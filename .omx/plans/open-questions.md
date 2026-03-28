@@ -1,0 +1,4 @@
+- [ ] Confirm initial success metric for MVP (context-pack quality vs session continuity vs recall speed).
+- [ ] Confirm first ingestion sources to support.
+- [ ] Confirm whether automatic ingestion is allowed in v1.
+- [ ] Confirm whether future share/export should influence the v1 schema.
