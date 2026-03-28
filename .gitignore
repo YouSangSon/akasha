@@ -1,0 +1,5 @@
+.DS_Store
+
+.omx/logs/
+.omx/state/
+.omx/tmux-hook.json

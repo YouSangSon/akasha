@@ -1,0 +1,25 @@
+# Context Snapshot
+
+- Task statement: Build a local side project inspired by Supermemory, focused on a practical "Developer Memory OS" for Claude/Codex rather than a full universal managed memory platform.
+- Desired outcome: Reach an approved MVP design that can become a local implementation plan for a developer-centric memory layer with MCP-facing interfaces.
+- Known facts/evidence:
+  - The repository is effectively empty and has no commits yet.
+  - The user explicitly wants a local-first version and is open to course correction if the product direction looks off.
+  - Requested workflows include `using-superpowers`, `ralph`, and `team`.
+  - Ralph planning gate applies: no implementation work before planning artifacts exist.
+  - Brainstorming hard gate applies: no scaffolding or implementation before design is presented and approved.
+- Constraints:
+  - Start with planning, not implementation.
+  - Ask clarifying questions one at a time.
+  - Use team orchestration rather than ad hoc subagent fanout for parallel work.
+  - Preserve space to challenge the idea and suggest a narrower or better direction if needed.
+- Unknowns/open questions:
+  - Primary user and initial usage loop: personal use only vs. shareable developer tool.
+  - Preferred local deployment shape: CLI-first, daemon, desktop app, or MCP server first.
+  - Storage/privacy boundaries and whether sync is explicitly out of scope.
+  - Success metric for MVP: better context packs, better recall, skill recommendation, or session continuity.
+- Likely codebase touchpoints:
+  - `.omx/context/`
+  - `.omx/plans/`
+  - future `docs/` design/spec files
+  - future local MCP server, storage, and retrieval pipeline modules
