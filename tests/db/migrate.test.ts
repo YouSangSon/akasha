@@ -85,4 +85,96 @@ describe("runMigrations", () => {
       "memory_records_au",
     ]);
   });
+
+  it("backfills the fts table for memory records that predate the migration", () => {
+    const tempDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "developer-memory-os-migrate-backfill-"),
+    );
+    tempDirs.push(tempDir);
+
+    const db = createMemoryDb(path.join(tempDir, "memory.db"));
+
+    db.exec(`
+      CREATE TABLE sources (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        scope_type TEXT NOT NULL,
+        scope_id TEXT NOT NULL,
+        source_type TEXT NOT NULL,
+        external_id TEXT NOT NULL,
+        title TEXT,
+        uri TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (scope_type, scope_id, source_type, external_id)
+      );
+
+      CREATE TABLE memory_records (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source_id INTEGER NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+        scope_type TEXT NOT NULL,
+        scope_id TEXT NOT NULL,
+        memory_type TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE context_pack_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        scope_type TEXT NOT NULL,
+        scope_id TEXT NOT NULL,
+        started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        completed_at TEXT,
+        status TEXT NOT NULL DEFAULT 'pending'
+      );
+    `);
+
+    const sourceInsert = db.prepare(`
+      INSERT INTO sources (
+        scope_type,
+        scope_id,
+        source_type,
+        external_id,
+        title,
+        uri
+      ) VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    const memoryInsert = db.prepare(`
+      INSERT INTO memory_records (
+        source_id,
+        scope_type,
+        scope_id,
+        memory_type,
+        content
+      ) VALUES (?, ?, ?, ?, ?)
+    `);
+
+    const sourceResult = sourceInsert.run(
+      "project",
+      "project-alpha",
+      "decision",
+      "decision-legacy",
+      "Legacy ADR",
+      "file:///tmp/project-alpha/docs/legacy-adr.md",
+    );
+
+    memoryInsert.run(
+      sourceResult.lastInsertRowid,
+      "project",
+      "project-alpha",
+      "decision",
+      "Legacy SQLite migration notes remain searchable.",
+    );
+
+    runMigrations(db);
+
+    const matches = db
+      .prepare(`
+        SELECT rowid
+        FROM memory_records_fts
+        WHERE memory_records_fts MATCH 'SQLite'
+      `)
+      .all() as Array<{ rowid: number }>;
+
+    expect(matches).toHaveLength(1);
+  });
 });

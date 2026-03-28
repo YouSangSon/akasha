@@ -11,4 +11,8 @@ const schemaPath = path.join(
 export function runMigrations(db: Database.Database) {
   const schemaSql = fs.readFileSync(schemaPath, "utf8");
   db.exec(schemaSql);
+  db.exec(`
+    INSERT INTO memory_records_fts(memory_records_fts)
+    VALUES ('rebuild');
+  `);
 }

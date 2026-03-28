@@ -59,8 +59,8 @@ export function createMemoryRepository(
       )
       ON CONFLICT(scope_type, scope_id, source_type, external_id)
       DO UPDATE SET
-        title = excluded.title,
-        uri = excluded.uri
+        title = COALESCE(excluded.title, sources.title),
+        uri = COALESCE(excluded.uri, sources.uri)
       RETURNING
         id,
         scope_type,
