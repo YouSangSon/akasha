@@ -1,0 +1,12 @@
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:${RESTORE_POSTGRES_PORT:-15432}:5432"
+
+  qdrant:
+    ports:
+      - "127.0.0.1:${RESTORE_QDRANT_PORT:-16333}:6333"
+
+  app:
+    ports:
+      - "127.0.0.1:${RESTORE_APP_PORT:-18787}:8787"

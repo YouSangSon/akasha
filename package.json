@@ -1,0 +1,36 @@
+{
+  "name": "developer-memory-os",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "start:server": "node dist/src/app/server.js",
+    "dev:server": "tsx src/app/server.ts",
+    "dev:mcp": "tsx src/mcp/server.ts",
+    "dev:cli": "tsx src/cli.ts",
+    "db:migrate": "node dist/src/db/migrate.js",
+    "backup:create": "sh -lc 'timestamp=$(date -u +%Y%m%d-%H%M); BACKUP_TIMESTAMP=$timestamp ./scripts/backup-postgres.sh && BACKUP_TIMESTAMP=$timestamp ./scripts/snapshot-qdrant.sh'",
+    "backup:verify": "node dist/scripts/backup-verify.js",
+    "restore:smoke": "node dist/scripts/restore-smoke.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@qdrant/js-client-rest": "^1.13.0",
+    "openai": "^4.0.0",
+    "pg": "^8.0.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0"
+  }
+}
