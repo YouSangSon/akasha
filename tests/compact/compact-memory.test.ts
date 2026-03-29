@@ -10,7 +10,7 @@ describe("compactMemory", () => {
           id: "1",
           kind: "summary",
           durability: "ephemeral",
-          summary: "Decision: use SQLite + FTS",
+          summary: "Decision: use durable project memory",
         },
         {
           id: "2",

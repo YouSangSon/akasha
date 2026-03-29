@@ -1,5 +1,7 @@
 # Developer Memory OS Design
 
+> Historical note: this document describes the earlier SQLite-first MVP direction. The deployed implementation path is superseded by [2026-03-29-postgres-qdrant-memory-service-design.md](/Users/yousang/Desktop/workspaces/context-forge/.worktrees/developer-memory-os-mvp/docs/superpowers/specs/2026-03-29-postgres-qdrant-memory-service-design.md).
+
 **Date:** 2026-03-28  
 **Status:** Proposed and approved for planning handoff  
 **Audience:** Project author and future implementation contributors

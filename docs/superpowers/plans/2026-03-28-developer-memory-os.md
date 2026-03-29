@@ -1,5 +1,7 @@
 # Developer Memory OS Implementation Plan
 
+> Historical note: this is the earlier SQLite-first MVP plan. The active implementation direction is the Postgres + Qdrant plan in [2026-03-29-postgres-qdrant-memory-service.md](/Users/yousang/Desktop/workspaces/context-forge/.worktrees/developer-memory-os-mvp/docs/superpowers/plans/2026-03-29-postgres-qdrant-memory-service.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a local-first TypeScript MCP server and companion CLI that ingest curated project artifacts into SQLite + FTS and generate task-specific context packs for future Claude/Codex sessions.

@@ -1,14 +1,4 @@
-import os from "node:os";
 import path from "node:path";
-
-export type ProjectPathsInput = {
-  cwd: string;
-  projectKey: string;
-};
-
-export type UserPathsInput = {
-  userScopeId: string;
-};
 
 export type ResolveServiceConfigInput = {
   env?: NodeJS.ProcessEnv;
@@ -39,38 +29,6 @@ export type ServiceConfig = {
     targetHost?: string;
   };
 };
-
-export function resolveProjectPaths(input: ProjectPathsInput) {
-  const projectKey = validatePathIdentifier(input.projectKey);
-  const stateDir = path.join(
-    os.homedir(),
-    ".developer-memory-os",
-    projectKey,
-  );
-
-  return {
-    cwd: input.cwd,
-    projectKey,
-    stateDir,
-    dbPath: path.join(stateDir, "memory.db"),
-  };
-}
-
-export function resolveUserPaths(input: UserPathsInput) {
-  const userScopeId = validatePathIdentifier(input.userScopeId);
-  const stateDir = path.join(
-    os.homedir(),
-    ".developer-memory-os",
-    "users",
-    userScopeId,
-  );
-
-  return {
-    userScopeId,
-    stateDir,
-    dbPath: path.join(stateDir, "memory.db"),
-  };
-}
 
 export function resolveServiceConfig(
   input: ResolveServiceConfigInput = {},
@@ -127,14 +85,6 @@ function parsePort(value: string | undefined): number {
   }
 
   return port;
-}
-
-function validatePathIdentifier(value: string): string {
-  if (!/^[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?$/i.test(value)) {
-    throw new Error(`Invalid path identifier: ${value}`);
-  }
-
-  return value;
 }
 
 function resolveDatabaseUrl(env: NodeJS.ProcessEnv): string {

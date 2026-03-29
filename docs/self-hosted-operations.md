@@ -1,6 +1,6 @@
 # Self-Hosted Operations
 
-This runbook covers the active Postgres + Qdrant operator stack. SQLite files remain only for legacy test fixtures and are not part of the deployed runtime path.
+This runbook covers the active Postgres + Qdrant operator stack. SQLite remains only in historical planning/design documents and is not part of the deployed runtime path.
 
 ## Deployment operations
 
