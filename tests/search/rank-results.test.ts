@@ -38,7 +38,7 @@ function createResult(
 }
 
 describe("rankResults", () => {
-  it("prefers project-scoped durable recent decisions over generic notes", () => {
+  it("keeps all project-scoped records ahead of user-scoped records", () => {
     const ranked = rankResults([
       createResult({
         id: 11,
@@ -94,7 +94,7 @@ describe("rankResults", () => {
       }),
     ]);
 
-    expect(ranked.map((record) => record.id)).toEqual([13, 12, 14, 11]);
+    expect(ranked.map((record) => record.id)).toEqual([13, 14, 11, 12]);
   });
 
   it("keeps a recent project summary ahead of an older project summary", () => {

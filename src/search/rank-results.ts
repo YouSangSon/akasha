@@ -2,10 +2,6 @@ import type { SearchMemoryResult } from "../types.js";
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const RANKING_WEIGHTS = {
-  scope: {
-    project: 60,
-    user: 0,
-  },
   memoryType: {
     decision: 120,
     summary: 70,
@@ -36,6 +32,13 @@ export function rankResults(
   );
 
   return [...records].sort((left, right) => {
+    const scopeDiff =
+      scopePrecedence(right.scopeType) - scopePrecedence(left.scopeType);
+
+    if (scopeDiff !== 0) {
+      return scopeDiff;
+    }
+
     const scoreDiff =
       scoreRecord(right, newestUpdatedAt) - scoreRecord(left, newestUpdatedAt);
 
@@ -60,7 +63,6 @@ function scoreRecord(
 ): number {
   let score = 0;
 
-  score += RANKING_WEIGHTS.scope[record.scopeType];
   score += memoryTypeWeight(record);
   score += sourceTypeWeight(record);
   score += recencyWeight(record.updatedAt, newestUpdatedAt);
@@ -70,6 +72,10 @@ function scoreRecord(
   }
 
   return score;
+}
+
+function scopePrecedence(scopeType: SearchMemoryResult["scopeType"]): number {
+  return scopeType === "project" ? 1 : 0;
 }
 
 function memoryTypeWeight(record: SearchMemoryResult): number {
