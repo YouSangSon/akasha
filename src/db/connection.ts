@@ -11,11 +11,19 @@ export type PgQueryResult<TRow extends PgQueryRow = PgQueryRow> = {
   rows: TRow[];
 };
 
-export type PgPool = {
+export type PgQueryable = {
   query<TRow extends PgQueryRow = PgQueryRow>(
     text: string,
     values?: readonly unknown[],
   ): Promise<PgQueryResult<TRow>>;
+};
+
+export type PgPoolClient = PgQueryable & {
+  release(): void;
+};
+
+export type PgPool = PgQueryable & {
+  connect(): Promise<PgPoolClient>;
   end(): Promise<void>;
 };
 

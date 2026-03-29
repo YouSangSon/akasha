@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createPgPool } from "../../src/db/connection.js";
 import { runMigrations } from "../../src/db/migrate.js";
@@ -111,6 +114,36 @@ describe("createMemoryRepository", () => {
       expect(created.sourceId).toBeGreaterThan(0);
       expect(created.summary).toContain("Always respond in Korean");
       expect(created.source.uri).toBe("file:///tmp/manual-note.md");
+    } finally {
+      await pool.end();
+    }
+  });
+
+  it("rejects writes that omit source provenance", async () => {
+    const pool = createPgPool({
+      connectionString: testConnectionString,
+    });
+
+    try {
+      await runMigrations(pool);
+      const repository = createMemoryRepository(pool);
+
+      await expect(
+        repository.addMemory({
+          scopeType: "project",
+          scopeId: "project-alpha",
+          projectKey: "project-alpha",
+          memoryType: "fact",
+          content: "This write should fail without provenance.",
+          source: {
+            scopeType: "project",
+            scopeId: "project-alpha",
+            sourceType: "document",
+          },
+          durability: "ephemeral",
+          importance: 1,
+        }),
+      ).rejects.toThrow(/source provenance is required/i);
     } finally {
       await pool.end();
     }
@@ -248,6 +281,86 @@ describe("createMemoryRepository", () => {
       });
     } finally {
       await pool.end();
+    }
+  });
+
+  it("keeps the SQLite repository path covered for add, search, and list semantics", async (context) => {
+    const sqliteModule = await import("../../src/db/connection.js").catch(
+      () => null,
+    );
+
+    if (!sqliteModule) {
+      context.skip();
+      return;
+    }
+
+    const tempDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "developer-memory-os-sqlite-store-"),
+    );
+
+    try {
+      let db;
+
+      try {
+        db = sqliteModule.createMemoryDb(path.join(tempDir, "memory.db"));
+      } catch {
+        context.skip();
+        return;
+      }
+
+      runMigrations(db);
+
+      const repository = createMemoryRepository(db);
+
+      repository.addMemory({
+        scopeType: "project",
+        scopeId: "project-alpha",
+        memoryType: "summary",
+        content: "SQLite still covers local-first project memory.",
+        source: {
+          scopeType: "project",
+          scopeId: "project-alpha",
+          sourceType: "document",
+          externalId: "readme",
+          uri: "file:///tmp/project-alpha/README.md",
+        },
+      });
+
+      repository.addMemory({
+        scopeType: "project",
+        scopeId: "project-beta",
+        memoryType: "fact",
+        content: "Unrelated SQLite beta memory.",
+        source: {
+          scopeType: "project",
+          scopeId: "project-beta",
+          sourceType: "document",
+          externalId: "notes",
+        },
+      });
+
+      const searched = repository.searchMemory({
+        query: "local-first project",
+        scopes: [{ scopeType: "project", scopeId: "project-alpha" }],
+        limit: 10,
+      });
+      const listed = repository.listMemory({
+        scopeType: "project",
+        scopeId: "project-alpha",
+      });
+
+      expect(searched).toHaveLength(1);
+      expect(searched[0]).toMatchObject({
+        scopeId: "project-alpha",
+        source: {
+          externalId: "readme",
+          uri: "file:///tmp/project-alpha/README.md",
+        },
+      });
+      expect(listed).toHaveLength(1);
+      expect(listed[0]?.content).toContain("SQLite still covers");
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
     }
   });
 });

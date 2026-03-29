@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type Database from "better-sqlite3";
-import type { PgPool } from "../db/connection.js";
+import type { PgPool, PgQueryable } from "../db/connection.js";
 import type {
   AddMemoryInput,
   CanonicalMemoryRepository,
@@ -158,7 +158,7 @@ function createSqliteMemoryRepository(
       input.source.scopeType,
       input.source.scopeId,
       input.source.sourceType,
-      toSourceKey(input.source),
+      requireSourceKey(input.source),
       input.source.title ?? null,
       input.source.uri ?? null,
     ) as SqliteInsertSourceRow;
@@ -282,55 +282,68 @@ function createPostgresMemoryRepository(
 ): CanonicalMemoryRepository {
   return {
     async addMemory(input) {
-      const sourceRow = await upsertPostgresSource(pool, input);
+      const client = await pool.connect();
 
-      const memoryResult = await pool.query<PostgresMemoryRow>(
-        `
-          INSERT INTO memory_records (
-            scope_type,
-            scope_id,
-            project_key,
-            kind,
-            title,
-            content,
-            summary,
-            durability,
-            importance,
-            source_id
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-          RETURNING
-            id,
-            scope_type,
-            scope_id,
-            project_key,
-            kind,
-            title,
-            content,
-            summary,
-            durability,
-            importance,
-            source_id,
-            created_at,
-            updated_at
-        `,
-        [
-          input.scopeType,
-          input.scopeId,
-          input.projectKey ?? null,
-          input.memoryType,
-          input.title ?? null,
-          input.content,
-          input.summary ?? summarize(input.content),
-          input.durability ?? "ephemeral",
-          input.importance ?? 0,
-          sourceRow.source_id_joined,
-        ],
-      );
+      try {
+        await client.query("BEGIN");
 
-      return mapPostgresSearchResult({
-        ...requireSingleRow(memoryResult.rows[0], "memory"),
-        ...sourceRow,
-      });
+        const sourceRow = await upsertPostgresSource(client, input);
+
+        const memoryResult = await client.query<PostgresMemoryRow>(
+          `
+            INSERT INTO memory_records (
+              scope_type,
+              scope_id,
+              project_key,
+              kind,
+              title,
+              content,
+              summary,
+              durability,
+              importance,
+              source_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            RETURNING
+              id,
+              scope_type,
+              scope_id,
+              project_key,
+              kind,
+              title,
+              content,
+              summary,
+              durability,
+              importance,
+              source_id,
+              created_at,
+              updated_at
+          `,
+          [
+            input.scopeType,
+            input.scopeId,
+            input.projectKey ?? null,
+            input.memoryType,
+            input.title ?? null,
+            input.content,
+            input.summary ?? summarize(input.content),
+            input.durability ?? "ephemeral",
+            input.importance ?? 0,
+            sourceRow.source_id_joined,
+          ],
+        );
+
+        await client.query("COMMIT");
+
+        return mapPostgresSearchResult({
+          ...requireSingleRow(memoryResult.rows[0], "memory"),
+          ...sourceRow,
+        });
+      } catch (error: unknown) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        throw error;
+      } finally {
+        client.release();
+      }
     },
 
     async searchMemory(input) {
@@ -480,8 +493,16 @@ function mapPostgresSearchResult(row: PostgresSearchRow): SearchMemoryResult {
   };
 }
 
-function toSourceKey(input: AddMemoryInput["source"]): string {
-  return input.sourceRef ?? input.externalId ?? "unknown";
+function requireSourceKey(input: AddMemoryInput["source"]): string {
+  const sourceKey = input.sourceRef ?? input.externalId;
+
+  if (!sourceKey) {
+    throw new Error(
+      "Memory source provenance is required: provide sourceRef or externalId",
+    );
+  }
+
+  return sourceKey;
 }
 
 function summarize(content: string): string {
@@ -505,11 +526,11 @@ function requireSingleRow<TRow>(row: TRow | undefined, label: string): TRow {
 }
 
 async function upsertPostgresSource(
-  pool: PgPool,
+  queryable: PgQueryable,
   input: AddMemoryInput,
 ): Promise<PostgresSourceRow> {
-  const sourceKey = toSourceKey(input.source);
-  const existingResult = await pool.query<PostgresSourceRow>(
+  const sourceKey = requireSourceKey(input.source);
+  const existingResult = await queryable.query<PostgresSourceRow>(
     `
       SELECT
         id AS source_id_joined,
@@ -543,7 +564,7 @@ async function upsertPostgresSource(
   });
 
   if (existingRow) {
-    const updatedResult = await pool.query<PostgresSourceRow>(
+    const updatedResult = await queryable.query<PostgresSourceRow>(
       `
         UPDATE sources
         SET title = COALESCE($2, title),
@@ -568,7 +589,7 @@ async function upsertPostgresSource(
     return requireSingleRow(updatedResult.rows[0], "source");
   }
 
-  const createdResult = await pool.query<PostgresSourceRow>(
+  const createdResult = await queryable.query<PostgresSourceRow>(
     `
       INSERT INTO sources (
         scope_type,
