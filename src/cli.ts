@@ -1,23 +1,42 @@
 import { pathToFileURL } from "node:url";
-import {
-  createProjectRuntime,
-  createToolRegistry,
-} from "./mcp/server.js";
+import { createToolRegistry } from "./mcp/server.js";
 
-export type ParsedCliArgs = {
-  command: "pack";
-  projectKey: string;
-  task: string;
-};
+export type ParsedCliArgs =
+  | {
+      command: "pack";
+      projectKey: string;
+      userScopeId?: string;
+      task: string;
+    }
+  | {
+      command: "reindex";
+      projectKey: string;
+      userScopeId?: string;
+    }
+  | {
+      command: "backup-verify";
+    }
+  | {
+      command: "restore-smoke";
+    };
 
 export function parseCliArgs(argv: string[]): ParsedCliArgs {
   const [command, ...rest] = argv;
 
-  if (command !== "pack") {
+  if (command === "backup-verify" || command === "restore-smoke") {
+    if (rest.length > 0) {
+      throw new Error(`Unsupported argument: ${rest[0]}`);
+    }
+
+    return { command };
+  }
+
+  if (command !== "pack" && command !== "reindex") {
     throw new Error(`Unsupported command: ${command ?? "(missing)"}`);
   }
 
   let projectKey: string | undefined;
+  let userScopeId: string | undefined;
   let task: string | undefined;
 
   for (let index = 0; index < rest.length; index += 1) {
@@ -36,6 +55,12 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
       continue;
     }
 
+    if (token === "--user") {
+      userScopeId = requireFlagValue(token, value);
+      index += 1;
+      continue;
+    }
+
     throw new Error(`Unsupported argument: ${token}`);
   }
 
@@ -43,34 +68,49 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
     throw new Error("Missing required --project argument");
   }
 
-  if (!task) {
+  if (command === "pack" && !task) {
     throw new Error("Missing required --task argument");
   }
 
+  if (command === "reindex") {
+    return {
+      command,
+      projectKey,
+      userScopeId,
+    };
+  }
+
   return {
-    command,
+    command: "pack",
     projectKey,
-    task,
+    userScopeId,
+    task: task!,
   };
 }
 
-export function runCli(argv: string[] = process.argv.slice(2)): string {
+export async function runCli(
+  argv: string[] = process.argv.slice(2),
+): Promise<string> {
   const parsed = parseCliArgs(argv);
-  const runtime = createProjectRuntime({
+  const registry = createToolRegistry({
     cwd: process.cwd(),
-    projectKey: parsed.projectKey,
   });
 
-  try {
-    const registry = createToolRegistry({ repository: runtime.repository });
-    const pack = registry.build_context_pack({
-      projectKey: parsed.projectKey,
-      task: parsed.task,
-    });
+  switch (parsed.command) {
+    case "pack": {
+      const pack = await registry.build_context_pack({
+        projectKey: parsed.projectKey,
+        userScopeId: parsed.userScopeId,
+        task: parsed.task,
+      });
 
-    return pack.packMarkdown;
-  } finally {
-    runtime.close();
+      return pack.packMarkdown;
+    }
+    case "reindex":
+      return JSON.stringify(parsed, null, 2);
+    case "backup-verify":
+    case "restore-smoke":
+      return JSON.stringify(parsed, null, 2);
   }
 }
 
@@ -83,10 +123,12 @@ function requireFlagValue(flag: string, value: string | undefined): string {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  try {
-    console.log(runCli());
-  } catch (error: unknown) {
-    console.error(error);
-    process.exit(1);
-  }
+  runCli()
+    .then((output) => {
+      console.log(output);
+    })
+    .catch((error: unknown) => {
+      console.error(error);
+      process.exit(1);
+    });
 }
