@@ -53,4 +53,5 @@ export type SearchMemoryResult = MemoryRecord & {
 export type MemoryRepository = {
   addMemory(input: AddMemoryInput): SearchMemoryResult;
   searchMemory(input: SearchMemoryInput): SearchMemoryResult[];
+  listMemory(scope: ScopeRef): SearchMemoryResult[];
 };

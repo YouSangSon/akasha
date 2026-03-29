@@ -135,4 +135,50 @@ describe("createMemoryRepository", () => {
       "file:///tmp/project-alpha/docs/adr-1.md",
     );
   });
+
+  it("lists all memories for a project scope without relying on full-text query matches", () => {
+    const tempDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "developer-memory-os-repository-list-"),
+    );
+    tempDirs.push(tempDir);
+
+    const db = createMemoryDb(path.join(tempDir, "memory.db"));
+    runMigrations(db);
+
+    const repository = createMemoryRepository(db);
+
+    repository.addMemory({
+      scopeType: "project",
+      scopeId: "project-alpha",
+      source: {
+        scopeType: "project",
+        scopeId: "project-alpha",
+        sourceType: "document",
+        externalId: "readme",
+      },
+      memoryType: "summary",
+      content: "Project Alpha keeps context local-first.",
+    });
+
+    repository.addMemory({
+      scopeType: "project",
+      scopeId: "project-alpha",
+      source: {
+        scopeType: "project",
+        scopeId: "project-alpha",
+        sourceType: "decision",
+        externalId: "adr-1",
+      },
+      memoryType: "decision",
+      content: "Decision: use SQLite with FTS for retrieval.",
+    });
+
+    const results = repository.listMemory({
+      scopeType: "project",
+      scopeId: "project-alpha",
+    });
+
+    expect(results).toHaveLength(2);
+    expect(results.map((record) => record.id)).toEqual([2, 1]);
+  });
 });

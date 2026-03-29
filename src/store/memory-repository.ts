@@ -190,6 +190,37 @@ export function createMemoryRepository(
         .all(params)
         .map((row) => mapSearchResult(row as SearchRow));
     },
+
+    listMemory(scope) {
+      const listSql = `
+        SELECT
+          mr.id,
+          mr.source_id,
+          mr.scope_type,
+          mr.scope_id,
+          mr.memory_type,
+          mr.content,
+          mr.created_at,
+          mr.updated_at,
+          s.id AS source_id_joined,
+          s.scope_type AS source_scope_type,
+          s.scope_id AS source_scope_id,
+          s.source_type,
+          s.external_id,
+          s.title,
+          s.uri,
+          s.created_at AS source_created_at
+        FROM memory_records mr
+        JOIN sources s ON s.id = mr.source_id
+        WHERE mr.scope_type = ? AND mr.scope_id = ?
+        ORDER BY mr.id DESC
+      `;
+
+      return db
+        .prepare(listSql)
+        .all(scope.scopeType, scope.scopeId)
+        .map((row) => mapSearchResult(row as SearchRow));
+    },
   };
 }
 

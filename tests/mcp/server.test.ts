@@ -26,7 +26,33 @@ function createRepository(): MemoryRepository {
         },
       };
     },
-    searchMemory() {
+    searchMemory(input) {
+      if (input.query === "project-alpha") {
+        return [];
+      }
+
+      return [
+        createRecord({
+          id: 11,
+          memoryType: "summary",
+          content: "Project Alpha keeps context local-first.",
+          sourceType: "document",
+          externalId: "readme",
+        }),
+        createRecord({
+          id: 12,
+          memoryType: "decision",
+          content: "Decision: use SQLite with FTS for retrieval.",
+          sourceType: "decision",
+          externalId: "adr-1",
+        }),
+      ];
+    },
+    listMemory(scope) {
+      if (scope.scopeId !== "project-alpha") {
+        return [];
+      }
+
       return [
         createRecord({
           id: 11,
@@ -47,6 +73,40 @@ function createRepository(): MemoryRepository {
   };
 }
 
+function createProjectRepository(projectKey: string): MemoryRepository {
+  return {
+    addMemory(input) {
+      return createRepository().addMemory(input);
+    },
+    searchMemory(input) {
+      return [
+        createRecord({
+          id: projectKey === "project-alpha" ? 21 : 31,
+          memoryType: "summary",
+          content: `Summary for ${projectKey}.`,
+          sourceType: "document",
+          externalId: `${projectKey}-summary`,
+          scopeId: projectKey,
+        }),
+      ].filter((record) => input.query === "continue work");
+    },
+    listMemory(scope) {
+      return scope.scopeId === projectKey
+        ? [
+            createRecord({
+              id: projectKey === "project-alpha" ? 21 : 31,
+              memoryType: "summary",
+              content: `Summary for ${projectKey}.`,
+              sourceType: "document",
+              externalId: `${projectKey}-summary`,
+              scopeId: projectKey,
+            }),
+          ]
+        : [];
+    },
+  };
+}
+
 function createRecord(
   overrides: {
     id: number;
@@ -54,13 +114,14 @@ function createRecord(
     content: string;
     sourceType: SearchMemoryResult["source"]["sourceType"];
     externalId: string;
+    scopeId?: string;
   },
 ): SearchMemoryResult {
   return {
     id: overrides.id,
     sourceId: overrides.id + 100,
     scopeType: "project",
-    scopeId: "project-alpha",
+    scopeId: overrides.scopeId ?? "project-alpha",
     memoryType: overrides.memoryType,
     content: overrides.content,
     createdAt: "2026-03-29T00:00:00.000Z",
@@ -68,7 +129,7 @@ function createRecord(
     source: {
       id: overrides.id + 100,
       scopeType: "project",
-      scopeId: "project-alpha",
+      scopeId: overrides.scopeId ?? "project-alpha",
       sourceType: overrides.sourceType,
       externalId: overrides.externalId,
       title: overrides.externalId,
@@ -138,6 +199,25 @@ describe("createToolRegistry", () => {
     expect(result.selectedMemoryIds).toEqual(["11", "12"]);
     expect(result.sections.project_summary).toEqual([
       expect.objectContaining({ id: 11 }),
+    ]);
+  });
+
+  it("resolves the repository using the requested project key", () => {
+    const registry = createToolRegistry({
+      resolveRepository(projectKey) {
+        return createProjectRepository(projectKey);
+      },
+    });
+
+    const result = registry.build_context_pack({
+      projectKey: "project-beta",
+      task: "continue work",
+    });
+
+    expect(result.projectKey).toBe("project-beta");
+    expect(result.selectedMemoryIds).toEqual(["31"]);
+    expect(result.sections.project_summary).toEqual([
+      expect.objectContaining({ scopeId: "project-beta" }),
     ]);
   });
 

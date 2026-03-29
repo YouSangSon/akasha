@@ -13,7 +13,6 @@ import { runMigrations } from "../db/migrate.js";
 import { createMemoryRepository } from "../store/memory-repository.js";
 import type {
   AddMemoryInput,
-  SearchMemoryInput,
   SearchMemoryResult,
   MemoryRepository,
 } from "../types.js";
@@ -79,6 +78,7 @@ export type ToolRegistry = {
 
 export type CreateToolRegistryOptions = {
   repository?: MemoryRepository;
+  resolveRepository?: (projectKey: string) => MemoryRepository | ProjectRuntime;
 };
 
 export type ProjectRuntime = {
@@ -115,20 +115,35 @@ export function createProjectRuntime(
 export function createToolRegistry(
   options: CreateToolRegistryOptions = {},
 ): ToolRegistry {
-  const repository = options.repository;
+  function withRepository<T>(
+    projectKey: string,
+    callback: (repository: MemoryRepository) => T,
+  ): T {
+    if (options.resolveRepository) {
+      const resolved = options.resolveRepository(projectKey);
 
-  function requireRepository(): MemoryRepository {
-    if (!repository) {
-      throw new Error("Memory repository not configured");
+      if ("repository" in resolved) {
+        try {
+          return callback(resolved.repository);
+        } finally {
+          resolved.close();
+        }
+      }
+
+      return callback(resolved);
     }
 
-    return repository;
+    if (options.repository) {
+      return callback(options.repository);
+    }
+
+    throw new Error("Memory repository not configured");
   }
 
   return {
     add_memory(input) {
-      const created = requireRepository().addMemory(
-        toRepositoryAddMemoryInput(input),
+      const created = withRepository(input.projectKey, (repository) =>
+        repository.addMemory(toRepositoryAddMemoryInput(input)),
       );
 
       return {
@@ -143,8 +158,24 @@ export function createToolRegistry(
         ok: true,
         projectKey: input.projectKey,
         query: input.query,
-        results: requireRepository().searchMemory({
-          query: input.query,
+        results: withRepository(input.projectKey, (repository) =>
+          repository.searchMemory({
+            query: input.query,
+            scopes: [
+              {
+                scopeType: "project",
+                scopeId: input.projectKey,
+              },
+            ],
+          }),
+        ),
+      };
+    },
+
+    build_context_pack(input) {
+      const records = withRepository(input.projectKey, (repository) =>
+        repository.searchMemory({
+          query: input.task,
           scopes: [
             {
               scopeType: "project",
@@ -152,19 +183,7 @@ export function createToolRegistry(
             },
           ],
         }),
-      };
-    },
-
-    build_context_pack(input) {
-      const records = requireRepository().searchMemory({
-        query: input.task,
-        scopes: [
-          {
-            scopeType: "project",
-            scopeId: input.projectKey,
-          },
-        ],
-      });
+      );
       const pack = buildContextPack({ records });
 
       return {
@@ -178,16 +197,12 @@ export function createToolRegistry(
 
     compact_memory(input) {
       const dryRun = input.dryRun ?? true;
-      const records = requireRepository().searchMemory({
-        query: input.projectKey,
-        scopes: [
-          {
-            scopeType: "project",
-            scopeId: input.projectKey,
-          },
-        ],
-        limit: 100,
-      });
+      const records = withRepository(input.projectKey, (repository) =>
+        repository.listMemory({
+          scopeType: "project",
+          scopeId: input.projectKey,
+        }),
+      );
 
       return {
         ok: true,
@@ -208,7 +223,11 @@ export function createMcpServer(
   options: CreateMcpServerOptions = {},
 ): McpServer {
   const registry =
-    options.registry ?? createToolRegistry({ repository: options.repository });
+    options.registry ??
+    createToolRegistry({
+      repository: options.repository,
+      resolveRepository: options.resolveRepository,
+    });
 
   const server = new McpServer({
     name: "developer-memory-os",
@@ -308,7 +327,7 @@ function toMemoryType(kind: string): AddMemoryInput["memoryType"] {
     case "fact":
       return kind;
     default:
-      return "fact";
+      throw new Error(`Unsupported memory kind: ${kind}`);
   }
 }
 
@@ -324,29 +343,19 @@ function shouldPromoteRecord(record: SearchMemoryResult): boolean {
   );
 }
 
-function runtimeFromEnv(): ProjectRuntime | undefined {
-  const projectKey = process.env.DMO_PROJECT_KEY;
-
-  if (!projectKey) {
-    return undefined;
-  }
-
-  return createProjectRuntime({
-    cwd: process.env.DMO_CWD ?? process.cwd(),
-    projectKey,
-  });
+function createRepositoryResolver(cwd: string) {
+  return (projectKey: string) =>
+    createProjectRuntime({
+      cwd,
+      projectKey,
+    });
 }
 
 async function main() {
-  const runtime = runtimeFromEnv();
-
-  try {
-    await startStdioServer({
-      repository: runtime?.repository,
-    });
-  } finally {
-    runtime?.close();
-  }
+  const cwd = process.env.DMO_CWD ?? process.cwd();
+  await startStdioServer({
+    resolveRepository: createRepositoryResolver(cwd),
+  });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

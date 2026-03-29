@@ -1,7 +1,7 @@
 import { pathToFileURL } from "node:url";
-import { buildContextPack } from "./context-pack/build-context-pack.js";
 import {
   createProjectRuntime,
+  createToolRegistry,
 } from "./mcp/server.js";
 
 export type ParsedCliArgs = {
@@ -62,19 +62,13 @@ export function runCli(argv: string[] = process.argv.slice(2)): string {
   });
 
   try {
-    const pack = buildContextPack({
-      records: runtime.repository.searchMemory({
-        query: parsed.task,
-        scopes: [
-          {
-            scopeType: "project",
-            scopeId: parsed.projectKey,
-          },
-        ],
-      }),
+    const registry = createToolRegistry({ repository: runtime.repository });
+    const pack = registry.build_context_pack({
+      projectKey: parsed.projectKey,
+      task: parsed.task,
     });
 
-    return pack.markdown;
+    return pack.packMarkdown;
   } finally {
     runtime.close();
   }

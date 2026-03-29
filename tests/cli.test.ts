@@ -13,5 +13,12 @@ describe("parseCliArgs", () => {
 
     expect(parsed.command).toBe("pack");
     expect(parsed.projectKey).toBe("project-alpha");
+    expect(parsed.task).toBe("continue work");
+  });
+
+  it("rejects missing project arguments", () => {
+    expect(() =>
+      parseCliArgs(["pack", "--task", "continue work"]),
+    ).toThrow("Missing required --project argument");
   });
 });
