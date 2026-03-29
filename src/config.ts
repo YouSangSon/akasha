@@ -23,6 +23,9 @@ export type ServiceConfig = {
     apiKey: string;
     collectionName: string;
   };
+  openai: {
+    apiKey: string;
+  };
   embedding: {
     provider: "openai";
     model: string;
@@ -73,6 +76,7 @@ export function resolveServiceConfig(
   const env = input.env ?? process.env;
   const host = env.HOST ?? "127.0.0.1";
   const port = Number(env.PORT ?? "8787");
+  const openAiApiKey = requireEnv(env.OPENAI_API_KEY, "OPENAI_API_KEY");
 
   return {
     host,
@@ -82,6 +86,9 @@ export function resolveServiceConfig(
       url: requireEnv(env.QDRANT_URL, "QDRANT_URL"),
       apiKey: requireEnv(env.QDRANT_API_KEY, "QDRANT_API_KEY"),
       collectionName: env.QDRANT_COLLECTION_NAME ?? "memory_chunks_v1",
+    },
+    openai: {
+      apiKey: openAiApiKey,
     },
     embedding: {
       provider: "openai",

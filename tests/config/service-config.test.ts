@@ -22,6 +22,7 @@ describe("resolveServiceConfig", () => {
     expect(config.port).toBe(8787);
     expect(config.databaseUrl).toContain("postgres://memory:memory");
     expect(config.qdrant.url).toBe("http://qdrant:6333");
+    expect(config.openai.apiKey).toBe("test-openai-key");
     expect(config.embedding.model).toBe("text-embedding-3-small");
     expect(config.backups.targetHost).toBe("backup@example.internal");
   });
