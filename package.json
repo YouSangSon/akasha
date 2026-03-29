@@ -14,9 +14,7 @@
     "dev:server": "tsx src/app/server.ts",
     "dev:mcp": "tsx src/mcp/server.ts",
     "dev:cli": "tsx src/cli.ts",
-    "db:migrate": "tsx src/db/migrate.ts",
-    "backup:verify": "tsx scripts/backup-verify.ts",
-    "restore:smoke": "tsx scripts/restore-smoke.ts"
+    "db:migrate": "tsx src/db/migrate.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",

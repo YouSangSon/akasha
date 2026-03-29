@@ -3,9 +3,9 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: memory
-      POSTGRES_PASSWORD: memory
-      POSTGRES_DB: memory_os
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -34,9 +34,14 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_started
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    volumes:
+      - backup_data:/var/lib/developer-memory-os/backups
     ports:
       - "127.0.0.1:8787:8787"
 
 volumes:
+  backup_data:
   postgres_data:
   qdrant_storage:

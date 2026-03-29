@@ -75,7 +75,7 @@ export function resolveServiceConfig(
 ): ServiceConfig {
   const env = input.env ?? process.env;
   const host = env.HOST ?? "127.0.0.1";
-  const port = Number(env.PORT ?? "8787");
+  const port = parsePort(env.PORT);
   const openAiApiKey = requireEnv(env.OPENAI_API_KEY, "OPENAI_API_KEY");
 
   return {
@@ -113,4 +113,15 @@ function requireEnv(value: string | undefined, name: string): string {
   }
 
   return value;
+}
+
+function parsePort(value: string | undefined): number {
+  const raw = value ?? "8787";
+  const port = Number(raw);
+
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+    throw new Error(`Invalid PORT: ${raw}`);
+  }
+
+  return port;
 }

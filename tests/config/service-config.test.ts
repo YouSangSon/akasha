@@ -26,4 +26,19 @@ describe("resolveServiceConfig", () => {
     expect(config.embedding.model).toBe("text-embedding-3-small");
     expect(config.backups.targetHost).toBe("backup@example.internal");
   });
+
+  it("rejects invalid port values", () => {
+    expect(() =>
+      resolveServiceConfig({
+        env: {
+          DATABASE_URL: "postgres://memory:memory@postgres:5432/memory_os",
+          QDRANT_URL: "http://qdrant:6333",
+          QDRANT_API_KEY: "local-qdrant-key",
+          OPENAI_API_KEY: "test-openai-key",
+          BACKUP_TARGET_HOST: "backup@example.internal",
+          PORT: "not-a-port",
+        },
+      }),
+    ).toThrow("Invalid PORT: not-a-port");
+  });
 });
