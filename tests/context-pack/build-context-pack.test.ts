@@ -388,4 +388,32 @@ Next step: validate migration paths.`,
     expect(pack.markdown).not.toContain("\n- Keep local-first storage");
     expect(pack.markdown).not.toContain("Constraint:\n");
   });
+
+  it("preserves the provided ranking order within each section", () => {
+    const pack = buildContextPack({
+      records: [
+        createResult({
+          id: 702,
+          memoryType: "decision",
+          content: "Decision: second-ranked decision.",
+          updatedAt: "2026-03-20T10:00:00.000Z",
+          source: { sourceType: "decision", title: "ADR 2" },
+        }),
+        createResult({
+          id: 701,
+          memoryType: "decision",
+          content: "Decision: top-ranked decision.",
+          updatedAt: "2026-03-29T10:00:00.000Z",
+          source: { sourceType: "decision", title: "ADR 1" },
+        }),
+      ],
+    });
+
+    expect(pack.sections.recent_decisions.map((record) => record.id)).toEqual([
+      702, 701,
+    ]);
+    expect(pack.markdown).toContain(
+      "Decision: second-ranked decision. (project scope; source: ADR 2)\n- Decision: top-ranked decision. (project scope; source: ADR 1)",
+    );
+  });
 });

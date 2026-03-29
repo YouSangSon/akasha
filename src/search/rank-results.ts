@@ -25,7 +25,7 @@ const RANKING_WEIGHTS = {
 } as const;
 
 export function rankResults(
-  records: SearchMemoryResult[],
+  records: readonly SearchMemoryResult[],
 ): SearchMemoryResult[] {
   if (records.length <= 1) {
     return [...records];

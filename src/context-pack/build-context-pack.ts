@@ -1,4 +1,3 @@
-import { rankResults } from "../search/rank-results.js";
 import type { SearchMemoryResult } from "../types.js";
 
 const SECTION_LIMITS = {
@@ -23,13 +22,12 @@ export type ContextPack = {
 };
 
 export type BuildContextPackInput = {
-  records: SearchMemoryResult[];
+  records: readonly SearchMemoryResult[];
 };
 
 export function buildContextPack(
   input: BuildContextPackInput,
 ): ContextPack {
-  const rankedRecords = rankResults(input.records);
   const sections: ContextPackSections = {
     project_summary: [],
     recent_decisions: [],
@@ -38,7 +36,7 @@ export function buildContextPack(
     relevant_notes: [],
   };
 
-  for (const record of rankedRecords) {
+  for (const record of input.records) {
     if (isOpenQuestion(record)) {
       pushIfWithinLimit(sections.open_questions, record, SECTION_LIMITS.open_questions);
       continue;
