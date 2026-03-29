@@ -70,6 +70,35 @@ function createRepository(): MemoryRepository {
         }),
       ];
     },
+    getMemoryRecordsByIds(ids) {
+      return ids.flatMap((id) => {
+        if (id === 11) {
+          return [
+            createRecord({
+              id: 11,
+              memoryType: "summary",
+              content: "Project Alpha keeps context local-first.",
+              sourceType: "document",
+              externalId: "readme",
+            }),
+          ];
+        }
+
+        if (id === 12) {
+          return [
+            createRecord({
+              id: 12,
+              memoryType: "decision",
+              content: "Decision: use SQLite with FTS for retrieval.",
+              sourceType: "decision",
+              externalId: "adr-1",
+            }),
+          ];
+        }
+
+        return [];
+      });
+    },
   };
 }
 
@@ -103,6 +132,22 @@ function createProjectRepository(projectKey: string): MemoryRepository {
             }),
           ]
         : [];
+    },
+    getMemoryRecordsByIds(ids) {
+      return ids.flatMap((id) =>
+        id === (projectKey === "project-alpha" ? 21 : 31)
+          ? [
+              createRecord({
+                id: projectKey === "project-alpha" ? 21 : 31,
+                memoryType: "summary",
+                content: "Summary for " + projectKey + ".",
+                sourceType: "document",
+                externalId: projectKey + "-summary",
+                scopeId: projectKey,
+              }),
+            ]
+          : [],
+      );
     },
   };
 }

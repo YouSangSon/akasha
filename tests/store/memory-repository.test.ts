@@ -284,6 +284,76 @@ describe("createMemoryRepository", () => {
     }
   });
 
+  it("hydrates canonical records by ids for retrieval assembly", async () => {
+    const pool = createPgPool({
+      connectionString: testConnectionString,
+    });
+
+    try {
+      await runMigrations(pool);
+      const repository = createMemoryRepository(pool);
+
+      const first = await repository.addMemory({
+        scopeType: "project",
+        scopeId: "project-alpha",
+        projectKey: "project-alpha",
+        memoryType: "decision",
+        content: "Decision: prefer project memory during retrieval.",
+        source: {
+          scopeType: "project",
+          scopeId: "project-alpha",
+          sourceType: "document",
+          sourceRef: "adr-1.md",
+          title: "ADR 1",
+        },
+        durability: "durable",
+        importance: 4,
+      });
+
+      const second = await repository.addMemory({
+        scopeType: "user",
+        scopeId: "alice",
+        projectKey: "project-alpha",
+        memoryType: "fact",
+        content: "Use ripgrep first.",
+        source: {
+          scopeType: "user",
+          scopeId: "alice",
+          sourceType: "document",
+          sourceRef: "tooling.md",
+          title: "Tooling",
+        },
+        durability: "ephemeral",
+        importance: 1,
+      });
+
+      const hydrated = await repository.getMemoryRecordsByIds([
+        second.id,
+        first.id,
+        999999,
+      ]);
+
+      expect(hydrated.map((record) => record.id)).toEqual([
+        second.id,
+        first.id,
+      ]);
+      expect(hydrated[0]).toMatchObject({
+        scopeType: "user",
+        source: {
+          title: "Tooling",
+        },
+      });
+      expect(hydrated[1]).toMatchObject({
+        scopeType: "project",
+        source: {
+          title: "ADR 1",
+        },
+      });
+    } finally {
+      await pool.end();
+    }
+  });
+
   it("keeps the SQLite repository path covered for add, search, and list semantics", async (context) => {
     const sqliteModule = await import("../../src/db/connection.js").catch(
       () => null,
@@ -359,6 +429,16 @@ describe("createMemoryRepository", () => {
       });
       expect(listed).toHaveLength(1);
       expect(listed[0]?.content).toContain("SQLite still covers");
+
+      const hydrated = repository.getMemoryRecordsByIds([listed[0]!.id, 999999]);
+
+      expect(hydrated).toHaveLength(1);
+      expect(hydrated[0]).toMatchObject({
+        id: listed[0]!.id,
+        source: {
+          externalId: "readme",
+        },
+      });
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }

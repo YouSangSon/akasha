@@ -274,6 +274,43 @@ function createSqliteMemoryRepository(
         .all(scope.scopeType, scope.scopeId)
         .map((row) => mapSqliteSearchResult(row as SqliteSearchRow));
     },
+
+    getMemoryRecordsByIds(ids) {
+      if (ids.length === 0) {
+        return [];
+      }
+
+      const placeholders = ids.map(() => "?").join(", ");
+      const rows = db
+        .prepare(
+          `
+            SELECT
+              mr.id,
+              mr.source_id,
+              mr.scope_type,
+              mr.scope_id,
+              mr.memory_type,
+              mr.content,
+              mr.created_at,
+              mr.updated_at,
+              s.id AS source_id_joined,
+              s.scope_type AS source_scope_type,
+              s.scope_id AS source_scope_id,
+              s.source_type,
+              s.external_id,
+              s.title,
+              s.uri,
+              s.created_at AS source_created_at
+            FROM memory_records mr
+            JOIN sources s ON s.id = mr.source_id
+            WHERE mr.id IN (${placeholders})
+          `,
+        )
+        .all(...ids)
+        .map((row) => mapSqliteSearchResult(row as SqliteSearchRow));
+
+      return orderRecordsByIds(rows, ids);
+    },
   };
 }
 
@@ -431,6 +468,47 @@ function createPostgresMemoryRepository(
 
       return result.rows.map(mapPostgresSearchResult);
     },
+
+    async getMemoryRecordsByIds(ids) {
+      if (ids.length === 0) {
+        return [];
+      }
+
+      const result = await pool.query<PostgresSearchRow>(
+        `
+          SELECT
+            mr.id,
+            mr.scope_type,
+            mr.scope_id,
+            mr.project_key,
+            mr.kind,
+            mr.title,
+            mr.content,
+            mr.summary,
+            mr.durability,
+            mr.importance,
+            mr.source_id,
+            mr.created_at,
+            mr.updated_at,
+            s.id AS source_id_joined,
+            s.scope_type AS source_scope_type,
+            s.scope_id AS source_scope_id,
+            s.source_type,
+            s.source_ref,
+            s.title AS source_title,
+            s.captured_at AS source_created_at
+          FROM memory_records mr
+          JOIN sources s ON s.id = mr.source_id
+          WHERE mr.id = ANY($1::int[])
+        `,
+        [ids],
+      );
+
+      return orderRecordsByIds(
+        result.rows.map(mapPostgresSearchResult),
+        ids,
+      );
+    },
   };
 }
 
@@ -523,6 +601,18 @@ function requireSingleRow<TRow>(row: TRow | undefined, label: string): TRow {
   }
 
   return row;
+}
+
+function orderRecordsByIds(
+  records: SearchMemoryResult[],
+  ids: number[],
+): SearchMemoryResult[] {
+  const recordsById = new Map(records.map((record) => [record.id, record]));
+
+  return ids.flatMap((id) => {
+    const record = recordsById.get(id);
+    return record ? [record] : [];
+  });
 }
 
 async function upsertPostgresSource(

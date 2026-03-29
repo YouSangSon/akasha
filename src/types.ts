@@ -68,12 +68,14 @@ export type MemoryRepository = {
   addMemory(input: AddMemoryInput): SearchMemoryResult;
   searchMemory(input: SearchMemoryInput): SearchMemoryResult[];
   listMemory(scope: ScopeRef): SearchMemoryResult[];
+  getMemoryRecordsByIds(ids: number[]): SearchMemoryResult[];
 };
 
 export type CanonicalMemoryRepository = {
   addMemory(input: AddMemoryInput): Promise<SearchMemoryResult>;
   searchMemory(input: SearchMemoryInput): Promise<SearchMemoryResult[]>;
   listMemory(scope: ScopeRef): Promise<SearchMemoryResult[]>;
+  getMemoryRecordsByIds(ids: number[]): Promise<SearchMemoryResult[]>;
 };
 
 export type IngestJobStatus = "pending" | "processing" | "completed" | "failed";
