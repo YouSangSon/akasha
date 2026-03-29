@@ -152,4 +152,41 @@ describe("compactMemory", () => {
       }),
     ]);
   });
+
+  it("does not merge identical conversation notes across different scopes", () => {
+    const result = compactMemory({
+      dryRun: true,
+      records: [
+        createResult({
+          id: 51,
+          scopeType: "project",
+          scopeId: "project-alpha",
+          content: "Need to follow up on the ranking edge case after lunch.",
+          source: {
+            scopeType: "project",
+            scopeId: "project-alpha",
+            sourceType: "conversation",
+            externalId: "project-session",
+            title: "Project Session",
+          },
+        }),
+        createResult({
+          id: 52,
+          scopeType: "user",
+          scopeId: "alice",
+          content: "Need to follow up on the ranking edge case after lunch.",
+          source: {
+            scopeType: "user",
+            scopeId: "alice",
+            sourceType: "conversation",
+            externalId: "user-session",
+            title: "User Session",
+          },
+        }),
+      ],
+    });
+
+    expect(result.mergeCandidates).toEqual([]);
+    expect(result.archiveCandidates).toEqual([]);
+  });
 });
