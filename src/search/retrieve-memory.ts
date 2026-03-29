@@ -20,14 +20,16 @@ type QdrantQueryResult = {
 
 export type RetrieveMemoryInput = {
   qdrantClient: {
-    query(args: {
-      collection_name: string;
+    query(
+      collectionName: string,
+      args: {
       query: number[];
       limit: number;
       filter: {
         should: QdrantScopeFilter[];
       };
-    }): Promise<QdrantQueryResult>;
+    },
+    ): Promise<QdrantQueryResult>;
   };
   repository: {
     getMemoryRecordsByIds(ids: number[]): Promise<SearchMemoryResult[]>;
@@ -42,8 +44,7 @@ export type RetrieveMemoryInput = {
 export async function retrieveMemory(
   input: RetrieveMemoryInput,
 ): Promise<SearchMemoryResult[]> {
-  const response = await input.qdrantClient.query({
-    collection_name: input.collectionName,
+  const response = await input.qdrantClient.query(input.collectionName, {
     query: input.vector,
     limit: input.limit,
     filter: {

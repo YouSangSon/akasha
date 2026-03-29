@@ -67,8 +67,7 @@ describe("retrieveMemory", () => {
       limit: 5,
     });
 
-    expect(qdrant.query).toHaveBeenCalledWith({
-      collection_name: "memory_chunks_v1",
+    expect(qdrant.query).toHaveBeenCalledWith("memory_chunks_v1", {
       query: [0.1, 0.2, 0.3],
       limit: 5,
       filter: {
