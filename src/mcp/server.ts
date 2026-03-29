@@ -128,7 +128,7 @@ export type CreateToolRegistryOptions = {
 
 export type RetrieveMemoryServiceInput = {
   projectKey: string;
-  userScopeId: string;
+  userScopeId?: string;
   query: string;
   limit: number;
 };
@@ -329,11 +329,13 @@ export function createToolRegistry(
     },
   ): Promise<SearchMemoryResult[]> {
     const limit = normalizeLimit(input.limit);
-    const userScopeId = resolveUserScopeId({
-      cwd,
-      explicitUserScopeId: input.userScopeId,
-      defaultUserScopeId: options.defaultUserScopeId,
-    });
+    const userScopeId = input.includeUser === false
+      ? undefined
+      : resolveUserScopeId({
+          cwd,
+          explicitUserScopeId: input.userScopeId,
+          defaultUserScopeId: options.defaultUserScopeId,
+        });
 
     if (options.retrieveMemory) {
       return options.retrieveMemory({

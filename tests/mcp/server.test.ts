@@ -266,6 +266,36 @@ describe("createToolRegistry", () => {
     ]);
   });
 
+  it("omits user scope from injected retrieval when includeUser is false", async () => {
+    const retrieveMemory = vi.fn().mockResolvedValue([
+      createRecord({
+        id: 21,
+        memoryType: "summary",
+        content: "Summary for project-alpha.",
+        sourceType: "document",
+        externalId: "project-alpha-summary",
+      }),
+    ]);
+    const registry = createToolRegistry({
+      defaultUserScopeId: "alice",
+      retrieveMemory,
+    });
+
+    const result = await registry.build_context_pack({
+      projectKey: "project-alpha",
+      task: "continue work",
+      includeUser: false,
+    });
+
+    expect(retrieveMemory).toHaveBeenCalledWith({
+      projectKey: "project-alpha",
+      userScopeId: undefined,
+      query: "continue work",
+      limit: 10,
+    });
+    expect(result.selectedMemoryIds).toEqual(["project:project-alpha:21"]);
+  });
+
   it("combines project and user memory when building a context pack", async () => {
     const registry = createToolRegistry({
       defaultUserScopeId: "alice",

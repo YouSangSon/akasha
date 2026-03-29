@@ -35,28 +35,29 @@ export type RetrieveMemoryInput = {
   collectionName: string;
   vector: number[];
   projectKey: string;
-  userScopeId: string;
+  userScopeId?: string;
   limit: number;
 };
 
 export async function retrieveMemory(
   input: RetrieveMemoryInput,
 ): Promise<SearchMemoryResult[]> {
-  const [projectResponse, userResponse] = await Promise.all([
+  const responses = await Promise.all([
     queryScope(input, [
       { key: "scope_type", match: { value: "project" } },
       { key: "project_key", match: { value: input.projectKey } },
     ]),
-    queryScope(input, [
-      { key: "scope_type", match: { value: "user" } },
-      { key: "scope_id", match: { value: input.userScopeId } },
-    ]),
+    ...(input.userScopeId
+      ? [
+          queryScope(input, [
+            { key: "scope_type", match: { value: "user" } },
+            { key: "scope_id", match: { value: input.userScopeId } },
+          ]),
+        ]
+      : []),
   ]);
 
-  const ids = uniqueMemoryRecordIds([
-    ...projectResponse.points,
-    ...userResponse.points,
-  ]);
+  const ids = uniqueMemoryRecordIds(responses.flatMap((response) => response.points));
 
   if (ids.length === 0) {
     return [];
