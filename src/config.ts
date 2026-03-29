@@ -41,30 +41,32 @@ export type ServiceConfig = {
 };
 
 export function resolveProjectPaths(input: ProjectPathsInput) {
+  const projectKey = validatePathIdentifier(input.projectKey);
   const stateDir = path.join(
     os.homedir(),
     ".developer-memory-os",
-    input.projectKey,
+    projectKey,
   );
 
   return {
     cwd: input.cwd,
-    projectKey: input.projectKey,
+    projectKey,
     stateDir,
     dbPath: path.join(stateDir, "memory.db"),
   };
 }
 
 export function resolveUserPaths(input: UserPathsInput) {
+  const userScopeId = validatePathIdentifier(input.userScopeId);
   const stateDir = path.join(
     os.homedir(),
     ".developer-memory-os",
     "users",
-    input.userScopeId,
+    userScopeId,
   );
 
   return {
-    userScopeId: input.userScopeId,
+    userScopeId,
     stateDir,
     dbPath: path.join(stateDir, "memory.db"),
   };
@@ -124,4 +126,12 @@ function parsePort(value: string | undefined): number {
   }
 
   return port;
+}
+
+function validatePathIdentifier(value: string): string {
+  if (!/^[a-z0-9](?:[a-z0-9_-]*[a-z0-9])?$/i.test(value)) {
+    throw new Error(`Invalid path identifier: ${value}`);
+  }
+
+  return value;
 }
