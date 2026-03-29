@@ -88,6 +88,41 @@ describe("createToolRegistry", () => {
     expect(registry).toHaveProperty("compact_memory");
   });
 
+  it("adds memory using the Task 6 public tool contract", () => {
+    const registry = createToolRegistry({ repository: createRepository() });
+
+    const result = registry.add_memory({
+      projectKey: "project-alpha",
+      kind: "decision",
+      content: "Use SQLite for local-first memory retrieval.",
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      memoryId: "101",
+      summary: "Use SQLite for local-first memory retrieval.",
+    });
+  });
+
+  it("searches memory using the Task 6 public tool contract", () => {
+    const registry = createToolRegistry({ repository: createRepository() });
+
+    const result = registry.search_memory({
+      projectKey: "project-alpha",
+      query: "SQLite",
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      projectKey: "project-alpha",
+      query: "SQLite",
+      results: [
+        expect.objectContaining({ id: 11 }),
+        expect.objectContaining({ id: 12 }),
+      ],
+    });
+  });
+
   it("builds a context pack using the Task 6 public tool contract", () => {
     const registry = createToolRegistry({ repository: createRepository() });
 

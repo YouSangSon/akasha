@@ -13,14 +13,34 @@ import { runMigrations } from "../db/migrate.js";
 import { createMemoryRepository } from "../store/memory-repository.js";
 import type {
   AddMemoryInput,
-  MemoryRepository,
   SearchMemoryInput,
   SearchMemoryResult,
+  MemoryRepository,
 } from "../types.js";
 
-const SCOPE_TYPES = ["user", "project"] as const;
-const MEMORY_TYPES = ["decision", "fact", "summary"] as const;
-const SOURCE_TYPES = ["decision", "document", "conversation"] as const;
+export type AddMemoryToolInput = {
+  projectKey: string;
+  kind: string;
+  content: string;
+};
+
+export type AddMemoryToolResult = {
+  ok: true;
+  memoryId: string;
+  summary: string;
+};
+
+export type SearchMemoryToolInput = {
+  projectKey: string;
+  query: string;
+};
+
+export type SearchMemoryToolResult = {
+  ok: true;
+  projectKey: string;
+  query: string;
+  results: SearchMemoryResult[];
+};
 
 export type BuildContextPackToolInput = {
   projectKey: string;
@@ -52,8 +72,8 @@ export type CompactMemoryToolResult = {
 };
 
 export type ToolRegistry = {
-  add_memory(input: AddMemoryInput): SearchMemoryResult;
-  search_memory(input: SearchMemoryInput): SearchMemoryResult[];
+  add_memory(input: AddMemoryToolInput): AddMemoryToolResult;
+  search_memory(input: SearchMemoryToolInput): SearchMemoryToolResult;
   build_context_pack(input: BuildContextPackToolInput): BuildContextPackToolResult;
   compact_memory(input: CompactMemoryToolInput): CompactMemoryToolResult;
 };
@@ -108,11 +128,32 @@ export function createToolRegistry(
 
   return {
     add_memory(input) {
-      return requireRepository().addMemory(input);
+      const created = requireRepository().addMemory(
+        toRepositoryAddMemoryInput(input),
+      );
+
+      return {
+        ok: true,
+        memoryId: String(created.id),
+        summary: input.content.slice(0, 80),
+      };
     },
 
     search_memory(input) {
-      return requireRepository().searchMemory(input);
+      return {
+        ok: true,
+        projectKey: input.projectKey,
+        query: input.query,
+        results: requireRepository().searchMemory({
+          query: input.query,
+          scopes: [
+            {
+              scopeType: "project",
+              scopeId: input.projectKey,
+            },
+          ],
+        }),
+      };
     },
 
     build_context_pack(input) {
@@ -181,18 +222,9 @@ export function createMcpServer(
     {
       description: "Persist a memory record for a project or user scope.",
       inputSchema: {
-        scopeType: z.enum(SCOPE_TYPES),
-        scopeId: z.string().min(1),
-        memoryType: z.enum(MEMORY_TYPES),
+        projectKey: z.string().min(1),
+        kind: z.string().min(1),
         content: z.string().min(1),
-        source: z.object({
-          scopeType: z.enum(SCOPE_TYPES),
-          scopeId: z.string().min(1),
-          sourceType: z.enum(SOURCE_TYPES),
-          externalId: z.string().min(1),
-          title: z.string().optional(),
-          uri: z.string().optional(),
-        }),
       },
     },
     (input) => toToolResult(registry.add_memory(input)),
@@ -203,9 +235,8 @@ export function createMcpServer(
     {
       description: "Search persisted memory records across one or more scopes.",
       inputSchema: {
+        projectKey: z.string().min(1),
         query: z.string().min(1),
-        scopes: z.array(scopeRefSchema()).min(1),
-        limit: z.number().int().min(1).max(100).optional(),
       },
     },
     (input) => toToolResult(registry.search_memory(input)),
@@ -246,13 +277,6 @@ export async function startStdioServer(options: CreateMcpServerOptions = {}) {
   return server;
 }
 
-function scopeRefSchema() {
-  return z.object({
-    scopeType: z.enum(SCOPE_TYPES),
-    scopeId: z.string().min(1),
-  });
-}
-
 function toToolResult(result: unknown) {
   return {
     content: [
@@ -262,6 +286,33 @@ function toToolResult(result: unknown) {
       },
     ],
   };
+}
+
+function toRepositoryAddMemoryInput(input: AddMemoryToolInput): AddMemoryInput {
+  return {
+    scopeType: "project",
+    scopeId: input.projectKey,
+    memoryType: toMemoryType(input.kind),
+    content: input.content,
+    source: {
+      scopeType: "project",
+      scopeId: input.projectKey,
+      sourceType: "conversation",
+      externalId: `${input.kind}:manual`,
+      title: `${input.kind} manual entry`,
+    },
+  };
+}
+
+function toMemoryType(kind: string): AddMemoryInput["memoryType"] {
+  switch (kind) {
+    case "decision":
+    case "summary":
+    case "fact":
+      return kind;
+    default:
+      return "fact";
+  }
 }
 
 function renderContextPackMarkdown(task: string, body: string): string {
