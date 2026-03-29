@@ -2,11 +2,14 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { createMemoryDb } from "../../src/db/connection.js";
-import { runMigrations } from "../../src/db/migrate.js";
 import { ingestProjectArtifacts } from "../../src/ingest/ingest-project.js";
 import { collectProjectSources } from "../../src/ingest/readers.js";
-import { createMemoryRepository } from "../../src/store/memory-repository.js";
+import type {
+  AddMemoryInput,
+  MemoryRepository,
+  SearchMemoryInput,
+  SearchMemoryResult,
+} from "../../src/types.js";
 
 const fixtureProjectRoot = path.resolve(
   "tests/fixtures/project-alpha",
@@ -84,11 +87,7 @@ describe("project ingestion", () => {
       path.join(os.tmpdir(), "developer-memory-os-ingest-project-"),
     );
     tempDirs.push(tempDir);
-
-    const db = createMemoryDb(path.join(tempDir, "memory.db"));
-    runMigrations(db);
-
-    const repository = createMemoryRepository(db);
+    const repository = createInMemoryRepository();
     const records = ingestProjectArtifacts({
       projectRoot: tempProjectRoot,
       projectId: "project-alpha",
@@ -164,3 +163,70 @@ describe("project ingestion", () => {
     ]);
   });
 });
+
+function createInMemoryRepository(): MemoryRepository {
+  const records: SearchMemoryResult[] = [];
+  let nextId = 1;
+
+  return {
+    addMemory(input: AddMemoryInput) {
+      const record: SearchMemoryResult = {
+        id: nextId,
+        sourceId: nextId + 100,
+        scopeType: input.scopeType,
+        scopeId: input.scopeId,
+        memoryType: input.memoryType,
+        content: input.content,
+        createdAt: "2026-03-29T00:00:00.000Z",
+        updatedAt: "2026-03-29T00:00:00.000Z",
+        source: {
+          id: nextId + 100,
+          scopeType: input.source.scopeType,
+          scopeId: input.source.scopeId,
+          sourceType: input.source.sourceType,
+          externalId: input.source.externalId ?? input.source.sourceRef ?? "",
+          sourceRef: input.source.sourceRef ?? input.source.externalId ?? "",
+          title: input.source.title ?? null,
+          uri: input.source.uri ?? null,
+          createdAt: "2026-03-29T00:00:00.000Z",
+        },
+      };
+
+      nextId += 1;
+      records.push(record);
+      return record;
+    },
+    searchMemory(input: SearchMemoryInput) {
+      const queryTerms = input.query
+        .toLowerCase()
+        .split(/\s+/)
+        .filter(Boolean);
+
+      return records.filter((record) => {
+        const inScope = input.scopes.some(
+          (scope) =>
+            scope.scopeType === record.scopeType && scope.scopeId === record.scopeId,
+        );
+
+        const normalizedContent = record.content.toLowerCase();
+
+        return (
+          inScope
+          && queryTerms.every((term) => normalizedContent.includes(term))
+        );
+      });
+    },
+    listMemory(scope) {
+      return records.filter(
+        (record) =>
+          record.scopeType === scope.scopeType && record.scopeId === scope.scopeId,
+      );
+    },
+    getMemoryRecordsByIds(ids) {
+      return ids.flatMap((id) => {
+        const record = records.find((candidate) => candidate.id === id);
+        return record ? [record] : [];
+      });
+    },
+  };
+}

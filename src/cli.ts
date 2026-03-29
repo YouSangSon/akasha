@@ -1,5 +1,5 @@
 import { pathToFileURL } from "node:url";
-import { createToolRegistry } from "./mcp/server.js";
+import { createToolRegistry, type ToolRegistry } from "./mcp/server.js";
 
 export type ParsedCliArgs =
   | {
@@ -90,9 +90,12 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
 
 export async function runCli(
   argv: string[] = process.argv.slice(2),
+  options: {
+    registry?: ToolRegistry;
+  } = {},
 ): Promise<string> {
   const parsed = parseCliArgs(argv);
-  const registry = createToolRegistry({
+  const registry = options.registry ?? createToolRegistry({
     cwd: process.cwd(),
   });
 
@@ -106,8 +109,14 @@ export async function runCli(
 
       return pack.packMarkdown;
     }
-    case "reindex":
-      return JSON.stringify(parsed, null, 2);
+    case "reindex": {
+      const result = await registry.reindex_memory({
+        projectKey: parsed.projectKey,
+        userScopeId: parsed.userScopeId,
+      });
+
+      return JSON.stringify(result, null, 2);
+    }
     case "backup-verify":
     case "restore-smoke":
       return JSON.stringify(parsed, null, 2);

@@ -36,7 +36,7 @@ export type ServiceConfig = {
   };
   backups: {
     directory: string;
-    targetHost: string;
+    targetHost?: string;
   };
 };
 
@@ -105,7 +105,7 @@ export function resolveServiceConfig(
       directory:
         env.BACKUP_DIR ??
         path.join(process.cwd(), ".developer-memory-os", "backups"),
-      targetHost: requireEnv(env.BACKUP_TARGET_HOST, "BACKUP_TARGET_HOST"),
+      targetHost: env.BACKUP_TARGET_HOST,
     },
   };
 }

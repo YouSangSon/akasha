@@ -1,6 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import type Database from "better-sqlite3";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import os from "node:os";
@@ -10,21 +9,27 @@ import {
   buildContextPack,
   type ContextPackSections,
 } from "../context-pack/build-context-pack.js";
-import {
-  resolveProjectPaths,
-  resolveServiceConfig,
-  resolveUserPaths,
-} from "../config.js";
-import { createMemoryDb, createPgPool } from "../db/connection.js";
+import { resolveServiceConfig, type ServiceConfig } from "../config.js";
+import { createPgPool } from "../db/connection.js";
 import { createOpenAiEmbeddingClient } from "../embedding/openai-embeddings.js";
+import { createIngestJobRepository } from "../jobs/ingest-job-repository.js";
 import { rankResults } from "../search/rank-results.js";
 import { retrieveMemory as retrieveMemoryFromQdrant } from "../search/retrieve-memory.js";
 import { runMigrations } from "../db/migrate.js";
 import { createQdrantClient } from "../qdrant/client.js";
 import { createMemoryRepository } from "../store/memory-repository.js";
+import {
+  createMemoryChunkRepository,
+  reindexCanonicalMemory,
+  writeCanonicalMemory,
+  type EmbeddingClient,
+  type MemoryChunkRepository,
+  type QdrantUpsertClient,
+} from "../store/canonical-indexing.js";
 import type {
   AddMemoryInput,
   CanonicalMemoryRepository,
+  IngestJobRepository,
   MemoryRepository,
   ScopeType,
   SearchMemoryResult,
@@ -77,6 +82,18 @@ export type BuildContextPackToolResult = {
   sections: ContextPackSections;
 };
 
+export type ReindexMemoryToolInput = {
+  projectKey: string;
+  userScopeId?: string;
+};
+
+export type ReindexMemoryToolResult = {
+  ok: true;
+  projectKey: string;
+  scopes: string[];
+  chunkCount: number;
+};
+
 export type CompactMemoryToolInput = {
   projectKey?: string;
   scope?: ScopeType;
@@ -100,19 +117,10 @@ export type ToolRegistry = {
   build_context_pack(
     input: BuildContextPackToolInput,
   ): Promise<BuildContextPackToolResult>;
+  reindex_memory(
+    input: ReindexMemoryToolInput,
+  ): Promise<ReindexMemoryToolResult>;
   compact_memory(input: CompactMemoryToolInput): Promise<CompactMemoryToolResult>;
-};
-
-export type ScopedRepositories = {
-  projectRepository?: MemoryRepository;
-  userRepository?: MemoryRepository;
-  close(): void;
-};
-
-export type ScopedRepositoriesInput = {
-  cwd: string;
-  projectKey?: string;
-  userScopeId?: string;
 };
 
 export type CreateToolRegistryOptions = {
@@ -120,8 +128,8 @@ export type CreateToolRegistryOptions = {
   repository?: MemoryRepository;
   projectRepository?: MemoryRepository;
   userRepository?: MemoryRepository;
-  resolveRepository?: (projectKey: string) => MemoryRepository | ProjectRuntime;
-  resolveRepositories?: (input: ScopedRepositoriesInput) => ScopedRepositories;
+  resolveRepository?: (projectKey: string) => MemoryRepository;
+  resolveCanonicalServices?: () => MaybePromise<CanonicalServices>;
   defaultUserScopeId?: string;
   retrieveMemory?: RetrieveMemoryService;
 };
@@ -137,91 +145,44 @@ export type RetrieveMemoryService = (
   input: RetrieveMemoryServiceInput,
 ) => Promise<SearchMemoryResult[]>;
 
-export type ProjectRuntime = {
-  db: Database.Database;
-  repository: MemoryRepository;
-  close(): void;
-};
-
-export type ProjectRuntimeInput = {
-  cwd: string;
-  projectKey: string;
-};
-
-export type UserRuntimeInput = {
-  userScopeId: string;
-};
-
 export type CreateMcpServerOptions = CreateToolRegistryOptions & {
   registry?: ToolRegistry;
 };
 
-export function createProjectRuntime(
-  input: ProjectRuntimeInput,
-): ProjectRuntime {
-  const paths = resolveProjectPaths(input);
-  const db = createMemoryDb(paths.dbPath);
-  runMigrations(db);
-
-  return {
-    db,
-    repository: createMemoryRepository(db),
-    close() {
-      db.close();
+type CanonicalQdrantQueryClient = {
+  query(
+    collectionName: string,
+    args: {
+      query: number[];
+      limit: number;
+      filter: {
+        must: Array<{
+          key: string;
+          match: { value: string };
+        }>;
+      };
     },
+  ): Promise<{
+    points: Array<{
+      payload?: {
+        memory_record_id?: number;
+      };
+    }>;
+  }>;
+};
+
+export type CanonicalServices = {
+  config: {
+    qdrant: Pick<ServiceConfig["qdrant"], "collectionName">;
+    embedding: ServiceConfig["embedding"];
   };
-}
-
-export function createUserRuntime(input: UserRuntimeInput): ProjectRuntime {
-  const paths = resolveUserPaths(input);
-  const db = createMemoryDb(paths.dbPath);
-  runMigrations(db);
-
-  return {
-    db,
-    repository: createMemoryRepository(db),
-    close() {
-      db.close();
-    },
-  };
-}
-
-export function createScopedRepositories(
-  input: ScopedRepositoriesInput,
-): ScopedRepositories {
-  const runtimes: ProjectRuntime[] = [];
-
-  const projectRuntime = input.projectKey
-    ? createProjectRuntime({
-        cwd: input.cwd,
-        projectKey: input.projectKey,
-      })
-    : undefined;
-
-  if (projectRuntime) {
-    runtimes.push(projectRuntime);
-  }
-
-  const userRuntime = input.userScopeId
-    ? createUserRuntime({
-        userScopeId: input.userScopeId,
-      })
-    : undefined;
-
-  if (userRuntime) {
-    runtimes.push(userRuntime);
-  }
-
-  return {
-    projectRepository: projectRuntime?.repository,
-    userRepository: userRuntime?.repository,
-    close() {
-      for (const runtime of runtimes) {
-        runtime.close();
-      }
-    },
-  };
-}
+  repository: CanonicalMemoryRepository;
+  chunkRepository: MemoryChunkRepository;
+  ingestJobs: IngestJobRepository;
+  embeddings: EmbeddingClient;
+  qdrantClient: QdrantUpsertClient & CanonicalQdrantQueryClient;
+  close?: () => MaybePromise<void>;
+};
 
 export function createToolRegistry(
   options: CreateToolRegistryOptions = {},
@@ -246,24 +207,6 @@ export function createToolRegistry(
       defaultUserScopeId: options.defaultUserScopeId,
     });
 
-    if (options.resolveRepositories) {
-      const resolved = options.resolveRepositories({
-        cwd,
-        projectKey: input.projectKey,
-        userScopeId: input.includeUser === false ? undefined : userScopeId,
-      });
-
-      try {
-        return await callback({
-          projectRepository: resolved.projectRepository,
-          userRepository: resolved.userRepository,
-          userScopeId,
-        });
-      } finally {
-        resolved.close();
-      }
-    }
-
     if (options.projectRepository || options.userRepository) {
       return await callback({
         projectRepository: options.projectRepository,
@@ -274,17 +217,6 @@ export function createToolRegistry(
 
     if (options.resolveRepository && input.projectKey) {
       const resolved = options.resolveRepository(input.projectKey);
-
-      if ("repository" in resolved) {
-        try {
-          return await callback({
-            projectRepository: resolved.repository,
-            userScopeId,
-          });
-        } finally {
-          resolved.close();
-        }
-      }
 
       return await callback({
         projectRepository: resolved,
@@ -305,6 +237,22 @@ export function createToolRegistry(
   async function withCanonicalRepository<T>(
     callback: (repository: CanonicalMemoryRepository) => Promise<T>,
   ): Promise<T> {
+    return withCanonicalServices((services) => callback(services.repository));
+  }
+
+  async function withCanonicalServices<T>(
+    callback: (services: CanonicalServices) => Promise<T>,
+  ): Promise<T> {
+    if (options.resolveCanonicalServices) {
+      const services = await options.resolveCanonicalServices();
+
+      try {
+        return await callback(services);
+      } finally {
+        await services.close?.();
+      }
+    }
+
     const config = resolveServiceConfig();
     const pool = createPgPool({
       connectionString: config.databaseUrl,
@@ -312,11 +260,74 @@ export function createToolRegistry(
 
     try {
       await runMigrations(pool);
-      const repository = createMemoryRepository(pool);
-      return await callback(repository);
+      const qdrantClient = createQdrantClient({
+        url: config.qdrant.url,
+        apiKey: config.qdrant.apiKey,
+      });
+
+      return await callback({
+        config: {
+          qdrant: {
+            collectionName: config.qdrant.collectionName,
+          },
+          embedding: config.embedding,
+        },
+        repository: createMemoryRepository(pool),
+        chunkRepository: createMemoryChunkRepository(pool),
+        ingestJobs: createIngestJobRepository(pool),
+        embeddings: createOpenAiEmbeddingClient({
+          apiKey: config.openai.apiKey,
+          model: config.embedding.model,
+        }),
+        qdrantClient: {
+          upsert(collectionName, input) {
+            return qdrantClient.upsert(collectionName, input);
+          },
+          async query(collectionName, args) {
+            const response = await qdrantClient.query(collectionName, args);
+
+            return {
+              points: response.points.map((point) => {
+                const payload =
+                  point.payload && typeof point.payload === "object"
+                    ? point.payload
+                    : undefined;
+                const memoryRecordId =
+                  typeof payload?.memory_record_id === "number"
+                    ? payload.memory_record_id
+                    : undefined;
+
+                return {
+                  payload:
+                    memoryRecordId === undefined
+                      ? undefined
+                      : { memory_record_id: memoryRecordId },
+                };
+              }),
+            };
+          },
+        },
+      });
     } finally {
       await pool.end();
     }
+  }
+
+  async function retrieveRecordsWithCanonicalServices(
+    services: CanonicalServices,
+    input: RetrieveMemoryServiceInput,
+  ): Promise<SearchMemoryResult[]> {
+    const vector = await services.embeddings.embed(input.query);
+
+    return retrieveMemoryFromQdrant({
+      qdrantClient: services.qdrantClient,
+      repository: services.repository,
+      collectionName: services.config.qdrant.collectionName,
+      vector,
+      projectKey: input.projectKey,
+      userScopeId: input.userScopeId,
+      limit: input.limit,
+    });
   }
 
   async function resolveRecords(
@@ -366,12 +377,14 @@ export function createToolRegistry(
       );
     }
 
-    return retrieveRecordsFromService({
-      projectKey: input.projectKey,
-      query: input.query,
-      userScopeId,
-      limit,
-    });
+    return withCanonicalServices((services) =>
+      retrieveRecordsWithCanonicalServices(services, {
+        projectKey: input.projectKey,
+        query: input.query,
+        userScopeId,
+        limit,
+      }),
+    );
   }
 
   return {
@@ -383,7 +396,7 @@ export function createToolRegistry(
         defaultUserScopeId: options.defaultUserScopeId,
       });
 
-      const created = hasRepositoryOverrides(options)
+      const createdRecord = hasRepositoryOverrides(options)
         ? await withRepositories(
             {
               projectKey: input.projectKey,
@@ -407,19 +420,33 @@ export function createToolRegistry(
               );
             },
           )
-        : await withCanonicalRepository((repository) =>
-            repository.addMemory(
-              toRepositoryAddMemoryInput({
+        : await withCanonicalServices((services) =>
+            writeCanonicalMemory({
+              repository: services.repository,
+              chunkRepository: services.chunkRepository,
+              ingestJobs: services.ingestJobs,
+              embeddings: services.embeddings,
+              qdrantClient: services.qdrantClient,
+              collectionName: services.config.qdrant.collectionName,
+              embedding: {
+                provider: services.config.embedding.provider,
+                model: services.config.embedding.model,
+                dimensions: services.config.embedding.dimensions,
+                version: services.config.embedding.version,
+                targetTokens: services.config.embedding.chunkTargetTokens,
+                overlapTokens: services.config.embedding.chunkOverlapTokens,
+              },
+              memory: toRepositoryAddMemoryInput({
                 ...input,
                 scope,
                 userScopeId,
               }),
-            ),
+            }),
           );
 
       return {
         ok: true,
-        memoryId: String(created.id),
+        memoryId: String(createdRecord.id),
         summary: input.content.slice(0, 80),
       };
     },
@@ -442,21 +469,106 @@ export function createToolRegistry(
     },
 
     async build_context_pack(input) {
-      const records = await resolveRecords({
-        projectKey: input.projectKey,
-        query: input.task,
-        userScopeId: input.userScopeId,
-        includeUser: input.includeUser,
-        limit: input.limit,
-      });
-      const pack = buildContextPack({ records });
+      const useServiceBackedPack =
+        !hasRepositoryOverrides(options) && !options.retrieveMemory;
+      const builtPack = useServiceBackedPack
+        ? await withCanonicalServices(async (services) => {
+            const records = await retrieveRecordsWithCanonicalServices(services, {
+              projectKey: input.projectKey,
+              query: input.task,
+              userScopeId:
+                input.includeUser === false
+                  ? undefined
+                  : resolveUserScopeId({
+                      cwd,
+                      explicitUserScopeId: input.userScopeId,
+                      defaultUserScopeId: options.defaultUserScopeId,
+                    }),
+              limit: normalizeLimit(input.limit),
+            });
+            const pack = buildContextPack({ records });
+            const packMarkdown = renderContextPackMarkdown(input.task, pack.markdown);
+            const selectedMemoryIds = records.map((record) =>
+              formatMemoryIdentifier(record)
+            );
+
+            await services.chunkRepository.createContextPackRun({
+              projectKey: input.projectKey,
+              task: input.task,
+              selectedMemoryIds,
+              packMarkdown,
+            });
+
+            return {
+              pack,
+              packMarkdown,
+              selectedMemoryIds,
+            };
+          })
+        : await (async () => {
+            const records = await resolveRecords({
+              projectKey: input.projectKey,
+              query: input.task,
+              userScopeId: input.userScopeId,
+              includeUser: input.includeUser,
+              limit: input.limit,
+            });
+            const pack = buildContextPack({ records });
+
+            return {
+              pack,
+              packMarkdown: renderContextPackMarkdown(input.task, pack.markdown),
+              selectedMemoryIds: records.map((record) =>
+                formatMemoryIdentifier(record)
+              ),
+            };
+          })();
 
       return {
         ok: true,
         projectKey: input.projectKey,
-        packMarkdown: renderContextPackMarkdown(input.task, pack.markdown),
-        selectedMemoryIds: records.map((record) => formatMemoryIdentifier(record)),
-        sections: pack.sections,
+        packMarkdown: builtPack.packMarkdown,
+        selectedMemoryIds: builtPack.selectedMemoryIds,
+        sections: builtPack.pack.sections,
+      };
+    },
+
+    async reindex_memory(input) {
+      const userScopeId = resolveUserScopeId({
+        cwd,
+        explicitUserScopeId: input.userScopeId,
+        defaultUserScopeId: options.defaultUserScopeId,
+      });
+      const scopes = [
+        {
+          scopeType: "project" as const,
+          scopeId: input.projectKey,
+        },
+        ...(userScopeId
+          ? [
+              {
+                scopeType: "user" as const,
+                scopeId: userScopeId,
+              },
+            ]
+          : []),
+      ];
+
+      const result = await withCanonicalServices((services) =>
+        reindexCanonicalMemory({
+          chunkRepository: services.chunkRepository,
+          embeddings: services.embeddings,
+          qdrantClient: services.qdrantClient,
+          collectionName: services.config.qdrant.collectionName,
+          scopes,
+        }),
+      );
+
+      return {
+        ok: true,
+        projectKey: input.projectKey,
+        scopes: scopes.map((scope) => `${scope.scopeType}:${scope.scopeId}`),
+        chunkCount: result.chunkCount,
       };
     },
 
@@ -530,7 +642,7 @@ export function createMcpServer(
       projectRepository: options.projectRepository,
       userRepository: options.userRepository,
       resolveRepository: options.resolveRepository,
-      resolveRepositories: options.resolveRepositories,
+      resolveCanonicalServices: options.resolveCanonicalServices,
       defaultUserScopeId: options.defaultUserScopeId,
       retrieveMemory: options.retrieveMemory,
     });
@@ -630,6 +742,7 @@ function toRepositoryAddMemoryInput(input: AddMemoryToolInput): AddMemoryInput {
   return {
     scopeType: scope,
     scopeId,
+    projectKey: scope === "project" ? scopeId : undefined,
     memoryType: toMemoryType(input.kind),
     content: input.content,
     source: {
@@ -716,71 +829,12 @@ function hasRepositoryOverrides(
     options.repository ||
       options.projectRepository ||
       options.userRepository ||
-      options.resolveRepository ||
-      options.resolveRepositories,
+      options.resolveRepository,
   );
 }
 
 function normalizeLimit(limit: number | undefined): number {
   return Math.max(1, Math.min(limit ?? 10, 100));
-}
-
-async function retrieveRecordsFromService(
-  input: RetrieveMemoryServiceInput,
-): Promise<SearchMemoryResult[]> {
-  const config = resolveServiceConfig();
-  const pool = createPgPool({
-    connectionString: config.databaseUrl,
-  });
-
-  try {
-    await runMigrations(pool);
-
-    const repository = createMemoryRepository(pool);
-    const embeddings = createOpenAiEmbeddingClient({
-      apiKey: config.openai.apiKey,
-      model: config.embedding.model,
-    });
-    const qdrantClient = createQdrantClient({
-      url: config.qdrant.url,
-      apiKey: config.qdrant.apiKey,
-    });
-    const vector = await embeddings.embed(input.query);
-
-    return retrieveMemoryFromQdrant({
-      qdrantClient: {
-        async query(collectionName, args) {
-          const response = await qdrantClient.query(collectionName, args);
-
-          return {
-            points: response.points.map((point) => {
-              const memoryRecordId =
-                point.payload &&
-                typeof point.payload === "object" &&
-                typeof point.payload.memory_record_id === "number"
-                  ? point.payload.memory_record_id
-                  : undefined;
-
-              return {
-                payload:
-                  memoryRecordId === undefined
-                    ? undefined
-                    : { memory_record_id: memoryRecordId },
-              };
-            }),
-          };
-        },
-      },
-      repository,
-      collectionName: config.qdrant.collectionName,
-      vector,
-      projectKey: input.projectKey,
-      userScopeId: input.userScopeId,
-      limit: input.limit,
-    });
-  } finally {
-    await pool.end();
-  }
 }
 
 function requireProjectKey(

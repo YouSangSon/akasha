@@ -1,7 +1,4 @@
-import fs from "node:fs";
 import { createRequire } from "node:module";
-import path from "node:path";
-import Database from "better-sqlite3";
 
 const require = createRequire(import.meta.url);
 
@@ -39,16 +36,6 @@ const { Pool: NodePostgresPool } = require("pg") as {
 export type CreatePgPoolInput = {
   connectionString: string;
 };
-
-export function createMemoryDb(dbPath: string) {
-  fs.mkdirSync(path.dirname(dbPath), { recursive: true });
-
-  const db = new Database(dbPath);
-  db.pragma("foreign_keys = ON");
-  db.pragma("journal_mode = WAL");
-
-  return db;
-}
 
 export function createPgPool(input: CreatePgPoolInput): PgPool {
   return new NodePostgresPool({

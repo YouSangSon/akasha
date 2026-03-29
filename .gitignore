@@ -1,8 +1,12 @@
 .DS_Store
 
 .worktrees/
+dist/
+node_modules/
 .omx/metrics.json
 .omx/logs/
+.omx/notepad.md
 .omx/state/
 .omx/team/
+.omx/context/codex-resume-*.md
 .omx/tmux-hook.json

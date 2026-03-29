@@ -342,6 +342,41 @@ describe("createToolRegistry", () => {
     });
   });
 
+  it("writes canonical memory through the indexing pipeline when using service-backed storage", async () => {
+    const services = createCanonicalServices();
+    const registry = createToolRegistry({
+      resolveCanonicalServices: async () => services,
+    });
+
+    const result = await registry.add_memory({
+      projectKey: "project-alpha",
+      kind: "decision",
+      content: "Decision: index canonical memory into qdrant on write.",
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      memoryId: "501",
+      summary: "Decision: index canonical memory into qdrant on write.",
+    });
+    expect(services.repository.addMemory).toHaveBeenCalledOnce();
+    expect(services.ingestJobs.create).toHaveBeenCalledWith({ memoryRecordId: 501 });
+    expect(services.chunkRepository.insertChunks).toHaveBeenCalledOnce();
+    expect(services.embeddings.embed).toHaveBeenCalled();
+    expect(services.qdrantClient.upsert).toHaveBeenCalledWith(
+      "memory_chunks_v1",
+      expect.objectContaining({
+        points: expect.arrayContaining([
+          expect.objectContaining({
+            payload: expect.objectContaining({
+              memory_record_id: 501,
+            }),
+          }),
+        ]),
+      }),
+    );
+  });
+
   it("searches project and user memories together by default", async () => {
     const registry = createToolRegistry({
       defaultUserScopeId: "alice",
@@ -379,6 +414,111 @@ describe("createToolRegistry", () => {
     ]);
   });
 
+  it("persists context pack runs when using service-backed retrieval", async () => {
+    const services = createCanonicalServices();
+    services.qdrantClient.query.mockResolvedValue({
+      points: [{ payload: { memory_record_id: 12 } }],
+    });
+    services.repository.getMemoryRecordsByIds.mockResolvedValue([
+      createRecord({
+        id: 12,
+        memoryType: "decision",
+        content: "Decision: keep project memory ahead of user memory.",
+        sourceType: "decision",
+        externalId: "adr-2",
+      }),
+    ]);
+    const registry = createToolRegistry({
+      defaultUserScopeId: "alice",
+      resolveCanonicalServices: async () => services,
+    });
+
+    const result = await registry.build_context_pack({
+      projectKey: "project-alpha",
+      task: "continue work",
+    });
+
+    expect(result.selectedMemoryIds).toEqual(["project:project-alpha:12"]);
+    expect(services.chunkRepository.createContextPackRun).toHaveBeenCalledWith({
+      projectKey: "project-alpha",
+      task: "continue work",
+      selectedMemoryIds: ["project:project-alpha:12"],
+      packMarkdown: result.packMarkdown,
+    });
+  });
+
+  it("reindexes project and user chunks through canonical services", async () => {
+    const services = createCanonicalServices();
+    services.chunkRepository.listChunks.mockResolvedValue([
+      {
+        id: 701,
+        memoryRecordId: 501,
+        chunkIndex: 0,
+        content: "Project chunk",
+        startOffset: 0,
+        endOffset: 13,
+        embeddingVersion: "v1",
+        scopeType: "project",
+        scopeId: "project-alpha",
+        projectKey: "project-alpha",
+        durability: "durable",
+        kind: "decision",
+        updatedAt: "2026-03-29T00:00:00.000Z",
+      },
+      {
+        id: 702,
+        memoryRecordId: 502,
+        chunkIndex: 0,
+        content: "User chunk",
+        startOffset: 0,
+        endOffset: 10,
+        embeddingVersion: "v1",
+        scopeType: "user",
+        scopeId: "alice",
+        projectKey: null,
+        durability: "ephemeral",
+        kind: "fact",
+        updatedAt: "2026-03-29T00:00:00.000Z",
+      },
+    ]);
+    const registry = createToolRegistry({
+      defaultUserScopeId: "alice",
+      resolveCanonicalServices: async () => services,
+    });
+
+    const result = await registry.reindex_memory({
+      projectKey: "project-alpha",
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      projectKey: "project-alpha",
+      chunkCount: 2,
+      scopes: ["project:project-alpha", "user:alice"],
+    });
+    expect(services.chunkRepository.listChunks).toHaveBeenCalledWith([
+      { scopeType: "project", scopeId: "project-alpha" },
+      { scopeType: "user", scopeId: "alice" },
+    ]);
+    expect(services.qdrantClient.upsert).toHaveBeenCalledWith(
+      "memory_chunks_v1",
+      expect.objectContaining({
+        points: expect.arrayContaining([
+          expect.objectContaining({
+            payload: expect.objectContaining({
+              memory_record_id: 501,
+            }),
+          }),
+          expect.objectContaining({
+            payload: expect.objectContaining({
+              memory_record_id: 502,
+            }),
+          }),
+        ]),
+      }),
+    );
+  });
+
   it("compacts memory using the narrower Task 6 public tool contract", async () => {
     const registry = createToolRegistry({ repository: createRepository() });
 
@@ -411,3 +551,81 @@ describe("createToolRegistry", () => {
     expect(result.summary).toContain("alice");
   });
 });
+
+function createCanonicalServices() {
+  const createdRecord = createRecord({
+    id: 501,
+    memoryType: "decision",
+    content: "Decision: index canonical memory into qdrant on write.",
+    sourceType: "conversation",
+    externalId: "decision:manual",
+  });
+
+  return {
+    repository: {
+      addMemory: vi.fn().mockResolvedValue(createdRecord),
+      searchMemory: vi.fn().mockResolvedValue([createdRecord]),
+      listMemory: vi.fn().mockResolvedValue([createdRecord]),
+      getMemoryRecordsByIds: vi.fn().mockResolvedValue([createdRecord]),
+    },
+    chunkRepository: {
+      insertChunks: vi.fn().mockResolvedValue([
+        {
+          id: 701,
+          memoryRecordId: createdRecord.id,
+          chunkIndex: 0,
+          content: createdRecord.content,
+          startOffset: 0,
+          endOffset: createdRecord.content.length,
+          embeddingVersion: "v1",
+        },
+      ]),
+      updatePointIds: vi.fn().mockResolvedValue(undefined),
+      listChunks: vi.fn().mockResolvedValue([]),
+      createContextPackRun: vi.fn().mockResolvedValue(undefined),
+    },
+    ingestJobs: {
+      create: vi.fn().mockResolvedValue({
+        id: 801,
+        memoryRecordId: createdRecord.id,
+        status: "pending",
+        attempts: 0,
+        lastError: null,
+        createdAt: "2026-03-29T00:00:00.000Z",
+        updatedAt: "2026-03-29T00:00:00.000Z",
+      }),
+      markCompleted: vi.fn().mockResolvedValue({
+        id: 801,
+        memoryRecordId: createdRecord.id,
+        status: "completed",
+        attempts: 0,
+        lastError: null,
+        createdAt: "2026-03-29T00:00:00.000Z",
+        updatedAt: "2026-03-29T00:00:01.000Z",
+      }),
+    },
+    embeddings: {
+      embed: vi.fn().mockResolvedValue([0.1, 0.2, 0.3]),
+    },
+    qdrantClient: {
+      upsert: vi.fn().mockResolvedValue(undefined),
+      query: vi.fn().mockResolvedValue({
+        points: [],
+      }),
+    },
+    config: {
+      qdrant: {
+        collectionName: "memory_chunks_v1",
+      },
+      embedding: {
+        provider: "openai" as const,
+        model: "text-embedding-3-small",
+        dimensions: 1536 as const,
+        version: "v1" as const,
+        chunkTargetTokens: 800 as const,
+        chunkOverlapTokens: 120 as const,
+      },
+    },
+    close: vi.fn().mockResolvedValue(undefined),
+  };
+}

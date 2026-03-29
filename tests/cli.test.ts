@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { parseCliArgs } from "../src/cli.js";
+import { describe, expect, it, vi } from "vitest";
+import { parseCliArgs, runCli } from "../src/cli.js";
+import type { ToolRegistry } from "../src/mcp/server.js";
 
 describe("parseCliArgs", () => {
   it("parses the pack command", () => {
@@ -43,5 +44,38 @@ describe("parseCliArgs", () => {
     expect(() =>
       parseCliArgs(["pack", "--task", "continue work"]),
     ).toThrow("Missing required --project argument");
+  });
+
+  it("runs the reindex command instead of echoing parsed arguments", async () => {
+    const registry: ToolRegistry = {
+      build_context_pack: vi.fn(),
+      search_memory: vi.fn(),
+      add_memory: vi.fn(),
+      compact_memory: vi.fn(),
+      reindex_memory: vi.fn().mockResolvedValue({
+        ok: true,
+        projectKey: "project-alpha",
+        userScopeId: "alice",
+        chunkCount: 3,
+      }),
+    };
+
+    const output = await runCli(
+      ["reindex", "--project", "project-alpha", "--user", "alice"],
+      {
+        registry,
+      },
+    );
+
+    expect(registry.reindex_memory).toHaveBeenCalledWith({
+      projectKey: "project-alpha",
+      userScopeId: "alice",
+    });
+    expect(JSON.parse(output)).toEqual({
+      ok: true,
+      projectKey: "project-alpha",
+      userScopeId: "alice",
+      chunkCount: 3,
+    });
   });
 });

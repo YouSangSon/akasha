@@ -110,6 +110,13 @@ Conceptually the system has four layers:
 
 The MVP should stay small. Three main tables plus one FTS index are enough.
 
+The storage model is split into two recall scopes:
+
+- `project` scope for repository-specific knowledge
+- `user` scope for cross-project preferences and durable operator habits
+
+Session recall should merge both scopes, with project memories ranked ahead of user memories when both are relevant.
+
 ### `sources`
 
 Represents original material captured by the system.
@@ -117,7 +124,8 @@ Represents original material captured by the system.
 Suggested fields:
 
 - `id`
-- `project_key`
+- `scope_type`
+- `scope_id`
 - `source_type`
 - `source_ref`
 - `content_hash`
@@ -137,7 +145,8 @@ Represents search and pack-building units.
 Suggested fields:
 
 - `id`
-- `project_key`
+- `scope_type`
+- `scope_id`
 - `kind`
 - `title`
 - `content`
@@ -214,7 +223,9 @@ Stores a memory record from manual input or structured session output.
 
 Input:
 
-- `project_key`
+- `scope`
+- `project_key?`
+- `user_scope_id?`
 - `kind`
 - `content`
 - `title?`
@@ -235,6 +246,8 @@ Finds relevant memories for a project/task query.
 Input:
 
 - `project_key`
+- `user_scope_id?`
+- `include_user?` default `true`
 - `query`
 - `kinds?`
 - `limit?`
@@ -256,6 +269,8 @@ Builds the main output for a new session.
 Input:
 
 - `project_key`
+- `user_scope_id?`
+- `include_user?` default `true`
 - `task`
 - `limit?`
 - `token_budget?`
@@ -306,7 +321,7 @@ Initial commands:
 
 The retrieval flow is intentionally simple.
 
-1. Restrict by `project_key`.
+1. Query the current `project` scope and the active `user` scope together.
 2. Use FTS to find initial candidates from `title`, `content`, and `summary`.
 3. Rerank candidates using:
    - recency
@@ -315,6 +330,7 @@ The retrieval flow is intentionally simple.
    - `durability`
    - `kind`
    - source-type weighting
+   - scope precedence, with `project > user`
 4. Build a structured context pack from the highest-value results.
 
 This is enough to validate the product without introducing embeddings yet.

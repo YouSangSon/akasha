@@ -1,14 +1,18 @@
 # Self-Hosted Operations
 
+This runbook covers the active Postgres + Qdrant operator stack. SQLite files remain only for legacy test fixtures and are not part of the deployed runtime path.
+
 ## Deployment operations
 
 Bring up the data plane and operator service:
 
 ```bash
 cp .env.example .env
+docker compose build app
 docker compose up -d postgres qdrant
-npm run db:migrate
-npm run dev:server
+npm run build
+docker compose run --rm app npm run db:migrate
+docker compose up -d app
 ```
 
 Check the private operator surface:
@@ -25,53 +29,70 @@ Expected response:
 
 ## Nightly backups
 
-Set the required environment variables, then run:
+Set the required environment variables, then run the packaged backup job:
 
 ```bash
-./scripts/backup-postgres.sh
-./scripts/snapshot-qdrant.sh
+npm run backup:create
 ```
 
 Required variables:
 
 - `BACKUP_DIR`
 - `DATABASE_URL`
+- `BACKUP_TARGET_HOST`
 - `QDRANT_URL`
 - `QDRANT_COLLECTION_NAME` (optional, defaults to `memory_chunks_v1`)
 - `QDRANT_API_KEY` (optional for unauthenticated local deployments)
+- `BACKUP_TARGET_DIR` (optional, defaults to `BACKUP_DIR` on the remote host)
 
-The Qdrant snapshot wrapper stores both the snapshot metadata JSON and the downloaded `.snapshot` archive in `BACKUP_DIR`.
+The backup scripts create and copy:
+
+- `postgres-YYYYMMDD-HHMM.sql.gz`
+- `qdrant-YYYYMMDD-HHMM.snapshot`
+- `manifest-YYYYMMDD-HHMM.json`
+
+The Qdrant script also keeps the snapshot metadata JSON sidecar in `BACKUP_DIR`.
 
 ## Backup verification
 
-Run the verification helper with the latest backup metadata:
+Run the verification helper against the newest local manifest and the copied files on `BACKUP_TARGET_HOST`:
 
 ```bash
-LATEST_BACKUP_AT="2026-03-30T00:00:00.000Z" \
-LOCAL_ARTIFACTS_PRESENT=true \
-REMOTE_ARTIFACTS_PRESENT=true \
-CHECKSUMS_MATCH=true \
-tsx scripts/backup-verify.ts
+npm run backup:verify
 ```
+
+`backup:verify` passes only when the newest manifest is less than 24 hours old, both artifacts exist locally, both artifacts exist on the off-box host, and the manifest checksums match both copies.
 
 ## Restore smoke
 
-Run a minimal restore smoke check with shell commands that exercise one search and one context-pack call:
+Run a disposable restore check against the newest manifest in `BACKUP_DIR`:
 
 ```bash
-RESTORE_SMOKE_SEARCH_CMD='echo "[{\"id\":12}]"' \
-RESTORE_SMOKE_PACK_CMD='echo "{\"ok\":true}"' \
-tsx scripts/restore-smoke.ts
+export RESTORE_POSTGRES_PORT=15432
+export RESTORE_QDRANT_PORT=16333
+export RESTORE_APP_PORT=18787
+export RESTORE_POSTGRES_URL="postgres://memory:memory@127.0.0.1:${RESTORE_POSTGRES_PORT}/memory_os"
+export RESTORE_QDRANT_URL="http://127.0.0.1:${RESTORE_QDRANT_PORT}"
+export RESTORE_SMOKE_PROJECT_KEY="project-alpha"
+export RESTORE_SMOKE_SEARCH_QUERY="continue work"
+export RESTORE_SMOKE_PACK_TASK="continue work"
+export RESTORE_SMOKE_POSTGRES_RESTORE_CMD='cat "$RESTORE_SMOKE_POSTGRES_ARTIFACT_PATH" | gunzip | psql "$RESTORE_POSTGRES_URL"'
+export RESTORE_SMOKE_QDRANT_RESTORE_CMD='curl -fsS -X POST "$RESTORE_QDRANT_URL/collections/memory_chunks_v1/snapshots/upload" -F "snapshot=@$RESTORE_SMOKE_QDRANT_ARTIFACT_PATH"'
+npm run restore:smoke
 ```
 
-This helper always starts the disposable restore environment with:
+This helper always:
+
+- boots `docker compose -f compose.yaml -f compose.restore-smoke.yaml -p restore-smoke up -d postgres qdrant`
+- resolves the newest manifest and artifact paths from `BACKUP_DIR`
+- restores the newest Postgres dump into the isolated database
+- restores the newest Qdrant snapshot into the isolated vector store
+- starts the `app` service only after both restores succeed and waits for `/healthz`
+- runs one real `search_memory` query and one real `build_context_pack` call against the restored services
+- tears the disposable environment down with `docker compose -f compose.yaml -f compose.restore-smoke.yaml -p restore-smoke down -v`
+
+Manual teardown is still safe if a shell command fails mid-run:
 
 ```bash
-docker compose -p restore-smoke up -d
-```
-
-After the smoke check finishes:
-
-```bash
-docker compose -p restore-smoke down -v
+docker compose -f compose.yaml -f compose.restore-smoke.yaml -p restore-smoke down -v
 ```

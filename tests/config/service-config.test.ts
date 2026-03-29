@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { resolveServiceConfig } from "../../src/config.js";
 
 describe("resolveServiceConfig", () => {
-  it("parses Postgres, Qdrant, OpenAI, and backup settings", () => {
+  it("parses Postgres, Qdrant, OpenAI, and optional backup settings", () => {
     const config = resolveServiceConfig({
       env: {
         NODE_ENV: "production",
@@ -35,7 +35,6 @@ describe("resolveServiceConfig", () => {
           QDRANT_URL: "http://qdrant:6333",
           QDRANT_API_KEY: "local-qdrant-key",
           OPENAI_API_KEY: "test-openai-key",
-          BACKUP_TARGET_HOST: "backup@example.internal",
           PORT: "not-a-port",
         },
       }),
@@ -51,12 +50,24 @@ describe("resolveServiceConfig", () => {
         QDRANT_URL: "http://qdrant:6333",
         QDRANT_API_KEY: "local-qdrant-key",
         OPENAI_API_KEY: "test-openai-key",
-        BACKUP_TARGET_HOST: "backup@example.internal",
       },
     });
 
     expect(config.databaseUrl).toBe(
       "postgres://memory:memory@postgres:5432/memory_os",
     );
+  });
+
+  it("does not require a backup target host for runtime services", () => {
+    const config = resolveServiceConfig({
+      env: {
+        DATABASE_URL: "postgres://memory:memory@postgres:5432/memory_os",
+        QDRANT_URL: "http://qdrant:6333",
+        QDRANT_API_KEY: "local-qdrant-key",
+        OPENAI_API_KEY: "test-openai-key",
+      },
+    });
+
+    expect(config.backups.targetHost).toBeUndefined();
   });
 });
