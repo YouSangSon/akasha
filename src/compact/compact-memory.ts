@@ -96,10 +96,10 @@ function groupDuplicateEphemeralRecords(
       continue;
     }
 
-    const normalizedContent = normalizeContent(record.content);
-    const existingGroup = groupedRecords.get(normalizedContent) ?? [];
+    const groupKey = duplicateGroupKey(record);
+    const existingGroup = groupedRecords.get(groupKey) ?? [];
     existingGroup.push(record);
-    groupedRecords.set(normalizedContent, existingGroup);
+    groupedRecords.set(groupKey, existingGroup);
   }
 
   return [...groupedRecords.values()]
@@ -127,4 +127,8 @@ function isEphemeralCandidate(record: SearchMemoryResult): boolean {
 
 function normalizeContent(content: string): string {
   return content.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function duplicateGroupKey(record: SearchMemoryResult): string {
+  return `${record.scopeType}:${record.scopeId}:${normalizeContent(record.content)}`;
 }
