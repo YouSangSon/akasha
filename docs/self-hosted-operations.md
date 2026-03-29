@@ -1,5 +1,28 @@
 # Self-Hosted Operations
 
+## Deployment operations
+
+Bring up the data plane and operator service:
+
+```bash
+cp .env.example .env
+docker compose up -d postgres qdrant
+npm run db:migrate
+npm run dev:server
+```
+
+Check the private operator surface:
+
+```bash
+curl http://127.0.0.1:8787/healthz
+```
+
+Expected response:
+
+```json
+{"ok":true,"host":"127.0.0.1","port":8787}
+```
+
 ## Nightly backups
 
 Set the required environment variables, then run:
@@ -16,6 +39,8 @@ Required variables:
 - `QDRANT_URL`
 - `QDRANT_COLLECTION_NAME` (optional, defaults to `memory_chunks_v1`)
 - `QDRANT_API_KEY` (optional for unauthenticated local deployments)
+
+The Qdrant snapshot wrapper stores both the snapshot metadata JSON and the downloaded `.snapshot` archive in `BACKUP_DIR`.
 
 ## Backup verification
 
@@ -39,10 +64,14 @@ RESTORE_SMOKE_PACK_CMD='echo "{\"ok\":true}"' \
 tsx scripts/restore-smoke.ts
 ```
 
-This helper always starts the restore environment with:
+This helper always starts the disposable restore environment with:
 
 ```bash
 docker compose -p restore-smoke up -d
 ```
 
-Use a disposable compose project name and tear it down after the check completes.
+After the smoke check finishes:
+
+```bash
+docker compose -p restore-smoke down -v
+```
