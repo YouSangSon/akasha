@@ -1,6 +1,28 @@
 import type { SearchMemoryResult } from "../types.js";
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
+const RANKING_WEIGHTS = {
+  scope: {
+    project: 60,
+    user: 0,
+  },
+  memoryType: {
+    decision: 120,
+    summary: 70,
+    fact: 45,
+  },
+  sourceType: {
+    decision: 30,
+    document: 15,
+    conversation: 0,
+  },
+  recency: {
+    maxBonus: 25,
+  },
+  penalty: {
+    genericNote: 35,
+  },
+} as const;
 
 export function rankResults(
   records: SearchMemoryResult[],
@@ -38,45 +60,34 @@ function scoreRecord(
 ): number {
   let score = 0;
 
-  score += record.scopeType === "project" ? 60 : 0;
+  score += RANKING_WEIGHTS.scope[record.scopeType];
   score += memoryTypeWeight(record);
   score += sourceTypeWeight(record);
   score += recencyWeight(record.updatedAt, newestUpdatedAt);
 
   if (looksGeneric(record)) {
-    score -= 35;
+    score -= RANKING_WEIGHTS.penalty.genericNote;
   }
 
   return score;
 }
 
 function memoryTypeWeight(record: SearchMemoryResult): number {
-  switch (record.memoryType) {
-    case "decision":
-      return 120;
-    case "summary":
-      return 70;
-    case "fact":
-      return 45;
-  }
+  return RANKING_WEIGHTS.memoryType[record.memoryType];
 }
 
 function sourceTypeWeight(record: SearchMemoryResult): number {
-  switch (record.source.sourceType) {
-    case "decision":
-      return 30;
-    case "document":
-      return 15;
-    case "conversation":
-      return 0;
-  }
+  return RANKING_WEIGHTS.sourceType[record.source.sourceType];
 }
 
 function recencyWeight(updatedAt: string, newestUpdatedAt: number): number {
   const updatedAtTime = Date.parse(updatedAt);
   const dayDistance = Math.max(0, (newestUpdatedAt - updatedAtTime) / DAY_IN_MS);
 
-  return Math.max(0, 25 - Math.floor(dayDistance));
+  return Math.max(
+    0,
+    RANKING_WEIGHTS.recency.maxBonus - Math.floor(dayDistance),
+  );
 }
 
 function looksGeneric(record: SearchMemoryResult): boolean {

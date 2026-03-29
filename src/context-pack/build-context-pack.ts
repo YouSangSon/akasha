@@ -1,6 +1,14 @@
 import { rankResults } from "../search/rank-results.js";
 import type { SearchMemoryResult } from "../types.js";
 
+const SECTION_LIMITS = {
+  project_summary: 2,
+  recent_decisions: 5,
+  constraints: 5,
+  open_questions: 5,
+  relevant_notes: 5,
+} as const;
+
 export type ContextPackSections = {
   project_summary: SearchMemoryResult[];
   recent_decisions: SearchMemoryResult[];
@@ -32,26 +40,38 @@ export function buildContextPack(
 
   for (const record of rankedRecords) {
     if (isOpenQuestion(record)) {
-      sections.open_questions.push(record);
+      pushIfWithinLimit(sections.open_questions, record, SECTION_LIMITS.open_questions);
       continue;
     }
 
     if (isConstraint(record)) {
-      sections.constraints.push(record);
+      pushIfWithinLimit(sections.constraints, record, SECTION_LIMITS.constraints);
       continue;
     }
 
     if (isDecision(record)) {
-      sections.recent_decisions.push(record);
+      pushIfWithinLimit(
+        sections.recent_decisions,
+        record,
+        SECTION_LIMITS.recent_decisions,
+      );
       continue;
     }
 
     if (isProjectSummary(record)) {
-      sections.project_summary.push(record);
+      pushIfWithinLimit(
+        sections.project_summary,
+        record,
+        SECTION_LIMITS.project_summary,
+      );
       continue;
     }
 
-    sections.relevant_notes.push(record);
+    pushIfWithinLimit(
+      sections.relevant_notes,
+      record,
+      SECTION_LIMITS.relevant_notes,
+    );
   }
 
   return {
@@ -105,8 +125,22 @@ function renderSection(
 
   const lines = records.map((record) => {
     const sourceLabel = record.source.title ?? record.source.externalId;
-    return `- ${record.content} (${record.scopeType} scope; source: ${sourceLabel})`;
+    return `- ${toSingleLineExcerpt(record.content)} (${record.scopeType} scope; source: ${sourceLabel})`;
   });
 
   return `## ${title}\n${lines.join("\n")}`;
+}
+
+function pushIfWithinLimit(
+  section: SearchMemoryResult[],
+  record: SearchMemoryResult,
+  limit: number,
+): void {
+  if (section.length < limit) {
+    section.push(record);
+  }
+}
+
+function toSingleLineExcerpt(content: string): string {
+  return content.replace(/\s+/g, " ").trim();
 }
