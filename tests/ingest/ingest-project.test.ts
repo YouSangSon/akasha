@@ -21,8 +21,26 @@ afterEach(() => {
 });
 
 describe("project ingestion", () => {
-  it("collects approved project sources and stores normalized records", () => {
-    const sources = collectProjectSources(fixtureProjectRoot);
+  it("collects only the explicit approved project sources and stores normalized records", () => {
+    const tempProjectRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "developer-memory-os-ingest-fixture-"),
+    );
+    tempDirs.push(tempProjectRoot);
+
+    fs.cpSync(fixtureProjectRoot, tempProjectRoot, { recursive: true });
+    fs.mkdirSync(path.join(tempProjectRoot, ".omx", "tmux"), {
+      recursive: true,
+    });
+    fs.writeFileSync(
+      path.join(tempProjectRoot, ".omx", "tmux", "session-log.md"),
+      "# Session Log\n\nThis file should not be ingested.\n",
+    );
+    fs.writeFileSync(
+      path.join(tempProjectRoot, "docs", "notes.md"),
+      "# Notes\n\nThis file should not be ingested.\n",
+    );
+
+    const sources = collectProjectSources(tempProjectRoot);
 
     expect(sources).toEqual([
       expect.objectContaining({
@@ -50,6 +68,13 @@ describe("project ingestion", () => {
         content: expect.stringContaining("feat: scaffold memory repository"),
       }),
     ]);
+    expect(sources).toHaveLength(4);
+    expect(sources.map((source) => source.sourceRef)).toEqual([
+      ".omx/context/session-1.md",
+      "README.md",
+      "docs/decision-log.md",
+      "git-log.txt",
+    ]);
 
     for (const source of sources) {
       expect(source.content.length).toBeGreaterThan(0);
@@ -65,7 +90,7 @@ describe("project ingestion", () => {
 
     const repository = createMemoryRepository(db);
     const records = ingestProjectArtifacts({
-      projectRoot: fixtureProjectRoot,
+      projectRoot: tempProjectRoot,
       projectId: "project-alpha",
       repository,
     });
