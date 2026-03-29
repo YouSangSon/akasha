@@ -6,7 +6,7 @@ describe("toQdrantPoint", () => {
     const point = toQdrantPoint({
       chunk: {
         id: 15,
-        memoryRecordId: 9,
+        memoryRecordId: 77,
         chunkIndex: 0,
         content: "Always respond in Korean unless the repo says otherwise.",
         embeddingVersion: "v1",

@@ -46,7 +46,7 @@ export function toQdrantPoint(input: QdrantPointInput): QdrantPoint {
     vector: input.embedding,
     payload: {
       chunk_id: input.chunk.id,
-      memory_record_id: input.chunk.memoryRecordId,
+      memory_record_id: input.record.id,
       scope_type: input.record.scopeType,
       scope_id: input.record.scopeId,
       project_key: input.record.projectKey,
