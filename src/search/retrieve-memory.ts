@@ -23,12 +23,10 @@ export type RetrieveMemoryInput = {
     query(
       collectionName: string,
       args: {
-      query: number[];
-      limit: number;
-      filter: {
-        should: QdrantScopeFilter[];
-      };
-    },
+        query: number[];
+        limit: number;
+        filter: QdrantScopeFilter;
+      },
     ): Promise<QdrantQueryResult>;
   };
   repository: {
@@ -44,28 +42,21 @@ export type RetrieveMemoryInput = {
 export async function retrieveMemory(
   input: RetrieveMemoryInput,
 ): Promise<SearchMemoryResult[]> {
-  const response = await input.qdrantClient.query(input.collectionName, {
-    query: input.vector,
-    limit: input.limit,
-    filter: {
-      should: [
-        {
-          must: [
-            { key: "scope_type", match: { value: "project" } },
-            { key: "project_key", match: { value: input.projectKey } },
-          ],
-        },
-        {
-          must: [
-            { key: "scope_type", match: { value: "user" } },
-            { key: "scope_id", match: { value: input.userScopeId } },
-          ],
-        },
-      ],
-    },
-  });
+  const [projectResponse, userResponse] = await Promise.all([
+    queryScope(input, [
+      { key: "scope_type", match: { value: "project" } },
+      { key: "project_key", match: { value: input.projectKey } },
+    ]),
+    queryScope(input, [
+      { key: "scope_type", match: { value: "user" } },
+      { key: "scope_id", match: { value: input.userScopeId } },
+    ]),
+  ]);
 
-  const ids = uniqueMemoryRecordIds(response.points).slice(0, input.limit);
+  const ids = uniqueMemoryRecordIds([
+    ...projectResponse.points,
+    ...userResponse.points,
+  ]);
 
   if (ids.length === 0) {
     return [];
@@ -74,6 +65,17 @@ export async function retrieveMemory(
   const hydratedRecords = await input.repository.getMemoryRecordsByIds(ids);
 
   return rankResults(hydratedRecords).slice(0, input.limit);
+}
+
+function queryScope(
+  input: RetrieveMemoryInput,
+  must: QdrantFilterMatch[],
+): Promise<QdrantQueryResult> {
+  return input.qdrantClient.query(input.collectionName, {
+    query: input.vector,
+    limit: input.limit,
+    filter: { must },
+  });
 }
 
 function uniqueMemoryRecordIds(
