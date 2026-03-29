@@ -22,6 +22,7 @@ The design goal is not just storage. It is to build a deployable, Supermemory-li
 - vector-backed retrieval
 - conservative compaction and promotion
 - operational recovery through backups, snapshots, and reindexing
+- operator-only access in milestone 1
 
 ## Why This Design
 
@@ -57,11 +58,25 @@ The difference is that retrieval is no longer limited to local SQLite FTS. It be
   - `app`
   - `postgres`
   - `qdrant`
-  - `caddy`
+
+### Operator access model
+
+Milestone 1 assumes a single trusted operator, not a public multi-user service.
+
+The access contract is:
+
+- the `app` service binds only to the internal Docker network and host loopback
+- there is no public HTTP endpoint in milestone 1
+- the operator reaches the app from a laptop through an `ssh -L` tunnel to the VPS
+- MCP `stdio` remains local-only
+- any remote operator flow goes through the tunneled app or CLI entrypoints
+
+This is the authentication boundary for milestone 1. No separate application login system is required while the service remains SSH-tunneled and single-operator.
 
 ### Networking
 
-- only the reverse proxy is public
+- only SSH is exposed publicly in milestone 1
+- the app remains private behind loopback and the internal Docker network
 - Postgres and Qdrant remain on the internal Docker network
 - Qdrant is never exposed directly to the public internet
 - Postgres is never exposed directly to the public internet
@@ -70,7 +85,7 @@ The difference is that retrieval is no longer limited to local SQLite FTS. It be
 
 This is the lightest self-hosted production shape that still preserves a clean separation between truth store and retrieval store.
 
-It is intentionally simpler than Kubernetes while remaining more future-proof than a `pgvector`-only design.
+It is intentionally simpler than Kubernetes while remaining more future-proof than a `pgvector`-only design. It also avoids inventing a public auth surface before the service actually needs one.
 
 ## Data Boundaries
 
@@ -130,6 +145,46 @@ Responsibilities:
 - dense retrieval in v1
 - dense + sparse hybrid retrieval in a later milestone
 
+## Embedding Contract
+
+The embedding contract is fixed in milestone 1 so the Qdrant collection, worker pipeline, and reindex behavior are all deterministic.
+
+### Milestone 1 embedding provider
+
+- provider: `OpenAI`
+- model: `text-embedding-3-small`
+- dimensions: `1536`
+- query embedding model: same as document embedding model
+- local embedding models are explicitly out of scope for milestone 1
+
+### Chunking policy
+
+- chunk target size: `800` tokens
+- chunk overlap: `120` tokens
+- chunks are derived from normalized source text, not raw file bytes
+- each chunk stores its source offsets and chunk index in Postgres
+
+### Versioning and reindexing
+
+Postgres must store these fields for every indexed chunk:
+
+- `embedding_provider`
+- `embedding_model`
+- `embedding_dimensions`
+- `embedding_version`
+
+`embedding_version` starts at `v1`.
+
+Any change to:
+
+- provider
+- model
+- dimensions
+- chunking policy
+- payload schema used for Qdrant filtering
+
+requires a full `reindex` run and a new Qdrant collection generation.
+
 ## Recall Model
 
 The service always treats memory as two recall scopes:
@@ -178,15 +233,42 @@ This makes Qdrant rebuildable from Postgres.
 ### v1 backup policy
 
 - nightly `pg_dump`
-- off-box backup copy
+- off-box backup copy to an SSH-reachable backup host
 - scheduled Qdrant snapshots
 - off-box snapshot copy
+
+Backup artifacts:
+
+- `postgres-YYYYMMDD-HHMM.sql.gz`
+- `qdrant-YYYYMMDD-HHMM.snapshot`
+- `manifest-YYYYMMDD-HHMM.json` containing SHA256 checksums and creation timestamps
 
 ### Recovery policy
 
 - Postgres recovery from dump in v1
 - Qdrant recovery from snapshot
 - full Qdrant rebuild from Postgres `memory_chunks` if needed
+
+### Backup verify contract
+
+`backup verify` passes only when all of the following are true:
+
+- the newest Postgres dump exists locally
+- the newest Qdrant snapshot exists locally
+- both artifacts also exist on the off-box backup host
+- manifest checksums match both local and off-box copies
+- newest successful backup age is less than `24` hours
+
+### Restore smoke contract
+
+`restore smoke` passes only when all of the following are true:
+
+- a fresh isolated Compose project can boot Postgres and Qdrant
+- the latest Postgres dump restores into the empty Postgres instance
+- the latest Qdrant snapshot restores into the empty Qdrant instance
+- the app can start against the restored services
+- one seeded search query returns at least one result
+- one `build_context_pack` call succeeds
 
 ### Deferred but planned
 
@@ -196,11 +278,12 @@ This is intentionally deferred out of the first production milestone to keep sel
 
 ## Security
 
-- reverse proxy terminates TLS
+- SSH key login only on the VPS
+- app access is operator-only through SSH local port forwarding
 - Qdrant protected behind the internal network and API key
 - Postgres restricted to the internal network
 - secrets passed through environment files or secret injection, not hardcoded
-- SSH key login only on the VPS
+- public HTTPS ingress is deferred until a later auth design exists
 
 ## Milestone Gates
 
@@ -211,8 +294,10 @@ This is intentionally deferred out of the first production milestone to keep sel
 Must include:
 
 - Postgres + Qdrant + app in Docker Compose
+- operator-only SSH-tunneled access model
 - dense retrieval through Qdrant
 - project + user scope recall
+- the fixed `text-embedding-3-small` embedding contract
 - nightly Postgres backup
 - scheduled Qdrant snapshots
 - `reindex` command
@@ -258,6 +343,7 @@ Mitigation:
 - Docker Compose
 - strict backup discipline
 - explicit restore drills
+- no public ingress in milestone 1
 
 ### Index drift
 
