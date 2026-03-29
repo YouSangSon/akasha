@@ -1,0 +1,2 @@
+abc1234 feat: scaffold memory repository
+def5678 docs: record ingestion plan
