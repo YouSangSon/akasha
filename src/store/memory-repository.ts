@@ -1,13 +1,17 @@
+import { createHash } from "node:crypto";
 import type Database from "better-sqlite3";
+import type { PgPool } from "../db/connection.js";
 import type {
   AddMemoryInput,
+  CanonicalMemoryRepository,
   MemoryRepository,
   MemorySource,
+  ScopeRef,
   SearchMemoryInput,
   SearchMemoryResult,
 } from "../types.js";
 
-type InsertSourceRow = {
+type SqliteInsertSourceRow = {
   id: number;
   scope_type: MemorySource["scopeType"];
   scope_id: string;
@@ -18,7 +22,7 @@ type InsertSourceRow = {
   created_at: string;
 };
 
-type InsertMemoryRow = {
+type SqliteInsertMemoryRow = {
   id: number;
   source_id: number;
   scope_type: SearchMemoryResult["scopeType"];
@@ -29,15 +33,59 @@ type InsertMemoryRow = {
   updated_at: string;
 };
 
-type SearchRow = InsertMemoryRow &
-  Omit<InsertSourceRow, "id" | "scope_type" | "scope_id" | "created_at"> & {
+type SqliteSearchRow = SqliteInsertMemoryRow &
+  Omit<SqliteInsertSourceRow, "id" | "scope_type" | "scope_id" | "created_at"> & {
     source_id_joined: number;
     source_scope_type: MemorySource["scopeType"];
     source_scope_id: string;
     source_created_at: string;
   };
 
+type PostgresMemoryRow = {
+  id: number;
+  scope_type: SearchMemoryResult["scopeType"];
+  scope_id: string;
+  project_key: string | null;
+  kind: SearchMemoryResult["memoryType"];
+  title: string | null;
+  content: string;
+  summary: string | null;
+  durability: NonNullable<SearchMemoryResult["durability"]>;
+  importance: number;
+  source_id: number;
+  created_at: string | Date;
+  updated_at: string | Date;
+};
+
+type PostgresSourceRow = {
+  source_id_joined: number;
+  source_scope_type: MemorySource["scopeType"];
+  source_scope_id: string;
+  source_type: MemorySource["sourceType"];
+  source_ref: string;
+  source_title: string | null;
+  source_created_at: string | Date;
+};
+
+type PostgresSearchRow = PostgresMemoryRow & PostgresSourceRow;
+
 export function createMemoryRepository(
+  db: Database.Database,
+): MemoryRepository;
+export function createMemoryRepository(
+  pool: PgPool,
+): CanonicalMemoryRepository;
+export function createMemoryRepository(
+  target: Database.Database | PgPool,
+): MemoryRepository | CanonicalMemoryRepository {
+  if (isPgPool(target)) {
+    return createPostgresMemoryRepository(target);
+  }
+
+  return createSqliteMemoryRepository(target);
+}
+
+function createSqliteMemoryRepository(
   db: Database.Database,
 ): MemoryRepository {
   const upsertSource = db.prepare(
@@ -105,10 +153,10 @@ export function createMemoryRepository(
       input.source.scopeType,
       input.source.scopeId,
       input.source.sourceType,
-      input.source.externalId,
+      toSourceKey(input.source),
       input.source.title ?? null,
       input.source.uri ?? null,
-    ) as InsertSourceRow;
+    ) as SqliteInsertSourceRow;
 
     const memoryRow = insertMemory.get(
       sourceRow.id,
@@ -116,9 +164,9 @@ export function createMemoryRepository(
       input.scopeId,
       input.memoryType,
       input.content,
-    ) as InsertMemoryRow;
+    ) as SqliteInsertMemoryRow;
 
-    return mapSearchResult({
+    return mapSqliteSearchResult({
       ...memoryRow,
       source_id_joined: sourceRow.id,
       source_scope_type: sourceRow.scope_type,
@@ -188,7 +236,7 @@ export function createMemoryRepository(
       return db
         .prepare(searchSql)
         .all(params)
-        .map((row) => mapSearchResult(row as SearchRow));
+        .map((row) => mapSqliteSearchResult(row as SqliteSearchRow));
     },
 
     listMemory(scope) {
@@ -219,12 +267,189 @@ export function createMemoryRepository(
       return db
         .prepare(listSql)
         .all(scope.scopeType, scope.scopeId)
-        .map((row) => mapSearchResult(row as SearchRow));
+        .map((row) => mapSqliteSearchResult(row as SqliteSearchRow));
     },
   };
 }
 
-function mapSearchResult(row: SearchRow): SearchMemoryResult {
+function createPostgresMemoryRepository(
+  pool: PgPool,
+): CanonicalMemoryRepository {
+  return {
+    async addMemory(input) {
+      const sourceResult = await pool.query<PostgresSourceRow>(
+        `
+          INSERT INTO sources (
+            scope_type,
+            scope_id,
+            source_type,
+            source_ref,
+            title,
+            content_hash
+          ) VALUES ($1, $2, $3, $4, $5, $6)
+          RETURNING
+            id AS source_id_joined,
+            scope_type AS source_scope_type,
+            scope_id AS source_scope_id,
+            source_type,
+            source_ref,
+            title AS source_title,
+            captured_at AS source_created_at
+        `,
+        [
+          input.source.scopeType,
+          input.source.scopeId,
+          input.source.sourceType,
+          toSourceKey(input.source),
+          input.source.title ?? null,
+          createHash("sha256").update(input.content).digest("hex"),
+        ],
+      );
+
+      const sourceRow = requireSingleRow(sourceResult.rows[0], "source");
+
+      const memoryResult = await pool.query<PostgresMemoryRow>(
+        `
+          INSERT INTO memory_records (
+            scope_type,
+            scope_id,
+            project_key,
+            kind,
+            title,
+            content,
+            summary,
+            durability,
+            importance,
+            source_id
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          RETURNING
+            id,
+            scope_type,
+            scope_id,
+            project_key,
+            kind,
+            title,
+            content,
+            summary,
+            durability,
+            importance,
+            source_id,
+            created_at,
+            updated_at
+        `,
+        [
+          input.scopeType,
+          input.scopeId,
+          input.projectKey ?? null,
+          input.memoryType,
+          input.title ?? null,
+          input.content,
+          input.summary ?? summarize(input.content),
+          input.durability ?? "ephemeral",
+          input.importance ?? 0,
+          sourceRow.source_id_joined,
+        ],
+      );
+
+      return mapPostgresSearchResult({
+        ...requireSingleRow(memoryResult.rows[0], "memory"),
+        ...sourceRow,
+      });
+    },
+
+    async searchMemory(input) {
+      if (input.scopes.length === 0) {
+        return [];
+      }
+
+      const limit = Math.max(1, Math.min(input.limit ?? 10, 100));
+      const params: unknown[] = [`%${input.query}%`];
+      const scopeClauses = input.scopes.map((scope, index) => {
+        const scopeTypeIndex = params.push(scope.scopeType);
+        const scopeIdIndex = params.push(scope.scopeId);
+        return `(mr.scope_type = $${scopeTypeIndex} AND mr.scope_id = $${scopeIdIndex})`;
+      });
+
+      const limitIndex = params.push(limit);
+      const result = await pool.query<PostgresSearchRow>(
+        `
+          SELECT
+            mr.id,
+            mr.scope_type,
+            mr.scope_id,
+            mr.project_key,
+            mr.kind,
+            mr.title,
+            mr.content,
+            mr.summary,
+            mr.durability,
+            mr.importance,
+            mr.source_id,
+            mr.created_at,
+            mr.updated_at,
+            s.id AS source_id_joined,
+            s.scope_type AS source_scope_type,
+            s.scope_id AS source_scope_id,
+            s.source_type,
+            s.source_ref,
+            s.title AS source_title,
+            s.captured_at AS source_created_at
+          FROM memory_records mr
+          JOIN sources s ON s.id = mr.source_id
+          WHERE mr.content ILIKE $1
+            AND (${scopeClauses.join(" OR ")})
+          ORDER BY mr.id DESC
+          LIMIT $${limitIndex}
+        `,
+        params,
+      );
+
+      return result.rows.map(mapPostgresSearchResult);
+    },
+
+    async listMemory(scope: ScopeRef) {
+      const result = await pool.query<PostgresSearchRow>(
+        `
+          SELECT
+            mr.id,
+            mr.scope_type,
+            mr.scope_id,
+            mr.project_key,
+            mr.kind,
+            mr.title,
+            mr.content,
+            mr.summary,
+            mr.durability,
+            mr.importance,
+            mr.source_id,
+            mr.created_at,
+            mr.updated_at,
+            s.id AS source_id_joined,
+            s.scope_type AS source_scope_type,
+            s.scope_id AS source_scope_id,
+            s.source_type,
+            s.source_ref,
+            s.title AS source_title,
+            s.captured_at AS source_created_at
+          FROM memory_records mr
+          JOIN sources s ON s.id = mr.source_id
+          WHERE mr.scope_type = $1
+            AND mr.scope_id = $2
+          ORDER BY mr.id DESC
+        `,
+        [scope.scopeType, scope.scopeId],
+      );
+
+      return result.rows.map(mapPostgresSearchResult);
+    },
+  };
+}
+
+function isPgPool(target: Database.Database | PgPool): target is PgPool {
+  return "query" in target;
+}
+
+function mapSqliteSearchResult(row: SqliteSearchRow): SearchMemoryResult {
   return {
     id: row.id,
     sourceId: row.source_id,
@@ -234,19 +459,69 @@ function mapSearchResult(row: SearchRow): SearchMemoryResult {
     content: row.content,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    source: mapSource(row),
+    source: {
+      id: row.source_id_joined,
+      scopeType: row.source_scope_type,
+      scopeId: row.source_scope_id,
+      sourceType: row.source_type,
+      externalId: row.external_id,
+      sourceRef: row.external_id,
+      title: row.title,
+      uri: row.uri,
+      createdAt: row.source_created_at,
+    },
   };
 }
 
-function mapSource(row: SearchRow): MemorySource {
+function mapPostgresSearchResult(row: PostgresSearchRow): SearchMemoryResult {
   return {
-    id: row.source_id_joined,
-    scopeType: row.source_scope_type,
-    scopeId: row.source_scope_id,
-    sourceType: row.source_type,
-    externalId: row.external_id,
+    id: toNumber(row.id),
+    sourceId: toNumber(row.source_id),
+    scopeType: row.scope_type,
+    scopeId: row.scope_id,
+    projectKey: row.project_key,
+    memoryType: row.kind,
     title: row.title,
-    uri: row.uri,
-    createdAt: row.source_created_at,
+    content: row.content,
+    summary: row.summary,
+    durability: row.durability,
+    importance: row.importance,
+    createdAt: toIsoString(row.created_at),
+    updatedAt: toIsoString(row.updated_at),
+    source: {
+      id: toNumber(row.source_id_joined),
+      scopeType: row.source_scope_type,
+      scopeId: row.source_scope_id,
+      sourceType: row.source_type,
+      externalId: row.source_ref,
+      sourceRef: row.source_ref,
+      title: row.source_title,
+      uri: null,
+      createdAt: toIsoString(row.source_created_at),
+    },
   };
+}
+
+function toSourceKey(input: AddMemoryInput["source"]): string {
+  return input.sourceRef ?? input.externalId ?? "unknown";
+}
+
+function summarize(content: string): string {
+  return content.length <= 180 ? content : `${content.slice(0, 177)}...`;
+}
+
+function toIsoString(value: string | Date): string {
+  return value instanceof Date ? value.toISOString() : value;
+}
+
+function toNumber(value: number | string): number {
+  return typeof value === "number" ? value : Number(value);
+}
+
+function requireSingleRow<TRow>(row: TRow | undefined, label: string): TRow {
+  if (!row) {
+    throw new Error(`Expected ${label} row to be returned`);
+  }
+
+  return row;
 }
