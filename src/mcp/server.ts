@@ -45,7 +45,6 @@ export type SearchMemoryToolResult = {
 export type BuildContextPackToolInput = {
   projectKey: string;
   task: string;
-  limit?: number;
 };
 
 export type BuildContextPackToolResult = {
@@ -165,7 +164,6 @@ export function createToolRegistry(
             scopeId: input.projectKey,
           },
         ],
-        limit: input.limit,
       });
       const pack = buildContextPack({ records });
 
@@ -249,7 +247,6 @@ export function createMcpServer(
       inputSchema: {
         projectKey: z.string().min(1),
         task: z.string().min(1),
-        limit: z.number().int().min(1).max(100).optional(),
       },
     },
     (input) => toToolResult(registry.build_context_pack(input)),
