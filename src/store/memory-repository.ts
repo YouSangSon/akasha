@@ -69,6 +69,11 @@ type PostgresSourceRow = {
 
 type PostgresSearchRow = PostgresMemoryRow & PostgresSourceRow;
 
+type PostgresStoredSourceMetadata = {
+  sourceRef: string;
+  uri: string | null;
+};
+
 export function createMemoryRepository(
   db: Database.Database,
 ): MemoryRepository;
@@ -277,36 +282,7 @@ function createPostgresMemoryRepository(
 ): CanonicalMemoryRepository {
   return {
     async addMemory(input) {
-      const sourceResult = await pool.query<PostgresSourceRow>(
-        `
-          INSERT INTO sources (
-            scope_type,
-            scope_id,
-            source_type,
-            source_ref,
-            title,
-            content_hash
-          ) VALUES ($1, $2, $3, $4, $5, $6)
-          RETURNING
-            id AS source_id_joined,
-            scope_type AS source_scope_type,
-            scope_id AS source_scope_id,
-            source_type,
-            source_ref,
-            title AS source_title,
-            captured_at AS source_created_at
-        `,
-        [
-          input.source.scopeType,
-          input.source.scopeId,
-          input.source.sourceType,
-          toSourceKey(input.source),
-          input.source.title ?? null,
-          createHash("sha256").update(input.content).digest("hex"),
-        ],
-      );
-
-      const sourceRow = requireSingleRow(sourceResult.rows[0], "source");
+      const sourceRow = await upsertPostgresSource(pool, input);
 
       const memoryResult = await pool.query<PostgresMemoryRow>(
         `
@@ -474,6 +450,8 @@ function mapSqliteSearchResult(row: SqliteSearchRow): SearchMemoryResult {
 }
 
 function mapPostgresSearchResult(row: PostgresSearchRow): SearchMemoryResult {
+  const sourceMetadata = parseStoredPostgresSourceRef(row.source_ref);
+
   return {
     id: toNumber(row.id),
     sourceId: toNumber(row.source_id),
@@ -493,10 +471,10 @@ function mapPostgresSearchResult(row: PostgresSearchRow): SearchMemoryResult {
       scopeType: row.source_scope_type,
       scopeId: row.source_scope_id,
       sourceType: row.source_type,
-      externalId: row.source_ref,
-      sourceRef: row.source_ref,
+      externalId: sourceMetadata.sourceRef,
+      sourceRef: sourceMetadata.sourceRef,
       title: row.source_title,
-      uri: null,
+      uri: sourceMetadata.uri,
       createdAt: toIsoString(row.source_created_at),
     },
   };
@@ -524,4 +502,126 @@ function requireSingleRow<TRow>(row: TRow | undefined, label: string): TRow {
   }
 
   return row;
+}
+
+async function upsertPostgresSource(
+  pool: PgPool,
+  input: AddMemoryInput,
+): Promise<PostgresSourceRow> {
+  const sourceKey = toSourceKey(input.source);
+  const existingResult = await pool.query<PostgresSourceRow>(
+    `
+      SELECT
+        id AS source_id_joined,
+        scope_type AS source_scope_type,
+        scope_id AS source_scope_id,
+        source_type,
+        source_ref,
+        title AS source_title,
+        captured_at AS source_created_at
+      FROM sources
+      WHERE scope_type = $1
+        AND scope_id = $2
+        AND source_type = $3
+      ORDER BY id ASC
+    `,
+    [input.source.scopeType, input.source.scopeId, input.source.sourceType],
+  );
+
+  const existingRow = existingResult.rows.find((row) => {
+    const metadata = parseStoredPostgresSourceRef(row.source_ref);
+    return metadata.sourceRef === sourceKey;
+  });
+
+  const nextSourceRef = serializeStoredPostgresSourceRef({
+    sourceRef: sourceKey,
+    uri:
+      input.source.uri
+      ?? (existingRow
+        ? parseStoredPostgresSourceRef(existingRow.source_ref).uri
+        : null),
+  });
+
+  if (existingRow) {
+    const updatedResult = await pool.query<PostgresSourceRow>(
+      `
+        UPDATE sources
+        SET title = COALESCE($2, title),
+            source_ref = $3
+        WHERE id = $1
+        RETURNING
+          id AS source_id_joined,
+          scope_type AS source_scope_type,
+          scope_id AS source_scope_id,
+          source_type,
+          source_ref,
+          title AS source_title,
+          captured_at AS source_created_at
+      `,
+      [
+        existingRow.source_id_joined,
+        input.source.title ?? null,
+        nextSourceRef,
+      ],
+    );
+
+    return requireSingleRow(updatedResult.rows[0], "source");
+  }
+
+  const createdResult = await pool.query<PostgresSourceRow>(
+    `
+      INSERT INTO sources (
+        scope_type,
+        scope_id,
+        source_type,
+        source_ref,
+        title,
+        content_hash
+      ) VALUES ($1, $2, $3, $4, $5, $6)
+      RETURNING
+        id AS source_id_joined,
+        scope_type AS source_scope_type,
+        scope_id AS source_scope_id,
+        source_type,
+        source_ref,
+        title AS source_title,
+        captured_at AS source_created_at
+    `,
+    [
+      input.source.scopeType,
+      input.source.scopeId,
+      input.source.sourceType,
+      nextSourceRef,
+      input.source.title ?? null,
+      createHash("sha256").update(input.content).digest("hex"),
+    ],
+  );
+
+  return requireSingleRow(createdResult.rows[0], "source");
+}
+
+function serializeStoredPostgresSourceRef(
+  metadata: PostgresStoredSourceMetadata,
+): string {
+  return JSON.stringify(metadata);
+}
+
+function parseStoredPostgresSourceRef(
+  value: string,
+): PostgresStoredSourceMetadata {
+  try {
+    const parsed = JSON.parse(value) as Partial<PostgresStoredSourceMetadata>;
+
+    if (typeof parsed.sourceRef === "string") {
+      return {
+        sourceRef: parsed.sourceRef,
+        uri: typeof parsed.uri === "string" ? parsed.uri : null,
+      };
+    }
+  } catch {}
+
+  return {
+    sourceRef: value,
+    uri: null,
+  };
 }

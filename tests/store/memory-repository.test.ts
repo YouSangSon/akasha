@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createPgPool } from "../../src/db/connection.js";
 import { runMigrations } from "../../src/db/migrate.js";
 import { createMemoryRepository } from "../../src/store/memory-repository.js";
@@ -52,6 +52,9 @@ async function recreateTestDatabase() {
 describe("createMemoryRepository", () => {
   beforeAll(async () => {
     await waitForPostgres();
+  });
+
+  beforeEach(async () => {
     await recreateTestDatabase();
   });
 
@@ -81,6 +84,7 @@ describe("createMemoryRepository", () => {
           sourceType: "conversation",
           sourceRef: "manual://session",
           title: "Manual note",
+          uri: "file:///tmp/manual-note.md",
         },
         durability: "durable",
         importance: 5,
@@ -100,11 +104,78 @@ describe("createMemoryRepository", () => {
           sourceType: "conversation",
           sourceRef: "manual://session",
           title: "Manual note",
+          uri: "file:///tmp/manual-note.md",
         },
       });
       expect(created.id).toBeGreaterThan(0);
       expect(created.sourceId).toBeGreaterThan(0);
       expect(created.summary).toContain("Always respond in Korean");
+      expect(created.source.uri).toBe("file:///tmp/manual-note.md");
+    } finally {
+      await pool.end();
+    }
+  });
+
+  it("preserves source metadata and reuses the same source on repeated writes", async () => {
+    const pool = createPgPool({
+      connectionString: testConnectionString,
+    });
+
+    try {
+      await runMigrations(pool);
+      const repository = createMemoryRepository(pool);
+
+      const first = await repository.addMemory({
+        scopeType: "project",
+        scopeId: "project-alpha",
+        projectKey: "project-alpha",
+        memoryType: "decision",
+        content: "Keep the original source metadata.",
+        source: {
+          scopeType: "project",
+          scopeId: "project-alpha",
+          sourceType: "document",
+          sourceRef: "docs/adr-1.md",
+          title: "ADR 1",
+          uri: "file:///tmp/project-alpha/docs/adr-1.md",
+        },
+        durability: "durable",
+        importance: 4,
+      });
+
+      const repeated = await repository.addMemory({
+        scopeType: "project",
+        scopeId: "project-alpha",
+        projectKey: "project-alpha",
+        memoryType: "fact",
+        content: "Write another memory against the same source.",
+        source: {
+          scopeType: "project",
+          scopeId: "project-alpha",
+          sourceType: "document",
+          sourceRef: "docs/adr-1.md",
+        },
+        durability: "durable",
+        importance: 2,
+      });
+
+      const searched = await repository.searchMemory({
+        query: "another memory",
+        scopes: [{ scopeType: "project", scopeId: "project-alpha" }],
+        limit: 10,
+      });
+
+      expect(repeated.sourceId).toBe(first.sourceId);
+      expect(repeated.source.title).toBe("ADR 1");
+      expect(repeated.source.uri).toBe(
+        "file:///tmp/project-alpha/docs/adr-1.md",
+      );
+      expect(searched).toHaveLength(1);
+      expect(searched[0]?.source).toMatchObject({
+        title: "ADR 1",
+        uri: "file:///tmp/project-alpha/docs/adr-1.md",
+        sourceRef: "docs/adr-1.md",
+      });
     } finally {
       await pool.end();
     }
