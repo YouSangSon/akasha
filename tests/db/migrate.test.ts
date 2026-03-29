@@ -1,14 +1,19 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createPgPool } from "../../src/db/connection.js";
-import { runMigrations } from "../../src/db/migrate.js";
+import {
+  readPostgresMigrationSql,
+  runMigrations,
+} from "../../src/db/migrate.js";
 
 type InformationSchemaTableRow = {
   table_name: string;
 };
 
-const adminConnectionString = "postgres://memory:memory@127.0.0.1:5432/postgres";
+const postgresPort = process.env.POSTGRES_PORT ?? "5432";
+const adminConnectionString =
+  `postgres://memory:memory@127.0.0.1:${postgresPort}/postgres`;
 const testConnectionString =
-  "postgres://memory:memory@127.0.0.1:5432/memory_os_test";
+  `postgres://memory:memory@127.0.0.1:${postgresPort}/memory_os_test`;
 
 async function waitForPostgres() {
   let lastError: unknown;
@@ -93,5 +98,18 @@ describe("runMigrations", () => {
     } finally {
       await pool.end();
     }
+  });
+
+  it("falls back to the embedded Postgres migration when the sql asset is unavailable", () => {
+    const sql = readPostgresMigrationSql({
+      readFile(filePath) {
+        const error = new Error(`missing: ${filePath}`) as NodeJS.ErrnoException;
+        error.code = "ENOENT";
+        throw error;
+      },
+    });
+
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS sources");
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS ingest_jobs");
   });
 });
