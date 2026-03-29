@@ -41,4 +41,22 @@ describe("resolveServiceConfig", () => {
       }),
     ).toThrow("Invalid PORT: not-a-port");
   });
+
+  it("derives the database url from Postgres env when DATABASE_URL is absent", () => {
+    const config = resolveServiceConfig({
+      env: {
+        POSTGRES_USER: "memory",
+        POSTGRES_PASSWORD: "memory",
+        POSTGRES_DB: "memory_os",
+        QDRANT_URL: "http://qdrant:6333",
+        QDRANT_API_KEY: "local-qdrant-key",
+        OPENAI_API_KEY: "test-openai-key",
+        BACKUP_TARGET_HOST: "backup@example.internal",
+      },
+    });
+
+    expect(config.databaseUrl).toBe(
+      "postgres://memory:memory@postgres:5432/memory_os",
+    );
+  });
 });

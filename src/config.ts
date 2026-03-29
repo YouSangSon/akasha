@@ -79,11 +79,12 @@ export function resolveServiceConfig(
   const host = env.HOST ?? "127.0.0.1";
   const port = parsePort(env.PORT);
   const openAiApiKey = requireEnv(env.OPENAI_API_KEY, "OPENAI_API_KEY");
+  const databaseUrl = resolveDatabaseUrl(env);
 
   return {
     host,
     port,
-    databaseUrl: requireEnv(env.DATABASE_URL, "DATABASE_URL"),
+    databaseUrl,
     qdrant: {
       url: requireEnv(env.QDRANT_URL, "QDRANT_URL"),
       apiKey: requireEnv(env.QDRANT_API_KEY, "QDRANT_API_KEY"),
@@ -134,4 +135,12 @@ function validatePathIdentifier(value: string): string {
   }
 
   return value;
+}
+
+function resolveDatabaseUrl(env: NodeJS.ProcessEnv): string {
+  if (env.DATABASE_URL) {
+    return env.DATABASE_URL;
+  }
+
+  return `postgres://${requireEnv(env.POSTGRES_USER, "POSTGRES_USER")}:${requireEnv(env.POSTGRES_PASSWORD, "POSTGRES_PASSWORD")}@postgres:5432/${requireEnv(env.POSTGRES_DB, "POSTGRES_DB")}`;
 }
