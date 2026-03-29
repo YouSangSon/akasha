@@ -40,10 +40,11 @@ services:
         condition: service_started
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      HOST: 0.0.0.0
     volumes:
       - backup_data:/var/lib/developer-memory-os/backups
     ports:
-      - "127.0.0.1:8787:8787"
+      - "127.0.0.1:${PORT}:${PORT}"
 
 volumes:
   backup_data:
