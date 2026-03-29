@@ -1,180 +1,97 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
-import { createMemoryDb } from "../../src/db/connection.js";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createPgPool } from "../../src/db/connection.js";
 import { runMigrations } from "../../src/db/migrate.js";
 
-const tempDirs: string[] = [];
+type InformationSchemaTableRow = {
+  table_name: string;
+};
 
-afterEach(() => {
-  for (const dir of tempDirs.splice(0)) {
-    fs.rmSync(dir, { recursive: true, force: true });
+const adminConnectionString = "postgres://memory:memory@127.0.0.1:5432/postgres";
+const testConnectionString =
+  "postgres://memory:memory@127.0.0.1:5432/memory_os_test";
+
+async function waitForPostgres() {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const adminPool = createPgPool({
+      connectionString: adminConnectionString,
+    });
+
+    try {
+      await adminPool.query("SELECT 1");
+      return;
+    } catch (error: unknown) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    } finally {
+      await adminPool.end().catch(() => undefined);
+    }
   }
-});
 
-describe("runMigrations", () => {
-  it("creates the core tables, fts table, and triggers", () => {
-    const tempDir = fs.mkdtempSync(
-      path.join(os.tmpdir(), "developer-memory-os-migrate-"),
-    );
-    tempDirs.push(tempDir);
+  throw lastError;
+}
 
-    const db = createMemoryDb(path.join(tempDir, "memory.db"));
-
-    runMigrations(db);
-
-    const tables = db
-      .prepare(
-        `
-          SELECT name
-          FROM sqlite_master
-          WHERE type = 'table'
-            AND name IN ('sources', 'memory_records', 'context_pack_runs', 'memory_records_fts')
-          ORDER BY name
-        `,
-      )
-      .all() as Array<{ name: string }>;
-
-    const triggers = db
-      .prepare(
-        `
-          SELECT name
-          FROM sqlite_master
-          WHERE type = 'trigger'
-            AND name IN (
-              'memory_records_ai',
-              'memory_records_ad',
-              'memory_records_au'
-            )
-          ORDER BY name
-        `,
-      )
-      .all() as Array<{ name: string }>;
-
-    const indexes = db
-      .prepare(
-        `
-          SELECT name
-          FROM sqlite_master
-          WHERE type = 'index'
-            AND name IN (
-              'idx_sources_scope',
-              'idx_memory_records_scope',
-              'idx_memory_records_source_id'
-            )
-          ORDER BY name
-        `,
-      )
-      .all() as Array<{ name: string }>;
-
-    expect(tables.map((row) => row.name)).toEqual([
-      "context_pack_runs",
-      "memory_records",
-      "memory_records_fts",
-      "sources",
-    ]);
-    expect(indexes.map((row) => row.name)).toEqual([
-      "idx_memory_records_scope",
-      "idx_memory_records_source_id",
-      "idx_sources_scope",
-    ]);
-    expect(triggers.map((row) => row.name)).toEqual([
-      "memory_records_ad",
-      "memory_records_ai",
-      "memory_records_au",
-    ]);
+async function recreateTestDatabase() {
+  const adminPool = createPgPool({
+    connectionString: adminConnectionString,
   });
 
-  it("backfills the fts table for memory records that predate the migration", () => {
-    const tempDir = fs.mkdtempSync(
-      path.join(os.tmpdir(), "developer-memory-os-migrate-backfill-"),
+  try {
+    await adminPool.query(
+      "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()",
+      ["memory_os_test"],
     );
-    tempDirs.push(tempDir);
+    await adminPool.query('DROP DATABASE IF EXISTS "memory_os_test"');
+    await adminPool.query('CREATE DATABASE "memory_os_test"');
+  } finally {
+    await adminPool.end();
+  }
+}
 
-    const db = createMemoryDb(path.join(tempDir, "memory.db"));
+describe("runMigrations", () => {
+  beforeAll(async () => {
+    await waitForPostgres();
+    await recreateTestDatabase();
+  });
 
-    db.exec(`
-      CREATE TABLE sources (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        scope_type TEXT NOT NULL,
-        scope_id TEXT NOT NULL,
-        source_type TEXT NOT NULL,
-        external_id TEXT NOT NULL,
-        title TEXT,
-        uri TEXT,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE (scope_type, scope_id, source_type, external_id)
-      );
+  afterAll(async () => {
+    await recreateTestDatabase();
+  });
 
-      CREATE TABLE memory_records (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        source_id INTEGER NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
-        scope_type TEXT NOT NULL,
-        scope_id TEXT NOT NULL,
-        memory_type TEXT NOT NULL,
-        content TEXT NOT NULL,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-      );
+  it("creates canonical Postgres tables for memory state", async () => {
+    const pool = createPgPool({
+      connectionString: testConnectionString,
+    });
 
-      CREATE TABLE context_pack_runs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        scope_type TEXT NOT NULL,
-        scope_id TEXT NOT NULL,
-        started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        completed_at TEXT,
-        status TEXT NOT NULL DEFAULT 'pending'
-      );
-    `);
+    try {
+      await runMigrations(pool);
 
-    const sourceInsert = db.prepare(`
-      INSERT INTO sources (
-        scope_type,
-        scope_id,
-        source_type,
-        external_id,
-        title,
-        uri
-      ) VALUES (?, ?, ?, ?, ?, ?)
-    `);
-    const memoryInsert = db.prepare(`
-      INSERT INTO memory_records (
-        source_id,
-        scope_type,
-        scope_id,
-        memory_type,
-        content
-      ) VALUES (?, ?, ?, ?, ?)
-    `);
+      const result = await pool.query<InformationSchemaTableRow>(`
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name IN (
+            'sources',
+            'memory_records',
+            'memory_chunks',
+            'relationships',
+            'context_pack_runs',
+            'ingest_jobs'
+          )
+        ORDER BY table_name
+      `);
 
-    const sourceResult = sourceInsert.run(
-      "project",
-      "project-alpha",
-      "decision",
-      "decision-legacy",
-      "Legacy ADR",
-      "file:///tmp/project-alpha/docs/legacy-adr.md",
-    );
-
-    memoryInsert.run(
-      sourceResult.lastInsertRowid,
-      "project",
-      "project-alpha",
-      "decision",
-      "Legacy SQLite migration notes remain searchable.",
-    );
-
-    runMigrations(db);
-
-    const matches = db
-      .prepare(`
-        SELECT rowid
-        FROM memory_records_fts
-        WHERE memory_records_fts MATCH 'SQLite'
-      `)
-      .all() as Array<{ rowid: number }>;
-
-    expect(matches).toHaveLength(1);
+      expect(result.rows.map((row) => row.table_name)).toEqual([
+        "context_pack_runs",
+        "ingest_jobs",
+        "memory_chunks",
+        "memory_records",
+        "relationships",
+        "sources",
+      ]);
+    } finally {
+      await pool.end();
+    }
   });
 });
