@@ -17,7 +17,7 @@ export type ServiceConfig = {
     apiKey: string;
   };
   embedding: {
-    provider: "openai" | "local";
+    provider: "openai" | "local" | "transformers";
     model: string;
     dimensions: number;
     version: "v1";
@@ -38,17 +38,24 @@ export function resolveServiceConfig(
   const port = parsePort(env.PORT);
   const databaseUrl = resolveDatabaseUrl(env);
 
-  // EMBEDDING_PROVIDER selects which embedding factory wires up. "openai" is
-  // the historical default and requires OPENAI_API_KEY. "local" is a
-  // deterministic offline provider for dev/CI/air-gapped use — does not call
-  // any remote service and does not need an API key.
+  // EMBEDDING_PROVIDER selects which embedding factory wires up.
+  //   "openai"       — historical default, requires OPENAI_API_KEY, paid.
+  //   "local"        — deterministic SHA-256 stub for dev/CI/air-gapped use;
+  //                    NOT semantically meaningful, plumbing tests only.
+  //   "transformers" — free local ONNX inference via @huggingface/transformers
+  //                    (optional dep). Default model Xenova/all-MiniLM-L6-v2,
+  //                    384-dim. First call downloads ~22MB to HF cache.
   const providerRaw = (env.EMBEDDING_PROVIDER ?? "openai").toLowerCase();
-  if (providerRaw !== "openai" && providerRaw !== "local") {
+  if (
+    providerRaw !== "openai" &&
+    providerRaw !== "local" &&
+    providerRaw !== "transformers"
+  ) {
     throw new Error(
-      `Unsupported EMBEDDING_PROVIDER: ${providerRaw} (expected "openai" or "local")`,
+      `Unsupported EMBEDDING_PROVIDER: ${providerRaw} (expected "openai", "local", or "transformers")`,
     );
   }
-  const provider: "openai" | "local" = providerRaw;
+  const provider: "openai" | "local" | "transformers" = providerRaw;
 
   const openAiApiKey =
     provider === "openai"
@@ -56,13 +63,17 @@ export function resolveServiceConfig(
       : env.OPENAI_API_KEY ?? "";
 
   const dimensions =
-    provider === "local"
-      ? parsePositiveInt(env.EMBEDDING_DIMENSIONS, 384)
-      : 1536;
+    provider === "openai"
+      ? 1536
+      : provider === "transformers"
+        ? parsePositiveInt(env.EMBEDDING_DIMENSIONS, 384)
+        : parsePositiveInt(env.EMBEDDING_DIMENSIONS, 384);
   const model =
-    provider === "local"
-      ? env.EMBEDDING_MODEL ?? "local-deterministic-v1"
-      : env.OPENAI_EMBEDDING_MODEL ?? "text-embedding-3-small";
+    provider === "openai"
+      ? env.OPENAI_EMBEDDING_MODEL ?? "text-embedding-3-small"
+      : provider === "transformers"
+        ? env.TRANSFORMERS_EMBEDDING_MODEL ?? "Xenova/all-MiniLM-L6-v2"
+        : env.EMBEDDING_MODEL ?? "local-deterministic-v1";
 
   return {
     host,

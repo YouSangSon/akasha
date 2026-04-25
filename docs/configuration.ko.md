@@ -73,10 +73,25 @@ compose 관리 Postgres 사용 시 `DATABASE_URL` 은 `POSTGRES_*` 부분에서
 
 | 변수 | 기본값 | 메모 |
 |---|---|---|
-| `EMBEDDING_PROVIDER` | `openai` | `openai` 는 API 호출; `local` 은 결정론적 SHA-256 (오프라인 / CI / air-gapped). |
+| `EMBEDDING_PROVIDER` | `openai` | `openai` (유료 API), `transformers` (무료 로컬 ONNX), 또는 `local` (CI용 결정론적 stub). |
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | 1536-dim. 변경 시 reindex 필요. |
-| `EMBEDDING_DIMENSIONS` | `384` | `EMBEDDING_PROVIDER=local` 일 때만 의미. |
+| `TRANSFORMERS_EMBEDDING_MODEL` | `Xenova/all-MiniLM-L6-v2` | Hugging Face ONNX 모델 id. 384-dim. `EMBEDDING_PROVIDER=transformers` 일 때만 의미. |
+| `EMBEDDING_DIMENSIONS` | `384` | `transformers` / `local` provider의 벡터 크기. |
 | `EMBEDDING_MODEL` | `local-deterministic-v1` | `EMBEDDING_PROVIDER=local` 일 때만 의미. |
+
+### Provider 선택 — 비용 vs. 품질 vs. 셋업
+
+| Provider | 비용 | 의미 검색 품질 | 셋업 |
+|---|---|---|---|
+| `openai` | 유료 (개인 사용 시 월 몇 센트 수준; [openai.com/api/pricing](https://openai.com/api/pricing)에서 확인) | 최고 | `OPENAI_API_KEY` 만 설정 |
+| `transformers` | **무료** | 좋음 (대부분 워크로드에서 OpenAI에 근접) | `npm install @huggingface/transformers` (optional dep, ~50MB onnxruntime + 첫 호출 시 ~22MB 모델 다운) |
+| `local` | 무료 | **없음 — 의미 없음**, 정확 일치만 | 셋업 불필요, 단 실제 검색에는 부적합 |
+
+`transformers` provider는 `Xenova/all-MiniLM-L6-v2` 를 ONNX로 로컬 실행 —
+Chroma와 txtai가 default로 채택한 동일 모델. CPU 추론으로 충분
+(노트북에서 초당 수백 임베딩). 모델과 토크나이저는 첫 호출 시
+`~/.cache/huggingface/hub/` 에 다운로드되고 캐시됩니다. 에어갭 배포 시
+해당 캐시 디렉토리를 미리 채워둘 것.
 
 **provider 변경은 reindex 필수** — 다른 vector dimension / 컨텐츠 의미는
 호환되지 않는 Qdrant point를 만듭니다. 변경 후 `npm run reindex_memory`
