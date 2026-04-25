@@ -76,8 +76,8 @@ curl -X POST http://localhost:8787/v1/memory/search \
 
 데이터 흐름: 호출자가 `add_memory` → 레코드는 Postgres에 저장 + 청크 분할 +
 임베딩 + Qdrant upsert. `search_memory` → 쿼리 임베딩 → Qdrant 코사인 검색
-→ Postgres에서 hydrate → 랭킹 → 반환. 자세한 설계 문서는
-[docs/superpowers/plans/](docs/superpowers/plans/) 참고.
+→ Postgres에서 hydrate → 랭킹 → 반환. 자세한 설계 내용은
+[docs/architecture.ko.md](docs/architecture.ko.md) 참고.
 
 ## 자주 쓰는 명령어
 

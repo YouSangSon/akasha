@@ -76,7 +76,7 @@ curl -X POST http://localhost:8787/v1/memory/search \
 Data flow: caller writes `add_memory` → record persisted to Postgres + chunked
 + embedded + upserted to Qdrant. `search_memory` → embed query → Qdrant cosine
 search → hydrate from Postgres → rank → return. See
-[docs/superpowers/plans/](docs/superpowers/plans/) for design docs.
+[docs/architecture.md](docs/architecture.md) for design details.
 
 ## Common commands
 

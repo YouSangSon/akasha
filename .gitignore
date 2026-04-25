@@ -3,7 +3,13 @@
 .worktrees/
 dist/
 node_modules/
-.omx
-.omc
-.dmux
-.dmux-hooks
+
+# Local agent/workflow artifacts
+.omx/
+.omc/
+.dmux/
+.dmux-hooks/
+.vibe/
+docs/_internal/
+docs/skills/
+docs/superpowers/
