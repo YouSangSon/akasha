@@ -9,41 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 once a 1.0 is released. Pre-1.0 minor versions may still contain breaking
 changes; CHANGELOG entries call those out explicitly.
 
-## [Unreleased]
-
-### Changed — BREAKING
-
-- **Default embedding provider flipped from `openai` to `transformers`.**
-  Fresh installs now run `Xenova/all-MiniLM-L6-v2` locally via ONNX (free,
-  384-dim) instead of paid `text-embedding-3-small` (1536-dim). Existing
-  v1.0.x installations on the OpenAI default must either pin
-  `EMBEDDING_PROVIDER=openai` to keep current behavior, or follow the
-  step-by-step migration playbook in
-  [docs/migrations/openai-to-transformers.md](docs/migrations/openai-to-transformers.md)
-  to recreate the Qdrant collection with `size=384` and `reindex_memory`
-  the existing canonical chunks. Postgres canonical text is preserved
-  throughout — only Qdrant points need rebuilding.
-- `@huggingface/transformers` promoted from `optionalDependencies` to
-  `dependencies` so the new default works out of the box on `npm install`.
-  OpenAI-only operators still pay the ~50MB onnxruntime install cost on
-  disk but never load it at runtime.
-- `install.sh` no longer hard-fails on the placeholder
-  `OPENAI_API_KEY=sk-replace-me` — it only checks the placeholder when the
-  user opted into `EMBEDDING_PROVIDER=openai`.
-- `.env.example` reorganized: `OPENAI_API_KEY` is now commented-out by
-  default; the `Embeddings` section leads with `transformers` as the
-  documented default.
-
-### Why
-
-A cross-OSS survey of 11 peer projects (mem0, Letta, Zep, Chroma, txtai,
-LlamaIndex, LangChain, doobidoo/mcp-memory-service, coleam00/mcp-mem0,
-Puliczek/mcp-memory, modelcontextprotocol/servers) found that the MCP
-memory server category norm is *free/local default* — the largest
-vector-using MCP memory server (doobidoo, 1.7k★) headlines `$0` cost as
-its differentiator. context-forge now follows that convention so OSS users
-get value from `npm install` without a paid API key.
-
 ## [1.0.0] — 2026-04-26
 
 Initial public release. context-forge graduates from internal hardening
@@ -87,9 +52,17 @@ work to a publishable open-source project.
   preserving original timestamps and source linkage. Re-chunks content,
   re-embeds, re-upserts to Qdrant. Idempotent (`unarchived_at` column).
   Per-archive failure isolation.
-- **Embeddings provider abstraction** — `EMBEDDING_PROVIDER=openai` (default,
-  `text-embedding-3-small`) or `local` (deterministic SHA-256, offline /
-  air-gapped).
+- **Embeddings provider abstraction** — three swappable providers via
+  `EMBEDDING_PROVIDER`: `transformers` (default, free local ONNX via
+  `@huggingface/transformers`, `Xenova/all-MiniLM-L6-v2`, 384-dim — the
+  same model Chroma and txtai default to, picked to align with the MCP
+  memory ecosystem norm of free-local default), `openai` (paid,
+  `text-embedding-3-small`, 1536-dim — opt-in via `OPENAI_API_KEY`), and
+  `local` (deterministic SHA-256 stub for CI / plumbing tests; semantically
+  meaningless). Switching providers requires `reindex_memory` after
+  recreating the Qdrant collection at the new vector dimension — see
+  [docs/migrations/openai-to-transformers.md](docs/migrations/openai-to-transformers.md)
+  for the operational playbook.
 - **Auth + rate limit** — bearer token via `MEMORY_API_TOKENS` (multi-token
   rotation, optional org binding); token-bucket rate limiter
   (`RATE_LIMIT_PER_MINUTE`); fail-closed startup gate refuses to bind to
