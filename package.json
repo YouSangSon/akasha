@@ -42,6 +42,7 @@
     "restore:smoke": "node dist/scripts/restore-smoke.js"
   },
   "dependencies": {
+    "@huggingface/transformers": "^3.0.0",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@qdrant/js-client-rest": "^1.13.0",
     "openai": "^4.0.0",
@@ -54,8 +55,5 @@
     "tsx": "^4.19.0",
     "typescript": "^5.8.0",
     "vitest": "^3.2.0"
-  },
-  "optionalDependencies": {
-    "@huggingface/transformers": "^3.0.0"
   }
 }
