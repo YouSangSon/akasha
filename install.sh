@@ -7,7 +7,9 @@
 # existing containers; migrations are CREATE … IF NOT EXISTS).
 #
 # Required: Docker, Node.js ≥ 20, npm.
-# Required env: .env file with OPENAI_API_KEY and MEMORY_API_TOKENS set.
+# Required env: .env file with MEMORY_API_TOKENS set.
+# Optional env: OPENAI_API_KEY (only when EMBEDDING_PROVIDER=openai). The
+# default provider is "transformers" (free local ONNX), which needs no key.
 
 set -euo pipefail
 
@@ -58,14 +60,16 @@ step "Checking .env"
 if [ ! -f .env ]; then
   cp .env.example .env
   warn ".env did not exist; copied .env.example → .env"
-  warn "EDIT .env now and set at minimum: OPENAI_API_KEY, MEMORY_API_TOKENS"
+  warn "EDIT .env now and set at minimum: MEMORY_API_TOKENS"
+  warn "(OPENAI_API_KEY is only needed if you set EMBEDDING_PROVIDER=openai)"
   warn "Then re-run ./install.sh"
   exit 1
 fi
 
-# Sanity-check the placeholders are gone.
-if grep -qE '^OPENAI_API_KEY=sk-replace-me' .env; then
-  fail "OPENAI_API_KEY in .env is still the placeholder. Edit .env first."
+# Sanity-check: when the user opted into openai, the placeholder must be replaced.
+if grep -qE '^EMBEDDING_PROVIDER=openai' .env \
+   && grep -qE '^OPENAI_API_KEY=sk-replace-me' .env; then
+  fail "EMBEDDING_PROVIDER=openai requires a real OPENAI_API_KEY. Edit .env first."
 fi
 ok ".env looks set up"
 
