@@ -1,0 +1,92 @@
+[
+  {
+    "id": "q01",
+    "query": "Which database holds the canonical memory state for each record?",
+    "relevantRecordSeedKeys": ["alpha.canonical-pg"],
+    "scope": { "projectKey": "project-alpha" }
+  },
+  {
+    "id": "q02",
+    "query": "What chunk size and overlap did we standardize on for memory ingest?",
+    "relevantRecordSeedKeys": ["alpha.chunk-size"],
+    "scope": { "projectKey": "project-alpha" }
+  },
+  {
+    "id": "q03",
+    "query": "Which embedding model is canonical and what is its dimensionality?",
+    "relevantRecordSeedKeys": ["alpha.embedding-model"],
+    "scope": { "projectKey": "project-alpha" }
+  },
+  {
+    "id": "q04",
+    "query": "What is the Qdrant collection name that stores canonical chunks?",
+    "relevantRecordSeedKeys": ["alpha.qdrant-collection"],
+    "scope": { "projectKey": "project-alpha" }
+  },
+  {
+    "id": "q05",
+    "query": "Are we allowed to log raw memory content to stdout?",
+    "relevantRecordSeedKeys": ["alpha.no-content-logging"],
+    "scope": { "projectKey": "project-alpha" }
+  },
+  {
+    "id": "q06",
+    "query": "When are we adding authentication to the beta project?",
+    "relevantRecordSeedKeys": ["beta.auth-deferred"],
+    "scope": { "projectKey": "project-beta" }
+  },
+  {
+    "id": "q07",
+    "query": "What database does the beta project use locally for development?",
+    "relevantRecordSeedKeys": ["beta.sqlite-local"],
+    "scope": { "projectKey": "project-beta" }
+  },
+  {
+    "id": "q08",
+    "query": "What language should Alice's responses default to?",
+    "relevantRecordSeedKeys": ["alice.korean-default"],
+    "scope": { "projectKey": "project-alpha", "userScopeId": "alice" }
+  },
+  {
+    "id": "q09",
+    "query": "Does Alice use tabs or spaces in TypeScript?",
+    "relevantRecordSeedKeys": ["alice.tabs-typescript"],
+    "scope": { "projectKey": "project-alpha", "userScopeId": "alice" }
+  },
+  {
+    "id": "q10",
+    "query": "What did migration 003 add to the memory_records schema?",
+    "relevantRecordSeedKeys": ["alpha.migration-003-durability"],
+    "scope": { "projectKey": "project-alpha" }
+  },
+  {
+    "id": "q11",
+    "query": "How much overlap is there between adjacent memory chunks?",
+    "relevantRecordSeedKeys": ["alpha.chunk-size"],
+    "scope": { "projectKey": "project-alpha" }
+  },
+  {
+    "id": "q12",
+    "query": "What is the default durability value applied to new records?",
+    "relevantRecordSeedKeys": ["alpha.migration-003-durability"],
+    "scope": { "projectKey": "project-alpha" }
+  },
+  {
+    "id": "q13",
+    "query": "Why did we choose Postgres over alternatives for canonical memory?",
+    "relevantRecordSeedKeys": ["alpha.canonical-pg"],
+    "scope": { "projectKey": "project-alpha" }
+  },
+  {
+    "id": "q14",
+    "query": "What dimensionality do our embedding vectors have?",
+    "relevantRecordSeedKeys": ["alpha.embedding-model"],
+    "scope": { "projectKey": "project-alpha" }
+  },
+  {
+    "id": "q15",
+    "query": "Was authentication implemented in phase 1 of the beta project?",
+    "relevantRecordSeedKeys": ["beta.auth-deferred"],
+    "scope": { "projectKey": "project-beta" }
+  }
+]

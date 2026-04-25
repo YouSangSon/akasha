@@ -1,0 +1,58 @@
+name: Feature request
+description: Suggest a feature or improvement
+title: "[feat] "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for thinking about how to make context-forge better.
+        Open an issue first for non-trivial work — a 30-second sketch
+        avoids days of work going in the wrong direction.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is the problem or pain point this feature would address?
+      placeholder: "When I do X, I have to Y because there's no way to Z."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: A sketch of what the feature would look like — API shape, env vars, UX, etc. Doesn't need to be final.
+      placeholder: "Add a `<flag>` to `<tool>` that does <thing>; behavior would be <details>."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What other approaches did you think about? Why is the proposal better?
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      description: Which parts of the codebase are affected?
+      multiple: true
+      options:
+        - MCP server (src/mcp/)
+        - HTTP API (src/app/)
+        - Postgres / repos (src/store/, src/db/)
+        - Qdrant / vector index
+        - Compaction (src/compact/)
+        - Embeddings (src/embedding/)
+        - Audit log
+        - Docs / packaging
+        - Other / not sure
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Screenshots, links, related issues — anything that helps the discussion.

@@ -1,0 +1,204 @@
+> [English](configuration.md) | **한국어**
+
+# 설정 레퍼런스
+
+context-forge는 환경 변수만으로 설정됩니다. 설정 파일이나 런타임 플래그가
+없습니다. 이 문서는 프로젝트가 읽는 모든 변수의 정식 레퍼런스입니다.
+
+복사해서 쓰는 템플릿은 repo 루트의 [.env.example](../.env.example) 참고.
+`install.sh` wrapper가 첫 실행 시 그 템플릿에서 `.env` 를 자동 생성합니다.
+
+## 설정 흐름
+
+```
+.env (사용자 파일)
+   ├─→ docker compose 치환            (compose.yaml의 ${VAR:-default})
+   └─→ Node process.env               (src/config.ts에서 읽음)
+```
+
+Postgres / Qdrant 컨테이너 안의 모든 것은 compose 레이어에서 옵니다. Node
+앱은 `src/config.ts` 의 `resolveServiceConfig` 를 통해 `process.env` 를 직접
+읽습니다. `compose up` 에 전달된 값은 양쪽 모두에 전파됩니다.
+
+## 검증 동작
+
+**필수**로 표시된 변수는 누락 / invalid 시 시작 시 throw 합니다. 의도적입니다 —
+정의되지 않은 값으로 silently 실행하는 것보다 fail-closed 가 낫습니다.
+
+`MEMORY_API_TOKENS` 가 비어 있는 상태에서 non-loopback 호스트
+(`HOST=0.0.0.0`, `HOST=10.x.x.x` 등) 바인딩도 fail-closed gate가 거부합니다 —
+실수로 zero-auth public 노출되는 것을 막습니다.
+
+## 필수
+
+| 변수 | 기본값 | 메모 |
+|---|---|---|
+| `OPENAI_API_KEY` | — | `EMBEDDING_PROVIDER=openai` (기본) 일 때 필수. `local` 일 때 무시. |
+| `MEMORY_API_TOKENS` | — | 콤마 구분 bearer 토큰. 아래 [Auth](#auth) 참고. |
+
+## Postgres
+
+compose 번들 Postgres가 기본. 외부 인스턴스를 가리키려면 `DATABASE_URL` 오버라이드.
+
+| 변수 | 기본값 | 메모 |
+|---|---|---|
+| `DATABASE_URL` | (계산됨) | 전체 URL. `POSTGRES_*` 보다 우선. |
+| `POSTGRES_USER` | `memory` | |
+| `POSTGRES_PASSWORD` | `memory` | production 에서는 변경. |
+| `POSTGRES_DB` | `memory_os` | |
+| `POSTGRES_HOST` | `127.0.0.1` (호스트 프로세스) / `postgres` (compose) | |
+| `POSTGRES_PORT` | `5432` | |
+
+compose 관리 Postgres 사용 시 `DATABASE_URL` 은 `POSTGRES_*` 부분에서
+자동 빌드됩니다 (네트워크 내부 host=`postgres`). 호스트에서 마이그레이션
+스크립트 실행 시 `install.sh` 가 host를 `127.0.0.1:5432` 로 다시 씁니다.
+
+## Qdrant
+
+| 변수 | 기본값 | 메모 |
+|---|---|---|
+| `QDRANT_URL` | `http://localhost:6333` | compose 내부: `http://qdrant:6333`. |
+| `QDRANT_API_KEY` | `local-qdrant-key` | production 에서는 변경. |
+| `QDRANT_COLLECTION_NAME` | `memory_chunks_v1` | 버전 bump 시 reindex 필요. |
+
+## 서버 바인드 (HTTP API)
+
+| 변수 | 기본값 | 메모 |
+|---|---|---|
+| `HOST` | `127.0.0.1` | 바인드 인터페이스. `0.0.0.0` 은 외부 노출 — 반드시 `MEMORY_API_TOKENS` 와 함께. |
+| `PORT` | `8787` | |
+| `NODE_ENV` | unset | `production` 시 connection pooling 기본값 활성. |
+
+## Embedding
+
+| 변수 | 기본값 | 메모 |
+|---|---|---|
+| `EMBEDDING_PROVIDER` | `openai` | `openai` 는 API 호출; `local` 은 결정론적 SHA-256 (오프라인 / CI / air-gapped). |
+| `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | 1536-dim. 변경 시 reindex 필요. |
+| `EMBEDDING_DIMENSIONS` | `384` | `EMBEDDING_PROVIDER=local` 일 때만 의미. |
+| `EMBEDDING_MODEL` | `local-deterministic-v1` | `EMBEDDING_PROVIDER=local` 일 때만 의미. |
+
+**provider 변경은 reindex 필수** — 다른 vector dimension / 컨텐츠 의미는
+호환되지 않는 Qdrant point를 만듭니다. 변경 후 `npm run reindex_memory`
+(또는 `reindex_memory` MCP 도구) 실행.
+
+## Auth
+
+`MEMORY_API_TOKENS` 는 콤마 구분 bearer 토큰 리스트. 각 토큰은 `:` 문법으로
+organization에 옵션 바인딩 가능:
+
+```bash
+# 단일 토큰, 어느 org든:
+MEMORY_API_TOKENS=dev-token
+
+# 다중 토큰 로테이션 (둘 다로 배포 → 클라이언트 로테이션 → 옛날 거 제거):
+MEMORY_API_TOKENS=old-token,new-token
+
+# Org 바인딩 (멀티-테넌트): 각 토큰은 바인딩된 org만 read/write.
+MEMORY_API_TOKENS=alpha-token:dev-team,beta-token:finance-team
+
+# 혼합:
+MEMORY_API_TOKENS=alpha-token:dev-team,legacy-token
+```
+
+토큰에 org 바인딩이 있을 때:
+- 요청은 자동으로 `organizationId = <bound org>` 상속.
+- 요청 body 또는 `x-organization-id` 헤더가 다르면 → **403**.
+
+토큰에 바인딩이 없을 때 (legacy):
+- `x-organization-id` 헤더 또는 body의 `organizationId` 사용.
+- 둘 다 없으면 org-blind 읽기 (legacy single-tenant 동작). production 에서는
+  반드시 토큰을 org에 바인딩.
+
+## 개인 / 단일 테넌트 사용
+
+`organization_id` 는 단순한 문자열 라벨이며 "회사" 나 "계정" 개념이 아닙니다 —
+별도 가입이나 사용자 시스템은 존재하지 않습니다. 레코드 보유 테이블은 모두
+`organization_id TEXT NOT NULL DEFAULT 'default'` 로 선언되어 있어, org 를
+지정하지 않은 요청은 자동으로 `'default'` 테넌트에 저장됩니다. 1인 사용에서는
+org 를 **전혀 의식할 필요가 없습니다**.
+
+격리 강도가 점점 높아지는 3가지 개인 사용 셋업:
+
+| 사용 사례 | `MEMORY_API_TOKENS` | `HOST` | 결과 |
+|---|---|---|---|
+| 로컬 솔로, 인증 없음 | (빈 값) | `127.0.0.1` | 모든 데이터가 `'default'` org. fail-closed 시작 게이트는 loopback 일 때만 이 조합을 허용. |
+| 로컬 솔로, 토큰 보호 | `mytoken` (콜론 없음) | `127.0.0.1` 또는 LAN | 토큰만 검증, org 라벨은 `'default'`. |
+| 향후 확장 대비 단일 테넌트 | `mytoken:yousang-personal` | 자유 | 이미 명명된 단일 테넌트로 격리 — 추후 인원 추가는 콤마 구분 항목 1줄 추가뿐, 스키마 변경 불필요. |
+
+멀티 테넌시는 같은 코드 경로의 **N=1 특수 케이스**이므로 "personal mode" 플래그나
+별도 쿼리 경로가 존재하지 않습니다. 향후 진짜 사용자별 격리 (예: 여러 개인에게
+SaaS 형으로 서빙) 가 필요하면 각 사용자에게 `token:org` 쌍을 하나씩 발급하면
+됩니다 — SQL/Qdrant 양 계층의 org 필터가 나머지를 처리합니다.
+
+## Rate limit
+
+| 변수 | 기본값 | 메모 |
+|---|---|---|
+| `RATE_LIMIT_PER_MINUTE` | unset (제한 없음) | 토큰별 token-bucket 캡. production 권장. |
+
+Compaction-apply 경로에는 별도 더 엄격한 limit (org당 1회/시간 기본) 이
+`applyCompaction` deps에 하드코딩되어 있습니다. 커스텀 통합에서는 다르게
+구성 가능.
+
+## Compaction sweeper
+
+archive 된 레코드의 인라인 Qdrant delete가 실패한 경우 sweeper가 재시도.
+기본 off — 지속 실행 단일 replica에서만 opt-in.
+
+| 변수 | 기본값 | 메모 |
+|---|---|---|
+| `COMPACTION_SWEEP_ENABLED` | `false` | truthy 값: `true`, `1`, `yes` (대소문자 무관). 그 외 = false. |
+| `COMPACTION_SWEEP_INTERVAL_MS` | `30000` | tick 간격. ≥ 1000 필수. |
+
+활성 시 각 tick 에서 pending row 최대 100개 처리, 5회 시도 후 포기
+(`qdrant_status='failed'` 로 표시 — ops 검토용).
+
+## 백업
+
+| 변수 | 기본값 | 메모 |
+|---|---|---|
+| `BACKUP_DIR` | `./.developer-memory-os/backups` | `npm run backup:create` 의 출력 디렉토리. |
+| `BACKUP_TARGET_HOST` | unset | 옵션. 오프-호스트 복제용 rsync 대상. |
+
+백업/복원 워크플로는 [docs/operations.md](operations.md) 참고.
+
+## 흔한 설정
+
+### 로컬 솔로 dev (loopback, 인증 불필요)
+
+```bash
+EMBEDDING_PROVIDER=local
+MEMORY_API_TOKENS=
+HOST=127.0.0.1
+```
+
+Loopback 바인드 + 빈 토큰 = fail-closed gate가 dev에서는 허용. 임베딩
+오프라인. 외부 API key 불필요.
+
+### OpenAI 사용 단일 사용자
+
+```bash
+OPENAI_API_KEY=sk-...
+MEMORY_API_TOKENS=local-dev-token
+HOST=127.0.0.1
+PORT=8787
+```
+
+### 멀티-테넌트 production
+
+```bash
+HOST=0.0.0.0
+PORT=8787
+DATABASE_URL=postgres://memory:STRONG_PW@db.internal:5432/memory_os
+QDRANT_URL=https://qdrant.internal:6333
+QDRANT_API_KEY=STRONG_QDRANT_KEY
+OPENAI_API_KEY=sk-prod-...
+MEMORY_API_TOKENS=team-a-token:team-a,team-b-token:team-b,ops-token:ops
+RATE_LIMIT_PER_MINUTE=300
+COMPACTION_SWEEP_ENABLED=true
+NODE_ENV=production
+```
+
+reverse proxy 레이어에서 TLS와 같이 사용. [docs/deployment.md](deployment.md)
+참고.
