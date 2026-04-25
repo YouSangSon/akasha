@@ -1,5 +1,6 @@
 import { createLocalEmbeddingClient } from "./local-embedding.js";
 import { createOpenAiEmbeddingClient } from "./openai-embeddings.js";
+import { createTransformersEmbeddingClient } from "./transformers-embedding.js";
 import type {
   EmbeddingProvider,
   EmbeddingProviderConfig,
@@ -37,6 +38,11 @@ export function createEmbeddingProvider(
         dimensions: input.config.dimensions,
       });
     }
+    case "transformers": {
+      return createTransformersEmbeddingClient({
+        model: input.config.model,
+      });
+    }
     default: {
       const exhaustive: never = input.config.provider;
       throw new Error(
@@ -49,5 +55,5 @@ export function createEmbeddingProvider(
 export function isKnownEmbeddingProvider(
   value: string,
 ): value is EmbeddingProviderName {
-  return value === "openai" || value === "local";
+  return value === "openai" || value === "local" || value === "transformers";
 }

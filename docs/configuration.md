@@ -77,10 +77,25 @@ the migration script from the host, `install.sh` rewrites the host to
 
 | Variable | Default | Notes |
 |---|---|---|
-| `EMBEDDING_PROVIDER` | `openai` | `openai` calls the API; `local` uses a deterministic SHA-256 stub (offline / CI / air-gapped). |
+| `EMBEDDING_PROVIDER` | `openai` | `openai` (paid API), `transformers` (free local ONNX), or `local` (deterministic stub for CI). |
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | 1536-dim. Bumping requires reindex. |
-| `EMBEDDING_DIMENSIONS` | `384` | Only meaningful when `EMBEDDING_PROVIDER=local`. |
+| `TRANSFORMERS_EMBEDDING_MODEL` | `Xenova/all-MiniLM-L6-v2` | Hugging Face ONNX model id. 384-dim. Only when `EMBEDDING_PROVIDER=transformers`. |
+| `EMBEDDING_DIMENSIONS` | `384` | Vector size for `transformers` and `local` providers. |
 | `EMBEDDING_MODEL` | `local-deterministic-v1` | Only meaningful when `EMBEDDING_PROVIDER=local`. |
+
+### Choosing a provider — cost vs. quality vs. setup
+
+| Provider | Cost | Semantic quality | Setup |
+|---|---|---|---|
+| `openai` | Paid (~cents/month for personal use; verify on [openai.com/api/pricing](https://openai.com/api/pricing)) | Best | Just set `OPENAI_API_KEY` |
+| `transformers` | **Free** | Good (close to OpenAI for most workloads) | `npm install @huggingface/transformers` (optional dep, ~50MB onnxruntime + ~22MB model on first call) |
+| `local` | Free | **None — semantically meaningless**, exact-match only | Zero setup, but unsuitable for real retrieval |
+
+The `transformers` provider runs `Xenova/all-MiniLM-L6-v2` locally via ONNX —
+the same model Chroma and txtai default to. CPU inference is sufficient
+(~hundreds of embeddings/second on a laptop). The model and tokenizer are
+downloaded once on first call to `~/.cache/huggingface/hub/` and cached.
+For air-gapped deployments, pre-populate that cache directory.
 
 **Switching providers requires a reindex** — different vector dimensions or
 content semantics produce incompatible Qdrant points. Run

@@ -7,7 +7,7 @@ export type EmbeddingProvider = {
   embed(inputText: string): Promise<number[]>;
 };
 
-export type EmbeddingProviderName = "openai" | "local";
+export type EmbeddingProviderName = "openai" | "local" | "transformers";
 
 export type EmbeddingProviderConfig = {
   provider: EmbeddingProviderName;
