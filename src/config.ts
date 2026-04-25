@@ -45,7 +45,7 @@ export function resolveServiceConfig(
   //   "transformers" — free local ONNX inference via @huggingface/transformers
   //                    (optional dep). Default model Xenova/all-MiniLM-L6-v2,
   //                    384-dim. First call downloads ~22MB to HF cache.
-  const providerRaw = (env.EMBEDDING_PROVIDER ?? "openai").toLowerCase();
+  const providerRaw = (env.EMBEDDING_PROVIDER ?? "transformers").toLowerCase();
   if (
     providerRaw !== "openai" &&
     providerRaw !== "local" &&

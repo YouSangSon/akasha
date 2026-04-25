@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { resolveServiceConfig } from "../../src/config.js";
 
 describe("resolveServiceConfig", () => {
-  it("parses Postgres, Qdrant, OpenAI, and optional backup settings", () => {
+  it("parses Postgres, Qdrant, OpenAI, and optional backup settings when EMBEDDING_PROVIDER=openai is set explicitly", () => {
     const config = resolveServiceConfig({
       env: {
         NODE_ENV: "production",
@@ -11,6 +11,7 @@ describe("resolveServiceConfig", () => {
         DATABASE_URL: "postgres://memory:memory@postgres:5432/memory_os",
         QDRANT_URL: "http://qdrant:6333",
         QDRANT_API_KEY: "local-qdrant-key",
+        EMBEDDING_PROVIDER: "openai",
         OPENAI_API_KEY: "test-openai-key",
         OPENAI_EMBEDDING_MODEL: "text-embedding-3-small",
         BACKUP_DIR: "/var/lib/developer-memory-os/backups",
@@ -23,8 +24,26 @@ describe("resolveServiceConfig", () => {
     expect(config.databaseUrl).toContain("postgres://memory:memory");
     expect(config.qdrant.url).toBe("http://qdrant:6333");
     expect(config.openai.apiKey).toBe("test-openai-key");
+    expect(config.embedding.provider).toBe("openai");
     expect(config.embedding.model).toBe("text-embedding-3-small");
+    expect(config.embedding.dimensions).toBe(1536);
     expect(config.backups.targetHost).toBe("backup@example.internal");
+  });
+
+  it("defaults to the transformers provider with Xenova/all-MiniLM-L6-v2 (384-dim) when EMBEDDING_PROVIDER is unset, with no OPENAI_API_KEY required", () => {
+    const config = resolveServiceConfig({
+      env: {
+        DATABASE_URL: "postgres://memory:memory@postgres:5432/memory_os",
+        QDRANT_URL: "http://qdrant:6333",
+        QDRANT_API_KEY: "local-qdrant-key",
+        // No EMBEDDING_PROVIDER → falls back to "transformers".
+        // No OPENAI_API_KEY → must NOT be required.
+      },
+    });
+
+    expect(config.embedding.provider).toBe("transformers");
+    expect(config.embedding.model).toBe("Xenova/all-MiniLM-L6-v2");
+    expect(config.embedding.dimensions).toBe(384);
   });
 
   it("rejects invalid port values", () => {

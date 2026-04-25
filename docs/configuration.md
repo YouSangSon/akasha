@@ -77,7 +77,7 @@ the migration script from the host, `install.sh` rewrites the host to
 
 | Variable | Default | Notes |
 |---|---|---|
-| `EMBEDDING_PROVIDER` | `openai` | `openai` (paid API), `transformers` (free local ONNX), or `local` (deterministic stub for CI). |
+| `EMBEDDING_PROVIDER` | `transformers` | `transformers` (free local ONNX, default), `openai` (paid API), or `local` (deterministic stub for CI). |
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | 1536-dim. Bumping requires reindex. |
 | `TRANSFORMERS_EMBEDDING_MODEL` | `Xenova/all-MiniLM-L6-v2` | Hugging Face ONNX model id. 384-dim. Only when `EMBEDDING_PROVIDER=transformers`. |
 | `EMBEDDING_DIMENSIONS` | `384` | Vector size for `transformers` and `local` providers. |
@@ -100,6 +100,11 @@ For air-gapped deployments, pre-populate that cache directory.
 **Switching providers requires a reindex** — different vector dimensions or
 content semantics produce incompatible Qdrant points. Run
 `npm run reindex_memory` (or the `reindex_memory` MCP tool) after switching.
+For the v1.0.x → transformers-default upgrade specifically, see the
+step-by-step playbook in
+[docs/migrations/openai-to-transformers.md](migrations/openai-to-transformers.md)
+(includes `curl` commands for recreating the Qdrant collection at the new
+dimension).
 
 ## Auth
 

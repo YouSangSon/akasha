@@ -73,7 +73,7 @@ compose 관리 Postgres 사용 시 `DATABASE_URL` 은 `POSTGRES_*` 부분에서
 
 | 변수 | 기본값 | 메모 |
 |---|---|---|
-| `EMBEDDING_PROVIDER` | `openai` | `openai` (유료 API), `transformers` (무료 로컬 ONNX), 또는 `local` (CI용 결정론적 stub). |
+| `EMBEDDING_PROVIDER` | `transformers` | `transformers` (무료 로컬 ONNX, default), `openai` (유료 API), 또는 `local` (CI용 결정론적 stub). |
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | 1536-dim. 변경 시 reindex 필요. |
 | `TRANSFORMERS_EMBEDDING_MODEL` | `Xenova/all-MiniLM-L6-v2` | Hugging Face ONNX 모델 id. 384-dim. `EMBEDDING_PROVIDER=transformers` 일 때만 의미. |
 | `EMBEDDING_DIMENSIONS` | `384` | `transformers` / `local` provider의 벡터 크기. |
@@ -95,7 +95,10 @@ Chroma와 txtai가 default로 채택한 동일 모델. CPU 추론으로 충분
 
 **provider 변경은 reindex 필수** — 다른 vector dimension / 컨텐츠 의미는
 호환되지 않는 Qdrant point를 만듭니다. 변경 후 `npm run reindex_memory`
-(또는 `reindex_memory` MCP 도구) 실행.
+(또는 `reindex_memory` MCP 도구) 실행. 특히 v1.0.x → transformers-default
+업그레이드는 [docs/migrations/openai-to-transformers.ko.md](migrations/openai-to-transformers.ko.md)
+의 단계별 절차 참고 (Qdrant collection 을 새 차원으로 재생성하는 `curl`
+명령 포함).
 
 ## Auth
 

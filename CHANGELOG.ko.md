@@ -9,6 +9,39 @@ context-forge의 모든 주요 변경 사항이 여기 기록됩니다.
 을 따릅니다. 1.0 이전 minor 버전에는 breaking change가 포함될 수 있으며,
 CHANGELOG에서 명시적으로 표기합니다.
 
+## [Unreleased]
+
+### Changed — BREAKING
+
+- **Default 임베딩 프로바이더가 `openai` 에서 `transformers` 로 전환되었습니다.**
+  새 설치는 이제 `Xenova/all-MiniLM-L6-v2` 를 ONNX 로 로컬 실행 (무료,
+  384-dim) — 기존의 유료 `text-embedding-3-small` (1536-dim) 대신.
+  v1.0.x 의 OpenAI default 로 운영 중인 기존 설치는 둘 중 하나:
+  `EMBEDDING_PROVIDER=openai` 를 명시적으로 고정해서 기존 동작 유지,
+  또는 [docs/migrations/openai-to-transformers.ko.md](docs/migrations/openai-to-transformers.ko.md)
+  의 단계별 마이그레이션 절차로 Qdrant collection 을 `size=384` 로 재생성
+  + 기존 canonical chunk 들을 `reindex_memory` 로 재임베딩. Postgres
+  canonical 텍스트는 전 과정에서 보존 — Qdrant point 만 재구축됩니다.
+- `@huggingface/transformers` 가 `optionalDependencies` 에서
+  `dependencies` 로 승격 — 새 default가 `npm install` 만으로 즉시 동작.
+  OpenAI 만 쓰는 운영자도 ~50MB onnxruntime 디스크 비용은 부담하지만
+  런타임에는 로드되지 않음.
+- `install.sh` 가 더 이상 placeholder `OPENAI_API_KEY=sk-replace-me` 에서
+  hard-fail 하지 않음 — `EMBEDDING_PROVIDER=openai` 를 선택했을 때만
+  placeholder 검증.
+- `.env.example` 재구성: `OPENAI_API_KEY` 는 default 주석 처리,
+  `Embeddings` 섹션은 `transformers` 를 default로 앞세움.
+
+### 변경 배경
+
+11개 OSS peer 프로젝트 (mem0, Letta, Zep, Chroma, txtai, LlamaIndex,
+LangChain, doobidoo/mcp-memory-service, coleam00/mcp-mem0,
+Puliczek/mcp-memory, modelcontextprotocol/servers) 조사 결과, MCP 메모리
+서버 카테고리의 norm 은 *무료/로컬 default* — 가장 큰 벡터 기반 MCP 메모리
+서버 (doobidoo, 1.7k★) 는 `$0` cost 를 헤드라인 차별화로 사용. context-forge
+도 이 컨벤션을 따라 OSS 사용자가 유료 API key 없이 `npm install` 만으로
+가치를 얻을 수 있게 합니다.
+
 ## [1.0.0] — 2026-04-26
 
 초기 공개 릴리스. context-forge가 내부 hardening 작업에서 publishable
