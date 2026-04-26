@@ -243,6 +243,17 @@ export function createMemoryRepository(
 
       return orderRecordsByIds(result.rows.map(mapPostgresSearchResult), ids);
     },
+
+    async deleteMemoryRecord(id) {
+      // Single-statement rollback. ON DELETE CASCADE on memory_chunks,
+      // ingest_jobs, and relationships (defined in migrations/001_initial.sql)
+      // removes every dependent row in the same transaction Postgres uses
+      // for this DELETE — no explicit child-table cleanup required.
+      await pool.query(
+        `DELETE FROM memory_records WHERE id = $1`,
+        [id],
+      );
+    },
   };
 }
 

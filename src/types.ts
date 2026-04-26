@@ -107,6 +107,12 @@ export type CanonicalMemoryRepository = {
     ids: number[],
     organizationId?: string,
   ): Promise<SearchMemoryResult[]>;
+  // Hard-deletes a memory_records row by id. Schema-level ON DELETE CASCADE
+  // (memory_chunks, ingest_jobs, relationships) handles dependents atomically
+  // in the same statement. Used by writeCanonicalMemory's rollback path when
+  // post-INSERT side effects (embed / Qdrant upsert) fail — without this,
+  // failed writes leave permanently dead PG state behind.
+  deleteMemoryRecord(id: number): Promise<void>;
 };
 
 export type IngestJobStatus = "pending" | "processing" | "completed" | "failed";
