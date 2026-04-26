@@ -107,15 +107,16 @@ describe("canonical indexing", () => {
     expect(ingestJobs.markCompleted).toHaveBeenCalledWith(801);
   });
 
-  it("marks the ingest job as failed when embedding throws and does not call markCompleted", async () => {
+  it("rolls back PG state by deleting the memory record when embedding throws", async () => {
     const record = createRecord({ id: 502, content: "fail path content" });
     const repository = {
       addMemory: vi.fn().mockResolvedValue(record),
+      deleteMemoryRecord: vi.fn().mockResolvedValue(undefined),
     };
     const ingestJobs = {
       create: vi.fn().mockResolvedValue({ id: 802 }),
       markCompleted: vi.fn(),
-      markFailed: vi.fn().mockResolvedValue({ id: 802, status: "failed" }),
+      markFailed: vi.fn(),
     };
     const chunkRepository = {
       insertChunks: vi.fn().mockResolvedValue([
@@ -171,9 +172,152 @@ describe("canonical indexing", () => {
       }),
     ).rejects.toBe(embedError);
 
-    expect(ingestJobs.markFailed).toHaveBeenCalledWith(802, embedError);
+    // Cascade-delete (memory_chunks, ingest_jobs, relationships) is handled
+    // at the schema layer; the repository call is the single rollback action.
+    expect(repository.deleteMemoryRecord).toHaveBeenCalledWith(502);
     expect(ingestJobs.markCompleted).not.toHaveBeenCalled();
     expect(qdrantClient.upsert).not.toHaveBeenCalled();
+  });
+
+  it("rolls back PG state by deleting the memory record when qdrant upsert throws", async () => {
+    const record = createRecord({ id: 503, content: "qdrant fail content" });
+    const repository = {
+      addMemory: vi.fn().mockResolvedValue(record),
+      deleteMemoryRecord: vi.fn().mockResolvedValue(undefined),
+    };
+    const ingestJobs = {
+      create: vi.fn().mockResolvedValue({ id: 803 }),
+      markCompleted: vi.fn(),
+      markFailed: vi.fn(),
+    };
+    const chunkRepository = {
+      insertChunks: vi.fn().mockResolvedValue([
+        {
+          id: 902,
+          memoryRecordId: 503,
+          chunkIndex: 0,
+          content: "qdrant fail content",
+          startOffset: 0,
+          endOffset: 19,
+          embeddingVersion: "v1",
+        },
+      ]),
+      updatePointIds: vi.fn(),
+    };
+    const embeddings = {
+      embed: vi.fn().mockResolvedValue([0.1, 0.2]),
+    };
+    const upsertError = new Error("Qdrant 503 service unavailable");
+    const qdrantClient = {
+      upsert: vi.fn().mockRejectedValue(upsertError),
+    };
+
+    await expect(
+      writeCanonicalMemory({
+        repository: repository as never,
+        chunkRepository: chunkRepository as never,
+        ingestJobs: ingestJobs as never,
+        embeddings,
+        qdrantClient,
+        collectionName: "memory_chunks_v1",
+        embedding: {
+          provider: "openai",
+          model: "text-embedding-3-small",
+          dimensions: 1536,
+          version: "v1",
+          targetTokens: 800,
+          overlapTokens: 120,
+        },
+        memory: {
+          scopeType: "project",
+          scopeId: "project-alpha",
+          projectKey: "project-alpha",
+          memoryType: "decision",
+          content: record.content,
+          source: {
+            scopeType: "project",
+            scopeId: "project-alpha",
+            sourceType: "conversation",
+            sourceRef: "manual://session",
+          },
+        },
+      }),
+    ).rejects.toBe(upsertError);
+
+    expect(repository.deleteMemoryRecord).toHaveBeenCalledWith(503);
+    expect(ingestJobs.markCompleted).not.toHaveBeenCalled();
+    // Qdrant upsert was attempted (and failed); updatePointIds must NOT run.
+    expect(chunkRepository.updatePointIds).not.toHaveBeenCalled();
+  });
+
+  it("re-throws the original error when rollback delete itself fails (best-effort cleanup)", async () => {
+    const record = createRecord({ id: 504, content: "double-fail content" });
+    const cleanupError = new Error("PG connection lost during rollback");
+    const repository = {
+      addMemory: vi.fn().mockResolvedValue(record),
+      // Cleanup also fails — exercise the best-effort .catch() path that
+      // must NOT mask the original failure that triggered the rollback.
+      deleteMemoryRecord: vi.fn().mockRejectedValue(cleanupError),
+    };
+    const ingestJobs = {
+      create: vi.fn().mockResolvedValue({ id: 804 }),
+      markCompleted: vi.fn(),
+      markFailed: vi.fn(),
+    };
+    const chunkRepository = {
+      insertChunks: vi.fn().mockResolvedValue([
+        {
+          id: 903,
+          memoryRecordId: 504,
+          chunkIndex: 0,
+          content: "double-fail content",
+          startOffset: 0,
+          endOffset: 19,
+          embeddingVersion: "v1",
+        },
+      ]),
+      updatePointIds: vi.fn(),
+    };
+    const embedError = new Error("OpenAI 500");
+    const embeddings = {
+      embed: vi.fn().mockRejectedValue(embedError),
+    };
+    const qdrantClient = { upsert: vi.fn() };
+
+    await expect(
+      writeCanonicalMemory({
+        repository: repository as never,
+        chunkRepository: chunkRepository as never,
+        ingestJobs: ingestJobs as never,
+        embeddings,
+        qdrantClient,
+        collectionName: "memory_chunks_v1",
+        embedding: {
+          provider: "openai",
+          model: "text-embedding-3-small",
+          dimensions: 1536,
+          version: "v1",
+          targetTokens: 2,
+          overlapTokens: 1,
+        },
+        memory: {
+          scopeType: "project",
+          scopeId: "project-alpha",
+          projectKey: "project-alpha",
+          memoryType: "decision",
+          content: record.content,
+          source: {
+            scopeType: "project",
+            scopeId: "project-alpha",
+            sourceType: "conversation",
+            sourceRef: "manual://session",
+          },
+        },
+      }),
+      // Caller must see the *original* embedError, not the cleanupError.
+    ).rejects.toBe(embedError);
+
+    expect(repository.deleteMemoryRecord).toHaveBeenCalledWith(504);
   });
 
   it("refuses to persist content matching a credential pattern (no record, no chunks, no qdrant write)", async () => {
