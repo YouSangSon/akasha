@@ -232,6 +232,175 @@ describe("canonical indexing", () => {
     expect(qdrantClient.upsert).not.toHaveBeenCalled();
   });
 
+  it("refuses to persist a secret in the title field (mirrors the content guard)", async () => {
+    const repository = { addMemory: vi.fn() };
+    const ingestJobs = {
+      create: vi.fn(),
+      markCompleted: vi.fn(),
+      markFailed: vi.fn(),
+    };
+    const chunkRepository = {
+      insertChunks: vi.fn(),
+      updatePointIds: vi.fn(),
+    };
+    const embeddings = { embed: vi.fn() };
+    const qdrantClient = { upsert: vi.fn() };
+
+    await expect(
+      writeCanonicalMemory({
+        repository: repository as never,
+        chunkRepository: chunkRepository as never,
+        ingestJobs: ingestJobs as never,
+        embeddings,
+        qdrantClient,
+        collectionName: "memory_chunks_v1",
+        embedding: {
+          provider: "openai",
+          model: "text-embedding-3-small",
+          dimensions: 1536,
+          version: "v1",
+          targetTokens: 800,
+          overlapTokens: 120,
+        },
+        memory: {
+          scopeType: "project",
+          scopeId: "project-alpha",
+          projectKey: "project-alpha",
+          memoryType: "decision",
+          // Synthetic AWS access key (canonical AWS docs example) in title.
+          title: "rotate key AKIAIOSFODNN7EXAMPLE",
+          content: "see title for the rotation target.",
+          source: {
+            scopeType: "project",
+            scopeId: "project-alpha",
+            sourceType: "conversation",
+            sourceRef: "manual://session",
+          },
+        },
+      }),
+    ).rejects.toBeInstanceOf(SecretDetectedError);
+
+    expect(repository.addMemory).not.toHaveBeenCalled();
+    expect(ingestJobs.create).not.toHaveBeenCalled();
+    expect(chunkRepository.insertChunks).not.toHaveBeenCalled();
+    expect(qdrantClient.upsert).not.toHaveBeenCalled();
+  });
+
+  it("refuses to persist a secret in the summary field (mirrors the content guard)", async () => {
+    const repository = { addMemory: vi.fn() };
+    const ingestJobs = {
+      create: vi.fn(),
+      markCompleted: vi.fn(),
+      markFailed: vi.fn(),
+    };
+    const chunkRepository = {
+      insertChunks: vi.fn(),
+      updatePointIds: vi.fn(),
+    };
+    const embeddings = { embed: vi.fn() };
+    const qdrantClient = { upsert: vi.fn() };
+
+    await expect(
+      writeCanonicalMemory({
+        repository: repository as never,
+        chunkRepository: chunkRepository as never,
+        ingestJobs: ingestJobs as never,
+        embeddings,
+        qdrantClient,
+        collectionName: "memory_chunks_v1",
+        embedding: {
+          provider: "openai",
+          model: "text-embedding-3-small",
+          dimensions: 1536,
+          version: "v1",
+          targetTokens: 800,
+          overlapTokens: 120,
+        },
+        memory: {
+          scopeType: "project",
+          scopeId: "project-alpha",
+          projectKey: "project-alpha",
+          memoryType: "decision",
+          content: "Plan: rotate the demo key noted in the summary.",
+          // Synthetic GitHub PAT (placeholder shape) in summary.
+          summary:
+            "Token to rotate: ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.",
+          source: {
+            scopeType: "project",
+            scopeId: "project-alpha",
+            sourceType: "conversation",
+            sourceRef: "manual://session",
+          },
+        },
+      }),
+    ).rejects.toBeInstanceOf(SecretDetectedError);
+
+    expect(repository.addMemory).not.toHaveBeenCalled();
+    expect(ingestJobs.create).not.toHaveBeenCalled();
+    expect(chunkRepository.insertChunks).not.toHaveBeenCalled();
+    expect(qdrantClient.upsert).not.toHaveBeenCalled();
+  });
+
+  it("reports categories from every field that contains a secret (title + summary together)", async () => {
+    const repository = { addMemory: vi.fn() };
+    const ingestJobs = {
+      create: vi.fn(),
+      markCompleted: vi.fn(),
+      markFailed: vi.fn(),
+    };
+    const chunkRepository = {
+      insertChunks: vi.fn(),
+      updatePointIds: vi.fn(),
+    };
+    const embeddings = { embed: vi.fn() };
+    const qdrantClient = { upsert: vi.fn() };
+
+    let caught: unknown;
+    try {
+      await writeCanonicalMemory({
+        repository: repository as never,
+        chunkRepository: chunkRepository as never,
+        ingestJobs: ingestJobs as never,
+        embeddings,
+        qdrantClient,
+        collectionName: "memory_chunks_v1",
+        embedding: {
+          provider: "openai",
+          model: "text-embedding-3-small",
+          dimensions: 1536,
+          version: "v1",
+          targetTokens: 800,
+          overlapTokens: 120,
+        },
+        memory: {
+          scopeType: "project",
+          scopeId: "project-alpha",
+          projectKey: "project-alpha",
+          memoryType: "decision",
+          title: "rotate key AKIAIOSFODNN7EXAMPLE",
+          content: "no secret in content.",
+          summary:
+            "Old token: ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa replaced.",
+          source: {
+            scopeType: "project",
+            scopeId: "project-alpha",
+            sourceType: "conversation",
+            sourceRef: "manual://session",
+          },
+        },
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(SecretDetectedError);
+    const err = caught as SecretDetectedError;
+    expect(err.categories).toEqual(
+      expect.arrayContaining(["aws-access-key", "github-token"]),
+    );
+    expect(repository.addMemory).not.toHaveBeenCalled();
+  });
+
   it("reindexes stored chunks back into qdrant for all requested scopes", async () => {
     const chunkRepository = {
       listChunks: vi.fn().mockResolvedValue([
