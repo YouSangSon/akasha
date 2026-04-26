@@ -14,6 +14,28 @@ Claude Code, Codex CLI, 또는 어떤 MCP 클라이언트에든 붙이면 에이
 요약)를 갖게 됩니다. canonical 상태는 Postgres, 벡터 검색은 Qdrant, 임베딩은
 ONNX로 로컬 실행 — **API 키 불필요**, 비용 `$0`, 데이터는 본인 머신에서만.
 
+## 다른 도구들과의 비교
+
+| | **context-forge** | doobidoo/mcp-memory-service | coleam00/mcp-mem0 | mem0ai/mem0 | letta-ai/letta | getzep/zep |
+|---|---|---|---|---|---|---|
+| **즉시 무료 사용** | ✅ | ✅ | ❌ (OpenAI) | ❌ (OpenAI default) | ❌ (hosted) | ❌ (Cloud SaaS) |
+| **데이터 본인 머신 저장** | ✅ | ✅ | 부분 (OpenAI 호출) | 부분 (OpenAI 호출) | ❌ (Letta Cloud) | ❌ (Zep Cloud) |
+| **MCP-native 프로토콜** | ✅ | ✅ | ✅ (Mem0 wrap) | wrapper 전용 | wrapper 전용 | ❌ |
+| **즉시 멀티테넌트** | ✅ (`organization_id`, token-org 바인딩, SQL + vector 양 계층 필터) | ❌ | Mem0 의존 | ✅ | ✅ | ✅ |
+| **Postgres + Qdrant 백엔드** | ✅ (canonical + vector 분리) | SQLite-vec | Supabase + pgvector | varies | varies | proprietary |
+| **OSS 경로 active 유지** | ✅ | ✅ | ✅ (template repo) | ✅ | ✅ | ❌ (CE 2025 deprecated) |
+
+MCP 메모리 생태계 norm 은 *무료/로컬 default* — doobidoo (1.7k★) 가 `$0`
+cost 를 헤드라인으로 사용, 수렴 무료 임베딩 모델 (`all-MiniLM-L6-v2`)도
+context-forge 가 같이 채택. context-forge 가 distinctively 더 나아간 점:
+**vector index 와 분리된 Postgres canonical store** (Qdrant collection 재구축
+시 데이터 손실 0, reindex 는 도구 1번 호출), **SQL + vector 양 계층의
+org-scoped 멀티테넌시** (peers 는 skip 하거나 upstream 프레임워크에 의존),
+**wrapper 가 아닌 MCP-native** (프로토콜과 메모리 엔진 사이 shim 없음).
+
+세련된 UI 가 있는 hosted 메모리 제품이 필요하면 Mem0 또는 Letta. **API
+키 불필요한 self-hosted 메모리 MCP 서버**가 필요하면 이것.
+
 ## 왜 필요한가
 
 코딩 에이전트와의 대화는 세션이 끝나는 순간 컨텍스트를 잃습니다.
