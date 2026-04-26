@@ -150,6 +150,11 @@ export function createToolRegistry(
       collectionName: services.config.qdrant.collectionName,
       vector,
       organizationId: input.organizationId,
+      // Default-strict: undefined organizationId throws unless the operator
+      // explicitly opted into the legacy single-tenant org-blind read by
+      // setting LEGACY_ANONYMOUS_SEARCH=true. Resolved from process.env at
+      // call time so runtime config flips take effect without a restart.
+      allowLegacyAnonymous: process.env.LEGACY_ANONYMOUS_SEARCH === "true",
       projectKey: input.projectKey,
       userScopeId: input.userScopeId,
       limit: input.limit,

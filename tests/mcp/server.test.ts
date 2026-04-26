@@ -442,6 +442,10 @@ describe("createToolRegistry", () => {
 
     const result = await registry.build_context_pack({
       projectKey: "project-alpha",
+      // Strict-org guard demands either organizationId or the LEGACY_ANONYMOUS_SEARCH
+      // escape hatch — pass the explicit "default" tenant so this test stays
+      // focused on context-pack persistence, not legacy-anonymous behavior.
+      organizationId: "default",
       task: "continue work",
     });
 

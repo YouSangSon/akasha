@@ -38,6 +38,13 @@ export type RetrieveMemoryInput = {
   collectionName: string;
   vector: number[];
   organizationId?: string;
+  // Escape hatch for the documented legacy single-tenant behavior. When
+  // organizationId is undefined and this flag is not set, retrieveMemory
+  // throws — silent cross-org reads are too easy a footgun once the
+  // operator adds a second tenant later. Production wiring sets this
+  // from `LEGACY_ANONYMOUS_SEARCH=true` only when the operator explicitly
+  // opts in.
+  allowLegacyAnonymous?: boolean;
   projectKey: string;
   userScopeId?: string;
   limit: number;
@@ -46,6 +53,16 @@ export type RetrieveMemoryInput = {
 export async function retrieveMemory(
   input: RetrieveMemoryInput,
 ): Promise<SearchMemoryResult[]> {
+  if (input.organizationId === undefined && !input.allowLegacyAnonymous) {
+    throw new Error(
+      "retrieveMemory requires organizationId. Bind your bearer token to " +
+        "an org with the `token:org` syntax in MEMORY_API_TOKENS, send the " +
+        "`x-organization-id` header (or `organizationId` in the request " +
+        "body), or opt into the legacy single-tenant org-blind read by " +
+        "setting LEGACY_ANONYMOUS_SEARCH=true in the server's environment.",
+    );
+  }
+
   const orgClause: QdrantFilterMatch[] =
     input.organizationId !== undefined
       ? [{ key: "organization_id", match: { value: input.organizationId } }]
