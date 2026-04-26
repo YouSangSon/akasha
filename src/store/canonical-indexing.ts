@@ -1,7 +1,7 @@
 import { chunkText, type TextChunk } from "../chunk/chunk-text.js";
 import { toQdrantPoint } from "../qdrant/point-mapper.js";
 import type { PgPool } from "../db/connection.js";
-import { assertNoSecrets } from "./secret-scrub.js";
+import { scanForSecrets, SecretDetectedError } from "./secret-scrub.js";
 import type {
   AddMemoryInput,
   CanonicalMemoryRepository,
@@ -250,10 +250,20 @@ export async function writeCanonicalMemory(input: {
   embedding: ChunkEmbeddingConfig;
   memory: AddMemoryInput;
 }): Promise<SearchMemoryResult> {
-  // Guard: refuse to persist content that looks like a credential. Throwing
-  // here means no record row, no chunk row, no qdrant point, no ingest job.
-  // The caller gets a SecretDetectedError with categories (no values).
-  assertNoSecrets(input.memory.content);
+  // Guard: refuse to persist user-supplied text that looks like a credential.
+  // Scans every user-controlled field (content + title + summary) and throws
+  // a single SecretDetectedError with the union of categories found, so the
+  // operator gets a complete picture in one error rather than a sequence of
+  // throws. Throwing here means no record row, no chunk row, no qdrant point,
+  // no ingest job. The error carries categories only, never the matched value.
+  const detections = [
+    ...scanForSecrets(input.memory.content),
+    ...(input.memory.title ? scanForSecrets(input.memory.title) : []),
+    ...(input.memory.summary ? scanForSecrets(input.memory.summary) : []),
+  ];
+  if (detections.length > 0) {
+    throw new SecretDetectedError(detections.map((d) => d.category));
+  }
 
   const record = await input.repository.addMemory(input.memory);
   const job = await input.ingestJobs.create({ memoryRecordId: record.id });
