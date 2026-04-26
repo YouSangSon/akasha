@@ -15,6 +15,30 @@ summaries. Postgres for canonical state, Qdrant for vector search, ONNX
 embeddings running locally — **no API key required**, `$0` cost, your
 data stays on your box.
 
+## How does it compare?
+
+| | **context-forge** | doobidoo/mcp-memory-service | coleam00/mcp-mem0 | mem0ai/mem0 | letta-ai/letta | getzep/zep |
+|---|---|---|---|---|---|---|
+| **Free out of the box** | ✅ | ✅ | ❌ (OpenAI) | ❌ (OpenAI default) | ❌ (hosted) | ❌ (Cloud SaaS) |
+| **Data stays on your box** | ✅ | ✅ | partial (OpenAI calls) | partial (OpenAI calls) | ❌ (Letta Cloud) | ❌ (Zep Cloud) |
+| **MCP-native protocol** | ✅ | ✅ | ✅ (wraps Mem0) | wrapper only | wrapper only | ❌ |
+| **Multi-tenant out of the box** | ✅ (`organization_id`, token-org binding, SQL + vector filters) | ❌ | inherits Mem0 | ✅ | ✅ | ✅ |
+| **Postgres + Qdrant backend** | ✅ (canonical + vector separated) | SQLite-vec | Supabase + pgvector | varies | varies | proprietary |
+| **OSS path actively maintained** | ✅ | ✅ | ✅ (template repo) | ✅ | ✅ | ❌ (CE deprecated 2025) |
+
+The MCP memory ecosystem norm is *free/local default* — doobidoo (1.7k★) headlines
+`$0` cost, and the convergent free embedding model (`all-MiniLM-L6-v2`) is what
+context-forge uses too. Where context-forge distinctively goes further: a
+**Postgres canonical store separate from the vector index** (so a Qdrant
+collection rebuild loses 0 data and reindex is one tool call), **org-scoped
+multi-tenancy at the SQL and vector layers** (peers either skip it or rely on
+the upstream framework), and **MCP-native rather than wrapper** (no shim
+between the protocol and the memory engine).
+
+If you need a hosted memory product with a polished UI, look at Mem0 or Letta.
+If you need a self-hosted memory MCP server with no API key required, this is
+that.
+
 ## Why
 
 Conversations with coding agents lose context the moment the session ends.
