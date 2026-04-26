@@ -9,6 +9,91 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 once a 1.0 is released. Pre-1.0 minor versions may still contain breaking
 changes; CHANGELOG entries call those out explicitly.
 
+## [Unreleased]
+
+Post-release audit cycle. v1.0.0 shipped with 0 OSS users, so this window
+was the safe time to tighten default-strict behavior on multi-tenancy
+boundaries and harden the secret-scrubber surface — all the changes below
+were merged during that window. The next release will bundle them together;
+strict SemVer suggests `2.0.0` (breaking default behavior on the org guard),
+but a `1.1.0`-with-prominent-breaking-warning is also defensible given the
+small actual impact surface.
+
+### Security
+
+- **Secret scrubber now covers `title` and `summary`, not only `content`** —
+  `writeCanonicalMemory` previously only scanned `content` for credential
+  shapes (AWS key, GitHub PAT, OpenAI key, PEM, JWT, etc.); a caller could
+  pass a secret in `title` or `summary` and bypass the guard the README and
+  `docs/security.md` headline as "blocks API keys / PEM / bearer / JWT
+  before any record hits Postgres or Qdrant". The guard now scans all three
+  user-controlled fields and raises one `SecretDetectedError` with the
+  union of categories found. (PR #5,
+  [`f033903`](https://github.com/YouSangSon/context-forge/commit/f033903))
+- **`retrieveMemory` refuses org-blind reads by default** — when
+  `organizationId` was undefined on a request (no token-org binding, no
+  `x-organization-id` header, no body field), the function fell through to
+  org-blind Qdrant queries + org-blind PG hydration. The legacy single-tenant
+  behavior was documented but trivially easy to fall into accidentally,
+  silently leaking cross-org data once the operator added a second tenant.
+  Default is now strict — the function throws with operational guidance.
+  Set `LEGACY_ANONYMOUS_SEARCH=true` to opt back into the historical behavior.
+  **BREAKING** for any deployment that relied on the implicit fallback;
+  one-line `.env` migration. (PR #6,
+  [`809eb87`](https://github.com/YouSangSon/context-forge/commit/809eb87))
+
+### Fixed
+
+- **Rollback PG state when `writeCanonicalMemory` hits a downstream failure** —
+  embedding 5xx, OpenAI rate-limit, or Qdrant upsert errors used to leave
+  orphan `memory_records` + `memory_chunks` rows behind with no Qdrant points
+  pointing at them. Search couldn't find them, compaction wouldn't clean them
+  up (compaction targets duplicates / decay, not orphans), and `reindex_memory`
+  only repaired them if the operator noticed. The catch block now calls a new
+  `deleteMemoryRecord` repository method which leverages schema-level
+  `ON DELETE CASCADE` to atomically remove `memory_chunks`, `ingest_jobs`,
+  and `relationships` in the same Postgres transaction — best-effort cleanup
+  that re-throws the original error if cleanup itself fails. The audit's
+  recommended outbox sweeper (option B, schema migration + retry loop) is
+  deferred as a follow-up; this is the schema-unchanged option A. (PR #7,
+  [`5764323`](https://github.com/YouSangSon/context-forge/commit/5764323))
+
+### Performance
+
+- **`embedBatch` API to collapse N HTTP RTTs into one** — `writeCanonicalMemory`
+  and `reindexCanonicalMemory` used `Promise.all(map(embed))` to embed each
+  chunk individually. For OpenAI that meant N round-trips per ingest and per
+  reindex sweep — 100 chunks at ~200ms RTT = ~20s of pure round-trip latency,
+  plus N times the rate-limit pressure, at the same per-token cost. The new
+  `embedBatch(inputs: string[])` method is part of `EmbeddingProvider`:
+  OpenAI implements it natively (single `embeddings.create` with array input);
+  Transformers and Local providers loop sequentially since neither pays
+  per-call overhead. Both call sites verify post-batch that `embeddings.length
+  === chunks.length` so a misbehaving provider cannot silently misalign.
+  (PR #8, [`7b5afac`](https://github.com/YouSangSon/context-forge/commit/7b5afac))
+
+### Documentation
+
+- **Migration guide reframed bidirectionally** —
+  `docs/migrations/openai-to-transformers.{md,ko.md}` retitled from
+  "Migration: OpenAI → Transformers default (v1.0.x → next)" to "Switching
+  between OpenAI and Transformers embedding providers". The v1.0.x framing
+  was anachronistic after collapsing the transformers + default-flip work
+  into the v1.0.0 release; the operational steps are now a reference for
+  switching in either direction, not a one-time migration.
+  ([`a3b456a`](https://github.com/YouSangSon/context-forge/commit/a3b456a))
+- **README landing tightened for 30-second value comprehension** — added
+  CI / License / MCP-compatible / Node ≥20 badges, leading tagline
+  "Persistent memory for AI coding agents — free, local, self-hosted" +
+  elevator paragraph surfacing the differentiator (no API key, $0 cost,
+  data stays on your box). Quick-start fix: "fill in `OPENAI_API_KEY` at
+  minimum" → "defaults work — `OPENAI_API_KEY` only needed if you set
+  `EMBEDDING_PROVIDER=openai` later". (Same `a3b456a`)
+- **`package.json` keywords expanded 9 → 19** — added `mcp-server`,
+  `agent-memory`, `embeddings`, `rag`, `onnx`, `transformers`,
+  `huggingface`, `claude-code`, `self-hosted`, `local-first` to surface
+  the project for the right npm and GitHub topic searches. (Same `a3b456a`)
+
 ## [1.0.0] — 2026-04-26
 
 Initial public release. context-forge graduates from internal hardening
