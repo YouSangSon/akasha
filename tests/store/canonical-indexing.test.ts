@@ -218,6 +218,10 @@ describe("canonical indexing", () => {
     };
     const embeddings = {
       embed: vi.fn().mockResolvedValue([0.1, 0.2]),
+      // F4 cascade: writeCanonicalMemory now batches embeddings via embedBatch
+      // instead of Promise.all(map(embed)). The qdrant-failure scenario needs
+      // a successful batch result so we reach the upsert step that throws.
+      embedBatch: vi.fn().mockResolvedValue([[0.1, 0.2]]),
     };
     const upsertError = new Error("Qdrant 503 service unavailable");
     const qdrantClient = {
@@ -293,6 +297,9 @@ describe("canonical indexing", () => {
     const embedError = new Error("OpenAI 500");
     const embeddings = {
       embed: vi.fn().mockRejectedValue(embedError),
+      // F4 cascade: production code calls embedBatch — that's the path that
+      // must reject for this test to exercise the rollback-on-failure case.
+      embedBatch: vi.fn().mockRejectedValue(embedError),
     };
     const qdrantClient = { upsert: vi.fn() };
 
