@@ -125,8 +125,12 @@ MEMORY_API_TOKENS=alpha-token:dev-team,legacy-token
 
 토큰에 바인딩이 없을 때 (legacy):
 - `x-organization-id` 헤더 또는 body의 `organizationId` 사용.
-- 둘 다 없으면 org-blind 읽기 (legacy single-tenant 동작). production 에서는
-  반드시 토큰을 org에 바인딩.
+- 둘 다 없으면 default-strict 가드가 명확한 에러로 차단 — 운영자가 (토큰
+  org 바인딩 / 헤더 / body) 세 가지 수정 경로 중 하나를 선택하도록 안내.
+  production 에서는 반드시 토큰을 org에 바인딩.
+- 의도적인 단일 테넌트 설치 (org 추가 계획 없음) 의 경우 `.env` 에
+  `LEGACY_ANONYMOUS_SEARCH=true` 명시 — 매 요청마다 플래그 읽어서 재시작
+  없이 토글 가능.
 
 ## 개인 / 단일 테넌트 사용
 

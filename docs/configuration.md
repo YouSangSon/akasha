@@ -131,8 +131,13 @@ When a token has an org binding:
 
 When a token has no binding (legacy form):
 - Requests use `organizationId` from `x-organization-id` header or body.
-- If neither supplies one, queries fall back to org-blind reads (legacy
-  single-tenant behavior). Bind tokens to orgs in production.
+- If neither supplies one, the default-strict guard refuses the read with a
+  clear error pointing the operator at the three available fixes (token-org
+  binding, header, body). Bind tokens to orgs in production.
+- To opt into the historical org-blind behavior — e.g. a single-tenant
+  install with no plans to add a second tenant — set
+  `LEGACY_ANONYMOUS_SEARCH=true` in `.env`. The flag is read on every
+  request, so flips take effect without a restart.
 
 ## Personal / single-tenant use
 
