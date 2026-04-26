@@ -94,6 +94,12 @@ function makeDeps(
     },
     embeddings: {
       embed: vi.fn().mockResolvedValue([0.1, 0.2, 0.3]),
+      // F4: writeCanonicalMemory uses embedBatch for chunk embeddings.
+      embedBatch: vi
+        .fn()
+        .mockImplementation(async (inputs: string[]) =>
+          inputs.map(() => [0.1, 0.2, 0.3]),
+        ),
     },
     qdrantClient: {
       upsert: vi.fn().mockResolvedValue(undefined),

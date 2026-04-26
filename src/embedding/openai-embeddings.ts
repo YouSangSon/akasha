@@ -2,8 +2,12 @@ import OpenAI from "openai";
 
 export type EmbeddingVector = number[];
 
+// `input` accepts either a single string or an array — the OpenAI Embeddings
+// endpoint natively supports batch input (up to ~2048 entries / ~300k tokens
+// per request) at the same per-token cost, so callers that have multiple
+// texts should use the array form to collapse N HTTP RTTs into one.
 export type EmbeddingsCreateParams = {
-  input: string;
+  input: string | string[];
   model: string;
 };
 
@@ -58,6 +62,36 @@ export function createOpenAiEmbeddingClient(
       }
 
       return embedding;
+    },
+
+    async embedBatch(inputs: string[]): Promise<EmbeddingVector[]> {
+      if (inputs.length === 0) {
+        return [];
+      }
+
+      const response = await client.embeddings.create({
+        input: inputs,
+        model: input.model,
+      });
+
+      // OpenAI returns one entry per input in input order — verify count
+      // before slicing so a future API change can't silently truncate.
+      if (response.data.length !== inputs.length) {
+        throw new Error(
+          `OpenAI returned ${response.data.length} embeddings for ${inputs.length} inputs (model ${input.model})`,
+        );
+      }
+
+      const embeddings = response.data.map((item, index) => {
+        if (!item.embedding || item.embedding.length === 0) {
+          throw new Error(
+            `OpenAI returned an empty embedding vector at index ${index} for model ${input.model}`,
+          );
+        }
+        return item.embedding;
+      });
+
+      return embeddings;
     },
   };
 }

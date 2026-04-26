@@ -369,7 +369,9 @@ describe("createToolRegistry", () => {
     expect(services.repository.addMemory).toHaveBeenCalledOnce();
     expect(services.ingestJobs.create).toHaveBeenCalledWith({ memoryRecordId: 501 });
     expect(services.chunkRepository.insertChunks).toHaveBeenCalledOnce();
-    expect(services.embeddings.embed).toHaveBeenCalled();
+    // F4: writeCanonicalMemory now batches per-chunk embeddings into a single
+    // embedBatch call instead of N sequential embed calls.
+    expect(services.embeddings.embedBatch).toHaveBeenCalled();
     expect(services.qdrantClient.upsert).toHaveBeenCalledWith(
       "memory_chunks_v1",
       expect.objectContaining({
@@ -905,6 +907,14 @@ function createCanonicalServices() {
     },
     embeddings: {
       embed: vi.fn().mockResolvedValue([0.1, 0.2, 0.3]),
+      // F4: writeCanonicalMemory + reindexCanonicalMemory now use embedBatch.
+      // Mock returns the same 3-dim vector for every input so suites that vary
+      // chunk count don't need provider arithmetic.
+      embedBatch: vi
+        .fn()
+        .mockImplementation(async (inputs: string[]) =>
+          inputs.map(() => [0.1, 0.2, 0.3]),
+        ),
     },
     archiveRepository: {
       createCompactionRun: vi.fn().mockResolvedValue({

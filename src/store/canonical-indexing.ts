@@ -59,6 +59,7 @@ export type MemoryChunkRepository = {
 
 export type EmbeddingClient = {
   embed(inputText: string): Promise<number[]>;
+  embedBatch(inputs: string[]): Promise<number[][]>;
 };
 
 export type QdrantUpsertClient = {
@@ -279,9 +280,14 @@ export async function writeCanonicalMemory(input: {
       chunks,
       embedding: input.embedding,
     });
-    const embeddings = await Promise.all(
-      storedChunks.map((chunk) => input.embeddings.embed(chunk.content)),
+    const embeddings = await input.embeddings.embedBatch(
+      storedChunks.map((chunk) => chunk.content),
     );
+    if (embeddings.length !== storedChunks.length) {
+      throw new Error(
+        `embedBatch returned ${embeddings.length} vectors for ${storedChunks.length} chunks`,
+      );
+    }
     const points = storedChunks.map((chunk, index) =>
       toQdrantPoint({
         chunk: {
@@ -340,9 +346,14 @@ export async function reindexCanonicalMemory(input: {
   scopes: ScopeRef[];
 }): Promise<{ chunkCount: number }> {
   const chunks = await input.chunkRepository.listChunks(input.scopes);
-  const embeddings = await Promise.all(
-    chunks.map((chunk) => input.embeddings.embed(chunk.content)),
+  const embeddings = await input.embeddings.embedBatch(
+    chunks.map((chunk) => chunk.content),
   );
+  if (embeddings.length !== chunks.length) {
+    throw new Error(
+      `reindex embedBatch returned ${embeddings.length} vectors for ${chunks.length} chunks`,
+    );
+  }
   const points = chunks.map((chunk, index) =>
     toQdrantPoint({
       chunk: {
