@@ -44,11 +44,16 @@ describe("canonical indexing", () => {
       updatePointIds: vi.fn().mockResolvedValue(undefined),
     };
     const embeddings = {
-      embed: vi
+      embed: vi.fn(),
+      // F4: writeCanonicalMemory now batches per-chunk embeddings into one
+      // embedBatch call. Mock returns the 3-vector batch in chunk order.
+      embedBatch: vi
         .fn()
-        .mockResolvedValueOnce([0.1, 0.2])
-        .mockResolvedValueOnce([0.3, 0.4])
-        .mockResolvedValueOnce([0.5, 0.6]),
+        .mockResolvedValue([
+          [0.1, 0.2],
+          [0.3, 0.4],
+          [0.5, 0.6],
+        ]),
     };
     const qdrantClient = {
       upsert: vi.fn().mockResolvedValue(undefined),
@@ -88,7 +93,13 @@ describe("canonical indexing", () => {
     expect(repository.addMemory).toHaveBeenCalledOnce();
     expect(ingestJobs.create).toHaveBeenCalledWith({ memoryRecordId: 501 });
     expect(chunkRepository.insertChunks).toHaveBeenCalledOnce();
-    expect(embeddings.embed).toHaveBeenCalledTimes(3);
+    // Single batch call replaces three sequential embed() calls.
+    expect(embeddings.embedBatch).toHaveBeenCalledOnce();
+    expect(embeddings.embedBatch).toHaveBeenCalledWith([
+      "one two",
+      "two three",
+      "three four",
+    ]);
     expect(qdrantClient.upsert).toHaveBeenCalledWith(
       "memory_chunks_v1",
       expect.objectContaining({
@@ -133,7 +144,8 @@ describe("canonical indexing", () => {
     };
     const embedError = new Error("OpenAI 429");
     const embeddings = {
-      embed: vi.fn().mockRejectedValue(embedError),
+      embed: vi.fn(),
+      embedBatch: vi.fn().mockRejectedValue(embedError),
     };
     const qdrantClient = {
       upsert: vi.fn(),
@@ -189,7 +201,7 @@ describe("canonical indexing", () => {
       insertChunks: vi.fn(),
       updatePointIds: vi.fn(),
     };
-    const embeddings = { embed: vi.fn() };
+    const embeddings = { embed: vi.fn(), embedBatch: vi.fn() };
     const qdrantClient = { upsert: vi.fn() };
 
     await expect(
@@ -243,7 +255,7 @@ describe("canonical indexing", () => {
       insertChunks: vi.fn(),
       updatePointIds: vi.fn(),
     };
-    const embeddings = { embed: vi.fn() };
+    const embeddings = { embed: vi.fn(), embedBatch: vi.fn() };
     const qdrantClient = { upsert: vi.fn() };
 
     await expect(
@@ -297,7 +309,7 @@ describe("canonical indexing", () => {
       insertChunks: vi.fn(),
       updatePointIds: vi.fn(),
     };
-    const embeddings = { embed: vi.fn() };
+    const embeddings = { embed: vi.fn(), embedBatch: vi.fn() };
     const qdrantClient = { upsert: vi.fn() };
 
     await expect(
@@ -352,7 +364,7 @@ describe("canonical indexing", () => {
       insertChunks: vi.fn(),
       updatePointIds: vi.fn(),
     };
-    const embeddings = { embed: vi.fn() };
+    const embeddings = { embed: vi.fn(), embedBatch: vi.fn() };
     const qdrantClient = { upsert: vi.fn() };
 
     let caught: unknown;
@@ -438,10 +450,13 @@ describe("canonical indexing", () => {
       updatePointIds: vi.fn().mockResolvedValue(undefined),
     };
     const embeddings = {
-      embed: vi
-        .fn()
-        .mockResolvedValueOnce([0.1, 0.2])
-        .mockResolvedValueOnce([0.3, 0.4]),
+      embed: vi.fn(),
+      // F4: reindexCanonicalMemory now uses embedBatch — single call returning
+      // both vectors in input order.
+      embedBatch: vi.fn().mockResolvedValue([
+        [0.1, 0.2],
+        [0.3, 0.4],
+      ]),
     };
     const qdrantClient = {
       upsert: vi.fn().mockResolvedValue(undefined),
@@ -463,7 +478,7 @@ describe("canonical indexing", () => {
       { scopeType: "project", scopeId: "project-alpha" },
       { scopeType: "user", scopeId: "alice" },
     ]);
-    expect(embeddings.embed).toHaveBeenCalledTimes(2);
+    expect(embeddings.embedBatch).toHaveBeenCalledOnce();
     expect(qdrantClient.upsert).toHaveBeenCalledWith(
       "memory_chunks_v1",
       expect.objectContaining({

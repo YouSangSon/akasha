@@ -35,21 +35,36 @@ export function createTransformersEmbeddingClient(
 
   const factory = input.createExtractor ?? defaultFactory(input.model);
 
+  async function embedOne(inputText: string): Promise<number[]> {
+    extractorPromise ??= factory();
+    const extractor = await extractorPromise;
+    const out = await extractor(inputText, {
+      pooling: "mean",
+      normalize: true,
+    });
+    const data = out.data;
+    if (!data || (typeof data.length === "number" && data.length === 0)) {
+      throw new Error(
+        `transformers extractor returned empty embedding for model ${input.model}`,
+      );
+    }
+    return Array.from(data as ArrayLike<number>);
+  }
+
   return {
-    async embed(inputText: string): Promise<number[]> {
-      extractorPromise ??= factory();
-      const extractor = await extractorPromise;
-      const out = await extractor(inputText, {
-        pooling: "mean",
-        normalize: true,
-      });
-      const data = out.data;
-      if (!data || (typeof data.length === "number" && data.length === 0)) {
-        throw new Error(
-          `transformers extractor returned empty embedding for model ${input.model}`,
-        );
+    embed: embedOne,
+    async embedBatch(inputs: string[]): Promise<number[][]> {
+      // Sequential single-text calls. ONNX-side batch input is supported by
+      // @huggingface/transformers but the result tensor reshaping is enough
+      // additional surface that we keep batching at the orchestrator level
+      // for now — local CPU inference has no per-call HTTP RTT to amortize,
+      // so the cost/latency benefit is minimal. Revisit if ONNX batch shows
+      // a measurable win in benchmarks.
+      const results: number[][] = [];
+      for (const text of inputs) {
+        results.push(await embedOne(text));
       }
-      return Array.from(data as ArrayLike<number>);
+      return results;
     },
   };
 }
