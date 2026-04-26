@@ -14,14 +14,24 @@
   },
   "keywords": [
     "mcp",
+    "mcp-server",
     "memory",
+    "agent-memory",
     "vector-search",
+    "embeddings",
+    "rag",
     "postgres",
     "qdrant",
+    "onnx",
+    "transformers",
+    "huggingface",
     "claude",
+    "claude-code",
     "codex",
     "ai-agents",
-    "context"
+    "context",
+    "self-hosted",
+    "local-first"
   ],
   "type": "module",
   "engines": {

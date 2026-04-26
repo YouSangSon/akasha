@@ -1,35 +1,48 @@
 > **English** | [한국어](openai-to-transformers.ko.md)
 
-# Migration: OpenAI → Transformers default (v1.0.x → next)
+# Switching between OpenAI and Transformers embedding providers
 
-The default `EMBEDDING_PROVIDER` flipped from `openai` (paid, 1536-dim) to
-`transformers` (free local ONNX, 384-dim). **This is a breaking change** for
-any installation that ran v1.0.x with the default OpenAI provider — the new
-default emits 384-dim vectors that Qdrant will reject when written into the
-existing 1536-dim collection.
+The default `EMBEDDING_PROVIDER` is `transformers` (free local ONNX,
+`Xenova/all-MiniLM-L6-v2`, 384-dim). The `openai` provider
+(`text-embedding-3-small`, 1536-dim, paid) is a fully-supported opt-in.
 
-This document covers two upgrade paths and the operational steps for each.
+This guide covers switching between the two. The Qdrant collection's
+vector size is fixed at creation time, so any switch that crosses
+dimensions (transformers ↔ openai) needs three operational steps:
+
+1. Recreate the Qdrant collection at the new dimension.
+2. Update `.env` to point at the new provider.
+3. Reindex the existing canonical chunks (Postgres preserves them across
+   any switch — only Qdrant points get rebuilt).
+
+Two paths follow — pick the direction you're going.
 
 ---
 
-## Path A — Stay on OpenAI (zero migration)
+## Path A — Switch to OpenAI (transformers → openai)
 
-If you want the v1.0.x behavior unchanged:
+Use this when you want hosted OpenAI quality for retrieval.
+
+If you have **no existing memories yet** (fresh install), it's two lines
+in `.env`:
 
 ```bash
-# .env
 EMBEDDING_PROVIDER=openai
 OPENAI_API_KEY=sk-...
 ```
 
-That's it. Restart the server, no Qdrant or Postgres changes. The new
-`@huggingface/transformers` dependency is installed (it's now a regular
-`dependencies` entry) but never loaded at runtime when the provider is set
-to `openai`.
+Restart the server. The `@huggingface/transformers` dependency is
+installed (~50MB on disk) but never loaded at runtime when the provider
+is set to `openai`.
+
+If you **already wrote memories under transformers** (384-dim) and want
+to switch, follow the operational steps from Path B below — but invert
+the dimensions: in Step 2 use `size=1536` instead of `size=384`, and in
+Step 3 set `EMBEDDING_PROVIDER=openai` with `OPENAI_API_KEY`.
 
 ---
 
-## Path B — Migrate to Transformers (recommended for personal use)
+## Path B — Switch to Transformers (openai → transformers, or rebuild the default)
 
 You'll need ~2 minutes of downtime, the Qdrant API endpoint reachable, and
 the existing canonical text intact in Postgres (which it is — chunks live
@@ -47,9 +60,9 @@ docker compose stop app
 
 ### Step 2 — Recreate the Qdrant collection with the new dimension
 
-The Qdrant collection's vector size is fixed at creation time. You must
-delete the existing 1536-dim collection and recreate it as 384-dim before
-the new default vectors can be written.
+The Qdrant collection's vector size is fixed at creation time. Delete the
+existing 1536-dim collection and recreate it as 384-dim before transformers
+vectors can be written. (For the inverse path A → 1536-dim, swap the size.)
 
 ```bash
 # Set these from your .env:
@@ -156,16 +169,16 @@ If results come back empty, check:
 
 ---
 
-## Why this changed
+## Why transformers is the default
 
 A cross-OSS survey of 11 peer projects (Chroma, txtai, mem0, Letta, Zep,
 LlamaIndex, LangChain, doobidoo/mcp-memory-service, etc.) found that the
 **MCP memory server category** norm is *free/local default*. The largest
 vector-using MCP memory server (doobidoo, 1.7k★) headlines `$0` cost and
-`100% local` as its differentiator. context-forge now follows that
-convention so OSS users get value from `npm install` without a paid API
-key. OpenAI remains a fully supported, well-documented option for
-operators who prefer hosted-provider quality.
+`100% local` as its differentiator. context-forge follows that convention
+so OSS users get value from `npm install` without a paid API key. OpenAI
+remains a fully supported, well-documented option for operators who prefer
+hosted-provider quality.
 
 The chosen model (`Xenova/all-MiniLM-L6-v2`) is the same convergent default
 picked by Chroma (bundled ONNX), txtai (sentence-transformers fallback),
@@ -173,9 +186,10 @@ and doobidoo. 384 dimensions, cosine distance, ~22MB on disk.
 
 ---
 
-## Rollback
+## Rollback either direction
 
-If things go wrong, Path A (stay on OpenAI) works as a rollback even after
-you started Path B — just set `EMBEDDING_PROVIDER=openai`, recreate the
-Qdrant collection with `size=1536`, and reindex. Your Postgres data is
-unchanged throughout.
+Postgres canonical text is preserved across every switch in this guide,
+so the operation is reversible. To go back to wherever you came from,
+follow the same path in the opposite direction: recreate the Qdrant
+collection at the original dimension, restore the original `.env`,
+reindex.

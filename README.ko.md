@@ -2,10 +2,17 @@
 
 # context-forge
 
-AI 코딩 에이전트를 위한 영구 메모리 MCP 서버입니다. Claude Code, Codex CLI,
-또는 어떤 MCP 클라이언트에든 붙이면 에이전트가 세션이 끝나도 사라지지 않는
-검색 가능한 메모리(결정 사항, 제약 조건, 요약)를 갖게 됩니다. Postgres와
-Qdrant 기반의 본격적인 벡터 검색을 사용합니다.
+[![CI](https://github.com/YouSangSon/context-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/YouSangSon/context-forge/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![MCP](https://img.shields.io/badge/MCP-compatible-blue.svg)](https://modelcontextprotocol.io/)
+[![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org/)
+
+**AI 코딩 에이전트를 위한 영구 메모리 — 무료, 로컬, 셀프-호스팅.**
+
+Claude Code, Codex CLI, 또는 어떤 MCP 클라이언트에든 붙이면 에이전트가
+세션이 끝나도 사라지지 않는 검색 가능한 메모리(결정 사항, 제약 조건,
+요약)를 갖게 됩니다. canonical 상태는 Postgres, 벡터 검색은 Qdrant, 임베딩은
+ONNX로 로컬 실행 — **API 키 불필요**, 비용 `$0`, 데이터는 본인 머신에서만.
 
 ## 왜 필요한가
 
@@ -34,7 +41,8 @@ Docker (Postgres + Qdrant 용) 와 Node.js ≥ 20이 필요합니다.
 git clone https://github.com/YouSangSon/context-forge.git
 cd context-forge
 
-# 1. env 템플릿 복사 + OPENAI_API_KEY 최소한 채우기
+# 1. env 템플릿 복사 (default 그대로 동작 — OPENAI_API_KEY 는
+#    EMBEDDING_PROVIDER=openai 로 바꿀 때만 필요)
 cp .env.example .env
 ${EDITOR:-nano} .env
 

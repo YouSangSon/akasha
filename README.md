@@ -2,10 +2,18 @@
 
 # context-forge
 
-A persistent-memory MCP server for AI coding agents. Attach it to Claude Code,
-Codex CLI, or any MCP client and the agent gets durable, searchable memory
-across sessions — decisions, constraints, summaries — backed by Postgres +
-Qdrant for full vector search.
+[![CI](https://github.com/YouSangSon/context-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/YouSangSon/context-forge/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![MCP](https://img.shields.io/badge/MCP-compatible-blue.svg)](https://modelcontextprotocol.io/)
+[![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org/)
+
+**Persistent memory for AI coding agents — free, local, self-hosted.**
+
+Attach it to Claude Code, Codex CLI, or any MCP client and the agent
+gains durable, searchable memory across sessions: decisions, constraints,
+summaries. Postgres for canonical state, Qdrant for vector search, ONNX
+embeddings running locally — **no API key required**, `$0` cost, your
+data stays on your box.
 
 ## Why
 
@@ -34,7 +42,8 @@ Requires Docker (for Postgres + Qdrant) and Node.js ≥ 20.
 git clone https://github.com/YouSangSon/context-forge.git
 cd context-forge
 
-# 1. Copy the env template and fill in OPENAI_API_KEY at minimum.
+# 1. Copy the env template (defaults work — OPENAI_API_KEY only needed if
+#    you set EMBEDDING_PROVIDER=openai later).
 cp .env.example .env
 ${EDITOR:-nano} .env
 
