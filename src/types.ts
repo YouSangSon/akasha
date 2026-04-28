@@ -117,12 +117,18 @@ export type CanonicalMemoryRepository = {
 
 export type IngestJobStatus = "pending" | "processing" | "completed" | "failed";
 
+export type IngestJobQdrantStatus = "pending" | "completed" | "failed";
+
 export type IngestJob = {
   id: number;
   memoryRecordId: number;
   status: IngestJobStatus;
   attempts: number;
   lastError: string | null;
+  qdrantStatus: IngestJobQdrantStatus;
+  qdrantAttempts: number;
+  qdrantNextRetryAt: string | null;
+  qdrantLastError: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -131,4 +137,17 @@ export type IngestJobRepository = {
   create(input: { memoryRecordId: number }): Promise<IngestJob>;
   markCompleted(jobId: number): Promise<IngestJob>;
   markFailed(jobId: number, error: unknown): Promise<IngestJob>;
+  markQdrantCompleted(jobId: number): Promise<IngestJob>;
+  markQdrantPending(input: {
+    jobId: number;
+    attempts: number;
+    nextRetryAt: Date;
+    error?: unknown;
+  }): Promise<IngestJob>;
+  markQdrantFailed(input: {
+    jobId: number;
+    attempts: number;
+    error: unknown;
+  }): Promise<IngestJob>;
+  listPendingForRetry(input: { limit: number; now: Date }): Promise<IngestJob[]>;
 };
