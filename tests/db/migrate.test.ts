@@ -9,6 +9,10 @@ type InformationSchemaTableRow = {
   table_name: string;
 };
 
+type InformationSchemaColumnRow = {
+  column_name: string;
+};
+
 const postgresPort = process.env.POSTGRES_PORT ?? "5432";
 const adminConnectionString =
   `postgres://memory:memory@127.0.0.1:${postgresPort}/postgres`;
@@ -103,6 +107,44 @@ describe.skipIf(!process.env.POSTGRES_HOST)("runMigrations", () => {
     }
   });
 
+  it("applies migration 007 outbox columns to ingest_jobs", async () => {
+    // Regression guard: PR #12 added 007_ingest_jobs_qdrant_outbox.sql to
+    // disk but forgot to register it in MIGRATION_FILES, so runMigrations
+    // silently skipped it. Tests that rely on these columns broke after
+    // recreating their test database. This test asserts the columns are
+    // present after a fresh migration so the same mistake can't recur.
+    const pool = createPgPool({
+      connectionString: testConnectionString,
+    });
+
+    try {
+      await runMigrations(pool);
+
+      const result = await pool.query<InformationSchemaColumnRow>(`
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'ingest_jobs'
+          AND column_name IN (
+            'qdrant_status',
+            'qdrant_attempts',
+            'qdrant_next_retry_at',
+            'qdrant_last_error'
+          )
+        ORDER BY column_name
+      `);
+
+      expect(result.rows.map((row) => row.column_name)).toEqual([
+        "qdrant_attempts",
+        "qdrant_last_error",
+        "qdrant_next_retry_at",
+        "qdrant_status",
+      ]);
+    } finally {
+      await pool.end();
+    }
+  });
+
   it("falls back to the embedded Postgres migration when the sql asset is unavailable", () => {
     const sql = readPostgresMigrationSql({
       readFile(filePath) {
@@ -114,5 +156,10 @@ describe.skipIf(!process.env.POSTGRES_HOST)("runMigrations", () => {
 
     expect(sql).toContain("CREATE TABLE IF NOT EXISTS sources");
     expect(sql).toContain("CREATE TABLE IF NOT EXISTS ingest_jobs");
+    // The embedded snapshot must mirror every on-disk migration so bundled-
+    // dist deployments see the same schema as file-based runs. Migration 007
+    // was the latest addition.
+    expect(sql).toContain("qdrant_status");
+    expect(sql).toContain("idx_ingest_jobs_qdrant_pending_retry");
   });
 });
