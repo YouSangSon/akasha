@@ -55,7 +55,8 @@ for env-var setup see [configuration.md](configuration.md).
 │ Persistence                                                     │
 │   Postgres 16  (compose container or external)                  │
 │   Qdrant       (compose container or external)                  │
-│   OpenAI       (or local deterministic embed)                   │
+│   Embeddings   (transformers local ONNX [default] / openai /   │
+│                 local deterministic)                            │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -67,7 +68,7 @@ Client          Tool                Orchestrator       Repos                Stor
 add_memory  →  add_memory tool  →  writeCanonical  →  memory-repo      →  Postgres (sources, memory_records)
                                    Memory             canonical-       →  Postgres (memory_chunks)
                                                       indexing
-                                                      embeddings.embed →  OpenAI / local
+                                                      embeddings.embed →  transformers / openai / local
                                                       qdrantClient     →  Qdrant (chunk vectors)
                                                       ingestJobs       →  Postgres (ingest_jobs)
 ```
@@ -81,7 +82,7 @@ side effects.
 ## Data flow: read
 
 ```
-search_memory  →  search tool  →  retrieveMemory  →  embeddings.embed  →  OpenAI / local
+search_memory  →  search tool  →  retrieveMemory  →  embeddings.embed  →  transformers / openai / local
                                   (Qdrant + PG)     qdrantClient.query →  Qdrant (cosine, scope-filtered)
                                                     repository         →  Postgres (hydrate by id)
                                                     .getMemoryRecordsByIds
@@ -164,8 +165,10 @@ memory_record_id FK    from_memory_record_id   organization_id
 status                 to_memory_record_id     actor / tool
 attempts               relation_type           outcome / error_message
 last_error             created_at              duration_ms / request_id
-                                               metadata JSONB
-                                               created_at
+qdrant_status                                  metadata JSONB
+qdrant_attempts                                created_at
+qdrant_next_retry_at
+qdrant_last_error
 
 compaction_runs        memory_archive
 ───────────────        ──────────────
@@ -184,7 +187,7 @@ completed_at           archived_at / unarchived_at
 idempotency_key UUID   UNIQUE (compaction_run_id, source_record_id)
 ```
 
-Migrations live in `src/db/migrations/` numbered 001-006 and are applied
+Migrations live in `src/db/migrations/` numbered 001-008 and are applied
 on bootstrap. Each is idempotent (`CREATE … IF NOT EXISTS`).
 
 ## Multi-tenancy
@@ -213,15 +216,20 @@ logged at error level so ops can detect audit-stream issues.
 
 ## Embedding pluggability
 
-`src/embedding/embedding-factory.ts` selects the provider:
+`src/embedding/embedding-factory.ts` selects the provider via
+`EMBEDDING_PROVIDER` (default: `transformers`):
 
-- `openai` (default) → `src/embedding/openai-embeddings.ts`,
-  `text-embedding-3-small`, 1536-dim.
+- `transformers` **(default)** → `src/embedding/transformers-embedding.ts`,
+  free local ONNX inference via `@huggingface/transformers` (optional dep).
+  Default model `Xenova/all-MiniLM-L6-v2`, 384-dim. First call downloads
+  ~22 MB to the HF cache; subsequent calls are fully offline. No API key
+  required.
+- `openai` → `src/embedding/openai-embeddings.ts`,
+  `text-embedding-3-small`, 1536-dim. Requires `OPENAI_API_KEY`.
 - `local` → `src/embedding/local-embeddings.ts`, deterministic SHA-256
-  hashing into 384-dim vectors. No external calls; usable in CI /
-  air-gapped / offline.
+  hashing into 384-dim vectors. No external calls; intended for CI /
+  air-gapped / offline use where semantic search is not needed.
 
-The provider is selected at bootstrap from `EMBEDDING_PROVIDER` and held
-in `services.embeddings` for the process lifetime. Changing provider
-requires a reindex (`reindex_memory` tool) because dimensions and content
-semantics differ.
+The provider is selected at bootstrap and held in `services.embeddings`
+for the process lifetime. Changing provider requires a reindex
+(`reindex_memory` tool) because dimensions and content semantics differ.
