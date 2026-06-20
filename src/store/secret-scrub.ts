@@ -64,6 +64,22 @@ const PATTERNS: readonly Pattern[] = [
     regex:
       /\beyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{20,}\b/,
   },
+  // GCP API key: AIza prefix followed by 35 alphanumeric/dash/underscore chars.
+  { category: "gcp-api-key", regex: /\bAIza[A-Za-z0-9_-]{35}\b/ },
+  // Stripe live or test secret key: sk_live_/sk_test_ + 24+ alphanumerics.
+  {
+    category: "stripe-key",
+    regex: /\bsk_(?:live|test)_[A-Za-z0-9]{24,}\b/,
+  },
+  // Slack token prefixes: xoxb (bot), xoxp (user), xoxo (OAuth), xoxa (app).
+  { category: "slack-token", regex: /\bxox[bpoa]-[0-9A-Za-z-]{10,}\b/ },
+  // DB connection string with embedded credentials: user:pass@host form.
+  // The ://[^:@\s]+:[^@\s]+@ structure ensures userinfo is present; plain
+  // URLs like https://example.com (no user:pass@) do not match.
+  {
+    category: "db-connection-string",
+    regex: /:\/\/[^:@\s]+:[^@\s]+@[a-z0-9][\w.-]+/i,
+  },
 ];
 
 export function scanForSecrets(content: string): SecretDetection[] {
