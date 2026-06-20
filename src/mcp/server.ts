@@ -772,6 +772,19 @@ export function createMcpServer(
   );
 
   server.registerTool(
+    "reindex_memory",
+    {
+      description: "Reindex all memory chunks for a project (and user) scope into Qdrant.",
+      inputSchema: {
+        organizationId: z.string().min(1).optional(),
+        projectKey: z.string().min(1),
+        userScopeId: z.string().min(1).optional(),
+      },
+    },
+    async (input) => toToolResult(await registry.reindex_memory(input)),
+  );
+
+  server.registerTool(
     "compact_memory",
     {
       description: "Preview or apply conservative memory compaction heuristics.",
@@ -787,6 +800,18 @@ export function createMcpServer(
       },
     },
     async (input) => toToolResult(await registry.compact_memory(input)),
+  );
+
+  server.registerTool(
+    "unarchive_memory",
+    {
+      description: "Restore one or more archived memory records back to active canonical storage.",
+      inputSchema: {
+        organizationId: z.string().min(1).optional(),
+        archiveIds: z.array(z.number().int()),
+      },
+    },
+    async (input) => toToolResult(await registry.unarchive_memory(input)),
   );
 
   server.registerTool(
