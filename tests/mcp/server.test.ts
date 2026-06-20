@@ -762,10 +762,14 @@ describe("createToolRegistry", () => {
     // Embedding mock: paraphrase records share a near-identical vector;
     // distinct record gets an orthogonal one. Above 0.95 threshold the
     // first two cluster together; the third stays alone.
-    (services.embeddings.embed as ReturnType<typeof vi.fn>)
-      .mockImplementationOnce(async () => [1, 0, 0])      // para1
-      .mockImplementationOnce(async () => [0.99, 0.01, 0]) // para2 — near
-      .mockImplementationOnce(async () => [0, 1, 0]);      // distinct
+    // computeSemanticGroups now calls embedBatch once with all 3 contents
+    // in input order (para1, para2, distinct), so return all 3 vectors.
+    (services.embeddings.embedBatch as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce([
+        [1, 0, 0],        // para1
+        [0.99, 0.01, 0],  // para2 — near-identical to para1
+        [0, 1, 0],        // distinct — orthogonal
+      ]);
 
     const registry = createToolRegistry({
       resolveCanonicalServices: async () => services,
@@ -782,7 +786,8 @@ describe("createToolRegistry", () => {
     // higher importance? both 0 — tie-break: lower id wins.
     expect(result.duplicateGroups[0]!.keepId).toBe("11");
     expect(result.duplicateGroups[0]!.archiveIds).toEqual(["12"]);
-    expect(services.embeddings.embed).toHaveBeenCalledTimes(3);
+    // Single batch call replaced 3 sequential embed() calls.
+    expect(services.embeddings.embedBatch).toHaveBeenCalledOnce();
   });
 
   it("rejects semantic dedup in legacy repository-override mode (no embedding client)", async () => {

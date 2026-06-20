@@ -378,23 +378,32 @@ async function computeSemanticGroups(
   logger: Logger,
 ): Promise<DuplicateGroupView[]> {
   const vectors = new Map<number, number[]>();
-  for (const record of records) {
-    try {
-      const vec = await embeddings.embed(record.content);
-      vectors.set(record.id, vec);
-    } catch (err: unknown) {
-      // One bad record shouldn't poison the whole compaction; skip it
-      // (findSemanticDuplicates handles missing embeddings silently).
-      logger.warn(
-        {
-          event: "compact.semantic_embed_failed",
-          recordId: record.id,
-          err: err instanceof Error ? err.message : String(err),
-        },
-        "embedding failed; record skipped from semantic dedup",
-      );
+
+  // Collapse N per-record embed() calls into a single embedBatch() round-trip.
+  // If the batch call throws, log once and leave vectors empty so
+  // findSemanticDuplicates returns [] — compaction still runs without semantic
+  // dedup rather than crashing. Note: unlike the per-record loop this loses
+  // partial results when the provider fails mid-batch, which is an accepted
+  // trade-off for the reduction in round-trips.
+  try {
+    const texts = records.map((r) => r.content);
+    const vecs = await embeddings.embedBatch(texts);
+    for (let i = 0; i < records.length; i += 1) {
+      const vec = vecs[i];
+      if (vec) {
+        vectors.set(records[i]!.id, vec);
+      }
     }
+  } catch (err: unknown) {
+    logger.warn(
+      {
+        event: "compact.semantic_embed_failed",
+        err: err instanceof Error ? err.message : String(err),
+      },
+      "embedBatch failed; semantic dedup skipped for this run",
+    );
   }
+
   const groups = findSemanticDuplicates(records, vectors, threshold);
   return groups.map((group) => ({
     keepId: String(group.keep.id),

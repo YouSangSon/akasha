@@ -74,57 +74,87 @@ export type QdrantUpsertClient = {
 export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository {
   return {
     async insertChunks(input) {
-      const inserted: StoredMemoryChunk[] = [];
+      if (input.chunks.length === 0) {
+        return [];
+      }
+
+      // Build a single multi-row INSERT. Each chunk contributes 10 parameters;
+      // the 5 embedding config columns are repeated per row (simpler, no CTE).
+      // Constant values shared by every row:
+      const orgId = input.record.organizationId ?? "default";
+      const recordId = input.record.id;
+      const { provider, model, dimensions, version } = input.embedding;
+
+      const params: unknown[] = [];
+      const valueClauses: string[] = [];
 
       for (const chunk of input.chunks) {
-        const result = await pool.query<{
-          id: number;
-          memory_record_id: number;
-          chunk_index: number;
-          content: string;
-          start_offset: number;
-          end_offset: number;
-          embedding_version: string;
-        }>(
-          `
-            INSERT INTO memory_chunks (
-              organization_id,
-              memory_record_id,
-              chunk_index,
-              content,
-              start_offset,
-              end_offset,
-              embedding_provider,
-              embedding_model,
-              embedding_dimensions,
-              embedding_version
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            RETURNING
-              id,
-              memory_record_id,
-              chunk_index,
-              content,
-              start_offset,
-              end_offset,
-              embedding_version
-          `,
-          [
-            input.record.organizationId ?? "default",
-            input.record.id,
-            chunk.chunkIndex,
-            chunk.content,
-            chunk.startOffset,
-            chunk.endOffset,
-            input.embedding.provider,
-            input.embedding.model,
-            input.embedding.dimensions,
-            input.embedding.version,
-          ],
+        const base = params.length; // 0-based index before pushing
+        params.push(
+          orgId,
+          recordId,
+          chunk.chunkIndex,
+          chunk.content,
+          chunk.startOffset,
+          chunk.endOffset,
+          provider,
+          model,
+          dimensions,
+          version,
         );
+        valueClauses.push(
+          `($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6},$${base + 7},$${base + 8},$${base + 9},$${base + 10})`,
+        );
+      }
 
-        const row = requireSingleRow(result.rows[0], "memory chunk");
+      const result = await pool.query<{
+        id: number;
+        memory_record_id: number;
+        chunk_index: number;
+        content: string;
+        start_offset: number;
+        end_offset: number;
+        embedding_version: string;
+      }>(
+        `
+          INSERT INTO memory_chunks (
+            organization_id,
+            memory_record_id,
+            chunk_index,
+            content,
+            start_offset,
+            end_offset,
+            embedding_provider,
+            embedding_model,
+            embedding_dimensions,
+            embedding_version
+          ) VALUES ${valueClauses.join(",")}
+          RETURNING
+            id,
+            memory_record_id,
+            chunk_index,
+            content,
+            start_offset,
+            end_offset,
+            embedding_version
+        `,
+        params,
+      );
 
-        inserted.push({
+      // RETURNING row order is not guaranteed to match VALUES order across all
+      // PG versions. Build a keyed map by chunk_index and reassemble in input
+      // order to guarantee the returned array matches input.chunks order.
+      const byChunkIndex = new Map<number, (typeof result.rows)[number]>();
+      for (const row of result.rows) {
+        byChunkIndex.set(row.chunk_index, row);
+      }
+
+      return input.chunks.map((chunk) => {
+        const row = requireSingleRow(
+          byChunkIndex.get(chunk.chunkIndex),
+          "memory chunk",
+        );
+        return {
           id: toNumber(row.id),
           memoryRecordId: toNumber(row.memory_record_id),
           chunkIndex: row.chunk_index,
@@ -132,23 +162,35 @@ export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository
           startOffset: row.start_offset,
           endOffset: row.end_offset,
           embeddingVersion: row.embedding_version,
-        });
-      }
-
-      return inserted;
+        };
+      });
     },
 
     async updatePointIds(mappings) {
-      for (const mapping of mappings) {
-        await pool.query(
-          `
-            UPDATE memory_chunks
-            SET qdrant_point_id = $2
-            WHERE id = $1
-          `,
-          [mapping.chunkId, mapping.qdrantPointId],
-        );
+      if (mappings.length === 0) {
+        return;
       }
+
+      // Build a single UPDATE...FROM VALUES so all mappings are applied in one
+      // round-trip. Types must be cast explicitly: id is bigint, pid is text.
+      const params: unknown[] = [];
+      const valueClauses: string[] = [];
+
+      for (const mapping of mappings) {
+        const base = params.length;
+        params.push(mapping.chunkId, mapping.qdrantPointId);
+        valueClauses.push(`($${base + 1}::bigint,$${base + 2}::text)`);
+      }
+
+      await pool.query(
+        `
+          UPDATE memory_chunks AS m
+          SET qdrant_point_id = v.pid
+          FROM (VALUES ${valueClauses.join(",")}) AS v(id, pid)
+          WHERE m.id = v.id
+        `,
+        params,
+      );
     },
 
     async listChunks(organizationId, scopes) {

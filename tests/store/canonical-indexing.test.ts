@@ -649,6 +649,95 @@ describe("canonical indexing", () => {
     ]);
   });
 
+  it("insertChunks issues exactly ONE pool.query for N>1 chunks and returns rows in input order", async () => {
+    // Returning rows in REVERSED order proves the keyed-map reassembly is
+    // not accidentally relying on RETURNING preserving VALUES order.
+    const mockPool = {
+      query: vi.fn().mockResolvedValue({
+        rows: [
+          // reversed: chunk_index 1 before 0
+          {
+            id: 2,
+            memory_record_id: 10,
+            chunk_index: 1,
+            content: "second chunk",
+            start_offset: 5,
+            end_offset: 11,
+            embedding_version: "v1",
+          },
+          {
+            id: 1,
+            memory_record_id: 10,
+            chunk_index: 0,
+            content: "first chunk",
+            start_offset: 0,
+            end_offset: 5,
+            embedding_version: "v1",
+          },
+        ],
+      }),
+    };
+    const repo = createMemoryChunkRepository(mockPool as never);
+    const record = createRecord({ id: 10, content: "first chunk second chunk" });
+
+    const chunks = [
+      { chunkIndex: 0, content: "first chunk", startOffset: 0, endOffset: 5 },
+      { chunkIndex: 1, content: "second chunk", startOffset: 5, endOffset: 11 },
+    ];
+
+    const result = await repo.insertChunks({
+      record,
+      chunks,
+      embedding: {
+        provider: "openai",
+        model: "text-embedding-3-small",
+        dimensions: 1536,
+        version: "v1",
+        targetTokens: 800,
+        overlapTokens: 120,
+      },
+    });
+
+    // Single query, not two.
+    expect(mockPool.query).toHaveBeenCalledOnce();
+
+    // Output must be in input order (chunk_index 0 first) even though RETURNING
+    // came back with chunk_index 1 first.
+    expect(result).toHaveLength(2);
+    expect(result[0]!.chunkIndex).toBe(0);
+    expect(result[0]!.id).toBe(1);
+    expect(result[1]!.chunkIndex).toBe(1);
+    expect(result[1]!.id).toBe(2);
+  });
+
+  it("updatePointIds issues exactly ONE pool.query for N mappings", async () => {
+    const mockPool = {
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+    };
+    const repo = createMemoryChunkRepository(mockPool as never);
+
+    await repo.updatePointIds([
+      { chunkId: 1, qdrantPointId: "chunk:1" },
+      { chunkId: 2, qdrantPointId: "chunk:2" },
+      { chunkId: 3, qdrantPointId: "chunk:3" },
+    ]);
+
+    // Three mappings → one query, not three.
+    expect(mockPool.query).toHaveBeenCalledOnce();
+
+    const [sql, params] = mockPool.query.mock.calls[0] as [string, unknown[]];
+    // SQL must reference the VALUES alias columns.
+    expect(sql).toMatch(/UPDATE\s+memory_chunks/i);
+    expect(sql).toMatch(/FROM\s+\(VALUES/i);
+    // All three chunkIds and pointIds must be in params.
+    expect(params).toContain(1);
+    expect(params).toContain("chunk:1");
+    expect(params).toContain(2);
+    expect(params).toContain("chunk:2");
+    expect(params).toContain(3);
+    expect(params).toContain("chunk:3");
+  });
+
   it("listChunks filters by organizationId to prevent cross-tenant data leakage (SEC-1)", () => {
     // Proof via mock-based SQL inspection:
     // createMemoryChunkRepository.listChunks must pass organizationId as
