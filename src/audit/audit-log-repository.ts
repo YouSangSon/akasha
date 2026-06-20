@@ -61,7 +61,9 @@ export function createAuditLogRepository(pool: PgPool): AuditLogRepository {
           entry.tool,
           entry.projectKey ?? null,
           entry.outcome,
-          entry.errorMessage ?? null,
+          entry.errorMessage != null
+            ? entry.errorMessage.slice(0, MAX_ERROR_MESSAGE_LENGTH)
+            : null,
           entry.durationMs,
           entry.requestId ?? null,
         ],
@@ -116,6 +118,7 @@ function mapAuditLogRow(row: AuditLogRow): StoredAuditLogEntry {
 
 const DEFAULT_AUDIT_LIMIT = 100;
 const MAX_AUDIT_LIMIT = 1000;
+const MAX_ERROR_MESSAGE_LENGTH = 1024;
 
 function clampAuditLimit(value: number | undefined): number {
   if (value === undefined || !Number.isFinite(value) || value <= 0) {

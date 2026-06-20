@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { PgPool, PgQueryable } from "../db/connection.js";
+import { rootLogger } from "../logger.js";
 import type {
   AddMemoryInput,
   CanonicalMemoryRepository,
@@ -429,7 +430,7 @@ function serializeStoredPostgresSourceRef(
   return JSON.stringify(metadata);
 }
 
-function parseStoredPostgresSourceRef(
+export function parseStoredPostgresSourceRef(
   value: string,
 ): PostgresStoredSourceMetadata {
   try {
@@ -441,7 +442,12 @@ function parseStoredPostgresSourceRef(
         uri: typeof parsed.uri === "string" ? parsed.uri : null,
       };
     }
-  } catch {}
+  } catch (err) {
+    rootLogger.warn(
+      { err, valueLength: value.length },
+      "parseStoredPostgresSourceRef: failed to parse source_ref JSON; falling back to raw value",
+    );
+  }
 
   return {
     sourceRef: value,
