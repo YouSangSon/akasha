@@ -84,7 +84,7 @@ const TOOL_VALIDATORS: Partial<Record<ToolName, BodyValidator>> = {
 //   2. x-organization-id header
 //   3. body.organizationId
 // If a token has a binding AND header/body specify a different org, reject 403.
-function resolveOrganizationId(
+export function resolveOrganizationId(
   req: IncomingMessage,
   bodyOrgRaw: unknown,
   auth: BearerToken | null | undefined,
