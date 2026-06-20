@@ -341,6 +341,10 @@ async function upsertPostgresSource(
   organizationId: string,
 ): Promise<PostgresSourceRow> {
   const sourceKey = requireSourceKey(input.source);
+  // Push the source_ref match into the DB — source_ref is stored as JSON
+  // {"sourceRef":...,"uri":...}, so we extract with ::jsonb->>'sourceRef'.
+  // LIMIT 1 + ORDER BY id ASC preserves the lowest-id-match semantics of
+  // the prior JS .find().
   const existingResult = await queryable.query<PostgresSourceRow>(
     `
       SELECT ${SOURCE_RETURN_COLUMNS}
@@ -349,20 +353,20 @@ async function upsertPostgresSource(
         AND scope_type = $2
         AND scope_id = $3
         AND source_type = $4
+        AND source_ref::jsonb->>'sourceRef' = $5
       ORDER BY id ASC
+      LIMIT 1
     `,
     [
       organizationId,
       input.source.scopeType,
       input.source.scopeId,
       input.source.sourceType,
+      sourceKey,
     ],
   );
 
-  const existingRow = existingResult.rows.find((row) => {
-    const metadata = parseStoredPostgresSourceRef(row.source_ref);
-    return metadata.sourceRef === sourceKey;
-  });
+  const existingRow = existingResult.rows[0];
 
   const nextSourceRef = serializeStoredPostgresSourceRef({
     sourceRef: sourceKey,

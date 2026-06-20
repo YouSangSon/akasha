@@ -17,6 +17,7 @@ const MIGRATION_FILES = [
   "004_add_cascade_indexes.sql",
   "005_add_compaction_archive.sql",
   "006_add_archive_unarchive.sql",
+  "008_chunks_fk_index.sql",
 ] as const;
 
 const embeddedPostgresMigrationSql = `CREATE TABLE IF NOT EXISTS sources (
@@ -223,6 +224,10 @@ ALTER TABLE memory_archive
 CREATE INDEX IF NOT EXISTS idx_memory_archive_unarchived_pending
   ON memory_archive (organization_id, archived_at DESC)
   WHERE unarchived_at IS NULL;
+
+-- PERF-6: single-column index so bare memory_record_id predicates
+-- (e.g. cascade delete) don't fall back to a seq-scan.
+CREATE INDEX IF NOT EXISTS idx_memory_chunks_record ON memory_chunks(memory_record_id);
 `;
 
 export type ReadPostgresMigrationSqlOptions = {

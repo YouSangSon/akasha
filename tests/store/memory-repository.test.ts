@@ -74,6 +74,91 @@ describe("createMemoryRepository (unit — no PG required)", () => {
       expect(params[1]).toBe("org-abc");
     });
   });
+
+  it("upsertPostgresSource pushes sourceRef filter into SQL WHERE clause (PERF-5)", () => {
+    // addMemory calls upsertPostgresSource via a transaction client.
+    // The SELECT for an existing source must pass sourceRef as $5 and use
+    // jsonb extraction so the DB filters — not JS — narrows the result set.
+    const clientQueryCalls: { sql: string; params: unknown[] }[] = [];
+    const mockClient = {
+      query: vi.fn().mockImplementation((sql: string, params?: unknown[]) => {
+        clientQueryCalls.push({ sql, params: params ?? [] });
+        // BEGIN / COMMIT return no rows; source SELECT returns empty (new insert path).
+        return Promise.resolve({ rows: [] });
+      }),
+      release: vi.fn(),
+    };
+    const mockPool = {
+      connect: vi.fn().mockResolvedValue(mockClient),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    // We expect addMemory to throw because the INSERT RETURNING comes back
+    // empty from the mock — that's fine; we only care about the SELECT shape.
+    return repo
+      .addMemory({
+        scopeType: "project",
+        scopeId: "proj-x",
+        memoryType: "fact",
+        content: "test content",
+        source: {
+          scopeType: "project",
+          scopeId: "proj-x",
+          sourceType: "document",
+          sourceRef: "docs/spec.md",
+        },
+        durability: "ephemeral",
+        importance: 0,
+      })
+      .catch(() => {
+        // Find the source SELECT (has source_ref in WHERE).
+        const sourceSelect = clientQueryCalls.find(({ sql }) =>
+          sql.includes("FROM sources") && sql.includes("source_ref"),
+        );
+
+        expect(sourceSelect).toBeDefined();
+        const { sql, params } = sourceSelect!;
+
+        // Filter must use jsonb extraction — not a plain equality — so non-JSON
+        // legacy rows don't cause a cast error.
+        expect(sql).toMatch(/source_ref::jsonb->>'sourceRef'\s*=\s*\$5/);
+
+        // $5 must be the sourceRef value itself.
+        expect(params[4]).toBe("docs/spec.md");
+
+        // SQL must include LIMIT 1 to avoid over-fetching.
+        expect(sql).toMatch(/LIMIT\s+1/i);
+      });
+  });
+
+  it("listMemory SQL includes a parameterized LIMIT (PERF-8)", () => {
+    // listMemory is a browse/list operation: it must always emit a bounded
+    // LIMIT so result sets can't grow without bound.
+    const queryCalls: { sql: string; params: unknown[] }[] = [];
+    const mockPool = {
+      query: vi.fn().mockImplementation((sql: string, params: unknown[]) => {
+        queryCalls.push({ sql, params });
+        return Promise.resolve({ rows: [] });
+      }),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    return repo
+      .listMemory({ scopeType: "project", scopeId: "proj-x" })
+      .then(() => {
+        expect(queryCalls).toHaveLength(1);
+        const { sql, params } = queryCalls[0]!;
+
+        // SQL must contain a parameterized LIMIT.
+        expect(sql).toMatch(/LIMIT\s+\$\d+/i);
+
+        // The LIMIT param must be a positive integer (the default cap).
+        const limitParam = params.find(
+          (p) => typeof p === "number" && p > 0,
+        );
+        expect(limitParam).toBeGreaterThan(0);
+      });
+  });
 });
 
 // PG-dependent suite: skip when POSTGRES_HOST is unset (e.g. the non-PG CI
