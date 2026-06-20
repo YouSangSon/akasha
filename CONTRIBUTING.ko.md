@@ -21,7 +21,7 @@
 git clone https://github.com/YouSangSon/context-forge.git
 cd context-forge
 cp .env.example .env
-${EDITOR:-nano} .env       # OPENAI_API_KEY + MEMORY_API_TOKENS 설정
+${EDITOR:-nano} .env       # MEMORY_API_TOKENS 설정 (OPENAI_API_KEY 는 EMBEDDING_PROVIDER=openai 일 때만 필요)
 ./install.sh
 ```
 

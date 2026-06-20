@@ -35,8 +35,11 @@ preventing accidental zero-auth public exposure.
 
 | Variable | Default | Notes |
 |---|---|---|
-| `OPENAI_API_KEY` | — | Required when `EMBEDDING_PROVIDER=openai` (the default). Ignored when `EMBEDDING_PROVIDER=local`. |
 | `MEMORY_API_TOKENS` | — | Comma-separated bearer tokens. See [Auth](#auth) below. |
+
+`OPENAI_API_KEY` is **not** required for default operation. The default
+embedding provider is `transformers` (free local ONNX). Set `OPENAI_API_KEY`
+only when you set `EMBEDDING_PROVIDER=openai`. See [Embeddings](#embeddings).
 
 ## Postgres
 
@@ -165,7 +168,7 @@ layers handles the rest.
 
 | Variable | Default | Notes |
 |---|---|---|
-| `RATE_LIMIT_PER_MINUTE` | unset (no limit) | Token-bucket cap, keyed per token. Recommended in production. |
+| `RATE_LIMIT_PER_MINUTE` | unset → no limit (compose deployments default to **60**) | Token-bucket cap, keyed per token. Recommended in production. |
 
 The compaction-apply path has a separate, stricter limit (1 per hour per
 org by default) hard-coded in `applyCompaction` deps. It can be tuned by

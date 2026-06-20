@@ -22,7 +22,7 @@ the codebase already follows.
 git clone https://github.com/YouSangSon/context-forge.git
 cd context-forge
 cp .env.example .env
-${EDITOR:-nano} .env       # set OPENAI_API_KEY + MEMORY_API_TOKENS
+${EDITOR:-nano} .env       # set MEMORY_API_TOKENS (OPENAI_API_KEY only if using EMBEDDING_PROVIDER=openai)
 ./install.sh
 ```
 

@@ -55,10 +55,15 @@ non-strict-boolean 값 거부. `true` / `false` / 생략 (기본 `true`) 만 핸
 메모리가 Postgres 또는 Qdrant 에 도달하기 전 `src/store/secret-scrub.ts` 의
 `assertNoSecrets(content)` 가 다음을 스캔하고 거부:
 
-- OpenAI / Anthropic / 일반 API key 패턴
-- AWS access key + secret key 페어
+- OpenAI / Anthropic API key 패턴 (`sk-…`, `sk-ant-…`)
+- AWS access key 패턴 (`AKIA…`)
+- GitHub 토큰 패턴 (`ghp_…`, `ghs_…` 등)
+- GCP API key 패턴 (`AIza…`)
+- Stripe secret key 패턴 (`sk_live_…`, `sk_test_…`)
+- Slack 토큰 패턴 (`xoxb-…`, `xoxp-…` 등)
+- 자격증명이 포함된 DB 연결 문자열 (`://user:pass@host`)
 - PEM 블록 (private key, certificate)
-- bearer-token-shaped 문자열
+- bearer-token-shaped 문자열 (`Authorization: Bearer …`)
 - JWT-shaped 문자열 (header.body.sig)
 
 매칭 시 `SecretDetectedError` (HTTP 400) 발생 — 카테고리 이름은 포함, 값은

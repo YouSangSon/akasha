@@ -104,7 +104,7 @@ curl -X POST http://localhost:8787/v1/memory/search \
 | Canonical store (`src/store/memory-repository.ts`) | Postgres — records, sources, ingest jobs, audit |
 | Vector index (`src/store/canonical-indexing.ts`) | Qdrant — chunked embeddings + similarity search |
 | Compaction (`src/compact/`) | Dedup (exact + semantic), decay, archive, unarchive, sweeper |
-| Embeddings (`src/embedding/`) | OpenAI `text-embedding-3-small` or offline-deterministic local |
+| Embeddings (`src/embedding/`) | `transformers` (free local ONNX, default), `openai` (`text-embedding-3-small`), or `local` (deterministic stub for CI) |
 
 Data flow: caller writes `add_memory` → record persisted to Postgres + chunked
 + embedded + upserted to Qdrant. `search_memory` → embed query → Qdrant cosine
@@ -126,8 +126,8 @@ npm run backup:create # snapshot Postgres + Qdrant to BACKUP_DIR
 ## Configuration
 
 All knobs are env vars. See [.env.example](.env.example) for the complete
-list. Required: `OPENAI_API_KEY`, `MEMORY_API_TOKENS`. Everything else has
-sensible defaults.
+list. Required: `MEMORY_API_TOKENS`. `OPENAI_API_KEY` is optional — only
+needed when `EMBEDDING_PROVIDER=openai`. Everything else has sensible defaults.
 
 ## License
 

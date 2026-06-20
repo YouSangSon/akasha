@@ -102,7 +102,7 @@ curl -X POST http://localhost:8787/v1/memory/search \
 | Canonical store (`src/store/memory-repository.ts`) | Postgres — 레코드, 소스, ingest job, 감사 |
 | Vector index (`src/store/canonical-indexing.ts`) | Qdrant — 청크 임베딩 + 유사도 검색 |
 | Compaction (`src/compact/`) | 중복 제거 (exact + 시맨틱), decay, archive, unarchive, sweeper |
-| Embeddings (`src/embedding/`) | OpenAI `text-embedding-3-small` 또는 결정론적 로컬 |
+| Embeddings (`src/embedding/`) | `transformers` (무료 로컬 ONNX, 기본), `openai` (`text-embedding-3-small`), 또는 `local` (CI용 결정론적 stub) |
 
 데이터 흐름: 호출자가 `add_memory` → 레코드는 Postgres에 저장 + 청크 분할 +
 임베딩 + Qdrant upsert. `search_memory` → 쿼리 임베딩 → Qdrant 코사인 검색
@@ -124,8 +124,8 @@ npm run backup:create # Postgres + Qdrant를 BACKUP_DIR로 백업
 ## 설정
 
 모든 옵션은 환경 변수입니다. 전체 목록은 [.env.example](.env.example) 참고.
-**필수**: `OPENAI_API_KEY`, `MEMORY_API_TOKENS`. 그 외에는 합리적인 기본값
-이 설정되어 있습니다.
+**필수**: `MEMORY_API_TOKENS`. `OPENAI_API_KEY` 는 선택 사항 — `EMBEDDING_PROVIDER=openai`
+일 때만 필요합니다. 그 외에는 합리적인 기본값이 설정되어 있습니다.
 
 ## 라이선스
 
