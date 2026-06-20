@@ -449,6 +449,8 @@ function parseStoredPostgresSourceRef(
   };
 }
 
+// listMemory is a browse/paging contract — bound results so a large scope
+// can't return an unbounded row set. Callers that need more should paginate.
 const DEFAULT_LIST_LIMIT = 1000;
 const MAX_LIST_LIMIT = 5000;
 
