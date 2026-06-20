@@ -685,9 +685,13 @@ describe("canonical indexing", () => {
       // SQL must reference the org filter with $1
       expect(sql).toMatch(/mr\.organization_id\s*=\s*\$1/);
 
-      // The scope OR-group must be wrapped in parentheses so AND binds first
-      // Pattern: AND (...scope clauses...)
-      expect(sql).toMatch(/AND\s*\(/);
+      // The scope OR-group must be wrapped in an OUTER set of parentheses so
+      // AND binds before OR. The discriminating pattern is "AND ((" — the outer
+      // wrap is immediately followed by "(" which opens the first scope clause.
+      // A broken "AND scope_type = $2 OR ..." would NOT match this pattern.
+      // Note: each per-scope clause is itself parenthesized, so the full SQL is:
+      //   WHERE mr.organization_id = $1 AND ((scope_type=? AND scope_id=?) OR (...))
+      expect(sql).toMatch(/AND\s*\(\s*\(/);
 
       // Both scope params must appear ($2 onward)
       expect(params).toContain("shared-project");
