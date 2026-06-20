@@ -55,6 +55,7 @@ services:
       QDRANT_API_KEY: ${QDRANT_API_KEY:-local-qdrant-key}
       QDRANT_COLLECTION_NAME: ${QDRANT_COLLECTION_NAME:-memory_chunks_v1}
       QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-60}
     volumes:
       - backup_data:/var/lib/developer-memory-os/backups
     ports:

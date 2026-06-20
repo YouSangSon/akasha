@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Logger } from "../../logger.js";
+import { CompactionRateLimitError } from "../../compact/apply-compaction.js";
 import type { ToolRegistry } from "../../mcp/types.js";
 import { SecretDetectedError } from "../../store/secret-scrub.js";
 import type { BearerToken } from "../middleware/bearer-auth.js";
@@ -106,7 +107,7 @@ function resolveOrganizationId(
   return { organizationId: callerOrg, conflict: false };
 }
 
-function buildHandler(toolName: ToolName, ctx: RouteContext) {
+function buildHandler<K extends ToolName>(toolName: K, ctx: RouteContext) {
   return async (
     req: IncomingMessage,
     res: ServerResponse,
@@ -150,7 +151,12 @@ function buildHandler(toolName: ToolName, ctx: RouteContext) {
           ? { ...bodyRecord, organizationId: resolved.organizationId }
           : bodyRecord;
 
-      const result = await ctx.registry[toolName](enrichedInput as never);
+      // The registry method accepts a typed input but the request body is
+      // unvalidated JSON — a system boundary cast is required here.
+      const handler = ctx.registry[toolName] as (
+        input: Record<string, unknown>,
+      ) => Promise<unknown>;
+      const result = await handler(enrichedInput);
       sendOk(res, 200, result);
     } catch (error: unknown) {
       if (error instanceof SecretDetectedError) {
@@ -161,14 +167,18 @@ function buildHandler(toolName: ToolName, ctx: RouteContext) {
         sendError(res, error.status, error.message);
         return;
       }
+      if (error instanceof CompactionRateLimitError) {
+        const retryAfterSeconds = Math.ceil(error.retryAfterMs / 1000);
+        res.setHeader("Retry-After", String(retryAfterSeconds));
+        sendError(res, 429, "compaction rate limit exceeded; retry later");
+        return;
+      }
 
-      const message =
-        error instanceof Error ? error.message : "internal server error";
       ctx.logger.error(
         { event: "http.tool_error", tool: toolName, err: error },
         "tool handler failed",
       );
-      sendError(res, 500, message);
+      sendError(res, 500, "internal server error");
     }
   };
 }

@@ -217,7 +217,7 @@ describe("createOperatorServer", () => {
     expect(res.status).toBe(404);
   });
 
-  it("returns 500 with envelope when the tool throws", async () => {
+  it("returns 500 with a static message when the tool throws (no internal leak)", async () => {
     (
       registry.add_memory as ReturnType<typeof vi.fn>
     ).mockRejectedValueOnce(new Error("repository down"));
@@ -240,7 +240,34 @@ describe("createOperatorServer", () => {
       error: { message: string };
     };
     expect(body.success).toBe(false);
-    expect(body.error.message).toContain("repository down");
+    expect(body.error.message).toBe("internal server error");
+    expect(body.error.message).not.toContain("repository down");
+  });
+
+  it("returns 429 when the tool throws CompactionRateLimitError", async () => {
+    const { CompactionRateLimitError } = await import(
+      "../../src/compact/apply-compaction.js"
+    );
+    (
+      registry.compact_memory as ReturnType<typeof vi.fn>
+    ).mockRejectedValueOnce(new CompactionRateLimitError(90_000));
+
+    const res = await fetch(`${handle.baseUrl}/v1/memory/compact`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({ projectKey: "p" }),
+    });
+    expect(res.status).toBe(429);
+    const body = (await res.json()) as {
+      success: boolean;
+      error: { message: string };
+    };
+    expect(body.success).toBe(false);
+    expect(body.error.message).not.toContain("repository");
+    expect(res.headers.get("retry-after")).toBe("90");
   });
 
   it("routes /v1/memory/context-pack to build_context_pack", async () => {
