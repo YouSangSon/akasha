@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPgPool } from "../../src/db/connection.js";
 import { runMigrations } from "../../src/db/migrate.js";
 import { createMemoryRepository } from "../../src/store/memory-repository.js";
@@ -48,6 +48,33 @@ async function recreateTestDatabase() {
     await adminPool.end();
   }
 }
+
+describe("createMemoryRepository (unit — no PG required)", () => {
+  it("deleteMemoryRecord issues SQL with organization_id predicate and passes both id and organizationId params (SEC-5)", () => {
+    // Proof via mock-based SQL inspection: deleteMemoryRecord must scope its
+    // DELETE to the given organization_id to prevent cross-tenant deletion.
+    const queryCalls: { sql: string; params: unknown[] }[] = [];
+    const mockPool = {
+      query: vi.fn().mockImplementation((sql: string, params: unknown[]) => {
+        queryCalls.push({ sql, params });
+        return Promise.resolve({ rows: [] });
+      }),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    return repo.deleteMemoryRecord(42, "org-abc").then(() => {
+      expect(queryCalls).toHaveLength(1);
+      const { sql, params } = queryCalls[0]!;
+
+      // SQL must include the org predicate — prevents cross-tenant deletion.
+      expect(sql).toMatch(/organization_id\s*=\s*\$2/);
+
+      // id must be $1, organizationId must be $2.
+      expect(params[0]).toBe(42);
+      expect(params[1]).toBe("org-abc");
+    });
+  });
+});
 
 // PG-dependent suite: skip when POSTGRES_HOST is unset (e.g. the non-PG CI
 // job, or local dev without docker compose). The pg-integration CI job sets

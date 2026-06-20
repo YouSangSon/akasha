@@ -244,14 +244,15 @@ export function createMemoryRepository(
       return orderRecordsByIds(result.rows.map(mapPostgresSearchResult), ids);
     },
 
-    async deleteMemoryRecord(id) {
+    async deleteMemoryRecord(id, organizationId) {
       // Single-statement rollback. ON DELETE CASCADE on memory_chunks,
       // ingest_jobs, and relationships (defined in migrations/001_initial.sql)
       // removes every dependent row in the same transaction Postgres uses
       // for this DELETE — no explicit child-table cleanup required.
+      // organization_id is required to prevent cross-tenant deletion (SEC-5).
       await pool.query(
-        `DELETE FROM memory_records WHERE id = $1`,
-        [id],
+        `DELETE FROM memory_records WHERE id = $1 AND organization_id = $2`,
+        [id, organizationId],
       );
     },
   };

@@ -334,7 +334,7 @@ export async function writeCanonicalMemory(input: {
     // been visible (upsert either failed or was never reached). Cleanup is
     // best-effort: if it itself fails, the original error still surfaces to
     // the caller; the orphan can be resolved later via reindex_memory.
-    await input.repository.deleteMemoryRecord(record.id).catch(() => undefined);
+    await input.repository.deleteMemoryRecord(record.id, record.organizationId ?? "default").catch(() => undefined);
     throw error;
   }
 }

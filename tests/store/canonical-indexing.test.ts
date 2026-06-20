@@ -187,7 +187,7 @@ describe("canonical indexing", () => {
 
     // Cascade-delete (memory_chunks, ingest_jobs, relationships) is handled
     // at the schema layer; the repository call is the single rollback action.
-    expect(repository.deleteMemoryRecord).toHaveBeenCalledWith(502);
+    expect(repository.deleteMemoryRecord).toHaveBeenCalledWith(502, "default");
     expect(ingestJobs.markCompleted).not.toHaveBeenCalled();
     expect(qdrantClient.upsert).not.toHaveBeenCalled();
   });
@@ -261,7 +261,7 @@ describe("canonical indexing", () => {
       }),
     ).rejects.toBe(upsertError);
 
-    expect(repository.deleteMemoryRecord).toHaveBeenCalledWith(503);
+    expect(repository.deleteMemoryRecord).toHaveBeenCalledWith(503, "default");
     expect(ingestJobs.markCompleted).not.toHaveBeenCalled();
     // Qdrant upsert was attempted (and failed); updatePointIds must NOT run.
     expect(chunkRepository.updatePointIds).not.toHaveBeenCalled();
@@ -337,7 +337,7 @@ describe("canonical indexing", () => {
       // Caller must see the *original* embedError, not the cleanupError.
     ).rejects.toBe(embedError);
 
-    expect(repository.deleteMemoryRecord).toHaveBeenCalledWith(504);
+    expect(repository.deleteMemoryRecord).toHaveBeenCalledWith(504, "default");
   });
 
   it("refuses to persist content matching a credential pattern (no record, no chunks, no qdrant write)", async () => {
