@@ -48,7 +48,7 @@ export type MemoryChunkRepository = {
   updatePointIds(
     mappings: Array<{ chunkId: number; qdrantPointId: string }>,
   ): Promise<void>;
-  listChunks(scopes: ScopeRef[]): Promise<ReindexableMemoryChunk[]>;
+  listChunks(organizationId: string, scopes: ScopeRef[]): Promise<ReindexableMemoryChunk[]>;
   createContextPackRun(input: {
     projectKey: string;
     task: string;
@@ -151,12 +151,13 @@ export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository
       }
     },
 
-    async listChunks(scopes) {
+    async listChunks(organizationId, scopes) {
       if (scopes.length === 0) {
         return [];
       }
 
-      const params: unknown[] = [];
+      // organizationId occupies $1; scope params start at $2.
+      const params: unknown[] = [organizationId];
       const scopeClauses = scopes.map((scope) => {
         const scopeTypeIndex = params.push(scope.scopeType);
         const scopeIdIndex = params.push(scope.scopeId);
@@ -196,7 +197,7 @@ export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository
             mr.updated_at
           FROM memory_chunks mc
           JOIN memory_records mr ON mr.id = mc.memory_record_id
-          WHERE ${scopeClauses.join(" OR ")}
+          WHERE mr.organization_id = $1 AND (${scopeClauses.join(" OR ")})
           ORDER BY mc.id ASC
         `,
         params,
@@ -343,9 +344,10 @@ export async function reindexCanonicalMemory(input: {
   embeddings: EmbeddingClient;
   qdrantClient: QdrantUpsertClient;
   collectionName: string;
+  organizationId: string;
   scopes: ScopeRef[];
 }): Promise<{ chunkCount: number }> {
-  const chunks = await input.chunkRepository.listChunks(input.scopes);
+  const chunks = await input.chunkRepository.listChunks(input.organizationId, input.scopes);
   const embeddings = await input.embeddings.embedBatch(
     chunks.map((chunk) => chunk.content),
   );

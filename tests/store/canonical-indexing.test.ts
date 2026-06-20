@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  createMemoryChunkRepository,
   reindexCanonicalMemory,
   writeCanonicalMemory,
 } from "../../src/store/canonical-indexing.js";
@@ -575,6 +576,7 @@ describe("canonical indexing", () => {
           startOffset: 0,
           endOffset: 13,
           embeddingVersion: "v1",
+          organizationId: "org-a",
           scopeType: "project",
           scopeId: "project-alpha",
           projectKey: "project-alpha",
@@ -590,6 +592,7 @@ describe("canonical indexing", () => {
           startOffset: 0,
           endOffset: 10,
           embeddingVersion: "v1",
+          organizationId: "org-a",
           scopeType: "user",
           scopeId: "alice",
           projectKey: null,
@@ -618,6 +621,7 @@ describe("canonical indexing", () => {
       embeddings,
       qdrantClient,
       collectionName: "memory_chunks_v1",
+      organizationId: "org-a",
       scopes: [
         { scopeType: "project", scopeId: "project-alpha" },
         { scopeType: "user", scopeId: "alice" },
@@ -625,7 +629,7 @@ describe("canonical indexing", () => {
     });
 
     expect(result).toEqual({ chunkCount: 2 });
-    expect(chunkRepository.listChunks).toHaveBeenCalledWith([
+    expect(chunkRepository.listChunks).toHaveBeenCalledWith("org-a", [
       { scopeType: "project", scopeId: "project-alpha" },
       { scopeType: "user", scopeId: "alice" },
     ]);
@@ -643,6 +647,52 @@ describe("canonical indexing", () => {
       { chunkId: 701, qdrantPointId: "chunk:701" },
       { chunkId: 702, qdrantPointId: "chunk:702" },
     ]);
+  });
+
+  it("listChunks filters by organizationId to prevent cross-tenant data leakage (SEC-1)", () => {
+    // Proof via mock-based SQL inspection:
+    // createMemoryChunkRepository.listChunks must pass organizationId as
+    // the FIRST parameter and build SQL with:
+    //   WHERE mr.organization_id = $1 AND (<scope-clauses>)
+    // Two scopes are used so the OR-binding parenthesization can be verified.
+    const queryCalls: { sql: string; params: unknown[] }[] = [];
+    const mockPool = {
+      query: vi.fn().mockImplementation((sql: string, params: unknown[]) => {
+        queryCalls.push({ sql, params });
+        return Promise.resolve({ rows: [] });
+      }),
+    };
+    const repo = createMemoryChunkRepository(mockPool as never);
+
+    const scopes = [
+      { scopeType: "project" as const, scopeId: "shared-project" },
+      { scopeType: "user" as const, scopeId: "user-x" },
+    ];
+
+    // Call listChunks as org-a — org-b's data must never appear.
+    // Even with identical scopeIds, the org filter must restrict results.
+    const promise = repo.listChunks("org-a", scopes);
+
+    // The call is async but the mock resolves immediately; we just need to
+    // inspect what was sent to pool.query.
+    return promise.then(() => {
+      expect(queryCalls).toHaveLength(1);
+      const { sql, params } = queryCalls[0]!;
+
+      // organizationId must be the first param ($1)
+      expect(params[0]).toBe("org-a");
+
+      // SQL must reference the org filter with $1
+      expect(sql).toMatch(/mr\.organization_id\s*=\s*\$1/);
+
+      // The scope OR-group must be wrapped in parentheses so AND binds first
+      // Pattern: AND (...scope clauses...)
+      expect(sql).toMatch(/AND\s*\(/);
+
+      // Both scope params must appear ($2 onward)
+      expect(params).toContain("shared-project");
+      expect(params).toContain("user-x");
+    });
   });
 });
 

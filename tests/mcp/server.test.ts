@@ -471,6 +471,7 @@ describe("createToolRegistry", () => {
         startOffset: 0,
         endOffset: 13,
         embeddingVersion: "v1",
+        organizationId: "org-a",
         scopeType: "project",
         scopeId: "project-alpha",
         projectKey: "project-alpha",
@@ -486,6 +487,7 @@ describe("createToolRegistry", () => {
         startOffset: 0,
         endOffset: 10,
         embeddingVersion: "v1",
+        organizationId: "org-a",
         scopeType: "user",
         scopeId: "alice",
         projectKey: null,
@@ -500,6 +502,7 @@ describe("createToolRegistry", () => {
     });
 
     const result = await registry.reindex_memory({
+      organizationId: "org-a",
       projectKey: "project-alpha",
     });
 
@@ -509,7 +512,7 @@ describe("createToolRegistry", () => {
       chunkCount: 2,
       scopes: ["project:project-alpha", "user:alice"],
     });
-    expect(services.chunkRepository.listChunks).toHaveBeenCalledWith([
+    expect(services.chunkRepository.listChunks).toHaveBeenCalledWith("org-a", [
       { scopeType: "project", scopeId: "project-alpha" },
       { scopeType: "user", scopeId: "alice" },
     ]);

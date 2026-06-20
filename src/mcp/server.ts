@@ -439,6 +439,14 @@ export function createToolRegistry(
     },
 
     async reindex_memory(input) {
+      if (!input.organizationId) {
+        throw new Error(
+          "reindex_memory requires organizationId: omitting it would reindex chunks " +
+            "across all tenants sharing the same scope, violating data isolation. " +
+            "Pass the caller's organization identifier.",
+        );
+      }
+      const organizationId: string = input.organizationId;
       const userScopeId = resolveUserScopeId({
         cwd,
         explicitUserScopeId: input.userScopeId,
@@ -465,6 +473,7 @@ export function createToolRegistry(
           embeddings: services.embeddings,
           qdrantClient: services.qdrantClient,
           collectionName: services.config.qdrant.collectionName,
+          organizationId,
           scopes,
         }),
       );
