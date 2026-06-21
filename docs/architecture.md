@@ -68,10 +68,21 @@ Client          Tool                Orchestrator       Repos                Stor
 add_memory  →  add_memory tool  →  writeCanonical  →  memory-repo      →  Postgres (sources, memory_records)
                                    Memory             canonical-       →  Postgres (memory_chunks)
                                                       indexing
+                                                      ingestJobs       →  Postgres (ingest_jobs: write-ahead pending)
                                                       embeddings.embed →  transformers / openai / local
-                                                      qdrantClient     →  Qdrant (chunk vectors)
-                                                      ingestJobs       →  Postgres (ingest_jobs)
+                                                      vectorIndex      →  Qdrant or pgvector (chunk vectors)
+                                                      ingestJobs       →  Postgres (ingest_jobs: mark completed)
 ```
+
+Write-ahead outbox: after chunks are committed to Postgres,
+`writeCanonicalMemory` calls `markQdrantPending` to record a scheduled
+`qdrant_next_retry_at` before touching Qdrant. If the process crashes between
+that point and `markQdrantCompleted`, the job row is left with
+`qdrant_status='pending'` and a non-null retry timestamp so the ingest sweeper
+(`src/compact/ingest-sweeper.ts`, opt-in via `INGEST_SWEEP_ENABLED`) can
+re-index the already-committed chunks. In-process failures still go through the
+catch block (option-A delete: CASCADE removes record + chunks + job + no orphan),
+so `add_memory` success/failure semantics are unchanged.
 
 Pre-write: `assertNoSecrets(content)` runs in
 `src/store/secret-scrub.ts` — refuses to persist content matching API key /

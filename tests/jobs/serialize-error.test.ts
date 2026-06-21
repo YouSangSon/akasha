@@ -13,6 +13,10 @@ function makeValidJobRow(): IngestJob {
     status: "failed",
     attempts: 1,
     lastError: null,
+    qdrantStatus: "pending",
+    qdrantAttempts: 0,
+    qdrantNextRetryAt: null,
+    qdrantLastError: null,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
   };

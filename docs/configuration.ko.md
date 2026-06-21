@@ -204,6 +204,22 @@ archive 된 레코드의 인라인 Qdrant delete가 실패한 경우 sweeper가 
 활성 시 각 tick 에서 pending row 최대 100개 처리, 5회 시도 후 포기
 (`qdrant_status='failed'` 로 표시 — ops 검토용).
 
+## Ingest sweeper
+
+ingest sweeper 는 write-ahead `markQdrantPending` 과 `markQdrantCompleted`
+사이에 프로세스 크래시로 Qdrant upsert 가 중단된 메모리 레코드를 재인덱스합니다.
+활성화하지 않으면 크래시 고아 레코드는 Qdrant 대기열에 무기한 남아 검색에 노출되지
+않습니다. 기본 off — 지속 실행 단일 replica 에서만 opt-in.
+
+| 변수 | 기본값 | 메모 |
+|---|---|---|
+| `INGEST_SWEEP_ENABLED` | `false` | truthy 값: `true`, `1`, `yes` (대소문자 무관). 그 외 = false. |
+| `INGEST_SWEEP_INTERVAL_MS` | `30000` | tick 간격(ms). ≥ 1000 필수. |
+
+활성 시 각 tick 에서 만료된 row 최대 100개 claim, 5회 시도 후 포기
+(`qdrant_status='failed'` 로 표시 — ops 검토용). 백오프는 지수 증가:
+1 s, 2 s, 4 s, 8 s, 최대 5분.
+
 ## 백업
 
 | 변수 | 기본값 | 메모 |

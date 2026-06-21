@@ -10,10 +10,14 @@
 //   PGVECTOR_TEST_URL=postgres://postgres:test@127.0.0.1:55432/memtest \
 //     npx vitest run tests/vector/pgvector-index.integration.test.ts
 
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPgPool } from "../../src/db/connection.js";
 import { createPgVectorIndex } from "../../src/vector/pgvector-index.js";
 import type { VectorFilter, VectorPoint } from "../../src/vector/vector-index.js";
+import { runMigrations } from "../../src/db/migrate.js";
+import { createIngestJobRepository } from "../../src/jobs/ingest-job-repository.js";
+import { createMemoryChunkRepository } from "../../src/store/canonical-indexing.js";
+import { runIngestSweep } from "../../src/compact/ingest-sweeper.js";
 
 const TEST_URL = process.env.PGVECTOR_TEST_URL;
 
@@ -415,5 +419,164 @@ describe.skipIf(!TEST_URL)("pgvector adapter — integration against real pgvect
         },
       ]),
     ).rejects.toThrow(/empty embedding vector/);
+  });
+});
+
+// ── Ingest sweeper recovery integration test ──────────────────────────────────
+//
+// Verifies that runIngestSweep correctly re-indexes a pending ingest job into
+// the pgvector backend, making the record queryable. This proves the VectorIndex
+// abstraction works end-to-end for the VECTOR_BACKEND=pgvector path.
+
+describe.skipIf(!TEST_URL)("ingest sweeper recovery — integration against real pgvector", () => {
+  const VECTOR_TABLE = "test_sweeper_vectors";
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  const pool = createPgPool({ connectionString: TEST_URL! });
+  const vectorIndex = createPgVectorIndex(pool, { tableName: VECTOR_TABLE });
+
+  const DIMS = 3;
+
+  beforeAll(async () => {
+    // Wait for Postgres to be ready.
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < 30; attempt++) {
+      try {
+        await pool.query("SELECT 1");
+        lastErr = undefined;
+        break;
+      } catch (err) {
+        lastErr = err;
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+    }
+    if (lastErr !== undefined) {
+      await pool.query("SELECT 1");
+    }
+
+    // Create the vector extension (superuser in Docker container).
+    await pool.query("CREATE EXTENSION IF NOT EXISTS vector");
+
+    // Run all migrations to create memory_records, memory_chunks, ingest_jobs.
+    await runMigrations(pool);
+
+    // Create the vector table for this suite.
+    await vectorIndex.ensureCollection(DIMS);
+  });
+
+  afterAll(async () => {
+    await pool.query(`DROP TABLE IF EXISTS ${VECTOR_TABLE}`);
+    await pool.end();
+  });
+
+  beforeEach(async () => {
+    // Clean all relevant tables between tests.
+    await pool.query(`TRUNCATE ${VECTOR_TABLE}`);
+    // ingest_jobs references memory_records via FK; memory_chunks also references
+    // memory_records. CASCADE on memory_records delete handles the rest.
+    await pool.query("DELETE FROM ingest_jobs");
+    await pool.query("DELETE FROM memory_chunks");
+    await pool.query("DELETE FROM memory_records");
+    await pool.query("DELETE FROM sources");
+  });
+
+  it("re-indexes a pending ingest job into pgvector, making the record queryable", async () => {
+    // Seed: insert a source, memory_record, memory_chunk, and ingest_job row
+    // that looks like it was left pending (process crashed after PG write but
+    // before Qdrant/vectorIndex upsert).
+    const orgId = "org-sweeper";
+    const scopeType = "project";
+    const scopeId = "proj-sweeper";
+    const projectKey = "proj-sweeper";
+
+    // 1. Insert source row (required FK for memory_records).
+    const sourceResult = await pool.query<{ id: number }>(
+      `INSERT INTO sources (organization_id, scope_type, scope_id, source_type, source_ref, content_hash)
+       VALUES ($1, $2, $3, 'conversation', 'manual://test', 'hash-sweeper')
+       RETURNING id`,
+      [orgId, scopeType, scopeId],
+    );
+    const sourceId = sourceResult.rows[0]!.id;
+
+    // 2. Insert memory_record.
+    const recordResult = await pool.query<{ id: number }>(
+      `INSERT INTO memory_records (organization_id, scope_type, scope_id, project_key, kind, content, durability, source_id)
+       VALUES ($1, $2, $3, $4, 'fact', 'sweeper integration test content', 'durable', $5)
+       RETURNING id`,
+      [orgId, scopeType, scopeId, projectKey, sourceId],
+    );
+    const recordId = recordResult.rows[0]!.id;
+
+    // 3. Insert memory_chunk for the record.
+    const chunkResult = await pool.query<{ id: number }>(
+      `INSERT INTO memory_chunks
+         (organization_id, memory_record_id, chunk_index, content, start_offset, end_offset,
+          embedding_provider, embedding_model, embedding_dimensions, embedding_version)
+       VALUES ($1, $2, 0, 'sweeper integration test content', 0, 35,
+               'openai', 'text-embedding-3-small', $3, 'v1')
+       RETURNING id`,
+      [orgId, recordId, DIMS],
+    );
+    const chunkId = chunkResult.rows[0]!.id;
+
+    // 4. Insert ingest_job in 'pending' state with qdrant_next_retry_at in the
+    //    past so claimPendingForRetry picks it up immediately.
+    const pastTime = new Date(Date.now() - 60_000); // 1 minute ago
+    await pool.query(
+      `INSERT INTO ingest_jobs
+         (memory_record_id, status, qdrant_status, qdrant_attempts, qdrant_next_retry_at)
+       VALUES ($1, 'processing', 'pending', 0, $2)`,
+      [recordId, pastTime],
+    );
+
+    // 5. Build real repositories that talk to the seeded DB.
+    const ingestJobs = createIngestJobRepository(pool);
+    const chunkRepository = createMemoryChunkRepository(pool);
+
+    // 6. Fake embedder: returns a fixed 3-dim unit vector for any input.
+    const fakeVector = [1, 0, 0];
+    const embeddings = {
+      embed: vi.fn().mockResolvedValue(fakeVector),
+      embedBatch: vi.fn().mockResolvedValue([fakeVector]),
+    };
+
+    const silentLogger = {
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+      debug: vi.fn(),
+      child: vi.fn(),
+    };
+
+    // 7. Run the sweeper against real pgvector.
+    const result = await runIngestSweep({
+      ingestJobs,
+      chunkRepository,
+      embeddings,
+      vectorIndex,
+      logger: silentLogger as never,
+    });
+
+    // 8. Assert sweep completed the job (not retried or failed).
+    expect(result).toEqual({ scanned: 1, completed: 1, retried: 0, failed: 0 });
+
+    // 9. Assert the chunk is now queryable in pgvector.
+    const filter: VectorFilter = {
+      organizationId: orgId,
+      scopes: [{ scopeType, scopeId }],
+      projectKey,
+    };
+    const hits = await vectorIndex.query(fakeVector, filter, 5);
+    expect(hits.length).toBeGreaterThanOrEqual(1);
+    expect(hits[0].id).toBe(`chunk:${chunkId}`);
+    // pgvector adapter converts memory_record_id to Number (BIGINT→string in
+    // node-postgres, then Number() in the adapter). Compare as number.
+    expect(hits[0].payload.memory_record_id).toBe(Number(recordId));
+
+    // 10. Assert the ingest_job row was marked qdrant_status='completed'.
+    const jobRow = await pool.query<{ qdrant_status: string }>(
+      `SELECT qdrant_status FROM ingest_jobs WHERE memory_record_id = $1`,
+      [recordId],
+    );
+    expect(jobRow.rows[0]!.qdrant_status).toBe("completed");
   });
 });

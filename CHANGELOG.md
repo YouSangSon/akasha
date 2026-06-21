@@ -72,6 +72,22 @@ small actual impact surface.
   deferred as a follow-up; this is the schema-unchanged option A. (PR #7,
   [`5764323`](https://github.com/YouSangSon/context-forge/commit/5764323))
 
+### Added
+
+- **Ingest outbox sweeper — crash-resilient Qdrant indexing (#12, parts 3-5)** —
+  `writeCanonicalMemory` now records a write-ahead `qdrant_status='pending'` row
+  (via `markQdrantPending`) immediately after chunks are committed to Postgres,
+  before touching Qdrant. On success the row is cleared by `markQdrantCompleted`;
+  in-process failures still go through the option-A catch block (CASCADE delete,
+  no orphan) so `add_memory` success/failure semantics are unchanged. Only a true
+  process crash between the write-ahead and completion leaves a pending row — the
+  background ingest sweeper (`src/compact/ingest-sweeper.ts`) picks those up,
+  re-embeds the already-committed chunks, and upserts the points to Qdrant. The
+  sweeper uses the same exponential backoff as the compaction sweeper (1 s base,
+  cap 5 min, give up after 5 attempts). Opt in via `INGEST_SWEEP_ENABLED=true`
+  (default false) on a single continuously-running replica; set tick cadence with
+  `INGEST_SWEEP_INTERVAL_MS` (default 30 000 ms).
+
 ### Performance
 
 - **`embedBatch` API to collapse N HTTP RTTs into one** — `writeCanonicalMemory`

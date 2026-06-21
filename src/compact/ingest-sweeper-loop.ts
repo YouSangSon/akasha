@@ -1,0 +1,135 @@
+// Background loop wrapper for runIngestSweep. Process-lifetime worker that
+// calls the one-shot sweep on a fixed interval. Caller (startOperatorServer)
+// decides cadence via INGEST_SWEEP_INTERVAL_MS env, defaults to 30 s.
+//
+// Stop handle: returned `{ stop }` cancels the next tick and awaits any
+// in-flight sweep so process shutdown doesn't leave a dangling Qdrant call.
+//
+// Errors during sweep are logged and swallowed — the loop must not die on
+// transient infra failures. Per-job max-attempts in runIngestSweep prevents
+// infinite retries on persistently-failing records.
+
+import {
+  runIngestSweep,
+  type RunIngestSweepInput,
+  type IngestSweepResult,
+} from "./ingest-sweeper.js";
+
+export type StartIngestSweeperInput = RunIngestSweepInput & {
+  intervalMs?: number;
+};
+
+export type IngestSweeperHandle = {
+  stop(): Promise<void>;
+};
+
+const DEFAULT_INTERVAL_MS = 30_000;
+
+export function startIngestSweeper(
+  input: Readonly<StartIngestSweeperInput>,
+): IngestSweeperHandle {
+  const intervalMs = input.intervalMs ?? DEFAULT_INTERVAL_MS;
+  if (intervalMs < 1000) {
+    throw new Error(
+      `startIngestSweeper: intervalMs must be ≥ 1000 (got ${intervalMs})`,
+    );
+  }
+
+  let stopped = false;
+  let inFlight: Promise<IngestSweepResult> | null = null;
+  let timer: NodeJS.Timeout | null = null;
+
+  const tick = async () => {
+    if (stopped) return;
+    inFlight = runIngestSweep(input);
+    try {
+      const result = await inFlight;
+      if (result.scanned > 0) {
+        input.logger.info(
+          {
+            event: "ingest.sweep_tick",
+            scanned: result.scanned,
+            completed: result.completed,
+            retried: result.retried,
+            failed: result.failed,
+          },
+          "ingest sweep tick completed",
+        );
+      }
+    } catch (err: unknown) {
+      input.logger.error(
+        {
+          event: "ingest.sweep_tick_failed",
+          err: err instanceof Error ? err.message : String(err),
+        },
+        "ingest sweep tick threw; loop continues",
+      );
+    } finally {
+      inFlight = null;
+    }
+  };
+
+  const schedule = () => {
+    if (stopped) return;
+    timer = setTimeout(async () => {
+      await tick();
+      schedule();
+    }, intervalMs);
+    // Don't keep the event loop alive solely for this timer — the process
+    // should exit cleanly on SIGINT/SIGTERM.
+    timer.unref?.();
+  };
+
+  schedule();
+  input.logger.info(
+    { event: "ingest.sweep_loop_started", intervalMs },
+    "ingest sweep loop started",
+  );
+
+  return {
+    async stop(): Promise<void> {
+      stopped = true;
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      if (inFlight) {
+        try {
+          await inFlight;
+        } catch {
+          // Already logged in tick; swallow during shutdown.
+        }
+      }
+      input.logger.info(
+        { event: "ingest.sweep_loop_stopped" },
+        "ingest sweep loop stopped",
+      );
+    },
+  };
+}
+
+// Helper for ops/tests: manually fire one sweep without starting a loop.
+// Re-exports runIngestSweep so callers can import a single module.
+export { runIngestSweep };
+
+// Resolves the env-driven enable flag. Used by startOperatorServer to
+// decide whether to spin up the loop. Default: disabled so existing deploys
+// don't get a surprise worker.
+export function loadIngestSweepEnabled(env: NodeJS.ProcessEnv): boolean {
+  const raw = env.INGEST_SWEEP_ENABLED;
+  if (!raw) return false;
+  const normalized = raw.trim().toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+}
+
+export function loadIngestSweepIntervalMs(env: NodeJS.ProcessEnv): number {
+  const raw = env.INGEST_SWEEP_INTERVAL_MS;
+  if (!raw) return DEFAULT_INTERVAL_MS;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 1000) {
+    throw new Error(
+      `INGEST_SWEEP_INTERVAL_MS must be a finite integer ≥ 1000 (got ${raw})`,
+    );
+  }
+  return parsed;
+}

@@ -68,10 +68,20 @@
 add_memory →  add_memory tool   →  writeCanonical →  memory-repo     →  Postgres (sources, memory_records)
                                    Memory            canonical-      →  Postgres (memory_chunks)
                                                      indexing
+                                                     ingestJobs      →  Postgres (ingest_jobs: write-ahead pending)
                                                      embeddings.embed→  transformers / openai / local
-                                                     qdrantClient    →  Qdrant (chunk vector)
-                                                     ingestJobs      →  Postgres (ingest_jobs)
+                                                     vectorIndex     →  Qdrant 또는 pgvector (chunk vector)
+                                                     ingestJobs      →  Postgres (ingest_jobs: mark completed)
 ```
+
+Write-ahead outbox: chunk이 Postgres에 커밋된 후, `writeCanonicalMemory` 는
+Qdrant 에 접근하기 전에 `markQdrantPending` 을 호출해 `qdrant_next_retry_at`
+를 예약합니다. 이 시점과 `markQdrantCompleted` 사이에 프로세스가 크래시되면,
+job row 는 `qdrant_status='pending'` + 재시도 타임스탬프를 갖고 남아 ingest
+sweeper(`src/compact/ingest-sweeper.ts`, `INGEST_SWEEP_ENABLED` opt-in)가
+이미 커밋된 chunk를 재인덱스할 수 있습니다. 인-프로세스 오류는 기존처럼
+catch 블록(option-A 삭제: CASCADE가 레코드·chunk·job을 제거, 고아 없음)을
+통해 처리되므로 `add_memory` 의 성공/실패 의미는 변경되지 않습니다.
 
 쓰기 전: `src/store/secret-scrub.ts` 의 `assertNoSecrets(content)` —
 API key / PEM / bearer / JWT 패턴 매칭 시 거부. `writeCanonicalMemory` 의

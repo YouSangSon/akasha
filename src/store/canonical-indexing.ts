@@ -3,6 +3,7 @@ import type { PgPool } from "../db/connection.js";
 import { scanForSecrets, SecretDetectedError } from "./secret-scrub.js";
 import type { VectorIndex, VectorPoint } from "../vector/vector-index.js";
 import { buildVectorPoint } from "../vector/point-builder.js";
+import { nextRetryDelayMs } from "../compact/ingest-sweeper.js";
 import type {
   AddMemoryInput,
   CanonicalMemoryRepository,
@@ -50,6 +51,10 @@ export type MemoryChunkRepository = {
     mappings: Array<{ chunkId: number; qdrantPointId: string }>,
   ): Promise<void>;
   listChunks(organizationId: string, scopes: ScopeRef[]): Promise<ReindexableMemoryChunk[]>;
+  // Fetch all chunks for a single memory record including the record-level
+  // metadata needed to rebuild vector points. Used by the ingest sweeper to
+  // re-index a specific record's chunks without scanning by scope.
+  getChunksByRecordId(recordId: number): Promise<ReindexableMemoryChunk[]>;
   createContextPackRun(input: {
     projectKey: string;
     task: string;
@@ -255,6 +260,65 @@ export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository
       }));
     },
 
+    async getChunksByRecordId(recordId) {
+      const result = await pool.query<{
+        id: number;
+        memory_record_id: number;
+        chunk_index: number;
+        content: string;
+        start_offset: number;
+        end_offset: number;
+        embedding_version: string;
+        organization_id: string;
+        scope_type: SearchMemoryResult["scopeType"];
+        scope_id: string;
+        project_key: string | null;
+        durability: string;
+        kind: string;
+        updated_at: string | Date;
+      }>(
+        `
+          SELECT
+            mc.id,
+            mc.memory_record_id,
+            mc.chunk_index,
+            mc.content,
+            mc.start_offset,
+            mc.end_offset,
+            mc.embedding_version,
+            mr.organization_id,
+            mr.scope_type,
+            mr.scope_id,
+            mr.project_key,
+            mr.durability,
+            mr.kind,
+            mr.updated_at
+          FROM memory_chunks mc
+          JOIN memory_records mr ON mr.id = mc.memory_record_id
+          WHERE mc.memory_record_id = $1
+          ORDER BY mc.chunk_index ASC
+        `,
+        [recordId],
+      );
+
+      return result.rows.map((row) => ({
+        id: toNumber(row.id),
+        memoryRecordId: toNumber(row.memory_record_id),
+        chunkIndex: row.chunk_index,
+        content: row.content,
+        startOffset: row.start_offset,
+        endOffset: row.end_offset,
+        embeddingVersion: row.embedding_version,
+        organizationId: row.organization_id,
+        scopeType: row.scope_type,
+        scopeId: row.scope_id,
+        projectKey: row.project_key,
+        durability: row.durability,
+        kind: row.kind,
+        updatedAt: toIsoString(row.updated_at),
+      }));
+    },
+
     async createContextPackRun(input) {
       await pool.query(
         `
@@ -314,6 +378,21 @@ export async function writeCanonicalMemory(input: {
       chunks,
       embedding: input.embedding,
     });
+
+    // Write-ahead: record the intent to index BEFORE touching Qdrant. If the
+    // process crashes between here and markQdrantCompleted, the job row is left
+    // with qdrant_status='pending' and a scheduled qdrant_next_retry_at so the
+    // ingest sweeper can re-index the already-committed chunks automatically.
+    // Guard: skip write-ahead when there are no chunks (empty content) — nothing
+    // to re-index, and markCompleted below handles the overall job close-out.
+    if (storedChunks.length > 0) {
+      await input.ingestJobs.markQdrantPending({
+        jobId: job.id,
+        attempts: 0,
+        nextRetryAt: new Date(Date.now() + nextRetryDelayMs(0)),
+      });
+    }
+
     const embeddings = await input.embeddings.embedBatch(
       storedChunks.map((chunk) => chunk.content),
     );
@@ -346,6 +425,8 @@ export async function writeCanonicalMemory(input: {
           qdrantPointId: point.id,
         })),
       );
+      // Success: clear the retry schedule and mark Qdrant indexing complete.
+      await input.ingestJobs.markQdrantCompleted(job.id);
     }
 
     await input.ingestJobs.markCompleted(job.id);

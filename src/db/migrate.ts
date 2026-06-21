@@ -17,6 +17,7 @@ const MIGRATION_FILES = [
   "004_add_cascade_indexes.sql",
   "005_add_compaction_archive.sql",
   "006_add_archive_unarchive.sql",
+  "007_ingest_jobs_qdrant_outbox.sql",
   "008_chunks_fk_index.sql",
 ] as const;
 
@@ -224,6 +225,27 @@ ALTER TABLE memory_archive
 CREATE INDEX IF NOT EXISTS idx_memory_archive_unarchived_pending
   ON memory_archive (organization_id, archived_at DESC)
   WHERE unarchived_at IS NULL;
+
+-- 007_ingest_jobs_qdrant_outbox: outbox columns for the qdrant retry sweeper.
+-- Mirrors src/db/migrations/007_ingest_jobs_qdrant_outbox.sql so the embedded
+-- snapshot stays in sync for bundled-dist deployments.
+ALTER TABLE ingest_jobs
+  ADD COLUMN IF NOT EXISTS qdrant_status TEXT NOT NULL DEFAULT 'pending'
+                           CHECK (qdrant_status IN ('pending','completed','failed'));
+
+ALTER TABLE ingest_jobs
+  ADD COLUMN IF NOT EXISTS qdrant_attempts INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE ingest_jobs
+  ADD COLUMN IF NOT EXISTS qdrant_next_retry_at TIMESTAMPTZ;
+
+ALTER TABLE ingest_jobs
+  ADD COLUMN IF NOT EXISTS qdrant_last_error TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_ingest_jobs_qdrant_pending_retry
+  ON ingest_jobs (qdrant_next_retry_at)
+  WHERE qdrant_status = 'pending'
+    AND qdrant_next_retry_at IS NOT NULL;
 
 -- PERF-6: single-column index so bare memory_record_id predicates
 -- (e.g. cascade delete) don't fall back to a seq-scan.

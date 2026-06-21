@@ -66,6 +66,20 @@ CHANGELOG에서 명시적으로 표기합니다.
   loop)는 follow-up 으로 deferred — 이 PR 은 schema 무변경 option A.
   (PR #7, [`5764323`](https://github.com/YouSangSon/context-forge/commit/5764323))
 
+### Added
+
+- **Ingest outbox sweeper — crash-resilient Qdrant 인덱싱 (#12, parts 3-5)** —
+  `writeCanonicalMemory` 가 이제 chunk 가 Postgres 에 커밋된 직후, Qdrant 에
+  접근하기 전에 `markQdrantPending` 을 호출해 write-ahead `qdrant_status='pending'`
+  row를 기록합니다. 성공 시 `markQdrantCompleted` 로 클리어. 인-프로세스 오류는
+  기존 option-A catch 블록(CASCADE 삭제, 고아 없음)을 거치므로 `add_memory` 의
+  성공/실패 의미 변경 없음. 오직 write-ahead 와 완료 사이 프로세스 크래시만이
+  pending row 를 남기며, 백그라운드 ingest sweeper(`src/compact/ingest-sweeper.ts`)가
+  이를 감지해 이미 커밋된 chunk 를 재임베딩 + Qdrant upsert 합니다. sweeper 는
+  compaction sweeper 와 동일한 지수 백오프(1 s 기준, 최대 5 min, 5회 포기) 사용.
+  `INGEST_SWEEP_ENABLED=true`(기본 false)로 지속 실행 단일 replica 에서 opt-in.
+  tick 주기는 `INGEST_SWEEP_INTERVAL_MS`(기본 30 000 ms)로 설정.
+
 ### Performance
 
 - **`embedBatch` API 로 N HTTP RTTs → 1로 압축** —
