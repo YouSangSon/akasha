@@ -794,6 +794,7 @@ export function createMcpServer(
         limit: z.number().int().positive().max(5000).optional(),
         decayThreshold: z.number().nonnegative().optional(),
         halfLifeDays: z.number().positive().optional(),
+        semanticDedupThreshold: z.number().positive().max(1).optional(),
       },
     },
     async (input) => toToolResult(await registry.compact_memory(input)),
