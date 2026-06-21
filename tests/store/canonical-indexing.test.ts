@@ -56,8 +56,11 @@ describe("canonical indexing", () => {
           [0.5, 0.6],
         ]),
     };
-    const qdrantClient = {
+    const vectorIndex = {
       upsert: vi.fn().mockResolvedValue(undefined),
+      query: vi.fn(),
+      delete: vi.fn(),
+      ensureCollection: vi.fn(),
     };
 
     const created = await writeCanonicalMemory({
@@ -65,8 +68,7 @@ describe("canonical indexing", () => {
       chunkRepository: chunkRepository as never,
       ingestJobs: ingestJobs as never,
       embeddings,
-      qdrantClient,
-      collectionName: "memory_chunks_v1",
+      vectorIndex,
       embedding: {
         provider: "openai",
         model: "text-embedding-3-small",
@@ -101,15 +103,12 @@ describe("canonical indexing", () => {
       "two three",
       "three four",
     ]);
-    expect(qdrantClient.upsert).toHaveBeenCalledWith(
-      "memory_chunks_v1",
-      expect.objectContaining({
-        points: expect.arrayContaining([
-          expect.objectContaining({ id: "chunk:701" }),
-          expect.objectContaining({ id: "chunk:702" }),
-          expect.objectContaining({ id: "chunk:703" }),
-        ]),
-      }),
+    expect(vectorIndex.upsert).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "chunk:701" }),
+        expect.objectContaining({ id: "chunk:702" }),
+        expect.objectContaining({ id: "chunk:703" }),
+      ]),
     );
     expect(chunkRepository.updatePointIds).toHaveBeenCalledWith([
       { chunkId: 701, qdrantPointId: "chunk:701" },
@@ -149,9 +148,7 @@ describe("canonical indexing", () => {
       embed: vi.fn(),
       embedBatch: vi.fn().mockRejectedValue(embedError),
     };
-    const qdrantClient = {
-      upsert: vi.fn(),
-    };
+    const vectorIndex = { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() };
 
     await expect(
       writeCanonicalMemory({
@@ -159,8 +156,7 @@ describe("canonical indexing", () => {
         chunkRepository: chunkRepository as never,
         ingestJobs: ingestJobs as never,
         embeddings,
-        qdrantClient,
-        collectionName: "memory_chunks_v1",
+        vectorIndex,
         embedding: {
           provider: "openai",
           model: "text-embedding-3-small",
@@ -189,7 +185,7 @@ describe("canonical indexing", () => {
     // at the schema layer; the repository call is the single rollback action.
     expect(repository.deleteMemoryRecord).toHaveBeenCalledWith(502, "default");
     expect(ingestJobs.markCompleted).not.toHaveBeenCalled();
-    expect(qdrantClient.upsert).not.toHaveBeenCalled();
+    expect(vectorIndex.upsert).not.toHaveBeenCalled();
   });
 
   it("rolls back PG state by deleting the memory record when qdrant upsert throws", async () => {
@@ -225,8 +221,11 @@ describe("canonical indexing", () => {
       embedBatch: vi.fn().mockResolvedValue([[0.1, 0.2]]),
     };
     const upsertError = new Error("Qdrant 503 service unavailable");
-    const qdrantClient = {
+    const vectorIndex = {
       upsert: vi.fn().mockRejectedValue(upsertError),
+      query: vi.fn(),
+      delete: vi.fn(),
+      ensureCollection: vi.fn(),
     };
 
     await expect(
@@ -235,8 +234,7 @@ describe("canonical indexing", () => {
         chunkRepository: chunkRepository as never,
         ingestJobs: ingestJobs as never,
         embeddings,
-        qdrantClient,
-        collectionName: "memory_chunks_v1",
+        vectorIndex,
         embedding: {
           provider: "openai",
           model: "text-embedding-3-small",
@@ -302,7 +300,7 @@ describe("canonical indexing", () => {
       // must reject for this test to exercise the rollback-on-failure case.
       embedBatch: vi.fn().mockRejectedValue(embedError),
     };
-    const qdrantClient = { upsert: vi.fn() };
+    const vectorIndex = { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() };
 
     await expect(
       writeCanonicalMemory({
@@ -310,8 +308,7 @@ describe("canonical indexing", () => {
         chunkRepository: chunkRepository as never,
         ingestJobs: ingestJobs as never,
         embeddings,
-        qdrantClient,
-        collectionName: "memory_chunks_v1",
+        vectorIndex,
         embedding: {
           provider: "openai",
           model: "text-embedding-3-small",
@@ -354,7 +351,7 @@ describe("canonical indexing", () => {
       updatePointIds: vi.fn(),
     };
     const embeddings = { embed: vi.fn(), embedBatch: vi.fn() };
-    const qdrantClient = { upsert: vi.fn() };
+    const vectorIndex = { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() };
 
     await expect(
       writeCanonicalMemory({
@@ -362,8 +359,7 @@ describe("canonical indexing", () => {
         chunkRepository: chunkRepository as never,
         ingestJobs: ingestJobs as never,
         embeddings,
-        qdrantClient,
-        collectionName: "memory_chunks_v1",
+        vectorIndex,
         embedding: {
           provider: "openai",
           model: "text-embedding-3-small",
@@ -393,7 +389,7 @@ describe("canonical indexing", () => {
     expect(repository.addMemory).not.toHaveBeenCalled();
     expect(ingestJobs.create).not.toHaveBeenCalled();
     expect(chunkRepository.insertChunks).not.toHaveBeenCalled();
-    expect(qdrantClient.upsert).not.toHaveBeenCalled();
+    expect(vectorIndex.upsert).not.toHaveBeenCalled();
   });
 
   it("refuses to persist a secret in the title field (mirrors the content guard)", async () => {
@@ -408,7 +404,7 @@ describe("canonical indexing", () => {
       updatePointIds: vi.fn(),
     };
     const embeddings = { embed: vi.fn(), embedBatch: vi.fn() };
-    const qdrantClient = { upsert: vi.fn() };
+    const vectorIndex = { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() };
 
     await expect(
       writeCanonicalMemory({
@@ -416,8 +412,7 @@ describe("canonical indexing", () => {
         chunkRepository: chunkRepository as never,
         ingestJobs: ingestJobs as never,
         embeddings,
-        qdrantClient,
-        collectionName: "memory_chunks_v1",
+        vectorIndex,
         embedding: {
           provider: "openai",
           model: "text-embedding-3-small",
@@ -447,7 +442,7 @@ describe("canonical indexing", () => {
     expect(repository.addMemory).not.toHaveBeenCalled();
     expect(ingestJobs.create).not.toHaveBeenCalled();
     expect(chunkRepository.insertChunks).not.toHaveBeenCalled();
-    expect(qdrantClient.upsert).not.toHaveBeenCalled();
+    expect(vectorIndex.upsert).not.toHaveBeenCalled();
   });
 
   it("refuses to persist a secret in the summary field (mirrors the content guard)", async () => {
@@ -462,7 +457,7 @@ describe("canonical indexing", () => {
       updatePointIds: vi.fn(),
     };
     const embeddings = { embed: vi.fn(), embedBatch: vi.fn() };
-    const qdrantClient = { upsert: vi.fn() };
+    const vectorIndex = { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() };
 
     await expect(
       writeCanonicalMemory({
@@ -470,8 +465,7 @@ describe("canonical indexing", () => {
         chunkRepository: chunkRepository as never,
         ingestJobs: ingestJobs as never,
         embeddings,
-        qdrantClient,
-        collectionName: "memory_chunks_v1",
+        vectorIndex,
         embedding: {
           provider: "openai",
           model: "text-embedding-3-small",
@@ -502,7 +496,7 @@ describe("canonical indexing", () => {
     expect(repository.addMemory).not.toHaveBeenCalled();
     expect(ingestJobs.create).not.toHaveBeenCalled();
     expect(chunkRepository.insertChunks).not.toHaveBeenCalled();
-    expect(qdrantClient.upsert).not.toHaveBeenCalled();
+    expect(vectorIndex.upsert).not.toHaveBeenCalled();
   });
 
   it("reports categories from every field that contains a secret (title + summary together)", async () => {
@@ -517,7 +511,7 @@ describe("canonical indexing", () => {
       updatePointIds: vi.fn(),
     };
     const embeddings = { embed: vi.fn(), embedBatch: vi.fn() };
-    const qdrantClient = { upsert: vi.fn() };
+    const vectorIndex = { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() };
 
     let caught: unknown;
     try {
@@ -526,8 +520,7 @@ describe("canonical indexing", () => {
         chunkRepository: chunkRepository as never,
         ingestJobs: ingestJobs as never,
         embeddings,
-        qdrantClient,
-        collectionName: "memory_chunks_v1",
+        vectorIndex,
         embedding: {
           provider: "openai",
           model: "text-embedding-3-small",
@@ -612,15 +605,17 @@ describe("canonical indexing", () => {
         [0.3, 0.4],
       ]),
     };
-    const qdrantClient = {
+    const vectorIndex = {
       upsert: vi.fn().mockResolvedValue(undefined),
+      query: vi.fn(),
+      delete: vi.fn(),
+      ensureCollection: vi.fn(),
     };
 
     const result = await reindexCanonicalMemory({
       chunkRepository: chunkRepository as never,
       embeddings,
-      qdrantClient,
-      collectionName: "memory_chunks_v1",
+      vectorIndex,
       organizationId: "org-a",
       scopes: [
         { scopeType: "project", scopeId: "project-alpha" },
@@ -634,14 +629,11 @@ describe("canonical indexing", () => {
       { scopeType: "user", scopeId: "alice" },
     ]);
     expect(embeddings.embedBatch).toHaveBeenCalledOnce();
-    expect(qdrantClient.upsert).toHaveBeenCalledWith(
-      "memory_chunks_v1",
-      expect.objectContaining({
-        points: expect.arrayContaining([
-          expect.objectContaining({ id: "chunk:701" }),
-          expect.objectContaining({ id: "chunk:702" }),
-        ]),
-      }),
+    expect(vectorIndex.upsert).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "chunk:701" }),
+        expect.objectContaining({ id: "chunk:702" }),
+      ]),
     );
     expect(chunkRepository.updatePointIds).toHaveBeenCalledWith([
       { chunkId: 701, qdrantPointId: "chunk:701" },

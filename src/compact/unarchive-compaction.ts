@@ -8,7 +8,7 @@
 //   4. Re-chunk content via existing chunkText
 //   5. insertChunks (writes memory_chunks rows with the new record id)
 //   6. Embed each chunk via EmbeddingClient
-//   7. qdrantClient.upsert points with the new chunk ids
+//   7. vectorIndex.upsert points with the new chunk ids
 //   8. updatePointIds back to memory_chunks
 //   9. markUnarchived(archiveId) — set unarchived_at = NOW()
 //
@@ -26,7 +26,6 @@ import type {
   SourceType,
 } from "../types.js";
 import { chunkText } from "../chunk/chunk-text.js";
-import { toQdrantPoint } from "../qdrant/point-mapper.js";
 import type {
   ArchiveRow,
   MemoryArchiveRepository,
@@ -35,8 +34,8 @@ import type {
   ChunkEmbeddingConfig,
   EmbeddingClient,
   MemoryChunkRepository,
-  QdrantUpsertClient,
 } from "../store/canonical-indexing.js";
+import type { VectorIndex, VectorPoint } from "../vector/vector-index.js";
 
 export type UnarchiveCompactionInput = {
   archiveIds: number[];
@@ -75,8 +74,7 @@ export type UnarchiveCompactionDeps = {
   archiveRepository: MemoryArchiveRepository;
   chunkRepository: MemoryChunkRepository;
   embeddings: EmbeddingClient;
-  qdrantClient: QdrantUpsertClient;
-  collectionName: string;
+  vectorIndex: VectorIndex;
   embedding: ChunkEmbeddingConfig;
   logger: Logger;
   now?: () => Date;
@@ -217,32 +215,26 @@ async function restoreOne(
   const embeddings = await Promise.all(
     storedChunks.map((chunk) => deps.embeddings.embed(chunk.content)),
   );
-  const points = storedChunks.map((chunk, index) =>
-    toQdrantPoint({
-      chunk: {
-        id: chunk.id,
-        memoryRecordId: chunk.memoryRecordId,
-        chunkIndex: chunk.chunkIndex,
-        content: chunk.content,
-        embeddingVersion: chunk.embeddingVersion,
-      },
-      record: {
-        id: restoredRecord.id,
-        organizationId,
-        scopeType: restoredRecord.scopeType,
-        scopeId: restoredRecord.scopeId,
-        projectKey: restoredRecord.projectKey ?? null,
-        durability: restoredRecord.durability ?? "ephemeral",
-        kind: restoredRecord.memoryType,
-        tags: [],
-        updatedAt: restoredRecord.updatedAt,
-      },
-      embedding: embeddings[index] ?? [],
-    }),
-  );
+  const points: VectorPoint[] = storedChunks.map((chunk, index) => ({
+    id: `chunk:${chunk.id}`,
+    vector: embeddings[index] ?? [],
+    payload: {
+      chunk_id: chunk.id,
+      memory_record_id: restoredRecord.id,
+      organization_id: organizationId,
+      scope_type: restoredRecord.scopeType,
+      scope_id: restoredRecord.scopeId,
+      project_key: restoredRecord.projectKey ?? null,
+      kind: restoredRecord.memoryType,
+      durability: restoredRecord.durability ?? "ephemeral",
+      tags: [],
+      updated_at: restoredRecord.updatedAt,
+      embedding_version: chunk.embeddingVersion,
+    },
+  }));
 
   if (points.length > 0) {
-    await deps.qdrantClient.upsert(deps.collectionName, { points });
+    await deps.vectorIndex.upsert(points);
     await deps.chunkRepository.updatePointIds(
       points.map((point, index) => ({
         chunkId: storedChunks[index]!.id,

@@ -24,6 +24,7 @@ import type { Logger } from "../logger.js";
 import type { CompactMemoryToolResult, DuplicateGroupView } from "../mcp/types.js";
 import type { SearchMemoryResult } from "../types.js";
 import type { EmbeddingClient } from "../store/canonical-indexing.js";
+import type { VectorIndex } from "../vector/vector-index.js";
 import type {
   ArchiveReason,
   MemoryArchiveRepository,
@@ -33,10 +34,6 @@ import {
   type BuildCompactionPlanInput,
 } from "./compact-memory.js";
 import { findSemanticDuplicates } from "./semantic-duplicates.js";
-
-export type QdrantPointDeleter = {
-  deletePoints(collectionName: string, pointIds: string[]): Promise<void>;
-};
 
 export type ApplyRateLimitConfig = {
   // Window during which `maxRuns` applies cap the org. Set to 0 to disable
@@ -63,8 +60,7 @@ export class CompactionRateLimitError extends Error {
 
 export type ApplyCompactionDeps = {
   archiveRepository: MemoryArchiveRepository;
-  qdrantClient: QdrantPointDeleter;
-  collectionName: string;
+  vectorIndex: VectorIndex;
   logger: Logger;
   // Required only when input.semanticDedupThreshold is set; embeds each
   // record's content for cosine clustering. Skipped on the dry-run /
@@ -239,10 +235,7 @@ export async function applyCompaction(
 
     // Sequential Qdrant deletes — see design §4.4.
     try {
-      await deps.qdrantClient.deletePoints(
-        deps.collectionName,
-        archiveResult.qdrantPointIds,
-      );
+      await deps.vectorIndex.delete(archiveResult.qdrantPointIds);
       qdrantPointsDeleted += archiveResult.qdrantPointIds.length;
       await deps.archiveRepository.markQdrantStatus(
         archiveResult.archiveId,

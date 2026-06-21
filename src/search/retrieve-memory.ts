@@ -1,35 +1,10 @@
 import { rankResults } from "./rank-results.js";
 import type { SearchMemoryResult } from "../types.js";
 import { assertOrganizationId } from "../store/assert-organization-id.js";
-
-type QdrantFilterMatch = {
-  key: string;
-  match: { value: string };
-};
-
-type QdrantScopeFilter = {
-  must: QdrantFilterMatch[];
-};
-
-type QdrantQueryResult = {
-  points: Array<{
-    payload?: {
-      memory_record_id?: number;
-    };
-  }>;
-};
+import type { VectorFilter, VectorHit, VectorIndex } from "../vector/vector-index.js";
 
 export type RetrieveMemoryInput = {
-  qdrantClient: {
-    query(
-      collectionName: string,
-      args: {
-        query: number[];
-        limit: number;
-        filter: QdrantScopeFilter;
-      },
-    ): Promise<QdrantQueryResult>;
-  };
+  vectorIndex: VectorIndex;
   repository: {
     getMemoryRecordsByIds(
       ids: number[],
@@ -37,7 +12,6 @@ export type RetrieveMemoryInput = {
       allowLegacyAnonymous?: boolean,
     ): Promise<SearchMemoryResult[]>;
   };
-  collectionName: string;
   vector: number[];
   organizationId?: string;
   // Escape hatch for the documented legacy single-tenant behavior. When
@@ -57,40 +31,29 @@ export async function retrieveMemory(
 ): Promise<SearchMemoryResult[]> {
   assertOrganizationId(input.organizationId, input.allowLegacyAnonymous, "retrieveMemory");
 
-  const orgClause: QdrantFilterMatch[] =
-    input.organizationId !== undefined
-      ? [{ key: "organization_id", match: { value: input.organizationId } }]
-      : [];
+  const organizationId = input.organizationId ?? "";
 
   const responses = await Promise.all([
-    queryScope(input, [
-      ...orgClause,
-      { key: "scope_type", match: { value: "project" } },
-      { key: "project_key", match: { value: input.projectKey } },
-    ]),
+    queryScope(input, organizationId, { scopeType: "project", scopeId: input.projectKey }, input.projectKey),
     ...(input.userScopeId
       ? [
-          queryScope(input, [
-            ...orgClause,
-            { key: "scope_type", match: { value: "user" } },
-            { key: "scope_id", match: { value: input.userScopeId } },
-          ]),
+          queryScope(input, organizationId, { scopeType: "user", scopeId: input.userScopeId }, null),
         ]
       : []),
   ]);
 
-  const ids = uniqueMemoryRecordIds(responses.flatMap((response) => response.points));
+  const ids = uniqueMemoryRecordIds(responses.flat());
 
   if (ids.length === 0) {
     return [];
   }
 
   // Pass organizationId so the PG hydration filters by org even if Qdrant
-  // returned a cross-org point id. Defense-in-depth: Qdrant filters already
-  // include org, but a misconfigured filter would otherwise hydrate the leak.
-  // Forward allowLegacyAnonymous so the repository guard (which mirrors the
-  // guard above) does not re-throw when an operator has opted into the legacy
-  // single-tenant mode via LEGACY_ANONYMOUS_SEARCH=true.
+  // returned a cross-org point id. Defense-in-depth: vector index filters
+  // already include org, but a misconfigured filter would otherwise hydrate
+  // the leak. Forward allowLegacyAnonymous so the repository guard (which
+  // mirrors the guard above) does not re-throw when an operator has opted
+  // into the legacy single-tenant mode via LEGACY_ANONYMOUS_SEARCH=true.
   const hydratedRecords = await input.repository.getMemoryRecordsByIds(
     ids,
     input.organizationId,
@@ -102,23 +65,24 @@ export async function retrieveMemory(
 
 function queryScope(
   input: RetrieveMemoryInput,
-  must: QdrantFilterMatch[],
-): Promise<QdrantQueryResult> {
-  return input.qdrantClient.query(input.collectionName, {
-    query: input.vector,
-    limit: input.limit,
-    filter: { must },
-  });
+  organizationId: string,
+  scope: { scopeType: string; scopeId: string },
+  projectKey: string | null,
+): Promise<VectorHit[]> {
+  const filter: VectorFilter = {
+    organizationId,
+    scopes: [scope],
+    projectKey,
+  };
+  return input.vectorIndex.query(input.vector, filter, input.limit);
 }
 
-function uniqueMemoryRecordIds(
-  points: QdrantQueryResult["points"],
-): number[] {
+function uniqueMemoryRecordIds(hits: VectorHit[]): number[] {
   const ids: number[] = [];
   const seen = new Set<number>();
 
-  for (const point of points) {
-    const id = point.payload?.memory_record_id;
+  for (const hit of hits) {
+    const id = hit.payload?.memory_record_id;
 
     if (typeof id !== "number" || seen.has(id)) {
       continue;

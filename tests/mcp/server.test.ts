@@ -374,17 +374,14 @@ describe("createToolRegistry", () => {
     // F4: writeCanonicalMemory now batches per-chunk embeddings into a single
     // embedBatch call instead of N sequential embed calls.
     expect(services.embeddings.embedBatch).toHaveBeenCalled();
-    expect(services.qdrantClient.upsert).toHaveBeenCalledWith(
-      "memory_chunks_v1",
-      expect.objectContaining({
-        points: expect.arrayContaining([
-          expect.objectContaining({
-            payload: expect.objectContaining({
-              memory_record_id: 501,
-            }),
+    expect(services.vectorIndex.upsert).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            memory_record_id: 501,
           }),
-        ]),
-      }),
+        }),
+      ]),
     );
   });
 
@@ -427,9 +424,9 @@ describe("createToolRegistry", () => {
 
   it("persists context pack runs when using service-backed retrieval", async () => {
     const services = createCanonicalServices();
-    services.qdrantClient.query.mockResolvedValue({
-      points: [{ payload: { memory_record_id: 12 } }],
-    });
+    services.vectorIndex.query.mockResolvedValue([
+      { id: "chunk:12", score: 0.9, payload: { memory_record_id: 12 } },
+    ]);
     services.repository.getMemoryRecordsByIds.mockResolvedValue([
       createRecord({
         id: 12,
@@ -518,22 +515,19 @@ describe("createToolRegistry", () => {
       { scopeType: "project", scopeId: "project-alpha" },
       { scopeType: "user", scopeId: "alice" },
     ]);
-    expect(services.qdrantClient.upsert).toHaveBeenCalledWith(
-      "memory_chunks_v1",
-      expect.objectContaining({
-        points: expect.arrayContaining([
-          expect.objectContaining({
-            payload: expect.objectContaining({
-              memory_record_id: 501,
-            }),
+    expect(services.vectorIndex.upsert).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            memory_record_id: 501,
           }),
-          expect.objectContaining({
-            payload: expect.objectContaining({
-              memory_record_id: 502,
-            }),
+        }),
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            memory_record_id: 502,
           }),
-        ]),
-      }),
+        }),
+      ]),
     );
   });
 
@@ -601,10 +595,7 @@ describe("createToolRegistry", () => {
     expect(services.archiveRepository.createCompactionRun).toHaveBeenCalledWith(
       expect.objectContaining({ organizationId: "dev-team", dryRun: false }),
     );
-    expect(services.qdrantClient.deletePoints).toHaveBeenCalledWith(
-      "memory_chunks_v1",
-      ["pt-902"],
-    );
+    expect(services.vectorIndex.delete).toHaveBeenCalledWith(["pt-902"]);
   });
 
   it("apply path enforces multi-tenancy: organizationId flows to archiveRepository.applyCompactionRecord", async () => {
@@ -1081,12 +1072,11 @@ function createCanonicalServices() {
       restoreToCanonical: vi.fn(),
       markUnarchived: vi.fn().mockResolvedValue(undefined),
     },
-    qdrantClient: {
+    vectorIndex: {
       upsert: vi.fn().mockResolvedValue(undefined),
-      query: vi.fn().mockResolvedValue({
-        points: [],
-      }),
-      deletePoints: vi.fn().mockResolvedValue(undefined),
+      query: vi.fn().mockResolvedValue([]),
+      delete: vi.fn().mockResolvedValue(undefined),
+      ensureCollection: vi.fn().mockResolvedValue(undefined),
     },
     config: {
       qdrant: {

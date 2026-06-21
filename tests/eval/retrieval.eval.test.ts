@@ -10,6 +10,7 @@ import { mrrAtK, recallAtK } from "../../src/eval/metrics.js";
 import type { EvalQuery, MetricSummary } from "../../src/eval/types.js";
 import { createIngestJobRepository } from "../../src/jobs/ingest-job-repository.js";
 import { createQdrantClient } from "../../src/qdrant/client.js";
+import { createQdrantVectorIndex } from "../../src/vector/qdrant-index.js";
 import { retrieveMemory } from "../../src/search/retrieve-memory.js";
 import {
   createMemoryChunkRepository,
@@ -37,8 +38,7 @@ type EvalServices = {
   pool: PgPool;
   repository: CanonicalMemoryRepository;
   embeddings: ReturnType<typeof createOpenAiEmbeddingClient>;
-  qdrantClient: ReturnType<typeof createQdrantClient>;
-  collectionName: string;
+  vectorIndex: ReturnType<typeof createQdrantVectorIndex>;
 };
 
 describe.skipIf(!RUN_EVAL)("retrieval eval harness", () => {
@@ -61,6 +61,7 @@ describe.skipIf(!RUN_EVAL)("retrieval eval harness", () => {
       url: config.qdrant.url,
       apiKey: config.qdrant.apiKey,
     });
+    const vectorIndex = createQdrantVectorIndex(qdrantClient, config.qdrant.collectionName);
 
     for (const entry of SEED_ENTRIES) {
       const written = await writeCanonicalMemory({
@@ -68,12 +69,7 @@ describe.skipIf(!RUN_EVAL)("retrieval eval harness", () => {
         chunkRepository,
         ingestJobs,
         embeddings,
-        qdrantClient: {
-          upsert(collection, points) {
-            return qdrantClient.upsert(collection, points);
-          },
-        },
-        collectionName: config.qdrant.collectionName,
+        vectorIndex,
         embedding: {
           provider: config.embedding.provider,
           model: config.embedding.model,
@@ -91,8 +87,7 @@ describe.skipIf(!RUN_EVAL)("retrieval eval harness", () => {
       pool,
       repository,
       embeddings,
-      qdrantClient,
-      collectionName: config.qdrant.collectionName,
+      vectorIndex,
     };
   }, 120_000);
 
@@ -114,38 +109,13 @@ describe.skipIf(!RUN_EVAL)("retrieval eval harness", () => {
 
       const vector = await services.embeddings.embed(query.query);
       const results = await retrieveMemory({
-        qdrantClient: {
-          async query(collection, args) {
-            const response = await services.qdrantClient.query(
-              collection,
-              args,
-            );
-            return {
-              points: response.points.map((point) => {
-                const payload =
-                  point.payload && typeof point.payload === "object"
-                    ? point.payload
-                    : undefined;
-                const memoryRecordId =
-                  typeof payload?.memory_record_id === "number"
-                    ? payload.memory_record_id
-                    : undefined;
-                return {
-                  payload:
-                    memoryRecordId === undefined
-                      ? undefined
-                      : { memory_record_id: memoryRecordId },
-                };
-              }),
-            };
-          },
-        },
+        vectorIndex: services.vectorIndex,
         repository: services.repository,
-        collectionName: services.collectionName,
         vector,
         projectKey,
         userScopeId: query.scope.userScopeId,
         limit: TOP_K,
+        allowLegacyAnonymous: true,
       });
 
       const retrievedIds = results.map(

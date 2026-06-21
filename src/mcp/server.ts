@@ -145,9 +145,8 @@ export function createToolRegistry(
     const vector = await services.embeddings.embed(input.query);
 
     return retrieveMemoryFromQdrant({
-      qdrantClient: services.qdrantClient,
+      vectorIndex: services.vectorIndex,
       repository: services.repository,
-      collectionName: services.config.qdrant.collectionName,
       vector,
       organizationId: input.organizationId,
       // Default-strict: undefined organizationId throws unless the operator
@@ -328,8 +327,7 @@ export function createToolRegistry(
               chunkRepository: services.chunkRepository,
               ingestJobs: services.ingestJobs,
               embeddings: services.embeddings,
-              qdrantClient: services.qdrantClient,
-              collectionName: services.config.qdrant.collectionName,
+              vectorIndex: services.vectorIndex,
               embedding: {
                 provider: services.config.embedding.provider,
                 model: services.config.embedding.model,
@@ -471,8 +469,7 @@ export function createToolRegistry(
         reindexCanonicalMemory({
           chunkRepository: services.chunkRepository,
           embeddings: services.embeddings,
-          qdrantClient: services.qdrantClient,
-          collectionName: services.config.qdrant.collectionName,
+          vectorIndex: services.vectorIndex,
           organizationId,
           scopes,
         }),
@@ -583,8 +580,7 @@ export function createToolRegistry(
           },
           {
             archiveRepository: services.archiveRepository,
-            qdrantClient: services.qdrantClient,
-            collectionName: services.config.qdrant.collectionName,
+            vectorIndex: services.vectorIndex,
             embeddings: services.embeddings,
             logger: baseLogger,
           },
@@ -623,8 +619,7 @@ export function createToolRegistry(
             archiveRepository: services.archiveRepository,
             chunkRepository: services.chunkRepository,
             embeddings: services.embeddings,
-            qdrantClient: services.qdrantClient,
-            collectionName: services.config.qdrant.collectionName,
+            vectorIndex: services.vectorIndex,
             embedding: {
               provider: services.config.embedding.provider,
               model: services.config.embedding.model,

@@ -43,8 +43,7 @@ describe("startBackgroundSweeper", () => {
     expect(() =>
       startBackgroundSweeper({
         archiveRepository: repo,
-        qdrantClient: { deletePoints: vi.fn() },
-        collectionName: "memory_chunks_v1",
+        vectorIndex: { delete: vi.fn(), upsert: vi.fn(), query: vi.fn(), ensureCollection: vi.fn() },
         logger: SILENT_LOGGER,
         intervalMs: 500,
       }),
@@ -55,8 +54,7 @@ describe("startBackgroundSweeper", () => {
     const repo = makeRepo();
     const handle = startBackgroundSweeper({
       archiveRepository: repo,
-      qdrantClient: { deletePoints: vi.fn() },
-      collectionName: "memory_chunks_v1",
+      vectorIndex: { delete: vi.fn(), upsert: vi.fn(), query: vi.fn(), ensureCollection: vi.fn() },
       logger: SILENT_LOGGER,
       intervalMs: 1000,
     });
@@ -76,8 +74,7 @@ describe("startBackgroundSweeper", () => {
     const repo = makeRepo();
     const handle = startBackgroundSweeper({
       archiveRepository: repo,
-      qdrantClient: { deletePoints: vi.fn() },
-      collectionName: "memory_chunks_v1",
+      vectorIndex: { delete: vi.fn(), upsert: vi.fn(), query: vi.fn(), ensureCollection: vi.fn() },
       logger: SILENT_LOGGER,
       intervalMs: 1000,
     });
@@ -99,8 +96,7 @@ describe("startBackgroundSweeper", () => {
 
     const handle = startBackgroundSweeper({
       archiveRepository: repo,
-      qdrantClient: { deletePoints: vi.fn() },
-      collectionName: "memory_chunks_v1",
+      vectorIndex: { delete: vi.fn(), upsert: vi.fn(), query: vi.fn(), ensureCollection: vi.fn() },
       logger: SILENT_LOGGER,
       intervalMs: 1000,
     });

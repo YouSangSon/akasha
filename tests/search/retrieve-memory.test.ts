@@ -2,16 +2,15 @@ import { describe, expect, it, vi } from "vitest";
 import { retrieveMemory } from "../../src/search/retrieve-memory.js";
 
 describe("retrieveMemory", () => {
-  it("hydrates qdrant hits from postgres and keeps project results ahead of user results", async () => {
-    const qdrant = {
+  it("hydrates vector hits from postgres and keeps project results ahead of user results", async () => {
+    const vectorIndex = {
       query: vi
         .fn()
-        .mockResolvedValueOnce({
-          points: [{ payload: { memory_record_id: 12 } }],
-        })
-        .mockResolvedValueOnce({
-          points: [{ payload: { memory_record_id: 21 } }],
-        }),
+        .mockResolvedValueOnce([{ id: "chunk:12", score: 0.9, payload: { memory_record_id: 12 } }])
+        .mockResolvedValueOnce([{ id: "chunk:21", score: 0.8, payload: { memory_record_id: 21 } }]),
+      upsert: vi.fn(),
+      delete: vi.fn(),
+      ensureCollection: vi.fn(),
     };
 
     const repository = {
@@ -60,9 +59,8 @@ describe("retrieveMemory", () => {
     };
 
     const results = await retrieveMemory({
-      qdrantClient: qdrant as never,
+      vectorIndex: vectorIndex as never,
       repository: repository as never,
-      collectionName: "memory_chunks_v1",
       vector: [0.1, 0.2, 0.3],
       // Pre-org-binding deployments still rely on legacy single-tenant
       // semantics — opt in explicitly so this test pins that behavior.
@@ -72,26 +70,20 @@ describe("retrieveMemory", () => {
       limit: 5,
     });
 
-    expect(qdrant.query).toHaveBeenNthCalledWith(1, "memory_chunks_v1", {
-      query: [0.1, 0.2, 0.3],
-      limit: 5,
-      filter: {
-        must: [
-          { key: "scope_type", match: { value: "project" } },
-          { key: "project_key", match: { value: "project-alpha" } },
-        ],
-      },
-    });
-    expect(qdrant.query).toHaveBeenNthCalledWith(2, "memory_chunks_v1", {
-      query: [0.1, 0.2, 0.3],
-      limit: 5,
-      filter: {
-        must: [
-          { key: "scope_type", match: { value: "user" } },
-          { key: "scope_id", match: { value: "alice" } },
-        ],
-      },
-    });
+    // Project scope query: organizationId="" (legacy), scope_type=project, project_key=project-alpha
+    expect(vectorIndex.query).toHaveBeenNthCalledWith(
+      1,
+      [0.1, 0.2, 0.3],
+      { organizationId: "", scopes: [{ scopeType: "project", scopeId: "project-alpha" }], projectKey: "project-alpha" },
+      5,
+    );
+    // User scope query: organizationId="" (legacy), scope_type=user, scopeId=alice
+    expect(vectorIndex.query).toHaveBeenNthCalledWith(
+      2,
+      [0.1, 0.2, 0.3],
+      { organizationId: "", scopes: [{ scopeType: "user", scopeId: "alice" }], projectKey: null },
+      5,
+    );
     expect(repository.getMemoryRecordsByIds).toHaveBeenCalledWith(
       [12, 21],
       undefined,
@@ -101,15 +93,14 @@ describe("retrieveMemory", () => {
   });
 
   it("keeps project hits ahead when limit is smaller than the combined candidate set", async () => {
-    const qdrant = {
+    const vectorIndex = {
       query: vi
         .fn()
-        .mockResolvedValueOnce({
-          points: [{ payload: { memory_record_id: 12 } }],
-        })
-        .mockResolvedValueOnce({
-          points: [{ payload: { memory_record_id: 21 } }],
-        }),
+        .mockResolvedValueOnce([{ id: "chunk:12", score: 0.9, payload: { memory_record_id: 12 } }])
+        .mockResolvedValueOnce([{ id: "chunk:21", score: 0.8, payload: { memory_record_id: 21 } }]),
+      upsert: vi.fn(),
+      delete: vi.fn(),
+      ensureCollection: vi.fn(),
     };
 
     const repository = {
@@ -158,9 +149,8 @@ describe("retrieveMemory", () => {
     };
 
     const results = await retrieveMemory({
-      qdrantClient: qdrant as never,
+      vectorIndex: vectorIndex as never,
       repository: repository as never,
-      collectionName: "memory_chunks_v1",
       vector: [0.1, 0.2, 0.3],
       // Legacy anonymous test path — pinned via the escape hatch.
       allowLegacyAnonymous: true,
@@ -178,10 +168,13 @@ describe("retrieveMemory", () => {
   });
 
   it("passes organizationId through to the repository hydration call", async () => {
-    const qdrant = {
-      query: vi.fn().mockResolvedValue({
-        points: [{ payload: { memory_record_id: 12 } }],
-      }),
+    const vectorIndex = {
+      query: vi.fn().mockResolvedValue([
+        { id: "chunk:12", score: 0.9, payload: { memory_record_id: 12 } },
+      ]),
+      upsert: vi.fn(),
+      delete: vi.fn(),
+      ensureCollection: vi.fn(),
     };
 
     const repository = {
@@ -210,9 +203,8 @@ describe("retrieveMemory", () => {
     };
 
     await retrieveMemory({
-      qdrantClient: qdrant as never,
+      vectorIndex: vectorIndex as never,
       repository: repository as never,
-      collectionName: "memory_chunks_v1",
       vector: [0.1, 0.2, 0.3],
       organizationId: "dev-team",
       projectKey: "project-alpha",
@@ -227,14 +219,13 @@ describe("retrieveMemory", () => {
   });
 
   it("throws when organizationId is missing and the legacy anonymous escape hatch is not opted into", async () => {
-    const qdrant = { query: vi.fn() };
+    const vectorIndex = { query: vi.fn(), upsert: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() };
     const repository = { getMemoryRecordsByIds: vi.fn() };
 
     await expect(
       retrieveMemory({
-        qdrantClient: qdrant as never,
+        vectorIndex: vectorIndex as never,
         repository: repository as never,
-        collectionName: "memory_chunks_v1",
         vector: [0.1, 0.2, 0.3],
         // organizationId omitted on purpose — default-strict mode rejects.
         projectKey: "project-alpha",
@@ -242,22 +233,21 @@ describe("retrieveMemory", () => {
       }),
     ).rejects.toThrow(/organizationId/i);
 
-    // Strict mode must not even reach Qdrant — the throw guards against
-    // accidental cross-org reads silently returning results.
-    expect(qdrant.query).not.toHaveBeenCalled();
+    // Strict mode must not even reach the vector index — the throw guards
+    // against accidental cross-org reads silently returning results.
+    expect(vectorIndex.query).not.toHaveBeenCalled();
     expect(repository.getMemoryRecordsByIds).not.toHaveBeenCalled();
   });
 
   it("includes operational guidance in the strict-mode error message", async () => {
-    const qdrant = { query: vi.fn() };
+    const vectorIndex = { query: vi.fn(), upsert: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() };
     const repository = { getMemoryRecordsByIds: vi.fn() };
 
     let caught: unknown;
     try {
       await retrieveMemory({
-        qdrantClient: qdrant as never,
+        vectorIndex: vectorIndex as never,
         repository: repository as never,
-        collectionName: "memory_chunks_v1",
         vector: [0.1, 0.2, 0.3],
         projectKey: "project-alpha",
         limit: 5,
@@ -273,10 +263,13 @@ describe("retrieveMemory", () => {
   });
 
   it("allows org-blind reads when allowLegacyAnonymous is explicitly true", async () => {
-    const qdrant = {
-      query: vi.fn().mockResolvedValue({
-        points: [{ payload: { memory_record_id: 12 } }],
-      }),
+    const vectorIndex = {
+      query: vi.fn().mockResolvedValue([
+        { id: "chunk:12", score: 0.9, payload: { memory_record_id: 12 } },
+      ]),
+      upsert: vi.fn(),
+      delete: vi.fn(),
+      ensureCollection: vi.fn(),
     };
     const repository = {
       getMemoryRecordsByIds: vi.fn().mockResolvedValue([
@@ -304,9 +297,8 @@ describe("retrieveMemory", () => {
     };
 
     const results = await retrieveMemory({
-      qdrantClient: qdrant as never,
+      vectorIndex: vectorIndex as never,
       repository: repository as never,
-      collectionName: "memory_chunks_v1",
       vector: [0.1, 0.2, 0.3],
       // organizationId omitted, but explicit opt-in into legacy behavior.
       allowLegacyAnonymous: true,
@@ -315,18 +307,13 @@ describe("retrieveMemory", () => {
     });
 
     expect(results).toHaveLength(1);
-    // No org filter on Qdrant, no orgId on PG hydration — preserves the
-    // documented legacy single-tenant behavior for explicit opt-ins.
-    expect(qdrant.query).toHaveBeenCalledWith("memory_chunks_v1", {
-      query: [0.1, 0.2, 0.3],
-      limit: 5,
-      filter: {
-        must: [
-          { key: "scope_type", match: { value: "project" } },
-          { key: "project_key", match: { value: "project-alpha" } },
-        ],
-      },
-    });
+    // No org filter on vector index (empty string), no orgId on PG hydration —
+    // preserves the documented legacy single-tenant behavior for explicit opt-ins.
+    expect(vectorIndex.query).toHaveBeenCalledWith(
+      [0.1, 0.2, 0.3],
+      { organizationId: "", scopes: [{ scopeType: "project", scopeId: "project-alpha" }], projectKey: "project-alpha" },
+      5,
+    );
     expect(repository.getMemoryRecordsByIds).toHaveBeenCalledWith(
       [12],
       undefined,

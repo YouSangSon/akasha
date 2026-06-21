@@ -1,7 +1,7 @@
 import { chunkText, type TextChunk } from "../chunk/chunk-text.js";
-import { toQdrantPoint } from "../qdrant/point-mapper.js";
 import type { PgPool } from "../db/connection.js";
 import { scanForSecrets, SecretDetectedError } from "./secret-scrub.js";
+import type { VectorIndex, VectorPoint } from "../vector/vector-index.js";
 import type {
   AddMemoryInput,
   CanonicalMemoryRepository,
@@ -60,15 +60,6 @@ export type MemoryChunkRepository = {
 export type EmbeddingClient = {
   embed(inputText: string): Promise<number[]>;
   embedBatch(inputs: string[]): Promise<number[][]>;
-};
-
-export type QdrantUpsertClient = {
-  upsert(
-    collectionName: string,
-    input: {
-      points: Array<ReturnType<typeof toQdrantPoint>>;
-    },
-  ): Promise<unknown>;
 };
 
 export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository {
@@ -289,8 +280,7 @@ export async function writeCanonicalMemory(input: {
   chunkRepository: MemoryChunkRepository;
   ingestJobs: IngestJobRepository;
   embeddings: EmbeddingClient;
-  qdrantClient: QdrantUpsertClient;
-  collectionName: string;
+  vectorIndex: VectorIndex;
   embedding: ChunkEmbeddingConfig;
   memory: AddMemoryInput;
 }): Promise<SearchMemoryResult> {
@@ -331,32 +321,26 @@ export async function writeCanonicalMemory(input: {
         `embedBatch returned ${embeddings.length} vectors for ${storedChunks.length} chunks`,
       );
     }
-    const points = storedChunks.map((chunk, index) =>
-      toQdrantPoint({
-        chunk: {
-          id: chunk.id,
-          memoryRecordId: chunk.memoryRecordId,
-          chunkIndex: chunk.chunkIndex,
-          content: chunk.content,
-          embeddingVersion: chunk.embeddingVersion,
-        },
-        record: {
-          id: record.id,
-          organizationId: record.organizationId ?? "default",
-          scopeType: record.scopeType,
-          scopeId: record.scopeId,
-          projectKey: record.projectKey ?? null,
-          durability: record.durability ?? "ephemeral",
-          kind: record.memoryType,
-          tags: [],
-          updatedAt: record.updatedAt,
-        },
-        embedding: embeddings[index] ?? [],
-      }),
-    );
+    const points: VectorPoint[] = storedChunks.map((chunk, index) => ({
+      id: `chunk:${chunk.id}`,
+      vector: embeddings[index] ?? [],
+      payload: {
+        chunk_id: chunk.id,
+        memory_record_id: record.id,
+        organization_id: record.organizationId ?? "default",
+        scope_type: record.scopeType,
+        scope_id: record.scopeId,
+        project_key: record.projectKey ?? null,
+        kind: record.memoryType,
+        durability: record.durability ?? "ephemeral",
+        tags: [],
+        updated_at: record.updatedAt,
+        embedding_version: chunk.embeddingVersion,
+      },
+    }));
 
     if (points.length > 0) {
-      await input.qdrantClient.upsert(input.collectionName, { points });
+      await input.vectorIndex.upsert(points);
       await input.chunkRepository.updatePointIds(
         points.map((point, index) => ({
           chunkId: storedChunks[index]!.id,
@@ -384,8 +368,7 @@ export async function writeCanonicalMemory(input: {
 export async function reindexCanonicalMemory(input: {
   chunkRepository: MemoryChunkRepository;
   embeddings: EmbeddingClient;
-  qdrantClient: QdrantUpsertClient;
-  collectionName: string;
+  vectorIndex: VectorIndex;
   organizationId: string;
   scopes: ScopeRef[];
 }): Promise<{ chunkCount: number }> {
@@ -398,32 +381,26 @@ export async function reindexCanonicalMemory(input: {
       `reindex embedBatch returned ${embeddings.length} vectors for ${chunks.length} chunks`,
     );
   }
-  const points = chunks.map((chunk, index) =>
-    toQdrantPoint({
-      chunk: {
-        id: chunk.id,
-        memoryRecordId: chunk.memoryRecordId,
-        chunkIndex: chunk.chunkIndex,
-        content: chunk.content,
-        embeddingVersion: chunk.embeddingVersion,
-      },
-      record: {
-        id: chunk.memoryRecordId,
-        organizationId: chunk.organizationId,
-        scopeType: chunk.scopeType,
-        scopeId: chunk.scopeId,
-        projectKey: chunk.projectKey,
-        durability: chunk.durability,
-        kind: chunk.kind,
-        tags: [],
-        updatedAt: chunk.updatedAt,
-      },
-      embedding: embeddings[index] ?? [],
-    }),
-  );
+  const points: VectorPoint[] = chunks.map((chunk, index) => ({
+    id: `chunk:${chunk.id}`,
+    vector: embeddings[index] ?? [],
+    payload: {
+      chunk_id: chunk.id,
+      memory_record_id: chunk.memoryRecordId,
+      organization_id: chunk.organizationId,
+      scope_type: chunk.scopeType,
+      scope_id: chunk.scopeId,
+      project_key: chunk.projectKey,
+      kind: chunk.kind,
+      durability: chunk.durability,
+      tags: [],
+      updated_at: chunk.updatedAt,
+      embedding_version: chunk.embeddingVersion,
+    },
+  }));
 
   if (points.length > 0) {
-    await input.qdrantClient.upsert(input.collectionName, { points });
+    await input.vectorIndex.upsert(points);
     await input.chunkRepository.updatePointIds(
       points.map((point, index) => ({
         chunkId: chunks[index]!.id,

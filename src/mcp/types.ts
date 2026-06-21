@@ -20,8 +20,8 @@ import type {
 import type {
   EmbeddingClient,
   MemoryChunkRepository,
-  QdrantUpsertClient,
 } from "../store/canonical-indexing.js";
+import type { VectorIndex } from "../vector/vector-index.js";
 import type { MemoryArchiveRepository } from "../store/memory-archive-repository.js";
 
 export type MaybePromise<T> = T | Promise<T>;
@@ -250,35 +250,6 @@ export type CreateMcpServerOptions = CreateToolRegistryOptions & {
   registry?: ToolRegistry;
 };
 
-export type CanonicalQdrantQueryClient = {
-  query(
-    collectionName: string,
-    args: {
-      query: number[];
-      limit: number;
-      filter: {
-        must: Array<{
-          key: string;
-          match: { value: string };
-        }>;
-      };
-    },
-  ): Promise<{
-    points: Array<{
-      payload?: {
-        memory_record_id?: number;
-      };
-    }>;
-  }>;
-};
-
-export type CanonicalQdrantDeleteClient = {
-  // Per-collection point delete by id list. Used by the P17 compaction apply
-  // path and the outbox sweeper. Idempotent: deleting a missing id is a
-  // no-op on Qdrant's side.
-  deletePoints(collectionName: string, pointIds: string[]): Promise<void>;
-};
-
 export type CanonicalServices = {
   config: {
     qdrant: Pick<ServiceConfig["qdrant"], "collectionName">;
@@ -289,8 +260,6 @@ export type CanonicalServices = {
   ingestJobs: IngestJobRepository;
   archiveRepository: MemoryArchiveRepository;
   embeddings: EmbeddingClient;
-  qdrantClient: QdrantUpsertClient &
-    CanonicalQdrantQueryClient &
-    CanonicalQdrantDeleteClient;
+  vectorIndex: VectorIndex;
   close?: () => MaybePromise<void>;
 };

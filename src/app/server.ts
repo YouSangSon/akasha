@@ -303,8 +303,7 @@ async function startSweeperOnce(
   const services = await bootstrapCanonicalServices();
   const handle = startBackgroundSweeper({
     archiveRepository: services.archiveRepository,
-    qdrantClient: services.qdrantClient,
-    collectionName: services.config.qdrant.collectionName,
+    vectorIndex: services.vectorIndex,
     logger: log,
     intervalMs: loadSweeperIntervalMs(process.env),
   });
