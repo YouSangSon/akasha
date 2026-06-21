@@ -194,7 +194,9 @@ Key event names to monitor:
 ### Health probes
 
 - `GET /healthz` — process is alive (always 200 once up).
-- `GET /readyz` — dependencies are reachable. 503 → drain.
+- `GET /readyz` — always `200` in the default build (no probes wired); probe
+  builders exist in `src/health/check-dependencies.ts` for operators who wire
+  them. Currently equivalent to `/healthz`.
 
 ### Metrics
 

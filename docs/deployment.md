@@ -45,7 +45,11 @@ self-hosted) and run multiple `app` instances behind a load balancer.
 - [ ] **Backups** — schedule `npm run backup:create` (cron / systemd timer)
       and verify with `npm run restore:smoke` periodically.
 - [ ] **Monitoring** — wire `/readyz` to your orchestrator's readiness probe
-      and the pino logs (stderr) to your log aggregator.
+      and the pino logs (stderr) to your log aggregator. **Note:** in the
+      default build `/readyz` returns `200 { ok: true }` unconditionally —
+      probe builders exist in `src/health/check-dependencies.ts` but are not
+      wired into `startOperatorServer`, so it acts as a liveness-equivalent,
+      not a true readiness gate.
 
 ## Single-host compose deployment
 
@@ -165,10 +169,14 @@ The `npm run backup:create` script handles the rsync invocation. See
 
 ## Disaster recovery
 
-The app pool fails closed on Postgres / Qdrant / OpenAI outages — `/readyz`
-returns 503 so a load balancer drains the instance. Once dependencies
-recover, the next request bootstraps the canonical-services singleton again
-(no app restart needed for transient failures).
+**Note:** the default build does **not** fail closed on dependency outages.
+`/readyz` returns `200 { ok: true, checks: [], message: "no probes configured" }`
+unconditionally because `startOperatorServer` does not pass `dependencyProbes`
+to the operator server. Probe builders (`buildPostgresProbe`, `buildQdrantProbe`,
+`buildOpenAiProbe`) exist in `src/health/check-dependencies.ts` for operators
+who wire them, but they are not active by default. Once dependencies recover
+from a transient failure, the next request bootstraps the canonical-services
+singleton again (no app restart needed).
 
 If a host goes away entirely, restore from the latest backup:
 

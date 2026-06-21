@@ -44,7 +44,10 @@ load balancer 뒤의 다중 `app` 인스턴스 사용.
 - [ ] **백업** — `npm run backup:create` 를 cron / systemd timer로 스케줄,
       `npm run restore:smoke` 로 정기 검증.
 - [ ] **모니터링** — `/readyz` 를 오케스트레이터 readiness probe에 연결,
-      pino 로그 (stderr) 를 로그 aggregator에 연결.
+      pino 로그 (stderr) 를 로그 aggregator에 연결. **주의:** 기본 빌드에서
+      `/readyz` 는 무조건 `200 { ok: true }` 를 반환 — probe 빌더가
+      `src/health/check-dependencies.ts` 에 존재하지만 `startOperatorServer`
+      에 연결되지 않아 liveness 등가로 동작하며, 진정한 readiness gate가 아님.
 
 ## 단일 호스트 compose 배포
 
@@ -159,10 +162,13 @@ BACKUP_TARGET_HOST=backup@backup.example.com
 
 ## 재해 복구
 
-앱 풀은 Postgres / Qdrant / OpenAI outage에서 fail-closed — `/readyz` 가 503
-반환 → load balancer가 인스턴스 drain. 의존성 복구되면 다음 요청이
-canonical-services singleton을 다시 부트스트랩 (transient 실패는 앱 재시작
-불필요).
+**주의:** 기본 빌드는 의존성 장애 시 fail-closed **하지 않음**.
+`startOperatorServer` 가 `dependencyProbes` 를 전달하지 않아 `/readyz` 는
+무조건 `200 { ok: true, checks: [], message: "no probes configured" }` 를 반환.
+Probe 빌더 (`buildPostgresProbe`, `buildQdrantProbe`, `buildOpenAiProbe`) 는
+`src/health/check-dependencies.ts` 에 존재하며 직접 연결해 사용할 수 있으나,
+기본값으로는 비활성. Transient 실패 복구 시 다음 요청이 canonical-services
+singleton을 다시 부트스트랩 (앱 재시작 불필요).
 
 호스트가 완전히 사라지면 최신 백업에서 복원:
 

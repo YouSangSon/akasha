@@ -190,7 +190,9 @@ docker compose logs --since 1h app | jq 'select(.level >= 40)'  # warn+
 ### Health probe
 
 - `GET /healthz` — 프로세스 살아 있음 (up 후 항상 200).
-- `GET /readyz` — 의존성 도달 가능. 503 → drain.
+- `GET /readyz` — 기본 빌드에서 항상 `200` 반환 (probe 미연결); probe 빌더는
+  `src/health/check-dependencies.ts` 에 존재하며 직접 연결 가능. 현재는
+  `/healthz` 와 동일하게 동작.
 
 ### 메트릭
 
