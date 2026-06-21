@@ -381,6 +381,11 @@ async function computeSemanticGroups(
   try {
     const texts = records.map((r) => r.content);
     const vecs = await embeddings.embedBatch(texts);
+    if (vecs.length !== texts.length) {
+      throw new Error(
+        `embedBatch returned ${vecs.length} vectors for ${texts.length} records`,
+      );
+    }
     for (let i = 0; i < records.length; i += 1) {
       const vec = vecs[i];
       if (vec) {

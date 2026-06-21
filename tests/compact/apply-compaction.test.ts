@@ -430,3 +430,48 @@ describe("applyCompaction (deduplicates records appearing in both duplicate and 
     );
   });
 });
+
+describe("applyCompaction (semantic dedup — embedBatch length mismatch)", () => {
+  it("skips semantic dedup and logs a warning when embedBatch returns wrong count", async () => {
+    // Arrange: two records that would be semantic duplicates if embedding worked.
+    const rec1 = makeRecord({ id: 10, content: "identical fact" });
+    const rec2 = makeRecord({ id: 11, content: "identical fact" });
+
+    const warnSpy = vi.fn();
+    const logger = {
+      info: vi.fn(),
+      warn: warnSpy,
+      error: vi.fn(),
+      debug: vi.fn(),
+      child: vi.fn(),
+    } as unknown as ApplyCompactionDeps["logger"];
+
+    // embedBatch returns only 1 vector for 2 records — simulates a misbehaving provider.
+    const embeddings = {
+      embed: vi.fn(),
+      embedBatch: vi.fn().mockResolvedValue([[0.1, 0.2]]),
+    };
+
+    const { repo } = makeRepoMocks();
+    const qdrant = makeVectorIndex();
+
+    // Act
+    const result = await applyCompaction(
+      makeInput({
+        records: [rec1, rec2],
+        dryRun: true,
+        semanticDedupThreshold: 0.95,
+      }),
+      makeDeps(repo, qdrant, { logger, embeddings }),
+    );
+
+    // Assert: semantic dedup is skipped — no duplicate groups despite identical content.
+    expect(result.duplicateGroups).toEqual([]);
+
+    // The length-mismatch should have been logged as a warning.
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ event: "compact.semantic_embed_failed" }),
+      expect.any(String),
+    );
+  });
+});
