@@ -1134,6 +1134,7 @@ function createCanonicalServices() {
       upsert: vi.fn().mockResolvedValue(undefined),
       query: vi.fn().mockResolvedValue([]),
       delete: vi.fn().mockResolvedValue(undefined),
+      deleteByRecordIds: vi.fn().mockResolvedValue(undefined),
       ensureCollection: vi.fn().mockResolvedValue(undefined),
     },
     config: {

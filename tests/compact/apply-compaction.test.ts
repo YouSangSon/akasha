@@ -90,6 +90,7 @@ function makeRepoMocks(overrides: Partial<MemoryArchiveRepository> = {}) {
 function makeVectorIndex(overrides: Partial<{ delete: ReturnType<typeof vi.fn> }> = {}) {
   return {
     delete: overrides.delete ?? vi.fn().mockResolvedValue(undefined),
+    deleteByRecordIds: vi.fn().mockResolvedValue(undefined),
     upsert: vi.fn(),
     query: vi.fn(),
     ensureCollection: vi.fn(),
@@ -120,7 +121,7 @@ function makeInput(overrides: Partial<ApplyCompactionInput> = {}): ApplyCompacti
 
 function makeDeps(
   repo: MemoryArchiveRepository,
-  vectorIndex: { delete: ReturnType<typeof vi.fn>; upsert: ReturnType<typeof vi.fn>; query: ReturnType<typeof vi.fn>; ensureCollection: ReturnType<typeof vi.fn> },
+  vectorIndex: { delete: ReturnType<typeof vi.fn>; deleteByRecordIds: ReturnType<typeof vi.fn>; upsert: ReturnType<typeof vi.fn>; query: ReturnType<typeof vi.fn>; ensureCollection: ReturnType<typeof vi.fn> },
   overrides: Partial<ApplyCompactionDeps> = {},
 ): ApplyCompactionDeps {
   return {

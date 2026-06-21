@@ -113,7 +113,7 @@ describe("runIngestSweep", () => {
   it("returns zero counts when no pending rows are claimed", async () => {
     const { repo } = makeIngestJobRepo([]);
     const chunkRepo = makeChunkRepo([]);
-    const vectorIndex = { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() };
+    const vectorIndex = { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), ensureCollection: vi.fn() };
 
     const result = await runIngestSweep({
       ingestJobs: repo,
@@ -134,7 +134,7 @@ describe("runIngestSweep", () => {
     const { repo, markQdrantCompleted } = makeIngestJobRepo([job]);
     const updatePointIds = vi.fn().mockResolvedValue(undefined);
     const chunkRepo = makeChunkRepo([chunk], { updatePointIds });
-    const vectorIndex = { upsert: vi.fn().mockResolvedValue(undefined), query: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() };
+    const vectorIndex = { upsert: vi.fn().mockResolvedValue(undefined), query: vi.fn(), delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), ensureCollection: vi.fn() };
     const embedding = [0.1, 0.2, 0.3];
     const embeddings = { embed: vi.fn(), embedBatch: vi.fn().mockResolvedValue([embedding]) };
 
@@ -161,7 +161,7 @@ describe("runIngestSweep", () => {
     const job = makeJob({ id: 2, memoryRecordId: 99 });
     const { repo, markQdrantCompleted } = makeIngestJobRepo([job]);
     const chunkRepo = makeChunkRepo([]); // no chunks
-    const vectorIndex = { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() };
+    const vectorIndex = { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), ensureCollection: vi.fn() };
 
     const result = await runIngestSweep({
       ingestJobs: repo,
@@ -187,6 +187,7 @@ describe("runIngestSweep", () => {
       upsert: vi.fn().mockRejectedValue(new Error("vector index 503")),
       query: vi.fn(),
       delete: vi.fn(),
+      deleteByRecordIds: vi.fn().mockResolvedValue(undefined),
       ensureCollection: vi.fn(),
     };
     const embeddings = { embed: vi.fn(), embedBatch: vi.fn().mockResolvedValue([[0.1]]) };
@@ -223,6 +224,7 @@ describe("runIngestSweep", () => {
       upsert: vi.fn().mockRejectedValue(new Error("vector index 503")),
       query: vi.fn(),
       delete: vi.fn(),
+      deleteByRecordIds: vi.fn().mockResolvedValue(undefined),
       ensureCollection: vi.fn(),
     };
     const embeddings = { embed: vi.fn(), embedBatch: vi.fn().mockResolvedValue([[0.1]]) };
@@ -253,7 +255,7 @@ describe("runIngestSweep", () => {
       ingestJobs: repo,
       chunkRepository: chunkRepo,
       embeddings: { embed: vi.fn(), embedBatch: vi.fn() },
-      vectorIndex: { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() },
+      vectorIndex: { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), ensureCollection: vi.fn() },
       logger: SILENT_LOGGER,
       batchSize: 25,
     });
@@ -270,7 +272,7 @@ describe("runIngestSweep", () => {
     const { repo, markQdrantCompleted } = makeIngestJobRepo([job]);
     const updatePointIds = vi.fn().mockResolvedValue(undefined);
     const chunkRepo = makeChunkRepo([chunk], { updatePointIds });
-    const vectorIndex = { upsert: vi.fn().mockResolvedValue(undefined), query: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() };
+    const vectorIndex = { upsert: vi.fn().mockResolvedValue(undefined), query: vi.fn(), delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), ensureCollection: vi.fn() };
     const embeddings = { embed: vi.fn(), embedBatch: vi.fn().mockResolvedValue([[0.5, 0.5]]) };
 
     // First sweep

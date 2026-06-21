@@ -53,7 +53,7 @@ describe("startIngestSweeper", () => {
         ingestJobs: makeIngestJobRepo(),
         chunkRepository: makeChunkRepo(),
         embeddings: { embed: vi.fn(), embedBatch: vi.fn() },
-        vectorIndex: { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() },
+        vectorIndex: { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), ensureCollection: vi.fn() },
         logger: SILENT_LOGGER,
         intervalMs: 500,
       }),
@@ -66,7 +66,7 @@ describe("startIngestSweeper", () => {
       ingestJobs,
       chunkRepository: makeChunkRepo(),
       embeddings: { embed: vi.fn(), embedBatch: vi.fn() },
-      vectorIndex: { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() },
+      vectorIndex: { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), ensureCollection: vi.fn() },
       logger: SILENT_LOGGER,
       intervalMs: 1000,
     });
@@ -88,7 +88,7 @@ describe("startIngestSweeper", () => {
       ingestJobs,
       chunkRepository: makeChunkRepo(),
       embeddings: { embed: vi.fn(), embedBatch: vi.fn() },
-      vectorIndex: { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() },
+      vectorIndex: { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), ensureCollection: vi.fn() },
       logger: SILENT_LOGGER,
       intervalMs: 1000,
     });
@@ -112,7 +112,7 @@ describe("startIngestSweeper", () => {
       ingestJobs,
       chunkRepository: makeChunkRepo(),
       embeddings: { embed: vi.fn(), embedBatch: vi.fn() },
-      vectorIndex: { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() },
+      vectorIndex: { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), ensureCollection: vi.fn() },
       logger: SILENT_LOGGER,
       intervalMs: 1000,
     });

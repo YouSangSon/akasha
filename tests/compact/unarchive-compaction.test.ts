@@ -106,6 +106,7 @@ function makeDeps(
       upsert: vi.fn().mockResolvedValue(undefined),
       query: vi.fn(),
       delete: vi.fn(),
+      deleteByRecordIds: vi.fn().mockResolvedValue(undefined),
       ensureCollection: vi.fn(),
     },
     embedding: {

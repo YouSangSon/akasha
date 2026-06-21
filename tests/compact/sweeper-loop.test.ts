@@ -43,7 +43,7 @@ describe("startBackgroundSweeper", () => {
     expect(() =>
       startBackgroundSweeper({
         archiveRepository: repo,
-        vectorIndex: { delete: vi.fn(), upsert: vi.fn(), query: vi.fn(), ensureCollection: vi.fn() },
+        vectorIndex: { delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), upsert: vi.fn(), query: vi.fn(), ensureCollection: vi.fn() },
         logger: SILENT_LOGGER,
         intervalMs: 500,
       }),
@@ -54,7 +54,7 @@ describe("startBackgroundSweeper", () => {
     const repo = makeRepo();
     const handle = startBackgroundSweeper({
       archiveRepository: repo,
-      vectorIndex: { delete: vi.fn(), upsert: vi.fn(), query: vi.fn(), ensureCollection: vi.fn() },
+      vectorIndex: { delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), upsert: vi.fn(), query: vi.fn(), ensureCollection: vi.fn() },
       logger: SILENT_LOGGER,
       intervalMs: 1000,
     });
@@ -74,7 +74,7 @@ describe("startBackgroundSweeper", () => {
     const repo = makeRepo();
     const handle = startBackgroundSweeper({
       archiveRepository: repo,
-      vectorIndex: { delete: vi.fn(), upsert: vi.fn(), query: vi.fn(), ensureCollection: vi.fn() },
+      vectorIndex: { delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), upsert: vi.fn(), query: vi.fn(), ensureCollection: vi.fn() },
       logger: SILENT_LOGGER,
       intervalMs: 1000,
     });
@@ -96,7 +96,7 @@ describe("startBackgroundSweeper", () => {
 
     const handle = startBackgroundSweeper({
       archiveRepository: repo,
-      vectorIndex: { delete: vi.fn(), upsert: vi.fn(), query: vi.fn(), ensureCollection: vi.fn() },
+      vectorIndex: { delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), upsert: vi.fn(), query: vi.fn(), ensureCollection: vi.fn() },
       logger: SILENT_LOGGER,
       intervalMs: 1000,
     });

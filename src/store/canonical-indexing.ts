@@ -477,6 +477,13 @@ export async function reindexCanonicalMemory(input: {
     }),
   );
 
+  // Clear stale vectors before upserting the current set. Without this, if a
+  // record's chunk count shrinks (e.g. 3 → 2), the old chunk:3 vector is
+  // orphaned in the index forever. The no-op guard in deleteByRecordIds means
+  // an empty recordIds array is safe.
+  const recordIds = [...new Set(chunks.map((c) => c.memoryRecordId))];
+  await input.vectorIndex.deleteByRecordIds(recordIds);
+
   if (points.length > 0) {
     await input.vectorIndex.upsert(points);
     await input.chunkRepository.updatePointIds(

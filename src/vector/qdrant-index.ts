@@ -80,5 +80,18 @@ export function createQdrantVectorIndex(
       if (ids.length === 0) return;
       await client.delete(collectionName, { points: ids });
     },
+
+    async deleteByRecordIds(recordIds: number[]): Promise<void> {
+      // Guard: an empty/null filter would delete the entire collection.
+      if (recordIds.length === 0) return;
+      await client.delete(collectionName, {
+        filter: {
+          should: recordIds.map((id) => ({
+            key: "memory_record_id",
+            match: { value: id },
+          })),
+        },
+      });
+    },
   };
 }

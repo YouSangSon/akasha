@@ -62,6 +62,7 @@ describe("canonical indexing", () => {
       upsert: vi.fn().mockResolvedValue(undefined),
       query: vi.fn(),
       delete: vi.fn(),
+      deleteByRecordIds: vi.fn().mockResolvedValue(undefined),
       ensureCollection: vi.fn(),
     };
 
@@ -170,7 +171,7 @@ describe("canonical indexing", () => {
       embed: vi.fn(),
       embedBatch: vi.fn().mockRejectedValue(embedError),
     };
-    const vectorIndex = { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() };
+    const vectorIndex = { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), ensureCollection: vi.fn() };
 
     await expect(
       writeCanonicalMemory({
@@ -249,6 +250,7 @@ describe("canonical indexing", () => {
       upsert: vi.fn().mockRejectedValue(upsertError),
       query: vi.fn(),
       delete: vi.fn(),
+      deleteByRecordIds: vi.fn().mockResolvedValue(undefined),
       ensureCollection: vi.fn(),
     };
 
@@ -326,7 +328,7 @@ describe("canonical indexing", () => {
       // must reject for this test to exercise the rollback-on-failure case.
       embedBatch: vi.fn().mockRejectedValue(embedError),
     };
-    const vectorIndex = { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() };
+    const vectorIndex = { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), ensureCollection: vi.fn() };
 
     await expect(
       writeCanonicalMemory({
@@ -382,7 +384,7 @@ describe("canonical indexing", () => {
       embed: vi.fn(),
       embedBatch: vi.fn().mockResolvedValue([]),
     };
-    const vectorIndex = { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() };
+    const vectorIndex = { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), ensureCollection: vi.fn() };
 
     const created = await writeCanonicalMemory({
       repository: repository as never,
@@ -436,7 +438,7 @@ describe("canonical indexing", () => {
       updatePointIds: vi.fn(),
     };
     const embeddings = { embed: vi.fn(), embedBatch: vi.fn() };
-    const vectorIndex = { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() };
+    const vectorIndex = { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), ensureCollection: vi.fn() };
 
     await expect(
       writeCanonicalMemory({
@@ -489,7 +491,7 @@ describe("canonical indexing", () => {
       updatePointIds: vi.fn(),
     };
     const embeddings = { embed: vi.fn(), embedBatch: vi.fn() };
-    const vectorIndex = { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() };
+    const vectorIndex = { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), ensureCollection: vi.fn() };
 
     await expect(
       writeCanonicalMemory({
@@ -542,7 +544,7 @@ describe("canonical indexing", () => {
       updatePointIds: vi.fn(),
     };
     const embeddings = { embed: vi.fn(), embedBatch: vi.fn() };
-    const vectorIndex = { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() };
+    const vectorIndex = { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), ensureCollection: vi.fn() };
 
     await expect(
       writeCanonicalMemory({
@@ -596,7 +598,7 @@ describe("canonical indexing", () => {
       updatePointIds: vi.fn(),
     };
     const embeddings = { embed: vi.fn(), embedBatch: vi.fn() };
-    const vectorIndex = { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() };
+    const vectorIndex = { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), ensureCollection: vi.fn() };
 
     let caught: unknown;
     try {
@@ -694,6 +696,7 @@ describe("canonical indexing", () => {
       upsert: vi.fn().mockResolvedValue(undefined),
       query: vi.fn(),
       delete: vi.fn(),
+      deleteByRecordIds: vi.fn().mockResolvedValue(undefined),
       ensureCollection: vi.fn(),
     };
 
@@ -714,6 +717,10 @@ describe("canonical indexing", () => {
       { scopeType: "user", scopeId: "alice" },
     ]);
     expect(embeddings.embedBatch).toHaveBeenCalledOnce();
+    // FU4: stale vectors must be cleared before upserting the current set.
+    expect(vectorIndex.deleteByRecordIds).toHaveBeenCalledWith(
+      expect.arrayContaining([501, 502]),
+    );
     expect(vectorIndex.upsert).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({ id: "chunk:701" }),

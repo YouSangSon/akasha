@@ -10,6 +10,7 @@ describe("retrieveMemory", () => {
         .mockResolvedValueOnce([{ id: "chunk:21", score: 0.8, payload: { memory_record_id: 21 } }]),
       upsert: vi.fn(),
       delete: vi.fn(),
+      deleteByRecordIds: vi.fn().mockResolvedValue(undefined),
       ensureCollection: vi.fn(),
     };
 
@@ -100,6 +101,7 @@ describe("retrieveMemory", () => {
         .mockResolvedValueOnce([{ id: "chunk:21", score: 0.8, payload: { memory_record_id: 21 } }]),
       upsert: vi.fn(),
       delete: vi.fn(),
+      deleteByRecordIds: vi.fn().mockResolvedValue(undefined),
       ensureCollection: vi.fn(),
     };
 
@@ -174,6 +176,7 @@ describe("retrieveMemory", () => {
       ]),
       upsert: vi.fn(),
       delete: vi.fn(),
+      deleteByRecordIds: vi.fn().mockResolvedValue(undefined),
       ensureCollection: vi.fn(),
     };
 
@@ -219,7 +222,7 @@ describe("retrieveMemory", () => {
   });
 
   it("throws when organizationId is missing and the legacy anonymous escape hatch is not opted into", async () => {
-    const vectorIndex = { query: vi.fn(), upsert: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() };
+    const vectorIndex = { query: vi.fn(), upsert: vi.fn(), delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), ensureCollection: vi.fn() };
     const repository = { getMemoryRecordsByIds: vi.fn() };
 
     await expect(
@@ -240,7 +243,7 @@ describe("retrieveMemory", () => {
   });
 
   it("includes operational guidance in the strict-mode error message", async () => {
-    const vectorIndex = { query: vi.fn(), upsert: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() };
+    const vectorIndex = { query: vi.fn(), upsert: vi.fn(), delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), ensureCollection: vi.fn() };
     const repository = { getMemoryRecordsByIds: vi.fn() };
 
     let caught: unknown;
@@ -269,6 +272,7 @@ describe("retrieveMemory", () => {
       ]),
       upsert: vi.fn(),
       delete: vi.fn(),
+      deleteByRecordIds: vi.fn().mockResolvedValue(undefined),
       ensureCollection: vi.fn(),
     };
     const repository = {

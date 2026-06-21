@@ -580,3 +580,97 @@ describe.skipIf(!TEST_URL)("ingest sweeper recovery — integration against real
     expect(jobRow.rows[0]!.qdrant_status).toBe("completed");
   });
 });
+
+describe.skipIf(!TEST_URL)("pgvector adapter — deleteByRecordIds prevents orphan vectors", () => {
+  const TABLE = "test_orphan_vectors";
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  const pool = createPgPool({ connectionString: TEST_URL! });
+  const index = createPgVectorIndex(pool, { tableName: TABLE });
+
+  beforeAll(async () => {
+    let lastErr: unknown;
+    for (let attempt = 0; attempt < 30; attempt++) {
+      try {
+        await pool.query("SELECT 1");
+        lastErr = undefined;
+        break;
+      } catch (err) {
+        lastErr = err;
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+    }
+    if (lastErr !== undefined) {
+      await pool.query("SELECT 1");
+    }
+    await pool.query("CREATE EXTENSION IF NOT EXISTS vector");
+    await index.ensureCollection(3);
+  });
+
+  afterAll(async () => {
+    await pool.query(`DROP TABLE IF EXISTS ${TABLE}`);
+    await pool.end();
+  });
+
+  beforeEach(async () => {
+    await pool.query(`TRUNCATE TABLE ${TABLE}`);
+  });
+
+  it("removes orphan vectors when chunk count shrinks from 3 to 2", async () => {
+    const fakeVec = [0.1, 0.2, 0.3];
+    const recordId = 9001;
+
+    // Arrange: upsert 3 chunks for record 9001.
+    const initial: VectorPoint[] = [
+      { id: "chunk:1001", vector: fakeVec, payload: { memory_record_id: recordId, organization_id: "org-a", scope_type: "project", scope_id: "p1", project_key: "p1", kind: "fact", embedding_version: "v1" } },
+      { id: "chunk:1002", vector: fakeVec, payload: { memory_record_id: recordId, organization_id: "org-a", scope_type: "project", scope_id: "p1", project_key: "p1", kind: "fact", embedding_version: "v1" } },
+      { id: "chunk:1003", vector: fakeVec, payload: { memory_record_id: recordId, organization_id: "org-a", scope_type: "project", scope_id: "p1", project_key: "p1", kind: "fact", embedding_version: "v1" } },
+    ];
+    await index.upsert(initial);
+
+    const before = await pool.query<{ count: string }>(
+      `SELECT COUNT(*) AS count FROM ${TABLE} WHERE memory_record_id = $1`,
+      [recordId],
+    );
+    expect(Number(before.rows[0]!.count)).toBe(3);
+
+    // Act: deleteByRecordIds then re-upsert only 2 chunks (simulates reindex after shrink).
+    await index.deleteByRecordIds([recordId]);
+
+    const updated: VectorPoint[] = [
+      { id: "chunk:1001", vector: fakeVec, payload: { memory_record_id: recordId, organization_id: "org-a", scope_type: "project", scope_id: "p1", project_key: "p1", kind: "fact", embedding_version: "v1" } },
+      { id: "chunk:1002", vector: fakeVec, payload: { memory_record_id: recordId, organization_id: "org-a", scope_type: "project", scope_id: "p1", project_key: "p1", kind: "fact", embedding_version: "v1" } },
+    ];
+    await index.upsert(updated);
+
+    // Assert: exactly 2 points remain — no orphan.
+    const after = await pool.query<{ count: string }>(
+      `SELECT COUNT(*) AS count FROM ${TABLE} WHERE memory_record_id = $1`,
+      [recordId],
+    );
+    expect(Number(after.rows[0]!.count)).toBe(2);
+
+    // Also assert chunk:1003 is gone.
+    const orphan = await pool.query<{ count: string }>(
+      `SELECT COUNT(*) AS count FROM ${TABLE} WHERE point_id = $1`,
+      ["chunk:1003"],
+    );
+    expect(Number(orphan.rows[0]!.count)).toBe(0);
+  });
+
+  it("is a no-op when recordIds is empty (does not wipe the table)", async () => {
+    const fakeVec = [0.1, 0.2, 0.3];
+    const recordId = 9002;
+
+    await index.upsert([
+      { id: "chunk:2001", vector: fakeVec, payload: { memory_record_id: recordId, organization_id: "org-a", scope_type: "project", scope_id: "p1", project_key: "p1", kind: "fact", embedding_version: "v1" } },
+    ]);
+
+    // Act: empty delete — should be a no-op.
+    await index.deleteByRecordIds([]);
+
+    const count = await pool.query<{ count: string }>(
+      `SELECT COUNT(*) AS count FROM ${TABLE}`,
+    );
+    expect(Number(count.rows[0]!.count)).toBe(1);
+  });
+});

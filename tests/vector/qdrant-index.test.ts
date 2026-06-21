@@ -26,6 +26,13 @@ export function createFakeVectorIndex() {
         stored.delete(id);
       }
     },
+    async deleteByRecordIds(recordIds: number[]) {
+      for (const [id, point] of stored) {
+        if (recordIds.includes(point.payload["memory_record_id"] as number)) {
+          stored.delete(id);
+        }
+      }
+    },
     // Test helpers
     _stored: stored,
     _setQueryResults(filter: VectorFilter, hits: unknown[]) {
@@ -214,6 +221,44 @@ describe("createQdrantVectorIndex — delete", () => {
   });
 });
 
+describe("createQdrantVectorIndex — deleteByRecordIds", () => {
+  it("deletes by memory_record_id payload filter using should clauses", async () => {
+    const client = {
+      query: vi.fn(),
+      upsert: vi.fn(),
+      delete: vi.fn().mockResolvedValue(undefined),
+      collectionExists: vi.fn(),
+      createCollection: vi.fn(),
+    };
+    const index = createQdrantVectorIndex(client as never, "memory_chunks_v1");
+
+    await index.deleteByRecordIds([101, 202]);
+
+    expect(client.delete).toHaveBeenCalledWith("memory_chunks_v1", {
+      filter: {
+        should: [
+          { key: "memory_record_id", match: { value: 101 } },
+          { key: "memory_record_id", match: { value: 202 } },
+        ],
+      },
+    });
+  });
+
+  it("skips Qdrant call when recordIds array is empty (data-loss guard)", async () => {
+    const client = {
+      query: vi.fn(),
+      upsert: vi.fn(),
+      delete: vi.fn(),
+      collectionExists: vi.fn(),
+      createCollection: vi.fn(),
+    };
+    const index = createQdrantVectorIndex(client as never, "memory_chunks_v1");
+
+    await index.deleteByRecordIds([]);
+    expect(client.delete).not.toHaveBeenCalled();
+  });
+});
+
 describe("createQdrantVectorIndex — ensureCollection", () => {
   it("creates the collection when it does not exist", async () => {
     const client = {
@@ -263,5 +308,21 @@ describe("FakeVectorIndex", () => {
     await fake.upsert([{ id: "chunk:1", vector: [1], payload: {} }]);
     await fake.delete(["chunk:1"]);
     expect(fake._stored.has("chunk:1")).toBe(false);
+  });
+
+  it("deleteByRecordIds removes all points matching the record id", async () => {
+    const fake = createFakeVectorIndex();
+    await fake.upsert([
+      { id: "chunk:1", vector: [1], payload: { memory_record_id: 10 } },
+      { id: "chunk:2", vector: [2], payload: { memory_record_id: 10 } },
+      { id: "chunk:3", vector: [3], payload: { memory_record_id: 20 } },
+    ]);
+
+    await fake.deleteByRecordIds([10]);
+
+    expect(fake._stored.has("chunk:1")).toBe(false);
+    expect(fake._stored.has("chunk:2")).toBe(false);
+    // Record 20 is unaffected.
+    expect(fake._stored.has("chunk:3")).toBe(true);
   });
 });

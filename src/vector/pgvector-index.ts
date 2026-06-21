@@ -352,5 +352,13 @@ export function createPgVectorIndex(
       if (ids.length === 0) return;
       await pool.query(`DELETE FROM ${tableName} WHERE point_id = ANY($1)`, [ids]);
     },
+
+    async deleteByRecordIds(recordIds: number[]): Promise<void> {
+      if (recordIds.length === 0) return;
+      await pool.query(
+        `DELETE FROM ${tableName} WHERE memory_record_id = ANY($1)`,
+        [recordIds],
+      );
+    },
   };
 }

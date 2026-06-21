@@ -40,7 +40,7 @@ function makeRepoWithPending(
 describe("runOutboxSweep", () => {
   it("returns zero counts when no pending rows", async () => {
     const { repo } = makeRepoWithPending([]);
-    const vectorIndex = { delete: vi.fn(), upsert: vi.fn(), query: vi.fn(), ensureCollection: vi.fn() };
+    const vectorIndex = { delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), upsert: vi.fn(), query: vi.fn(), ensureCollection: vi.fn() };
 
     const result = await runOutboxSweep({
       archiveRepository: repo,
@@ -68,7 +68,7 @@ describe("runOutboxSweep", () => {
       },
     ];
     const { repo, markQdrantStatus } = makeRepoWithPending(pending);
-    const vectorIndex = { delete: vi.fn().mockResolvedValue(undefined), upsert: vi.fn(), query: vi.fn(), ensureCollection: vi.fn() };
+    const vectorIndex = { delete: vi.fn().mockResolvedValue(undefined), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), upsert: vi.fn(), query: vi.fn(), ensureCollection: vi.fn() };
 
     const result = await runOutboxSweep({
       archiveRepository: repo,
@@ -96,6 +96,7 @@ describe("runOutboxSweep", () => {
     const { repo, markQdrantStatus } = makeRepoWithPending(pending);
     const vectorIndex = {
       delete: vi.fn().mockRejectedValue(new Error("Qdrant 503")),
+      deleteByRecordIds: vi.fn().mockResolvedValue(undefined),
       upsert: vi.fn(), query: vi.fn(), ensureCollection: vi.fn(),
     };
 
@@ -121,6 +122,7 @@ describe("runOutboxSweep", () => {
     const { repo, markQdrantStatus } = makeRepoWithPending(pending);
     const vectorIndex = {
       delete: vi.fn().mockRejectedValue(new Error("Qdrant 503")),
+      deleteByRecordIds: vi.fn().mockResolvedValue(undefined),
       upsert: vi.fn(), query: vi.fn(), ensureCollection: vi.fn(),
     };
 
@@ -137,7 +139,7 @@ describe("runOutboxSweep", () => {
   it("respects custom batchSize and maxAttempts", async () => {
     const { repo } = makeRepoWithPending([]);
     const findSpy = repo.findPendingQdrantCleanup as ReturnType<typeof vi.fn>;
-    const vectorIndex = { delete: vi.fn(), upsert: vi.fn(), query: vi.fn(), ensureCollection: vi.fn() };
+    const vectorIndex = { delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), upsert: vi.fn(), query: vi.fn(), ensureCollection: vi.fn() };
 
     await runOutboxSweep({
       archiveRepository: repo,
