@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { describe, expect, it, vi } from "vitest";
+import * as z from "zod/v4";
 import { createMcpServer, createToolRegistry } from "../../src/mcp/server.js";
 import type { ToolRegistry } from "../../src/mcp/types.js";
 import type { MemoryRepository, SearchMemoryResult } from "../../src/types.js";
@@ -972,41 +973,39 @@ describe("createMcpServer", () => {
     });
   });
 
-  it("dispatches semanticDedupThreshold through the compact_memory handler (schema regression)", async () => {
-    // This test drives the field through the registered MCP handler — not the
-    // registry directly — to confirm the Zod inputSchema does not strip it.
-    const capturedInput: Record<string, unknown>[] = [];
-    const registry: ToolRegistry = {
-      add_memory: vi.fn(),
-      search_memory: vi.fn(),
-      build_context_pack: vi.fn(),
-      reindex_memory: vi.fn(),
-      compact_memory: vi.fn().mockImplementation(async (input: unknown) => {
-        capturedInput.push(input as Record<string, unknown>);
-        return { ok: true, dryRun: true, recordsScanned: 0, plan: [], duplicateGroups: [], stats: { archived: 0, decayed: 0, duplicates: 0, qdrantFailed: 0 } };
-      }),
-      list_audit_log: vi.fn(),
-      unarchive_memory: vi.fn(),
-    } as unknown as ToolRegistry;
+  it("semanticDedupThreshold is present in the compact_memory inputSchema and survives z.object() parse", async () => {
+    // The MCP SDK wraps registerTool's inputSchema in z.object() before parsing
+    // incoming tool calls. If semanticDedupThreshold is absent from inputSchema,
+    // z.object().strict() would strip it (and our real SDK call would silently drop
+    // it). This test captures the raw schema object and replicates that parse so
+    // the assertion fails when the field is removed from src/mcp/server.ts.
+    type SchemaArg = { inputSchema: Record<string, z.ZodTypeAny> };
+    let capturedSchema: SchemaArg | undefined;
 
-    const handlers: Map<string, (input: unknown) => Promise<unknown>> = new Map();
     const spy = vi
       .spyOn(McpServer.prototype, "registerTool")
-      .mockImplementation((name: string, _schema: unknown, handler: (input: unknown) => Promise<unknown>) => {
-        handlers.set(name, handler);
+      .mockImplementation((name: string, schema: unknown, _handler: unknown) => {
+        if (name === "compact_memory") {
+          capturedSchema = schema as SchemaArg;
+        }
         return undefined as unknown as ReturnType<McpServer["registerTool"]>;
       });
 
-    createMcpServer({ registry });
+    createMcpServer({ registry: {} as unknown as ToolRegistry });
     spy.mockRestore();
 
-    const handler = handlers.get("compact_memory")!;
-    expect(handler).toBeDefined();
+    expect(capturedSchema).toBeDefined();
 
-    await handler({ projectKey: "p", semanticDedupThreshold: 0.95 });
+    // Replicate what the MCP SDK does: wrap inputSchema fields in z.object() and
+    // parse — this strips any unknown fields not declared in the schema.
+    const parsed = z.object(capturedSchema!.inputSchema).parse({
+      projectKey: "p",
+      semanticDedupThreshold: 0.95,
+    });
 
-    expect(registry.compact_memory).toHaveBeenCalledOnce();
-    expect(capturedInput[0]).toMatchObject({ projectKey: "p", semanticDedupThreshold: 0.95 });
+    // If semanticDedupThreshold were missing from inputSchema, z.object() would
+    // strip it and this assertion would fail.
+    expect(parsed).toMatchObject({ projectKey: "p", semanticDedupThreshold: 0.95 });
   });
 });
 
