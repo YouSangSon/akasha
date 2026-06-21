@@ -201,6 +201,16 @@ include `WHERE organization_id = $org` in every read and write path. Bearer
 tokens in `MEMORY_API_TOKENS` may bind to an org with `:org` syntax — when
 present, the token's org overrides body / header values; mismatch is 403.
 
+**Org enforcement on all read paths.** `retrieveMemory` (search),
+`listMemory` (used by `compact_memory`), and `getMemoryRecordsByIds`
+(vector-hydration step) all throw when `organizationId` is undefined and
+the operator has not set `LEGACY_ANONYMOUS_SEARCH=true`. This means an
+unbound token (no `:org` in `MEMORY_API_TOKENS`, no `x-organization-id`
+header, no body org) cannot silently read across tenants — it receives a
+clear operational error describing all three remediation paths. The shared
+`assertOrganizationId` helper (`src/store/assert-organization-id.ts`)
+enforces this consistently across all three entry points.
+
 The `organization_id` written into `memory_archive` during apply is read
 from the canonical record itself (RETURNING from the DELETE), not from
 the caller token — defense-in-depth against the unlikely case where a

@@ -7,6 +7,7 @@ import type {
   MemorySource,
   SearchMemoryResult,
 } from "../types.js";
+import { assertOrganizationId } from "./assert-organization-id.js";
 
 const DEFAULT_ORG_ID = "default";
 
@@ -195,6 +196,7 @@ export function createMemoryRepository(
     },
 
     async listMemory(scope, options) {
+      assertOrganizationId(options?.organizationId, options?.allowLegacyAnonymous, "listMemory");
       const limit = clampListLimit(options?.limit);
       const params: unknown[] = [scope.scopeType, scope.scopeId];
       let orgClause = "";
@@ -220,7 +222,8 @@ export function createMemoryRepository(
       return result.rows.map(mapPostgresSearchResult);
     },
 
-    async getMemoryRecordsByIds(ids, organizationId) {
+    async getMemoryRecordsByIds(ids, organizationId, allowLegacyAnonymous) {
+      assertOrganizationId(organizationId, allowLegacyAnonymous, "getMemoryRecordsByIds");
       if (ids.length === 0) {
         return [];
       }

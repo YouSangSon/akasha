@@ -95,6 +95,7 @@ describe("retrieveMemory", () => {
     expect(repository.getMemoryRecordsByIds).toHaveBeenCalledWith(
       [12, 21],
       undefined,
+      true,
     );
     expect(results.map((result) => result.id)).toEqual([12, 21]);
   });
@@ -171,6 +172,7 @@ describe("retrieveMemory", () => {
     expect(repository.getMemoryRecordsByIds).toHaveBeenCalledWith(
       [12, 21],
       undefined,
+      true,
     );
     expect(results.map((result) => result.id)).toEqual([12]);
   });
@@ -220,6 +222,7 @@ describe("retrieveMemory", () => {
     expect(repository.getMemoryRecordsByIds).toHaveBeenCalledWith(
       [12],
       "dev-team",
+      undefined,
     );
   });
 
@@ -327,6 +330,7 @@ describe("retrieveMemory", () => {
     expect(repository.getMemoryRecordsByIds).toHaveBeenCalledWith(
       [12],
       undefined,
+      true,
     );
   });
 });

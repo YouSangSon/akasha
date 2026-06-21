@@ -140,7 +140,10 @@ When a token has no binding (legacy form):
 - To opt into the historical org-blind behavior — e.g. a single-tenant
   install with no plans to add a second tenant — set
   `LEGACY_ANONYMOUS_SEARCH=true` in `.env`. The flag is read on every
-  request, so flips take effect without a restart.
+  request, so flips take effect without a restart. This flag now gates
+  **all** read paths: `retrieve_memory` (search), `compact_memory` dry-run
+  (`listMemory`), and the vector-hydration step (`getMemoryRecordsByIds`).
+  Without it, every read that omits an org throws an operational error.
 
 ## Personal / single-tenant use
 

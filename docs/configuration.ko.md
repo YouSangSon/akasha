@@ -133,7 +133,10 @@ MEMORY_API_TOKENS=alpha-token:dev-team,legacy-token
   production 에서는 반드시 토큰을 org에 바인딩.
 - 의도적인 단일 테넌트 설치 (org 추가 계획 없음) 의 경우 `.env` 에
   `LEGACY_ANONYMOUS_SEARCH=true` 명시 — 매 요청마다 플래그 읽어서 재시작
-  없이 토글 가능.
+  없이 토글 가능. 이 플래그는 이제 **모든** 읽기 경로를 제어합니다:
+  `retrieve_memory` (검색), `compact_memory` dry-run (`listMemory`),
+  벡터 하이드레이션 단계 (`getMemoryRecordsByIds`). 플래그 없이 org 를
+  생략하면 해당 읽기 호출이 운영 안내 에러를 던집니다.
 
 ## 개인 / 단일 테넌트 사용
 

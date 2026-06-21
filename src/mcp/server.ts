@@ -522,6 +522,7 @@ export function createToolRegistry(
               return repository.listMemory(scopeRef, {
                 limit: input.limit,
                 organizationId: input.organizationId,
+                allowLegacyAnonymous: process.env.LEGACY_ANONYMOUS_SEARCH === "true",
               });
             },
           )
@@ -529,6 +530,7 @@ export function createToolRegistry(
             repository.listMemory(scopeRef, {
               limit: input.limit,
               organizationId: input.organizationId,
+              allowLegacyAnonymous: process.env.LEGACY_ANONYMOUS_SEARCH === "true",
             }),
           );
       const targetLabel =

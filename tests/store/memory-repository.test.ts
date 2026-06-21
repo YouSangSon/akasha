@@ -131,6 +131,86 @@ describe("createMemoryRepository (unit — no PG required)", () => {
       });
   });
 
+  it("listMemory throws when organizationId is undefined and allowLegacyAnonymous is not set (SEC-read)", () => {
+    const mockPool = { query: vi.fn() };
+    const repo = createMemoryRepository(mockPool as never);
+
+    return expect(
+      repo.listMemory({ scopeType: "project", scopeId: "proj-x" }),
+    ).rejects.toThrow(/organizationId/i);
+  });
+
+  it("listMemory throws when allowLegacyAnonymous is explicitly false (SEC-read)", () => {
+    const mockPool = { query: vi.fn() };
+    const repo = createMemoryRepository(mockPool as never);
+
+    return expect(
+      repo.listMemory(
+        { scopeType: "project", scopeId: "proj-x" },
+        { allowLegacyAnonymous: false },
+      ),
+    ).rejects.toThrow(/organizationId/i);
+  });
+
+  it("listMemory does not throw when allowLegacyAnonymous is true (SEC-read)", () => {
+    const mockPool = {
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    return expect(
+      repo.listMemory(
+        { scopeType: "project", scopeId: "proj-x" },
+        { allowLegacyAnonymous: true },
+      ),
+    ).resolves.toEqual([]);
+  });
+
+  it("listMemory does not throw when organizationId is provided (SEC-read)", () => {
+    const mockPool = {
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    return expect(
+      repo.listMemory(
+        { scopeType: "project", scopeId: "proj-x" },
+        { organizationId: "org-a" },
+      ),
+    ).resolves.toEqual([]);
+  });
+
+  it("getMemoryRecordsByIds throws when organizationId is undefined and allowLegacyAnonymous is not set (SEC-read)", () => {
+    const mockPool = { query: vi.fn() };
+    const repo = createMemoryRepository(mockPool as never);
+
+    return expect(
+      repo.getMemoryRecordsByIds([1, 2]),
+    ).rejects.toThrow(/organizationId/i);
+  });
+
+  it("getMemoryRecordsByIds does not throw when allowLegacyAnonymous is true (SEC-read)", () => {
+    const mockPool = {
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    return expect(
+      repo.getMemoryRecordsByIds([1, 2], undefined, true),
+    ).resolves.toEqual([]);
+  });
+
+  it("getMemoryRecordsByIds does not throw when organizationId is provided (SEC-read)", () => {
+    const mockPool = {
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    return expect(
+      repo.getMemoryRecordsByIds([1, 2], "org-a"),
+    ).resolves.toEqual([]);
+  });
+
   it("listMemory SQL includes a parameterized LIMIT (PERF-8)", () => {
     // listMemory is a browse/list operation: it must always emit a bounded
     // LIMIT so result sets can't grow without bound.
@@ -144,7 +224,7 @@ describe("createMemoryRepository (unit — no PG required)", () => {
     const repo = createMemoryRepository(mockPool as never);
 
     return repo
-      .listMemory({ scopeType: "project", scopeId: "proj-x" })
+      .listMemory({ scopeType: "project", scopeId: "proj-x" }, { allowLegacyAnonymous: true })
       .then(() => {
         expect(queryCalls).toHaveLength(1);
         const { sql, params } = queryCalls[0]!;
@@ -367,10 +447,10 @@ describe.skipIf(!process.env.POSTGRES_HOST)("createMemoryRepository", () => {
         importance: 1,
       });
 
-      const listed = await repository.listMemory({
-        scopeType: "project",
-        scopeId: "project-alpha",
-      });
+      const listed = await repository.listMemory(
+        { scopeType: "project", scopeId: "project-alpha" },
+        { allowLegacyAnonymous: true },
+      );
       const searched = await repository.searchMemory({
         query: "local memory durable",
         scopes: [{ scopeType: "project", scopeId: "project-alpha" }],
@@ -439,11 +519,11 @@ describe.skipIf(!process.env.POSTGRES_HOST)("createMemoryRepository", () => {
         importance: 1,
       });
 
-      const hydrated = await repository.getMemoryRecordsByIds([
-        second.id,
-        first.id,
-        999999,
-      ]);
+      const hydrated = await repository.getMemoryRecordsByIds(
+        [second.id, first.id, 999999],
+        undefined,
+        true,
+      );
 
       expect(hydrated.map((record) => record.id)).toEqual([
         second.id,

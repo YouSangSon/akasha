@@ -198,6 +198,16 @@ write 경로의 SQL 쿼리에 `WHERE organization_id = $org` 포함. `MEMORY_API
 의 bearer 토큰은 `:org` 문법으로 org 바인딩 가능 — 존재 시 토큰의 org가 body /
 헤더 값을 덮어씀; mismatch 는 403.
 
+**모든 읽기 경로에 org 강제 적용.** `retrieveMemory` (검색), `listMemory`
+(`compact_memory` 에서 사용), `getMemoryRecordsByIds` (벡터 하이드레이션
+단계) 는 모두 `organizationId` 가 undefined 이고 운영자가
+`LEGACY_ANONYMOUS_SEARCH=true` 를 설정하지 않은 경우 에러를 던집니다. 즉,
+언바운드 토큰 (`:org` 없음, `x-organization-id` 헤더 없음, body org 없음) 은
+테넌트 경계를 넘어 자동으로 데이터를 읽을 수 없으며, 세 가지 해결 방법을
+안내하는 명확한 운영 에러를 받습니다. 공유 헬퍼 `assertOrganizationId`
+(`src/store/assert-organization-id.ts`) 가 세 진입점 모두에서 일관되게 이를
+강제합니다.
+
 apply 시 `memory_archive` 에 쓰이는 `organization_id` 는 caller 토큰이 아닌
 canonical 레코드 자체에서 (DELETE의 RETURNING) 읽음 — 토큰의 바인딩 org와
 레코드의 org가 다른 (드물지만 가능한) 케이스에 대한 defense-in-depth.

@@ -1,5 +1,6 @@
 import { rankResults } from "./rank-results.js";
 import type { SearchMemoryResult } from "../types.js";
+import { assertOrganizationId } from "../store/assert-organization-id.js";
 
 type QdrantFilterMatch = {
   key: string;
@@ -33,6 +34,7 @@ export type RetrieveMemoryInput = {
     getMemoryRecordsByIds(
       ids: number[],
       organizationId?: string,
+      allowLegacyAnonymous?: boolean,
     ): Promise<SearchMemoryResult[]>;
   };
   collectionName: string;
@@ -53,15 +55,7 @@ export type RetrieveMemoryInput = {
 export async function retrieveMemory(
   input: RetrieveMemoryInput,
 ): Promise<SearchMemoryResult[]> {
-  if (input.organizationId === undefined && !input.allowLegacyAnonymous) {
-    throw new Error(
-      "retrieveMemory requires organizationId. Bind your bearer token to " +
-        "an org with the `token:org` syntax in MEMORY_API_TOKENS, send the " +
-        "`x-organization-id` header (or `organizationId` in the request " +
-        "body), or opt into the legacy single-tenant org-blind read by " +
-        "setting LEGACY_ANONYMOUS_SEARCH=true in the server's environment.",
-    );
-  }
+  assertOrganizationId(input.organizationId, input.allowLegacyAnonymous, "retrieveMemory");
 
   const orgClause: QdrantFilterMatch[] =
     input.organizationId !== undefined
@@ -94,9 +88,13 @@ export async function retrieveMemory(
   // Pass organizationId so the PG hydration filters by org even if Qdrant
   // returned a cross-org point id. Defense-in-depth: Qdrant filters already
   // include org, but a misconfigured filter would otherwise hydrate the leak.
+  // Forward allowLegacyAnonymous so the repository guard (which mirrors the
+  // guard above) does not re-throw when an operator has opted into the legacy
+  // single-tenant mode via LEGACY_ANONYMOUS_SEARCH=true.
   const hydratedRecords = await input.repository.getMemoryRecordsByIds(
     ids,
     input.organizationId,
+    input.allowLegacyAnonymous,
   );
 
   return rankResults(hydratedRecords).slice(0, input.limit);
