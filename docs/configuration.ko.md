@@ -62,6 +62,20 @@ compose 관리 Postgres 사용 시 `DATABASE_URL` 은 `POSTGRES_*` 부분에서
 |---|---|---|
 | `VECTOR_BACKEND` | `qdrant` | `qdrant` (기본) 또는 `pgvector`. `pgvector` 선택 시 벡터를 Postgres 에 저장 — Qdrant 서비스 불필요, Qdrant 자격증명도 불필요. 백엔드 전환 시 `reindex_memory` 필수. |
 
+### pgvector — 관리자 사전 요건
+
+`VECTOR_BACKEND=pgvector` 사용 시 앱 시작 전에 Postgres `vector` 확장이 설치되어 있어야 합니다. 앱은 부팅 시 확장 존재 여부를 확인하고 없으면 명확한 에러를 던집니다 — 앱 자체적으로 `CREATE EXTENSION` 을 실행하지 **않습니다** (슈퍼유저 권한 필요, 앱 role에는 보통 없음).
+
+**Docker / 로컬** (`pgvector/pgvector:pg16` 이미지에 확장 포함; `postgres` 슈퍼유저로 실행):
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+**RDS / Cloud SQL / Supabase**: 관리형 확장 패널 또는 일회성 슈퍼유저 마이그레이션 스크립트로 활성화. Supabase 신규 프로젝트는 기본 활성화됨. RDS 는 `rds_superuser` 권한으로 마이그레이션 실행.
+
+확장이 존재하면 이후 테이블·인덱스 생성은 앱 role (테이블 소유자 권한으로 충분) 이 처리합니다.
+
 ## Qdrant
 
 Qdrant 변수는 `VECTOR_BACKEND=qdrant` (기본값) 일 때만 필요합니다.

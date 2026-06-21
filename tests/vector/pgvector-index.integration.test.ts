@@ -13,7 +13,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createPgPool } from "../../src/db/connection.js";
 import { createPgVectorIndex } from "../../src/vector/pgvector-index.js";
-import type { VectorFilter } from "../../src/vector/vector-index.js";
+import type { VectorFilter, VectorPoint } from "../../src/vector/vector-index.js";
 
 const TEST_URL = process.env.PGVECTOR_TEST_URL;
 
@@ -28,6 +28,18 @@ function cosineSimilarity(a: number[], b: number[]): number {
     normB += b[i] * b[i];
   }
   return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+}
+
+// Helper: build a normalised unit vector of `dims` dimensions, with the primary
+// signal in the first `dims` coordinates spread as given by `coords`.
+function makeVec(dims: number, coords: number[]): number[] {
+  const v = new Array<number>(dims).fill(0);
+  for (let i = 0; i < coords.length && i < dims; i++) {
+    v[i] = coords[i];
+  }
+  // Normalise to unit length.
+  const norm = Math.sqrt(v.reduce((s, x) => s + x * x, 0));
+  return norm === 0 ? v : v.map((x) => x / norm);
 }
 
 describe.skipIf(!TEST_URL)("pgvector adapter — integration against real pgvector", () => {
@@ -54,6 +66,11 @@ describe.skipIf(!TEST_URL)("pgvector adapter — integration against real pgvect
       // We check by trying one more time and letting it throw.
       await pool.query("SELECT 1");
     }
+
+    // HIGH 3 fix: ensureCollection no longer creates the extension (requires
+    // superuser). In the Docker test container we ARE superuser — create it
+    // here so the tests can proceed. In production a DB admin does this once.
+    await pool.query("CREATE EXTENSION IF NOT EXISTS vector");
 
     await index.ensureCollection(3);
   });
@@ -92,6 +109,13 @@ describe.skipIf(!TEST_URL)("pgvector adapter — integration against real pgvect
       [TABLE],
     );
     expect(idxResult.rows.length).toBeGreaterThanOrEqual(1);
+
+    // HIGH 1(a): Composite BTree indexes
+    const btreeResult = await pool.query<{ indexname: string }>(
+      `SELECT indexname FROM pg_indexes WHERE tablename = $1 AND indexdef NOT ILIKE '%hnsw%' AND indexdef ILIKE '%organization_id%'`,
+      [TABLE],
+    );
+    expect(btreeResult.rows.length).toBeGreaterThanOrEqual(2);
   });
 
   // ── Test 2: upsert + ranked query ────────────────────────────────────────
@@ -262,5 +286,134 @@ describe.skipIf(!TEST_URL)("pgvector adapter — integration against real pgvect
     expect(hits).toHaveLength(1);
     expect(typeof hits[0].payload.memory_record_id).toBe("number");
     expect(hits[0].payload.memory_record_id).toBe(42);
+  });
+
+  // ── Test 7: HIGH 1 — small-tenant recall at scale ────────────────────────
+  //
+  // Reproduces the HNSW post-filter recall hole:
+  //   - 2000 "big-org" rows are inserted with vectors clustered tightly near
+  //     the probe direction [1, 0, 0]. They occupy the global top-ef_search
+  //     (default 40) candidates.
+  //   - "org-small" has 5 rows far from the probe — would fall outside the
+  //     global top-ef_search without the fix, yielding 0 results.
+  //   - With fix: composite BTree lets planner do an exact filtered scan for
+  //     the selective small tenant; iterative_scan is the safety net.
+  //   - Assertion: querying as org-small returns exactly its 5 nearest points
+  //     in correct ranked order (NOT 0 results).
+  //
+  // This test table uses 3 dimensions to stay fast; the recall problem is
+  // dimension-agnostic (it's a candidate-count issue, not a dim issue).
+
+  it("HIGH 1 scale: small-tenant with 5 rows returns correct neighbors despite 2000 other-org rows near the probe", async () => {
+    // The probe direction.
+    const probeVec = [1, 0, 0];
+
+    // 2000 big-org rows clustered tightly near the probe — they dominate
+    // the HNSW top-ef_search global candidates.
+    const bigOrgPoints: VectorPoint[] = [];
+    for (let i = 0; i < 2000; i++) {
+      // Slightly perturbed probe direction, normalised.
+      const noise = (i % 100) / 10000; // tiny: 0..0.0099
+      bigOrgPoints.push({
+        id: `big:${i}`,
+        vector: makeVec(3, [1 - noise, noise, 0]),
+        payload: {
+          memory_record_id: 1000 + i,
+          organization_id: "org-big",
+          scope_type: "user",
+          scope_id: "user-big",
+          project_key: null,
+          kind: "fact",
+        },
+      });
+    }
+
+    // 5 org-small rows placed far from the probe (near [0,0,1] direction).
+    // Without the fix, HNSW never surfaces them in top-40 global candidates.
+    const smallOrgPoints: VectorPoint[] = [
+      { id: "small:0", vector: makeVec(3, [0.1, 0.2, 0.97]), payload: { memory_record_id: 5000, organization_id: "org-small", scope_type: "user", scope_id: "user-small", project_key: null, kind: "fact" } },
+      { id: "small:1", vector: makeVec(3, [0.05, 0.15, 0.98]), payload: { memory_record_id: 5001, organization_id: "org-small", scope_type: "user", scope_id: "user-small", project_key: null, kind: "fact" } },
+      { id: "small:2", vector: makeVec(3, [0.12, 0.10, 0.99]), payload: { memory_record_id: 5002, organization_id: "org-small", scope_type: "user", scope_id: "user-small", project_key: null, kind: "fact" } },
+      { id: "small:3", vector: makeVec(3, [0.08, 0.18, 0.96]), payload: { memory_record_id: 5003, organization_id: "org-small", scope_type: "user", scope_id: "user-small", project_key: null, kind: "fact" } },
+      { id: "small:4", vector: makeVec(3, [0.06, 0.22, 0.95]), payload: { memory_record_id: 5004, organization_id: "org-small", scope_type: "user", scope_id: "user-small", project_key: null, kind: "fact" } },
+    ];
+
+    // Insert big-org rows in batches (respects UPSERT_BATCH_ROWS internally).
+    await index.upsert(bigOrgPoints);
+    await index.upsert(smallOrgPoints);
+
+    const filterSmall: VectorFilter = {
+      organizationId: "org-small",
+      scopes: [{ scopeType: "user", scopeId: "user-small" }],
+      projectKey: null,
+    };
+
+    const hits = await index.query(probeVec, filterSmall, 5);
+
+    // Must return exactly the 5 org-small rows (not 0).
+    expect(hits).toHaveLength(5);
+
+    const returnedIds = new Set(hits.map((h) => h.id));
+    expect(returnedIds).toContain("small:0");
+    expect(returnedIds).toContain("small:1");
+    expect(returnedIds).toContain("small:2");
+    expect(returnedIds).toContain("small:3");
+    expect(returnedIds).toContain("small:4");
+
+    // Scores decrease monotonically (nearest first).
+    for (let i = 1; i < hits.length; i++) {
+      expect(hits[i - 1].score).toBeGreaterThanOrEqual(hits[i].score);
+    }
+
+    // No org-big rows leaked through.
+    for (const hit of hits) {
+      expect(hit.payload.organization_id).toBe("org-small");
+    }
+  }, 60_000); // 60s timeout for 2000-row seed
+
+  // ── Test 8: HIGH 2 — batch upsert > 8191 rows ────────────────────────────
+  //
+  // With 8 params/row, >8191 rows in one INSERT would overflow the 65535 bind-
+  // param cap and abort. This test verifies the batching path handles it.
+
+  it("HIGH 2 batch: upserts 8500 rows (>8191 per-batch limit) without bind-param overflow", async () => {
+    const points: VectorPoint[] = [];
+    for (let i = 0; i < 8500; i++) {
+      points.push({
+        id: `batch:${i}`,
+        vector: makeVec(3, [Math.cos(i * 0.001), Math.sin(i * 0.001), 0]),
+        payload: {
+          memory_record_id: i,
+          organization_id: "org-batch",
+          scope_type: "user",
+          scope_id: "user-batch",
+          project_key: null,
+          kind: "fact",
+        },
+      });
+    }
+
+    // Should not throw despite exceeding 8191 rows.
+    await expect(index.upsert(points)).resolves.toBeUndefined();
+
+    // Spot-check: count stored rows for org-batch.
+    const countResult = await pool.query<{ n: string }>(
+      `SELECT COUNT(*)::text AS n FROM ${TABLE} WHERE organization_id = 'org-batch'`,
+    );
+    expect(Number(countResult.rows[0].n)).toBe(8500);
+  }, 120_000); // 120s timeout for 8500-row seed
+
+  // ── Test 9: LOW 5 — empty embedding throws before SQL ────────────────────
+
+  it("LOW 5: upsert with an empty vector throws a descriptive error", async () => {
+    await expect(
+      index.upsert([
+        {
+          id: "chunk:empty",
+          vector: [],
+          payload: { memory_record_id: 99, organization_id: "org-a", scope_type: "user", scope_id: "u", project_key: null, kind: "fact" },
+        },
+      ]),
+    ).rejects.toThrow(/empty embedding vector/);
   });
 });

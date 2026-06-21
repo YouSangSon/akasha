@@ -66,6 +66,20 @@ the migration script from the host, `install.sh` rewrites the host to
 |---|---|---|
 | `VECTOR_BACKEND` | `qdrant` | `qdrant` (default) or `pgvector`. When `pgvector`, vectors are stored in Postgres — no Qdrant service needed and Qdrant credentials are not required. Switching backends requires a `reindex_memory`. |
 
+### pgvector — admin prerequisite
+
+When `VECTOR_BACKEND=pgvector`, the `vector` Postgres extension must be installed before the app starts. The app checks for the extension at boot and throws a clear error if it is absent — it does **not** run `CREATE EXTENSION` itself (that requires superuser, which the app role typically lacks on managed Postgres).
+
+**Docker / local** (the `pgvector/pgvector:pg16` image ships the extension; the `postgres` superuser can run):
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+**RDS / Cloud SQL / Supabase**: enable the extension through the managed extension panel or a one-time superuser migration script. Supabase enables it by default in new projects. On RDS, use `rds_superuser` via a migration.
+
+Once the extension exists, all subsequent table and index creation is done by the app role (table-owner privileges are sufficient).
+
 ## Qdrant
 
 Qdrant variables are only required when `VECTOR_BACKEND=qdrant` (the default).
