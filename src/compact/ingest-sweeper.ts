@@ -21,6 +21,7 @@ import type {
   MemoryChunkRepository,
 } from "../store/canonical-indexing.js";
 import type { IngestJob } from "../types.js";
+import { nextRetryDelayMs } from "../jobs/retry-backoff.js";
 
 export type RunIngestSweepInput = {
   ingestJobs: IngestJobRepository;
@@ -45,13 +46,6 @@ export type IngestSweepResult = {
 
 const DEFAULT_BATCH_SIZE = 100;
 const DEFAULT_MAX_ATTEMPTS = 5;
-
-// Exponential backoff: base 1 s, doubles per attempt, capped at 5 min.
-export function nextRetryDelayMs(attempts: number): number {
-  const BASE_MS = 1_000;
-  const CAP_MS = 5 * 60 * 1_000;
-  return Math.min(BASE_MS * Math.pow(2, attempts), CAP_MS);
-}
 
 export async function runIngestSweep(
   input: Readonly<RunIngestSweepInput>,

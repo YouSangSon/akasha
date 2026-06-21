@@ -3,7 +3,7 @@ import type { PgPool } from "../db/connection.js";
 import { scanForSecrets, SecretDetectedError } from "./secret-scrub.js";
 import type { VectorIndex, VectorPoint } from "../vector/vector-index.js";
 import { buildVectorPoint } from "../vector/point-builder.js";
-import { nextRetryDelayMs } from "../compact/ingest-sweeper.js";
+import { nextRetryDelayMs } from "../jobs/retry-backoff.js";
 import type {
   AddMemoryInput,
   CanonicalMemoryRepository,

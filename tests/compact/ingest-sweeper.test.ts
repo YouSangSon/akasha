@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   runIngestSweep,
-  nextRetryDelayMs,
   type RunIngestSweepInput,
 } from "../../src/compact/ingest-sweeper.js";
+import { nextRetryDelayMs } from "../../src/jobs/retry-backoff.js";
 import type { IngestJob, IngestJobRepository } from "../../src/types.js";
 import type {
   MemoryChunkRepository,
