@@ -220,7 +220,13 @@ export function createPgVectorIndex(
 
         await client.query("COMMIT");
       } catch (err) {
-        await client.query("ROLLBACK");
+        // Preserve and rethrow the original error even if ROLLBACK itself fails
+        // (a dead/dropped connection must not mask the real failure).
+        try {
+          await client.query("ROLLBACK");
+        } catch {
+          /* ignore rollback failure */
+        }
         throw err;
       } finally {
         client.release();
@@ -329,7 +335,13 @@ export function createPgVectorIndex(
           },
         }));
       } catch (err) {
-        await client.query("ROLLBACK");
+        // Preserve and rethrow the original error even if ROLLBACK itself fails
+        // (a dead/dropped connection must not mask the real failure).
+        try {
+          await client.query("ROLLBACK");
+        } catch {
+          /* ignore rollback failure */
+        }
         throw err;
       } finally {
         client.release();
