@@ -78,42 +78,39 @@ small actual impact surface.
   it), matching the existing guard on `search_memory`. The CLI `reindex` command gained an
   optional `--organization-id` flag (default `"default"`). Previously the reindex path ran
   org-blind, silently touching every tenant's chunks.
-  ([`c2a76dd`](https://github.com/YouSangSon/context-forge/commit/c2a76dd),
-  [`9c8ab3b`](https://github.com/YouSangSon/context-forge/commit/9c8ab3b))
 - **`deleteMemoryRecord` now enforces org guard** — the cleanup helper introduced in PR #7
   previously accepted any `memoryRecordId` without verifying it belongs to the calling org.
   Added `organizationId` guard to close the cross-tenant deletion path (SEC-5).
-  ([`4a36aba`](https://github.com/YouSangSon/context-forge/commit/4a36aba))
 - **HTTP error handling hardened** — generic 500 responses now return a static
   `"internal server error"` body (no internal detail leak). `compact_memory` rate-limit now
   returns HTTP **429** with a `Retry-After` header instead of 500. Removed a `as never` cast
   that suppressed a type-level exhaustiveness check.
-  ([`6b2a36e`](https://github.com/YouSangSon/context-forge/commit/6b2a36e))
 - **`RATE_LIMIT_PER_MINUTE` default added to `compose.yaml`** — rate limiting is now on out of
   the box for Compose deployments (value: 60 req/min). Previously the env var was absent from
   the Compose file, leaving new deployments with no rate cap unless operators set it manually.
-  ([`6b2a36e`](https://github.com/YouSangSon/context-forge/commit/6b2a36e))
 - **Secret scrubber expanded** — now also blocks GCP API keys, Stripe secret/publishable keys,
   Slack tokens (`xoxb-`, `xoxp-`, `xoxa-`), and database connection strings (`postgres://`,
   `mysql://`, `mongodb+srv://`), in addition to the existing AWS, GitHub PAT, OpenAI, Anthropic,
   PEM, Bearer, and JWT patterns.
-  ([`e96c367`](https://github.com/YouSangSon/context-forge/commit/e96c367))
 - **Security unit tests added** — new test suite covers rate-limit enforcement, bearer-auth
   paths, and `resolveOrganizationId` logic; the SEC-1 isolation assertion was tightened to catch
   AND/OR SQL precedence bugs.
-  ([`bc5c391`](https://github.com/YouSangSon/context-forge/commit/bc5c391),
-  [`f1b0cf1`](https://github.com/YouSangSon/context-forge/commit/f1b0cf1))
+- **Strict org guard extended to the remaining read paths** — PR #6 made `retrieveMemory`
+  (search) strict, but `listMemory` and `getMemoryRecordsByIds` still filtered `organization_id`
+  only when defined, so an unbound token running `compact_memory` (dry-run) read memories
+  org-blind across tenants. Both read methods now apply the same strict guard via a shared
+  `assertOrganizationId` helper and take an `allowLegacyAnonymous` flag the handlers source from
+  `LEGACY_ANONYMOUS_SEARCH`. **BREAKING** for unbound-token deployments that relied on org-blind
+  reads; same one-line `LEGACY_ANONYMOUS_SEARCH=true` migration as PR #6.
 
 ### Fixed (audit cycle 2)
 
 - **MCP stdio transport now registers all 7 tools** — `reindex_memory` and `unarchive_memory`
   were missing from the stdio transport, leaving MCP clients (Claude Code, Codex CLI) with only
   5 of the 7 tools available over HTTP. Now matches HTTP and CLI parity.
-  ([`77db4ea`](https://github.com/YouSangSon/context-forge/commit/77db4ea))
 - **Silent failures surfaced** — parse errors, DB error messages stripped of stack traces, and
   `audit_log.error_message` capped to prevent oversized payloads. Previously these failed
   silently or exposed internal stack details.
-  ([`0b0a953`](https://github.com/YouSangSon/context-forge/commit/0b0a953))
 
 ### Performance (audit cycle 2)
 
@@ -121,17 +118,13 @@ small actual impact surface.
   `status`, `retry_count`, `last_error`, `process_after`, and `processed_at` columns to
   `ingest_jobs` for the option-B outbox sweeper. Schema file is on `main` (#12, part 1 of 5);
   sweeper registration and retry loop are in-flight on the #12 branch.
-  (#12, [`28b63d1`](https://github.com/YouSangSon/context-forge/commit/28b63d1))
 - **Migration 008: FK index on `memory_chunks`** — `008_chunks_fk_index.sql` adds
   `idx_memory_chunks_record` on `memory_chunks(memory_record_id)`, eliminating sequential scans
   on the FK join path. Migrations are now 001–008.
-  ([`2c87949`](https://github.com/YouSangSon/context-forge/commit/2c87949))
 - **`listMemory` is now bounded** — enforces a `LIMIT` (default 1000, max 5000) on browse
   queries. Previously unbounded queries could return the full table for large tenants.
-  ([`22e4028`](https://github.com/YouSangSon/context-forge/commit/22e4028))
 - **Batched N+1 DB writes** — chunk inserts and upserts are now issued in a single round-trip
   rather than per-item, complementing the existing `embedBatch` change (PR #8).
-  ([`3afb3eb`](https://github.com/YouSangSon/context-forge/commit/3afb3eb))
 
 ### Documentation (audit cycle 2)
 
@@ -141,9 +134,6 @@ small actual impact surface.
   default corrected to `transformers`; migration range updated to 001–008; `ingest_jobs` outbox
   columns added to schema diagram; `/readyz` probe list corrected against actual
   `check-dependencies.ts` behavior; MCP tool list updated to 7 tools.
-  ([`a066dc6`](https://github.com/YouSangSon/context-forge/commit/a066dc6),
-  [`1902c2f`](https://github.com/YouSangSon/context-forge/commit/1902c2f),
-  [`1ffcc30`](https://github.com/YouSangSon/context-forge/commit/1ffcc30))
 - **`AGENTS.md` dangling references removed** — replaced broken `.vibe/context-index.md` and
   `.pi/skills/vibe-workflow/SKILL.md` references (both absent) with accurate contributor
   guidance pointing to `README.md`, `CONTRIBUTING.md`, and `docs/`.
