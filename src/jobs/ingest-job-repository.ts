@@ -1,6 +1,19 @@
 import type { PgPool } from "../db/connection.js";
 import type { IngestJob, IngestJobRepository } from "../types.js";
 
+// How long (in ms) a claimed row is "reserved" before it can be re-claimed.
+// A sweeper that claims a row sets qdrant_next_retry_at = now + this window
+// instead of NULL. If the process crashes before calling markQdrantCompleted /
+// markQdrantPending / markQdrantFailed, the row's next_retry_at naturally
+// falls back to <= now after this window and the next sweeper cycle re-claims
+// it automatically — no manual intervention needed.
+//
+// Known nuance: a crash-reclaim does NOT increment qdrant_attempts (the
+// failure path was bypassed). A persistently-crashing process is therefore
+// rate-limited by the visibility window rather than bounded by maxAttempts.
+// This is acceptable; it is far better than the row being stuck forever.
+const CLAIM_VISIBILITY_TIMEOUT_MS = 5 * 60 * 1_000; // 5 minutes
+
 type IngestJobRow = {
   id: number;
   memory_record_id: number;
@@ -159,23 +172,25 @@ export function createIngestJobRepository(pool: PgPool): IngestJobRepository {
 
     async claimPendingForRetry({ limit, now }) {
       // Atomically select + claim due rows in a single UPDATE so the
-      // SKIP LOCKED lock is held when retry_at is nulled. A bare
+      // SKIP LOCKED lock is held for the full statement. A bare
       // SELECT … FOR UPDATE SKIP LOCKED releases the lock at autocommit,
       // allowing a second replica to read the same row between SELECT and
       // UPDATE. The single-statement form prevents that race.
       //
-      // NOTE (tradeoff): nulling retry_at to claim means a process crash
-      // after claim but before markQdrantCompleted/markQdrantPending leaves
-      // the row with retry_at=NULL and qdrant_status='pending'. That row no
-      // longer matches the claim WHERE clause, so the sweeper never
-      // re-picks it (only manual reindex_memory recovers it). An alternative
-      // sentinel (far-future timestamp as a visibility-timeout) would make
-      // crashes auto-recoverable but adds more complexity. NULL is chosen
-      // here per the design doc's example SQL; see report for the trade-off.
+      // Visibility-timeout claim: instead of setting qdrant_next_retry_at=NULL
+      // (which would leave crashed rows permanently invisible), we push the
+      // timestamp into the future by CLAIM_VISIBILITY_TIMEOUT_MS. The claimed
+      // row is "reserved" for that window — its next_retry_at > now, so the
+      // WHERE clause excludes it from future claim passes. On success →
+      // markQdrantCompleted clears it (status='completed', retry_at=NULL). On
+      // transient failure → markQdrantPending reschedules normally. On crash →
+      // after the visibility window elapses, next_retry_at <= now again and
+      // the row is automatically re-claimed on the next sweep cycle.
+      const claimUntil = new Date(now.getTime() + CLAIM_VISIBILITY_TIMEOUT_MS);
       const result = await pool.query<IngestJobRow>(
         `
           UPDATE ingest_jobs
-          SET qdrant_next_retry_at = NULL,
+          SET qdrant_next_retry_at = $3,
               updated_at = NOW()
           WHERE id IN (
             SELECT id
@@ -189,7 +204,7 @@ export function createIngestJobRepository(pool: PgPool): IngestJobRepository {
           )
           RETURNING ${RETURNING_COLUMNS}
         `,
-        [now, limit],
+        [now, limit, claimUntil],
       );
 
       return result.rows.map(mapJob);

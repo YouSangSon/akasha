@@ -1,8 +1,8 @@
 // Mock-pool tests asserting the SQL shape of claimPendingForRetry.
 // These run without a real Postgres instance and verify:
 //   1. The claim uses a single UPDATE ... WHERE id IN (SELECT ... FOR UPDATE SKIP LOCKED)
-//   2. The claim nulls qdrant_next_retry_at in the same statement
-//   3. Parameters are $1=now and $2=limit (in that order)
+//   2. The claim sets qdrant_next_retry_at = $3 (a future visibility-timeout timestamp)
+//   3. Parameters are $1=now, $2=limit, $3=claimUntil (now + CLAIM_VISIBILITY_TIMEOUT_MS)
 //
 // The PG-gated integration suite in ingest-job-repository.test.ts covers the
 // end-to-end behaviour; this suite covers the SQL shape contract.
@@ -34,8 +34,10 @@ describe("claimPendingForRetry SQL shape", () => {
     // Must be an UPDATE (claim), not a SELECT
     expect(sql.trim().toUpperCase()).toMatch(/^UPDATE\s+INGEST_JOBS/i);
 
-    // Must set qdrant_next_retry_at = NULL to claim the row
-    expect(sql).toMatch(/qdrant_next_retry_at\s*=\s*NULL/i);
+    // Must set qdrant_next_retry_at to a bound parameter (visibility-timeout
+    // timestamp), NOT NULL. Setting NULL would strand crashed rows forever.
+    expect(sql).toMatch(/qdrant_next_retry_at\s*=\s*\$3/i);
+    expect(sql).not.toMatch(/qdrant_next_retry_at\s*=\s*NULL/i);
 
     // Must use a sub-select with FOR UPDATE SKIP LOCKED
     expect(sql).toMatch(/FOR\s+UPDATE\s+SKIP\s+LOCKED/i);
@@ -52,9 +54,14 @@ describe("claimPendingForRetry SQL shape", () => {
     // Must RETURNING so we get the row back
     expect(sql).toMatch(/RETURNING/i);
 
-    // Parameters: $1 = now, $2 = limit
+    // Parameters: $1 = now, $2 = limit, $3 = claimUntil (strictly in the future)
     expect(params[0]).toBe(now);
     expect(params[1]).toBe(50);
+    const claimUntil = params[2] as Date;
+    expect(claimUntil).toBeInstanceOf(Date);
+    expect(claimUntil.getTime()).toBeGreaterThan(now.getTime());
+    // Visibility timeout is 5 minutes; claimUntil should be now + 5min exactly
+    expect(claimUntil.getTime()).toBe(now.getTime() + 5 * 60 * 1_000);
   });
 
   it("orders the sub-select by qdrant_next_retry_at ASC (oldest-due first)", async () => {
