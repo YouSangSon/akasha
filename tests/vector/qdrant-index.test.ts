@@ -104,8 +104,8 @@ describe("createQdrantVectorIndex — VectorFilter → {must} translation", () =
     };
     await index.query([0.1, 0.2, 0.3], filter, 5);
 
-    const calledFilter = (client.query.mock.calls[0] as [string, { filter: { must: unknown[] } }])[1].filter;
-    const keys = calledFilter.must.map((c: { key: string }) => c.key);
+    const calledFilter = (client.query.mock.calls[0] as [string, { filter: { must: Array<{ key: string }> } }])[1].filter;
+    const keys = calledFilter.must.map((c) => c.key);
     expect(keys).not.toContain("organization_id");
     expect(keys).toContain("scope_type");
     expect(keys).toContain("project_key");
