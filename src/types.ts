@@ -81,6 +81,12 @@ export type ListMemoryOptions = {
   // When set, restrict listing to a single organization. Repositories that
   // honor this option only return records whose organization_id matches.
   organizationId?: string;
+  // Escape hatch for documented legacy single-tenant behavior. When
+  // organizationId is undefined and this flag is not set, listMemory throws —
+  // silent cross-org reads are a footgun once a second tenant is added.
+  // Production wiring sets this from LEGACY_ANONYMOUS_SEARCH=true only when
+  // the operator explicitly opts in.
+  allowLegacyAnonymous?: boolean;
 };
 
 export type MemoryRepository = {
@@ -90,6 +96,7 @@ export type MemoryRepository = {
   getMemoryRecordsByIds(
     ids: number[],
     organizationId?: string,
+    allowLegacyAnonymous?: boolean,
   ): SearchMemoryResult[];
 };
 
@@ -100,19 +107,24 @@ export type CanonicalMemoryRepository = {
     scope: ScopeRef,
     options?: ListMemoryOptions,
   ): Promise<SearchMemoryResult[]>;
-  // organizationId scopes the WHERE clause when provided. The apply path in
-  // P17+ MUST pass it; legacy callers that omit it get the historical
-  // org-blind behavior. After P17 lands, every caller should pass an org.
+  // organizationId scopes the WHERE clause. When organizationId is undefined
+  // and allowLegacyAnonymous is not set, throws — silent cross-org reads are
+  // too easy a footgun once a second tenant is added. Pass
+  // allowLegacyAnonymous: true (wired from LEGACY_ANONYMOUS_SEARCH=true) to
+  // restore the historical org-blind behavior.
   getMemoryRecordsByIds(
     ids: number[],
     organizationId?: string,
+    allowLegacyAnonymous?: boolean,
   ): Promise<SearchMemoryResult[]>;
-  // Hard-deletes a memory_records row by id. Schema-level ON DELETE CASCADE
-  // (memory_chunks, ingest_jobs, relationships) handles dependents atomically
-  // in the same statement. Used by writeCanonicalMemory's rollback path when
-  // post-INSERT side effects (embed / Qdrant upsert) fail — without this,
-  // failed writes leave permanently dead PG state behind.
-  deleteMemoryRecord(id: number): Promise<void>;
+  // Hard-deletes a memory_records row by id scoped to the given organization.
+  // The organization_id guard prevents cross-tenant deletion in the event of
+  // id collision. Schema-level ON DELETE CASCADE (memory_chunks, ingest_jobs,
+  // relationships) handles dependents atomically in the same statement. Used
+  // by writeCanonicalMemory's rollback path when post-INSERT side effects
+  // (embed / Qdrant upsert) fail — without this, failed writes leave
+  // permanently dead PG state behind.
+  deleteMemoryRecord(id: number, organizationId: string): Promise<void>;
 };
 
 export type IngestJobStatus = "pending" | "processing" | "completed" | "failed";

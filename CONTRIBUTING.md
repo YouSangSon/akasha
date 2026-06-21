@@ -22,7 +22,7 @@ the codebase already follows.
 git clone https://github.com/YouSangSon/context-forge.git
 cd context-forge
 cp .env.example .env
-${EDITOR:-nano} .env       # set OPENAI_API_KEY + MEMORY_API_TOKENS
+${EDITOR:-nano} .env       # set MEMORY_API_TOKENS (OPENAI_API_KEY only if using EMBEDDING_PROVIDER=openai)
 ./install.sh
 ```
 
@@ -71,7 +71,7 @@ factory. Tool handlers and orchestrators consume the interface, not the impl.
 ### Migrations
 
 SQL files live in `src/db/migrations/NNN_*.sql`. Append new migrations as
-`007_…sql` and add the filename to `MIGRATION_FILES` in `src/db/migrate.ts`,
+`009_…sql` and add the filename to `MIGRATION_FILES` in `src/db/migrate.ts`,
 plus the embedded snapshot string for production fallbacks. All migrations
 must be idempotent (`CREATE … IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`)
 and safe to run on populated databases.

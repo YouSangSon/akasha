@@ -55,7 +55,8 @@ for env-var setup see [configuration.md](configuration.md).
 │ Persistence                                                     │
 │   Postgres 16  (compose container or external)                  │
 │   Qdrant       (compose container or external)                  │
-│   OpenAI       (or local deterministic embed)                   │
+│   Embeddings   (transformers local ONNX [default] / openai /   │
+│                 local deterministic)                            │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -67,7 +68,7 @@ Client          Tool                Orchestrator       Repos                Stor
 add_memory  →  add_memory tool  →  writeCanonical  →  memory-repo      →  Postgres (sources, memory_records)
                                    Memory             canonical-       →  Postgres (memory_chunks)
                                                       indexing
-                                                      embeddings.embed →  OpenAI / local
+                                                      embeddings.embed →  transformers / openai / local
                                                       qdrantClient     →  Qdrant (chunk vectors)
                                                       ingestJobs       →  Postgres (ingest_jobs)
 ```
@@ -81,7 +82,7 @@ side effects.
 ## Data flow: read
 
 ```
-search_memory  →  search tool  →  retrieveMemory  →  embeddings.embed  →  OpenAI / local
+search_memory  →  search tool  →  retrieveMemory  →  embeddings.embed  →  transformers / openai / local
                                   (Qdrant + PG)     qdrantClient.query →  Qdrant (cosine, scope-filtered)
                                                     repository         →  Postgres (hydrate by id)
                                                     .getMemoryRecordsByIds
@@ -164,8 +165,10 @@ memory_record_id FK    from_memory_record_id   organization_id
 status                 to_memory_record_id     actor / tool
 attempts               relation_type           outcome / error_message
 last_error             created_at              duration_ms / request_id
-                                               metadata JSONB
-                                               created_at
+qdrant_status (staged — migration 007, applied by the #12 series)
+qdrant_attempts (staged — migration 007)       metadata JSONB
+qdrant_next_retry_at (staged — migration 007)  created_at
+qdrant_last_error (staged — migration 007)
 
 compaction_runs        memory_archive
 ───────────────        ──────────────
@@ -184,8 +187,12 @@ completed_at           archived_at / unarchived_at
 idempotency_key UUID   UNIQUE (compaction_run_id, source_record_id)
 ```
 
-Migrations live in `src/db/migrations/` numbered 001-006 and are applied
-on bootstrap. Each is idempotent (`CREATE … IF NOT EXISTS`).
+Migrations live in `src/db/migrations/`. The runner applies 001-006 and
+008 on bootstrap (each is idempotent, `CREATE … IF NOT EXISTS`).
+`007_ingest_jobs_qdrant_outbox.sql` is a **staged** file that adds the four
+`qdrant_*` outbox columns to `ingest_jobs`; it is NOT yet registered in
+`MIGRATION_FILES` in `src/db/migrate.ts` and will be wired in by the
+in-flight #12 outbox-sweeper series.
 
 ## Multi-tenancy
 
@@ -193,6 +200,16 @@ Every record-bearing table has `organization_id TEXT NOT NULL`. SQL queries
 include `WHERE organization_id = $org` in every read and write path. Bearer
 tokens in `MEMORY_API_TOKENS` may bind to an org with `:org` syntax — when
 present, the token's org overrides body / header values; mismatch is 403.
+
+**Org enforcement on all read paths.** `retrieveMemory` (search),
+`listMemory` (used by `compact_memory`), and `getMemoryRecordsByIds`
+(vector-hydration step) all throw when `organizationId` is undefined and
+the operator has not set `LEGACY_ANONYMOUS_SEARCH=true`. This means an
+unbound token (no `:org` in `MEMORY_API_TOKENS`, no `x-organization-id`
+header, no body org) cannot silently read across tenants — it receives a
+clear operational error describing all three remediation paths. The shared
+`assertOrganizationId` helper (`src/store/assert-organization-id.ts`)
+enforces this consistently across all three entry points.
 
 The `organization_id` written into `memory_archive` during apply is read
 from the canonical record itself (RETURNING from the DELETE), not from
@@ -211,17 +228,54 @@ Reads via `list_audit_log` are org-scoped — entries from other orgs never
 leak. Writes are best-effort (failures don't block the user request) but
 logged at error level so ops can detect audit-stream issues.
 
+## Vector backend pluggability
+
+`src/mcp/canonical-services.ts` selects the vector backend via
+`VECTOR_BACKEND` (default: `qdrant`):
+
+- `qdrant` **(default)** → `src/vector/qdrant-index.ts`, wraps
+  `@qdrant/js-client-rest`. Requires `QDRANT_URL` + `QDRANT_API_KEY`.
+- `pgvector` → `src/vector/pgvector-index.ts`, stores embeddings in
+  Postgres using the `vector` extension. Reuses the existing PG pool —
+  **no second service needed**. Qdrant credentials are not required.
+  `ensureCollection(dims)` creates the extension, table, and HNSW index
+  at bootstrap; subsequent restarts are no-ops (`CREATE … IF NOT EXISTS`).
+
+Both adapters implement the `VectorIndex` interface
+(`src/vector/vector-index.ts`): `ensureCollection`, `upsert`, `query`,
+`delete`. Filter translation (`VectorFilter` → Qdrant `must` / SQL
+`WHERE`) is encapsulated inside each adapter so no Qdrant or pgvector
+SQL dialect leaks into orchestration code.
+
+### Postgres-only deploy
+
+Set `VECTOR_BACKEND=pgvector` to run context-forge on a single Postgres
+instance with no Qdrant service. The local compose override
+`compose.pgvector.yaml` swaps in `pgvector/pgvector:pg16`:
+
+```bash
+docker compose -f compose.yaml -f compose.pgvector.yaml up -d
+```
+
+**Switching backends requires a reindex** (`reindex_memory` tool) —
+vector dimensions and content topology differ between backends.
+
 ## Embedding pluggability
 
-`src/embedding/embedding-factory.ts` selects the provider:
+`src/embedding/embedding-factory.ts` selects the provider via
+`EMBEDDING_PROVIDER` (default: `transformers`):
 
-- `openai` (default) → `src/embedding/openai-embeddings.ts`,
-  `text-embedding-3-small`, 1536-dim.
+- `transformers` **(default)** → `src/embedding/transformers-embedding.ts`,
+  free local ONNX inference via `@huggingface/transformers` (optional dep).
+  Default model `Xenova/all-MiniLM-L6-v2`, 384-dim. First call downloads
+  ~22 MB to the HF cache; subsequent calls are fully offline. No API key
+  required.
+- `openai` → `src/embedding/openai-embeddings.ts`,
+  `text-embedding-3-small`, 1536-dim. Requires `OPENAI_API_KEY`.
 - `local` → `src/embedding/local-embeddings.ts`, deterministic SHA-256
-  hashing into 384-dim vectors. No external calls; usable in CI /
-  air-gapped / offline.
+  hashing into 384-dim vectors. No external calls; intended for CI /
+  air-gapped / offline use where semantic search is not needed.
 
-The provider is selected at bootstrap from `EMBEDDING_PROVIDER` and held
-in `services.embeddings` for the process lifetime. Changing provider
-requires a reindex (`reindex_memory` tool) because dimensions and content
-semantics differ.
+The provider is selected at bootstrap and held in `services.embeddings`
+for the process lifetime. Changing provider requires a reindex
+(`reindex_memory` tool) because dimensions and content semantics differ.

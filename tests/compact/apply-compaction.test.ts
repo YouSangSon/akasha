@@ -87,9 +87,12 @@ function makeRepoMocks(overrides: Partial<MemoryArchiveRepository> = {}) {
   };
 }
 
-function makeQdrant(overrides: Partial<{ deletePoints: ReturnType<typeof vi.fn> }> = {}) {
+function makeVectorIndex(overrides: Partial<{ delete: ReturnType<typeof vi.fn> }> = {}) {
   return {
-    deletePoints: overrides.deletePoints ?? vi.fn().mockResolvedValue(undefined),
+    delete: overrides.delete ?? vi.fn().mockResolvedValue(undefined),
+    upsert: vi.fn(),
+    query: vi.fn(),
+    ensureCollection: vi.fn(),
   };
 }
 
@@ -117,13 +120,12 @@ function makeInput(overrides: Partial<ApplyCompactionInput> = {}): ApplyCompacti
 
 function makeDeps(
   repo: MemoryArchiveRepository,
-  qdrant: { deletePoints: ReturnType<typeof vi.fn> },
+  vectorIndex: { delete: ReturnType<typeof vi.fn>; upsert: ReturnType<typeof vi.fn>; query: ReturnType<typeof vi.fn>; ensureCollection: ReturnType<typeof vi.fn> },
   overrides: Partial<ApplyCompactionDeps> = {},
 ): ApplyCompactionDeps {
   return {
     archiveRepository: repo,
-    qdrantClient: qdrant,
-    collectionName: "memory_chunks_v1",
+    vectorIndex,
     logger: SILENT_LOGGER,
     generateRunId: () => TEST_RUN_ID,
     now: () => NOW,
@@ -134,7 +136,7 @@ function makeDeps(
 describe("applyCompaction (dry-run)", () => {
   it("returns plan + zero stats without calling repo or qdrant", async () => {
     const { repo, createCompactionRun, applyCompactionRecord } = makeRepoMocks();
-    const qdrant = makeQdrant();
+    const qdrant = makeVectorIndex();
 
     const result = await applyCompaction(
       makeInput({ dryRun: true }),
@@ -146,7 +148,7 @@ describe("applyCompaction (dry-run)", () => {
     expect(result.applyStats.archived).toBe(0);
     expect(createCompactionRun).not.toHaveBeenCalled();
     expect(applyCompactionRecord).not.toHaveBeenCalled();
-    expect(qdrant.deletePoints).not.toHaveBeenCalled();
+    expect(qdrant.delete).not.toHaveBeenCalled();
   });
 });
 
@@ -166,7 +168,7 @@ describe("applyCompaction (apply path - happy path)", () => {
       });
     const { repo, createCompactionRun, markQdrantStatus, completeCompactionRun } =
       makeRepoMocks({ applyCompactionRecord: archive });
-    const qdrant = makeQdrant();
+    const qdrant = makeVectorIndex();
 
     const records = [
       makeRecord({ id: 1, content: "Decision: ship" }),
@@ -185,7 +187,7 @@ describe("applyCompaction (apply path - happy path)", () => {
     expect(result.applyStats.qdrantPointsDeleted).toBe(3); // p1, p2, p3
     expect(result.archivedIds.sort()).toEqual(["2", "3"]);
     expect(createCompactionRun).toHaveBeenCalledOnce();
-    expect(qdrant.deletePoints).toHaveBeenCalledTimes(2);
+    expect(qdrant.delete).toHaveBeenCalledTimes(2);
     expect(markQdrantStatus).toHaveBeenCalledTimes(2);
     expect(markQdrantStatus.mock.calls[0]![1]).toBe("deleted");
     expect(completeCompactionRun).toHaveBeenCalledWith(
@@ -198,7 +200,7 @@ describe("applyCompaction (apply path - happy path)", () => {
       .fn()
       .mockResolvedValue({ archived: true, archiveId: 1, qdrantPointIds: [] });
     const { repo } = makeRepoMocks({ applyCompactionRecord: archive });
-    const qdrant = makeQdrant();
+    const qdrant = makeVectorIndex();
 
     const records = [
       makeRecord({ id: 10, content: "same" }),
@@ -226,7 +228,7 @@ describe("applyCompaction (apply path - happy path)", () => {
       .mockResolvedValueOnce({ archived: false, qdrantPointIds: [] })
       .mockResolvedValueOnce({ archived: true, archiveId: 1, qdrantPointIds: [] });
     const { repo } = makeRepoMocks({ applyCompactionRecord: archive });
-    const qdrant = makeQdrant();
+    const qdrant = makeVectorIndex();
 
     const records = [
       makeRecord({ id: 1, content: "x" }),
@@ -255,7 +257,7 @@ describe("applyCompaction (apply path - replay)", () => {
     const { repo, applyCompactionRecord } = makeRepoMocks({
       createCompactionRun: vi.fn().mockResolvedValue(COMPLETED_RUN),
     });
-    const qdrant = makeQdrant();
+    const qdrant = makeVectorIndex();
 
     const result = await applyCompaction(
       makeInput({ dryRun: false }),
@@ -266,7 +268,7 @@ describe("applyCompaction (apply path - replay)", () => {
     expect(result.applyStats.qdrantPointsPending).toBe(1);
     expect(result.summary).toContain("Replay");
     expect(applyCompactionRecord).not.toHaveBeenCalled();
-    expect(qdrant.deletePoints).not.toHaveBeenCalled();
+    expect(qdrant.delete).not.toHaveBeenCalled();
   });
 });
 
@@ -282,8 +284,8 @@ describe("applyCompaction (apply path - partial failure)", () => {
     const { repo, markQdrantStatus, completeCompactionRun } = makeRepoMocks({
       applyCompactionRecord: archive,
     });
-    const qdrant = makeQdrant({
-      deletePoints: vi.fn().mockRejectedValue(new Error("Qdrant 503")),
+    const qdrant = makeVectorIndex({
+      delete: vi.fn().mockRejectedValue(new Error("Qdrant 503")),
     });
 
     const records = [
@@ -313,7 +315,7 @@ describe("applyCompaction (apply path - partial failure)", () => {
     const { repo, completeCompactionRun } = makeRepoMocks({
       applyCompactionRecord: vi.fn().mockRejectedValue(pgError),
     });
-    const qdrant = makeQdrant();
+    const qdrant = makeVectorIndex();
 
     const records = [
       makeRecord({ id: 1, content: "x" }),
@@ -333,7 +335,7 @@ describe("applyCompaction (apply path - partial failure)", () => {
         errorMessage: "PG connection lost",
       }),
     );
-    expect(qdrant.deletePoints).not.toHaveBeenCalled();
+    expect(qdrant.delete).not.toHaveBeenCalled();
   });
 });
 
@@ -341,7 +343,7 @@ describe("applyCompaction (rate limit)", () => {
   it("throws CompactionRateLimitError when org has a recent dryRun=false run", async () => {
     const countSpy = vi.fn().mockResolvedValue(1); // 1 recent apply
     const { repo } = makeRepoMocks({ countRecentApplyRuns: countSpy });
-    const qdrant = makeQdrant();
+    const qdrant = makeVectorIndex();
 
     await expect(
       applyCompaction(
@@ -355,7 +357,7 @@ describe("applyCompaction (rate limit)", () => {
   it("does not check rate limit when windowMs=0 (test/ops bypass)", async () => {
     const countSpy = vi.fn().mockResolvedValue(99);
     const { repo } = makeRepoMocks({ countRecentApplyRuns: countSpy });
-    const qdrant = makeQdrant();
+    const qdrant = makeVectorIndex();
 
     await applyCompaction(
       makeInput({ dryRun: false }),
@@ -370,7 +372,7 @@ describe("applyCompaction (rate limit)", () => {
   it("does not check rate limit on dry-run path", async () => {
     const countSpy = vi.fn().mockResolvedValue(5);
     const { repo } = makeRepoMocks({ countRecentApplyRuns: countSpy });
-    const qdrant = makeQdrant();
+    const qdrant = makeVectorIndex();
 
     await applyCompaction(
       makeInput({ dryRun: true }),
@@ -387,7 +389,7 @@ describe("applyCompaction (deduplicates records appearing in both duplicate and 
       .fn()
       .mockResolvedValue({ archived: true, archiveId: 1, qdrantPointIds: [] });
     const { repo } = makeRepoMocks({ applyCompactionRecord: archive });
-    const qdrant = makeQdrant();
+    const qdrant = makeVectorIndex();
 
     // Build a record set where:
     // - id=1 and id=2 are duplicates (same content) → id=2 archived as duplicate

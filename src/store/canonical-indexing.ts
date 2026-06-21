@@ -1,7 +1,8 @@
 import { chunkText, type TextChunk } from "../chunk/chunk-text.js";
-import { toQdrantPoint } from "../qdrant/point-mapper.js";
 import type { PgPool } from "../db/connection.js";
 import { scanForSecrets, SecretDetectedError } from "./secret-scrub.js";
+import type { VectorIndex, VectorPoint } from "../vector/vector-index.js";
+import { buildVectorPoint } from "../vector/point-builder.js";
 import type {
   AddMemoryInput,
   CanonicalMemoryRepository,
@@ -48,7 +49,7 @@ export type MemoryChunkRepository = {
   updatePointIds(
     mappings: Array<{ chunkId: number; qdrantPointId: string }>,
   ): Promise<void>;
-  listChunks(scopes: ScopeRef[]): Promise<ReindexableMemoryChunk[]>;
+  listChunks(organizationId: string, scopes: ScopeRef[]): Promise<ReindexableMemoryChunk[]>;
   createContextPackRun(input: {
     projectKey: string;
     task: string;
@@ -62,69 +63,90 @@ export type EmbeddingClient = {
   embedBatch(inputs: string[]): Promise<number[][]>;
 };
 
-export type QdrantUpsertClient = {
-  upsert(
-    collectionName: string,
-    input: {
-      points: Array<ReturnType<typeof toQdrantPoint>>;
-    },
-  ): Promise<unknown>;
-};
-
 export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository {
   return {
     async insertChunks(input) {
-      const inserted: StoredMemoryChunk[] = [];
+      if (input.chunks.length === 0) {
+        return [];
+      }
+
+      // Build a single multi-row INSERT. Each chunk contributes 10 parameters;
+      // the 5 embedding config columns are repeated per row (simpler, no CTE).
+      // Constant values shared by every row:
+      const orgId = input.record.organizationId ?? "default";
+      const recordId = input.record.id;
+      const { provider, model, dimensions, version } = input.embedding;
+
+      const params: unknown[] = [];
+      const valueClauses: string[] = [];
 
       for (const chunk of input.chunks) {
-        const result = await pool.query<{
-          id: number;
-          memory_record_id: number;
-          chunk_index: number;
-          content: string;
-          start_offset: number;
-          end_offset: number;
-          embedding_version: string;
-        }>(
-          `
-            INSERT INTO memory_chunks (
-              organization_id,
-              memory_record_id,
-              chunk_index,
-              content,
-              start_offset,
-              end_offset,
-              embedding_provider,
-              embedding_model,
-              embedding_dimensions,
-              embedding_version
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            RETURNING
-              id,
-              memory_record_id,
-              chunk_index,
-              content,
-              start_offset,
-              end_offset,
-              embedding_version
-          `,
-          [
-            input.record.organizationId ?? "default",
-            input.record.id,
-            chunk.chunkIndex,
-            chunk.content,
-            chunk.startOffset,
-            chunk.endOffset,
-            input.embedding.provider,
-            input.embedding.model,
-            input.embedding.dimensions,
-            input.embedding.version,
-          ],
+        const base = params.length; // 0-based index before pushing
+        params.push(
+          orgId,
+          recordId,
+          chunk.chunkIndex,
+          chunk.content,
+          chunk.startOffset,
+          chunk.endOffset,
+          provider,
+          model,
+          dimensions,
+          version,
         );
+        valueClauses.push(
+          `($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6},$${base + 7},$${base + 8},$${base + 9},$${base + 10})`,
+        );
+      }
 
-        const row = requireSingleRow(result.rows[0], "memory chunk");
+      const result = await pool.query<{
+        id: number;
+        memory_record_id: number;
+        chunk_index: number;
+        content: string;
+        start_offset: number;
+        end_offset: number;
+        embedding_version: string;
+      }>(
+        `
+          INSERT INTO memory_chunks (
+            organization_id,
+            memory_record_id,
+            chunk_index,
+            content,
+            start_offset,
+            end_offset,
+            embedding_provider,
+            embedding_model,
+            embedding_dimensions,
+            embedding_version
+          ) VALUES ${valueClauses.join(",")}
+          RETURNING
+            id,
+            memory_record_id,
+            chunk_index,
+            content,
+            start_offset,
+            end_offset,
+            embedding_version
+        `,
+        params,
+      );
 
-        inserted.push({
+      // RETURNING row order is not guaranteed to match VALUES order across all
+      // PG versions. Build a keyed map by chunk_index and reassemble in input
+      // order to guarantee the returned array matches input.chunks order.
+      const byChunkIndex = new Map<number, (typeof result.rows)[number]>();
+      for (const row of result.rows) {
+        byChunkIndex.set(row.chunk_index, row);
+      }
+
+      return input.chunks.map((chunk) => {
+        const row = requireSingleRow(
+          byChunkIndex.get(chunk.chunkIndex),
+          "memory chunk",
+        );
+        return {
           id: toNumber(row.id),
           memoryRecordId: toNumber(row.memory_record_id),
           chunkIndex: row.chunk_index,
@@ -132,31 +154,44 @@ export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository
           startOffset: row.start_offset,
           endOffset: row.end_offset,
           embeddingVersion: row.embedding_version,
-        });
-      }
-
-      return inserted;
+        };
+      });
     },
 
     async updatePointIds(mappings) {
-      for (const mapping of mappings) {
-        await pool.query(
-          `
-            UPDATE memory_chunks
-            SET qdrant_point_id = $2
-            WHERE id = $1
-          `,
-          [mapping.chunkId, mapping.qdrantPointId],
-        );
+      if (mappings.length === 0) {
+        return;
       }
+
+      // Build a single UPDATE...FROM VALUES so all mappings are applied in one
+      // round-trip. Types must be cast explicitly: id is bigint, pid is text.
+      const params: unknown[] = [];
+      const valueClauses: string[] = [];
+
+      for (const mapping of mappings) {
+        const base = params.length;
+        params.push(mapping.chunkId, mapping.qdrantPointId);
+        valueClauses.push(`($${base + 1}::bigint,$${base + 2}::text)`);
+      }
+
+      await pool.query(
+        `
+          UPDATE memory_chunks AS m
+          SET qdrant_point_id = v.pid
+          FROM (VALUES ${valueClauses.join(",")}) AS v(id, pid)
+          WHERE m.id = v.id
+        `,
+        params,
+      );
     },
 
-    async listChunks(scopes) {
+    async listChunks(organizationId, scopes) {
       if (scopes.length === 0) {
         return [];
       }
 
-      const params: unknown[] = [];
+      // organizationId occupies $1; scope params start at $2.
+      const params: unknown[] = [organizationId];
       const scopeClauses = scopes.map((scope) => {
         const scopeTypeIndex = params.push(scope.scopeType);
         const scopeIdIndex = params.push(scope.scopeId);
@@ -196,7 +231,7 @@ export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository
             mr.updated_at
           FROM memory_chunks mc
           JOIN memory_records mr ON mr.id = mc.memory_record_id
-          WHERE ${scopeClauses.join(" OR ")}
+          WHERE mr.organization_id = $1 AND (${scopeClauses.join(" OR ")})
           ORDER BY mc.id ASC
         `,
         params,
@@ -246,8 +281,7 @@ export async function writeCanonicalMemory(input: {
   chunkRepository: MemoryChunkRepository;
   ingestJobs: IngestJobRepository;
   embeddings: EmbeddingClient;
-  qdrantClient: QdrantUpsertClient;
-  collectionName: string;
+  vectorIndex: VectorIndex;
   embedding: ChunkEmbeddingConfig;
   memory: AddMemoryInput;
 }): Promise<SearchMemoryResult> {
@@ -288,32 +322,24 @@ export async function writeCanonicalMemory(input: {
         `embedBatch returned ${embeddings.length} vectors for ${storedChunks.length} chunks`,
       );
     }
-    const points = storedChunks.map((chunk, index) =>
-      toQdrantPoint({
-        chunk: {
-          id: chunk.id,
-          memoryRecordId: chunk.memoryRecordId,
-          chunkIndex: chunk.chunkIndex,
-          content: chunk.content,
-          embeddingVersion: chunk.embeddingVersion,
-        },
-        record: {
-          id: record.id,
-          organizationId: record.organizationId ?? "default",
-          scopeType: record.scopeType,
-          scopeId: record.scopeId,
-          projectKey: record.projectKey ?? null,
-          durability: record.durability ?? "ephemeral",
-          kind: record.memoryType,
-          tags: [],
-          updatedAt: record.updatedAt,
-        },
-        embedding: embeddings[index] ?? [],
+    const points: VectorPoint[] = storedChunks.map((chunk, index) =>
+      buildVectorPoint({
+        chunkId: chunk.id,
+        vector: embeddings[index] ?? [],
+        memoryRecordId: record.id,
+        organizationId: record.organizationId ?? "default",
+        scopeType: record.scopeType,
+        scopeId: record.scopeId,
+        projectKey: record.projectKey ?? null,
+        kind: record.memoryType,
+        durability: record.durability ?? "ephemeral",
+        updatedAt: record.updatedAt,
+        embeddingVersion: chunk.embeddingVersion,
       }),
     );
 
     if (points.length > 0) {
-      await input.qdrantClient.upsert(input.collectionName, { points });
+      await input.vectorIndex.upsert(points);
       await input.chunkRepository.updatePointIds(
         points.map((point, index) => ({
           chunkId: storedChunks[index]!.id,
@@ -333,7 +359,7 @@ export async function writeCanonicalMemory(input: {
     // been visible (upsert either failed or was never reached). Cleanup is
     // best-effort: if it itself fails, the original error still surfaces to
     // the caller; the orphan can be resolved later via reindex_memory.
-    await input.repository.deleteMemoryRecord(record.id).catch(() => undefined);
+    await input.repository.deleteMemoryRecord(record.id, record.organizationId ?? "default").catch(() => undefined);
     throw error;
   }
 }
@@ -341,11 +367,11 @@ export async function writeCanonicalMemory(input: {
 export async function reindexCanonicalMemory(input: {
   chunkRepository: MemoryChunkRepository;
   embeddings: EmbeddingClient;
-  qdrantClient: QdrantUpsertClient;
-  collectionName: string;
+  vectorIndex: VectorIndex;
+  organizationId: string;
   scopes: ScopeRef[];
 }): Promise<{ chunkCount: number }> {
-  const chunks = await input.chunkRepository.listChunks(input.scopes);
+  const chunks = await input.chunkRepository.listChunks(input.organizationId, input.scopes);
   const embeddings = await input.embeddings.embedBatch(
     chunks.map((chunk) => chunk.content),
   );
@@ -354,32 +380,24 @@ export async function reindexCanonicalMemory(input: {
       `reindex embedBatch returned ${embeddings.length} vectors for ${chunks.length} chunks`,
     );
   }
-  const points = chunks.map((chunk, index) =>
-    toQdrantPoint({
-      chunk: {
-        id: chunk.id,
-        memoryRecordId: chunk.memoryRecordId,
-        chunkIndex: chunk.chunkIndex,
-        content: chunk.content,
-        embeddingVersion: chunk.embeddingVersion,
-      },
-      record: {
-        id: chunk.memoryRecordId,
-        organizationId: chunk.organizationId,
-        scopeType: chunk.scopeType,
-        scopeId: chunk.scopeId,
-        projectKey: chunk.projectKey,
-        durability: chunk.durability,
-        kind: chunk.kind,
-        tags: [],
-        updatedAt: chunk.updatedAt,
-      },
-      embedding: embeddings[index] ?? [],
+  const points: VectorPoint[] = chunks.map((chunk, index) =>
+    buildVectorPoint({
+      chunkId: chunk.id,
+      vector: embeddings[index] ?? [],
+      memoryRecordId: chunk.memoryRecordId,
+      organizationId: chunk.organizationId,
+      scopeType: chunk.scopeType,
+      scopeId: chunk.scopeId,
+      projectKey: chunk.projectKey,
+      kind: chunk.kind,
+      durability: chunk.durability,
+      updatedAt: chunk.updatedAt,
+      embeddingVersion: chunk.embeddingVersion,
     }),
   );
 
   if (points.length > 0) {
-    await input.qdrantClient.upsert(input.collectionName, { points });
+    await input.vectorIndex.upsert(points);
     await input.chunkRepository.updatePointIds(
       points.map((point, index) => ({
         chunkId: chunks[index]!.id,

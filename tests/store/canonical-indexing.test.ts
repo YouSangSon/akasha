@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  createMemoryChunkRepository,
   reindexCanonicalMemory,
   writeCanonicalMemory,
 } from "../../src/store/canonical-indexing.js";
@@ -55,8 +56,11 @@ describe("canonical indexing", () => {
           [0.5, 0.6],
         ]),
     };
-    const qdrantClient = {
+    const vectorIndex = {
       upsert: vi.fn().mockResolvedValue(undefined),
+      query: vi.fn(),
+      delete: vi.fn(),
+      ensureCollection: vi.fn(),
     };
 
     const created = await writeCanonicalMemory({
@@ -64,8 +68,7 @@ describe("canonical indexing", () => {
       chunkRepository: chunkRepository as never,
       ingestJobs: ingestJobs as never,
       embeddings,
-      qdrantClient,
-      collectionName: "memory_chunks_v1",
+      vectorIndex,
       embedding: {
         provider: "openai",
         model: "text-embedding-3-small",
@@ -100,15 +103,12 @@ describe("canonical indexing", () => {
       "two three",
       "three four",
     ]);
-    expect(qdrantClient.upsert).toHaveBeenCalledWith(
-      "memory_chunks_v1",
-      expect.objectContaining({
-        points: expect.arrayContaining([
-          expect.objectContaining({ id: "chunk:701" }),
-          expect.objectContaining({ id: "chunk:702" }),
-          expect.objectContaining({ id: "chunk:703" }),
-        ]),
-      }),
+    expect(vectorIndex.upsert).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "chunk:701" }),
+        expect.objectContaining({ id: "chunk:702" }),
+        expect.objectContaining({ id: "chunk:703" }),
+      ]),
     );
     expect(chunkRepository.updatePointIds).toHaveBeenCalledWith([
       { chunkId: 701, qdrantPointId: "chunk:701" },
@@ -148,9 +148,7 @@ describe("canonical indexing", () => {
       embed: vi.fn(),
       embedBatch: vi.fn().mockRejectedValue(embedError),
     };
-    const qdrantClient = {
-      upsert: vi.fn(),
-    };
+    const vectorIndex = { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() };
 
     await expect(
       writeCanonicalMemory({
@@ -158,8 +156,7 @@ describe("canonical indexing", () => {
         chunkRepository: chunkRepository as never,
         ingestJobs: ingestJobs as never,
         embeddings,
-        qdrantClient,
-        collectionName: "memory_chunks_v1",
+        vectorIndex,
         embedding: {
           provider: "openai",
           model: "text-embedding-3-small",
@@ -186,9 +183,9 @@ describe("canonical indexing", () => {
 
     // Cascade-delete (memory_chunks, ingest_jobs, relationships) is handled
     // at the schema layer; the repository call is the single rollback action.
-    expect(repository.deleteMemoryRecord).toHaveBeenCalledWith(502);
+    expect(repository.deleteMemoryRecord).toHaveBeenCalledWith(502, "default");
     expect(ingestJobs.markCompleted).not.toHaveBeenCalled();
-    expect(qdrantClient.upsert).not.toHaveBeenCalled();
+    expect(vectorIndex.upsert).not.toHaveBeenCalled();
   });
 
   it("rolls back PG state by deleting the memory record when qdrant upsert throws", async () => {
@@ -224,8 +221,11 @@ describe("canonical indexing", () => {
       embedBatch: vi.fn().mockResolvedValue([[0.1, 0.2]]),
     };
     const upsertError = new Error("Qdrant 503 service unavailable");
-    const qdrantClient = {
+    const vectorIndex = {
       upsert: vi.fn().mockRejectedValue(upsertError),
+      query: vi.fn(),
+      delete: vi.fn(),
+      ensureCollection: vi.fn(),
     };
 
     await expect(
@@ -234,8 +234,7 @@ describe("canonical indexing", () => {
         chunkRepository: chunkRepository as never,
         ingestJobs: ingestJobs as never,
         embeddings,
-        qdrantClient,
-        collectionName: "memory_chunks_v1",
+        vectorIndex,
         embedding: {
           provider: "openai",
           model: "text-embedding-3-small",
@@ -260,7 +259,7 @@ describe("canonical indexing", () => {
       }),
     ).rejects.toBe(upsertError);
 
-    expect(repository.deleteMemoryRecord).toHaveBeenCalledWith(503);
+    expect(repository.deleteMemoryRecord).toHaveBeenCalledWith(503, "default");
     expect(ingestJobs.markCompleted).not.toHaveBeenCalled();
     // Qdrant upsert was attempted (and failed); updatePointIds must NOT run.
     expect(chunkRepository.updatePointIds).not.toHaveBeenCalled();
@@ -301,7 +300,7 @@ describe("canonical indexing", () => {
       // must reject for this test to exercise the rollback-on-failure case.
       embedBatch: vi.fn().mockRejectedValue(embedError),
     };
-    const qdrantClient = { upsert: vi.fn() };
+    const vectorIndex = { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() };
 
     await expect(
       writeCanonicalMemory({
@@ -309,8 +308,7 @@ describe("canonical indexing", () => {
         chunkRepository: chunkRepository as never,
         ingestJobs: ingestJobs as never,
         embeddings,
-        qdrantClient,
-        collectionName: "memory_chunks_v1",
+        vectorIndex,
         embedding: {
           provider: "openai",
           model: "text-embedding-3-small",
@@ -336,7 +334,7 @@ describe("canonical indexing", () => {
       // Caller must see the *original* embedError, not the cleanupError.
     ).rejects.toBe(embedError);
 
-    expect(repository.deleteMemoryRecord).toHaveBeenCalledWith(504);
+    expect(repository.deleteMemoryRecord).toHaveBeenCalledWith(504, "default");
   });
 
   it("refuses to persist content matching a credential pattern (no record, no chunks, no qdrant write)", async () => {
@@ -353,7 +351,7 @@ describe("canonical indexing", () => {
       updatePointIds: vi.fn(),
     };
     const embeddings = { embed: vi.fn(), embedBatch: vi.fn() };
-    const qdrantClient = { upsert: vi.fn() };
+    const vectorIndex = { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() };
 
     await expect(
       writeCanonicalMemory({
@@ -361,8 +359,7 @@ describe("canonical indexing", () => {
         chunkRepository: chunkRepository as never,
         ingestJobs: ingestJobs as never,
         embeddings,
-        qdrantClient,
-        collectionName: "memory_chunks_v1",
+        vectorIndex,
         embedding: {
           provider: "openai",
           model: "text-embedding-3-small",
@@ -392,7 +389,7 @@ describe("canonical indexing", () => {
     expect(repository.addMemory).not.toHaveBeenCalled();
     expect(ingestJobs.create).not.toHaveBeenCalled();
     expect(chunkRepository.insertChunks).not.toHaveBeenCalled();
-    expect(qdrantClient.upsert).not.toHaveBeenCalled();
+    expect(vectorIndex.upsert).not.toHaveBeenCalled();
   });
 
   it("refuses to persist a secret in the title field (mirrors the content guard)", async () => {
@@ -407,7 +404,7 @@ describe("canonical indexing", () => {
       updatePointIds: vi.fn(),
     };
     const embeddings = { embed: vi.fn(), embedBatch: vi.fn() };
-    const qdrantClient = { upsert: vi.fn() };
+    const vectorIndex = { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() };
 
     await expect(
       writeCanonicalMemory({
@@ -415,8 +412,7 @@ describe("canonical indexing", () => {
         chunkRepository: chunkRepository as never,
         ingestJobs: ingestJobs as never,
         embeddings,
-        qdrantClient,
-        collectionName: "memory_chunks_v1",
+        vectorIndex,
         embedding: {
           provider: "openai",
           model: "text-embedding-3-small",
@@ -446,7 +442,7 @@ describe("canonical indexing", () => {
     expect(repository.addMemory).not.toHaveBeenCalled();
     expect(ingestJobs.create).not.toHaveBeenCalled();
     expect(chunkRepository.insertChunks).not.toHaveBeenCalled();
-    expect(qdrantClient.upsert).not.toHaveBeenCalled();
+    expect(vectorIndex.upsert).not.toHaveBeenCalled();
   });
 
   it("refuses to persist a secret in the summary field (mirrors the content guard)", async () => {
@@ -461,7 +457,7 @@ describe("canonical indexing", () => {
       updatePointIds: vi.fn(),
     };
     const embeddings = { embed: vi.fn(), embedBatch: vi.fn() };
-    const qdrantClient = { upsert: vi.fn() };
+    const vectorIndex = { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() };
 
     await expect(
       writeCanonicalMemory({
@@ -469,8 +465,7 @@ describe("canonical indexing", () => {
         chunkRepository: chunkRepository as never,
         ingestJobs: ingestJobs as never,
         embeddings,
-        qdrantClient,
-        collectionName: "memory_chunks_v1",
+        vectorIndex,
         embedding: {
           provider: "openai",
           model: "text-embedding-3-small",
@@ -501,7 +496,7 @@ describe("canonical indexing", () => {
     expect(repository.addMemory).not.toHaveBeenCalled();
     expect(ingestJobs.create).not.toHaveBeenCalled();
     expect(chunkRepository.insertChunks).not.toHaveBeenCalled();
-    expect(qdrantClient.upsert).not.toHaveBeenCalled();
+    expect(vectorIndex.upsert).not.toHaveBeenCalled();
   });
 
   it("reports categories from every field that contains a secret (title + summary together)", async () => {
@@ -516,7 +511,7 @@ describe("canonical indexing", () => {
       updatePointIds: vi.fn(),
     };
     const embeddings = { embed: vi.fn(), embedBatch: vi.fn() };
-    const qdrantClient = { upsert: vi.fn() };
+    const vectorIndex = { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), ensureCollection: vi.fn() };
 
     let caught: unknown;
     try {
@@ -525,8 +520,7 @@ describe("canonical indexing", () => {
         chunkRepository: chunkRepository as never,
         ingestJobs: ingestJobs as never,
         embeddings,
-        qdrantClient,
-        collectionName: "memory_chunks_v1",
+        vectorIndex,
         embedding: {
           provider: "openai",
           model: "text-embedding-3-small",
@@ -575,6 +569,7 @@ describe("canonical indexing", () => {
           startOffset: 0,
           endOffset: 13,
           embeddingVersion: "v1",
+          organizationId: "org-a",
           scopeType: "project",
           scopeId: "project-alpha",
           projectKey: "project-alpha",
@@ -590,6 +585,7 @@ describe("canonical indexing", () => {
           startOffset: 0,
           endOffset: 10,
           embeddingVersion: "v1",
+          organizationId: "org-a",
           scopeType: "user",
           scopeId: "alice",
           projectKey: null,
@@ -609,15 +605,18 @@ describe("canonical indexing", () => {
         [0.3, 0.4],
       ]),
     };
-    const qdrantClient = {
+    const vectorIndex = {
       upsert: vi.fn().mockResolvedValue(undefined),
+      query: vi.fn(),
+      delete: vi.fn(),
+      ensureCollection: vi.fn(),
     };
 
     const result = await reindexCanonicalMemory({
       chunkRepository: chunkRepository as never,
       embeddings,
-      qdrantClient,
-      collectionName: "memory_chunks_v1",
+      vectorIndex,
+      organizationId: "org-a",
       scopes: [
         { scopeType: "project", scopeId: "project-alpha" },
         { scopeType: "user", scopeId: "alice" },
@@ -625,24 +624,160 @@ describe("canonical indexing", () => {
     });
 
     expect(result).toEqual({ chunkCount: 2 });
-    expect(chunkRepository.listChunks).toHaveBeenCalledWith([
+    expect(chunkRepository.listChunks).toHaveBeenCalledWith("org-a", [
       { scopeType: "project", scopeId: "project-alpha" },
       { scopeType: "user", scopeId: "alice" },
     ]);
     expect(embeddings.embedBatch).toHaveBeenCalledOnce();
-    expect(qdrantClient.upsert).toHaveBeenCalledWith(
-      "memory_chunks_v1",
-      expect.objectContaining({
-        points: expect.arrayContaining([
-          expect.objectContaining({ id: "chunk:701" }),
-          expect.objectContaining({ id: "chunk:702" }),
-        ]),
-      }),
+    expect(vectorIndex.upsert).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "chunk:701" }),
+        expect.objectContaining({ id: "chunk:702" }),
+      ]),
     );
     expect(chunkRepository.updatePointIds).toHaveBeenCalledWith([
       { chunkId: 701, qdrantPointId: "chunk:701" },
       { chunkId: 702, qdrantPointId: "chunk:702" },
     ]);
+  });
+
+  it("insertChunks issues exactly ONE pool.query for N>1 chunks and returns rows in input order", async () => {
+    // Returning rows in REVERSED order proves the keyed-map reassembly is
+    // not accidentally relying on RETURNING preserving VALUES order.
+    const mockPool = {
+      query: vi.fn().mockResolvedValue({
+        rows: [
+          // reversed: chunk_index 1 before 0
+          {
+            id: 2,
+            memory_record_id: 10,
+            chunk_index: 1,
+            content: "second chunk",
+            start_offset: 5,
+            end_offset: 11,
+            embedding_version: "v1",
+          },
+          {
+            id: 1,
+            memory_record_id: 10,
+            chunk_index: 0,
+            content: "first chunk",
+            start_offset: 0,
+            end_offset: 5,
+            embedding_version: "v1",
+          },
+        ],
+      }),
+    };
+    const repo = createMemoryChunkRepository(mockPool as never);
+    const record = createRecord({ id: 10, content: "first chunk second chunk" });
+
+    const chunks = [
+      { chunkIndex: 0, content: "first chunk", startOffset: 0, endOffset: 5 },
+      { chunkIndex: 1, content: "second chunk", startOffset: 5, endOffset: 11 },
+    ];
+
+    const result = await repo.insertChunks({
+      record,
+      chunks,
+      embedding: {
+        provider: "openai",
+        model: "text-embedding-3-small",
+        dimensions: 1536,
+        version: "v1",
+        targetTokens: 800,
+        overlapTokens: 120,
+      },
+    });
+
+    // Single query, not two.
+    expect(mockPool.query).toHaveBeenCalledOnce();
+
+    // Output must be in input order (chunk_index 0 first) even though RETURNING
+    // came back with chunk_index 1 first.
+    expect(result).toHaveLength(2);
+    expect(result[0]!.chunkIndex).toBe(0);
+    expect(result[0]!.id).toBe(1);
+    expect(result[1]!.chunkIndex).toBe(1);
+    expect(result[1]!.id).toBe(2);
+  });
+
+  it("updatePointIds issues exactly ONE pool.query for N mappings", async () => {
+    const mockPool = {
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+    };
+    const repo = createMemoryChunkRepository(mockPool as never);
+
+    await repo.updatePointIds([
+      { chunkId: 1, qdrantPointId: "chunk:1" },
+      { chunkId: 2, qdrantPointId: "chunk:2" },
+      { chunkId: 3, qdrantPointId: "chunk:3" },
+    ]);
+
+    // Three mappings → one query, not three.
+    expect(mockPool.query).toHaveBeenCalledOnce();
+
+    const [sql, params] = mockPool.query.mock.calls[0] as [string, unknown[]];
+    // SQL must reference the VALUES alias columns.
+    expect(sql).toMatch(/UPDATE\s+memory_chunks/i);
+    expect(sql).toMatch(/FROM\s+\(VALUES/i);
+    // All three chunkIds and pointIds must be in params.
+    expect(params).toContain(1);
+    expect(params).toContain("chunk:1");
+    expect(params).toContain(2);
+    expect(params).toContain("chunk:2");
+    expect(params).toContain(3);
+    expect(params).toContain("chunk:3");
+  });
+
+  it("listChunks filters by organizationId to prevent cross-tenant data leakage (SEC-1)", () => {
+    // Proof via mock-based SQL inspection:
+    // createMemoryChunkRepository.listChunks must pass organizationId as
+    // the FIRST parameter and build SQL with:
+    //   WHERE mr.organization_id = $1 AND (<scope-clauses>)
+    // Two scopes are used so the OR-binding parenthesization can be verified.
+    const queryCalls: { sql: string; params: unknown[] }[] = [];
+    const mockPool = {
+      query: vi.fn().mockImplementation((sql: string, params: unknown[]) => {
+        queryCalls.push({ sql, params });
+        return Promise.resolve({ rows: [] });
+      }),
+    };
+    const repo = createMemoryChunkRepository(mockPool as never);
+
+    const scopes = [
+      { scopeType: "project" as const, scopeId: "shared-project" },
+      { scopeType: "user" as const, scopeId: "user-x" },
+    ];
+
+    // Call listChunks as org-a — org-b's data must never appear.
+    // Even with identical scopeIds, the org filter must restrict results.
+    const promise = repo.listChunks("org-a", scopes);
+
+    // The call is async but the mock resolves immediately; we just need to
+    // inspect what was sent to pool.query.
+    return promise.then(() => {
+      expect(queryCalls).toHaveLength(1);
+      const { sql, params } = queryCalls[0]!;
+
+      // organizationId must be the first param ($1)
+      expect(params[0]).toBe("org-a");
+
+      // SQL must reference the org filter with $1
+      expect(sql).toMatch(/mr\.organization_id\s*=\s*\$1/);
+
+      // The scope OR-group must be wrapped in an OUTER set of parentheses so
+      // AND binds before OR. The discriminating pattern is "AND ((" — the outer
+      // wrap is immediately followed by "(" which opens the first scope clause.
+      // A broken "AND scope_type = $2 OR ..." would NOT match this pattern.
+      // Note: each per-scope clause is itself parenthesized, so the full SQL is:
+      //   WHERE mr.organization_id = $1 AND ((scope_type=? AND scope_id=?) OR (...))
+      expect(sql).toMatch(/AND\s*\(\s*\(/);
+
+      // Both scope params must appear ($2 onward)
+      expect(params).toContain("shared-project");
+      expect(params).toContain("user-x");
+    });
   });
 });
 

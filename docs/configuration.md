@@ -35,8 +35,11 @@ preventing accidental zero-auth public exposure.
 
 | Variable | Default | Notes |
 |---|---|---|
-| `OPENAI_API_KEY` | — | Required when `EMBEDDING_PROVIDER=openai` (the default). Ignored when `EMBEDDING_PROVIDER=local`. |
 | `MEMORY_API_TOKENS` | — | Comma-separated bearer tokens. See [Auth](#auth) below. |
+
+`OPENAI_API_KEY` is **not** required for default operation. The default
+embedding provider is `transformers` (free local ONNX). Set `OPENAI_API_KEY`
+only when you set `EMBEDDING_PROVIDER=openai`. See [Embeddings](#embeddings).
 
 ## Postgres
 
@@ -57,7 +60,29 @@ the `POSTGRES_*` parts (with host=`postgres` inside the network). When running
 the migration script from the host, `install.sh` rewrites the host to
 `127.0.0.1:5432` for reachability.
 
+## Vector backend
+
+| Variable | Default | Notes |
+|---|---|---|
+| `VECTOR_BACKEND` | `qdrant` | `qdrant` (default) or `pgvector`. When `pgvector`, vectors are stored in Postgres — no Qdrant service needed and Qdrant credentials are not required. Switching backends requires a `reindex_memory`. |
+
+### pgvector — admin prerequisite
+
+When `VECTOR_BACKEND=pgvector`, the `vector` Postgres extension must be installed before the app starts. The app checks for the extension at boot and throws a clear error if it is absent — it does **not** run `CREATE EXTENSION` itself (that requires superuser, which the app role typically lacks on managed Postgres).
+
+**Docker / local** (the `pgvector/pgvector:pg16` image ships the extension; the `postgres` superuser can run):
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+**RDS / Cloud SQL / Supabase**: enable the extension through the managed extension panel or a one-time superuser migration script. Supabase enables it by default in new projects. On RDS, use `rds_superuser` via a migration.
+
+Once the extension exists, all subsequent table and index creation is done by the app role (table-owner privileges are sufficient).
+
 ## Qdrant
+
+Qdrant variables are only required when `VECTOR_BACKEND=qdrant` (the default).
 
 | Variable | Default | Notes |
 |---|---|---|
@@ -137,7 +162,10 @@ When a token has no binding (legacy form):
 - To opt into the historical org-blind behavior — e.g. a single-tenant
   install with no plans to add a second tenant — set
   `LEGACY_ANONYMOUS_SEARCH=true` in `.env`. The flag is read on every
-  request, so flips take effect without a restart.
+  request, so flips take effect without a restart. This flag now gates
+  **all** read paths: `retrieve_memory` (search), `compact_memory` dry-run
+  (`listMemory`), and the vector-hydration step (`getMemoryRecordsByIds`).
+  Without it, every read that omits an org throws an operational error.
 
 ## Personal / single-tenant use
 
@@ -165,7 +193,7 @@ layers handles the rest.
 
 | Variable | Default | Notes |
 |---|---|---|
-| `RATE_LIMIT_PER_MINUTE` | unset (no limit) | Token-bucket cap, keyed per token. Recommended in production. |
+| `RATE_LIMIT_PER_MINUTE` | unset → no limit (compose deployments default to **60**) | Token-bucket cap, keyed per token. Recommended in production. |
 
 The compaction-apply path has a separate, stricter limit (1 per hour per
 org by default) hard-coded in `applyCompaction` deps. It can be tuned by

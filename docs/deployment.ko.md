@@ -44,7 +44,10 @@ load balancer 뒤의 다중 `app` 인스턴스 사용.
 - [ ] **백업** — `npm run backup:create` 를 cron / systemd timer로 스케줄,
       `npm run restore:smoke` 로 정기 검증.
 - [ ] **모니터링** — `/readyz` 를 오케스트레이터 readiness probe에 연결,
-      pino 로그 (stderr) 를 로그 aggregator에 연결.
+      pino 로그 (stderr) 를 로그 aggregator에 연결. `/readyz` 는 매 요청마다
+      Postgres와 Qdrant를 프로브하며 (`EMBEDDING_PROVIDER=openai` 시 OpenAI도
+      포함), 의존성 하나라도 연결 불가면 503을 반환해 오케스트레이터가 트래픽을
+      자동으로 drain합니다.
 
 ## 단일 호스트 compose 배포
 
@@ -159,10 +162,10 @@ BACKUP_TARGET_HOST=backup@backup.example.com
 
 ## 재해 복구
 
-앱 풀은 Postgres / Qdrant / OpenAI outage에서 fail-closed — `/readyz` 가 503
-반환 → load balancer가 인스턴스 drain. 의존성 복구되면 다음 요청이
-canonical-services singleton을 다시 부트스트랩 (transient 실패는 앱 재시작
-불필요).
+**주의:** `/readyz` 는 Postgres와 Qdrant를 능동적으로 프로브하며
+(`EMBEDDING_PROVIDER=openai` 시 OpenAI도 포함), 의존성 하나라도 연결 불가면
+503을 반환합니다. Transient 실패 복구 시 다음 요청이 canonical-services
+singleton을 다시 부트스트랩합니다 (앱 재시작 불필요).
 
 호스트가 완전히 사라지면 최신 백업에서 복원:
 

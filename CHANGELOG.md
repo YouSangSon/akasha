@@ -19,6 +19,20 @@ strict SemVer suggests `2.0.0` (breaking default behavior on the org guard),
 but a `1.1.0`-with-prominent-breaking-warning is also defensible given the
 small actual impact surface.
 
+### Added
+
+- **pgvector backend — Postgres-only deploy option** — a `VectorIndex` port
+  (`src/vector/vector-index.ts`) abstracts the vector backend so either Qdrant
+  or pgvector can be selected at startup via `VECTOR_BACKEND`. The new
+  `pgvector` adapter (`src/vector/pgvector-index.ts`) stores embeddings in a
+  `memory_vectors` table using the Postgres `vector` extension (HNSW index,
+  cosine ops) and provides the same `upsert`/`query`/`delete` interface with
+  org/scope filter parity. Setting `VECTOR_BACKEND=pgvector` removes the
+  Qdrant service dependency entirely; the `compose.pgvector.yaml` overlay
+  (`docker compose -f compose.yaml -f compose.pgvector.yaml up -d`) swaps in
+  `pgvector/pgvector:pg16` for local development. Switching backends requires
+  `reindex_memory`.
+
 ### Security
 
 - **Secret scrubber now covers `title` and `summary`, not only `content`** —
@@ -72,9 +86,89 @@ small actual impact surface.
   === chunks.length` so a misbehaving provider cannot silently misalign.
   (PR #8, [`7b5afac`](https://github.com/YouSangSon/context-forge/commit/7b5afac))
 
-### Documentation
+### Security (audit cycle 2)
 
-- **Migration guide reframed bidirectionally** —
+- **`reindex_memory` is now org-scoped and strict** — requires `organizationId` (throws without
+  it), matching the existing guard on `search_memory`. The CLI `reindex` command gained an
+  optional `--organization-id` flag (default `"default"`). Previously the reindex path ran
+  org-blind, silently touching every tenant's chunks.
+- **`deleteMemoryRecord` now enforces org guard** — the cleanup helper introduced in PR #7
+  previously accepted any `memoryRecordId` without verifying it belongs to the calling org.
+  Added `organizationId` guard to close the cross-tenant deletion path (SEC-5).
+- **HTTP error handling hardened** — generic 500 responses now return a static
+  `"internal server error"` body (no internal detail leak). `compact_memory` rate-limit now
+  returns HTTP **429** with a `Retry-After` header instead of 500. Removed a `as never` cast
+  that suppressed a type-level exhaustiveness check.
+- **`RATE_LIMIT_PER_MINUTE` default added to `compose.yaml`** — rate limiting is now on out of
+  the box for Compose deployments (value: 60 req/min). Previously the env var was absent from
+  the Compose file, leaving new deployments with no rate cap unless operators set it manually.
+- **Secret scrubber expanded** — now also blocks GCP API keys, Stripe secret/publishable keys,
+  Slack tokens (`xoxb-`, `xoxp-`, `xoxa-`), and database connection strings (`postgres://`,
+  `mysql://`, `mongodb+srv://`), in addition to the existing AWS, GitHub PAT, OpenAI, Anthropic,
+  PEM, Bearer, and JWT patterns.
+- **Security unit tests added** — new test suite covers rate-limit enforcement, bearer-auth
+  paths, and `resolveOrganizationId` logic; the SEC-1 isolation assertion was tightened to catch
+  AND/OR SQL precedence bugs.
+- **Strict org guard extended to the remaining read paths** — PR #6 made `retrieveMemory`
+  (search) strict, but `listMemory` and `getMemoryRecordsByIds` still filtered `organization_id`
+  only when defined, so an unbound token running `compact_memory` (dry-run) read memories
+  org-blind across tenants. Both read methods now apply the same strict guard via a shared
+  `assertOrganizationId` helper and take an `allowLegacyAnonymous` flag the handlers source from
+  `LEGACY_ANONYMOUS_SEARCH`. **BREAKING** for unbound-token deployments that relied on org-blind
+  reads; same one-line `LEGACY_ANONYMOUS_SEARCH=true` migration as PR #6.
+
+### Fixed (audit cycle 2)
+
+- **MCP stdio transport now registers all 7 tools** — `reindex_memory` and `unarchive_memory`
+  were missing from the stdio transport, leaving MCP clients (Claude Code, Codex CLI) with only
+  5 of the 7 tools available over HTTP. Now matches HTTP and CLI parity.
+- **Silent failures surfaced** — parse errors, DB error messages stripped of stack traces, and
+  `audit_log.error_message` capped to prevent oversized payloads. Previously these failed
+  silently or exposed internal stack details.
+
+### Added (audit cycle 2)
+
+- **`/readyz` now wires real dependency probes** — `startOperatorServer` builds
+  and passes a `DependencyProbes` set automatically: Postgres (`SELECT 1`) and
+  Qdrant (`GET /healthz`) are always active; the OpenAI probe (`GET /v1/models`)
+  is included only when `EMBEDDING_PROVIDER=openai`, so `transformers`/`local`
+  deployments without an API key are unaffected. Returns 503 when any dependency
+  is unreachable, making `/readyz` a true readiness gate for orchestrators.
+  A dedicated single-connection pool is created for the Postgres probe and torn
+  down on server close. The conditional selection logic lives in an exported
+  `selectDependencyProbes(config, pool)` helper for testability.
+
+### Performance (audit cycle 2)
+
+- **Migration 007: `ingest_jobs` outbox columns** (foundational, in-progress) — adds
+  `status`, `retry_count`, `last_error`, `process_after`, and `processed_at` columns to
+  `ingest_jobs` for the option-B outbox sweeper. Schema file is on `main` (#12, part 1 of 5);
+  sweeper registration and retry loop are in-flight on the #12 branch.
+- **Migration 008: FK index on `memory_chunks`** — `008_chunks_fk_index.sql` adds
+  `idx_memory_chunks_record` on `memory_chunks(memory_record_id)`, eliminating sequential scans
+  on the FK join path. Migrations are now 001–008.
+- **`listMemory` is now bounded** — enforces a `LIMIT` (default 1000, max 5000) on browse
+  queries. Previously unbounded queries could return the full table for large tenants.
+- **Batched N+1 DB writes** — chunk inserts and upserts are now issued in a single round-trip
+  rather than per-item, complementing the existing `embedBatch` change (PR #8).
+
+### Documentation (audit cycle 2)
+
+- **Documentation accuracy pass** — fixed pre-existing drift across `docs/architecture.md`,
+  `docs/configuration.md`, `docs/api-reference.md`, `CONTRIBUTING.md`, and `README.md`:
+  `OPENAI_API_KEY` marked optional (only needed when `EMBEDDING_PROVIDER=openai`); embedding
+  default corrected to `transformers`; migration range updated to 001–008; `ingest_jobs` outbox
+  columns added to schema diagram; `/readyz` probe list corrected against actual
+  `check-dependencies.ts` behavior; MCP tool list updated to 7 tools.
+- **`AGENTS.md` dangling references removed** — replaced broken `.vibe/context-index.md` and
+  `.pi/skills/vibe-workflow/SKILL.md` references (both absent) with accurate contributor
+  guidance pointing to `README.md`, `CONTRIBUTING.md`, and `docs/`.
+- **`docs/README.md` documentation index added** — new index linking every doc with a one-line
+  description, listing both English and Korean mirrors.
+- **`docs/self-hosted-operations.ko.md` added** — Korean mirror of `self-hosted-operations.md`
+  (the only doc that was missing a `.ko.md` counterpart).
+
+### Documentation
   `docs/migrations/openai-to-transformers.{md,ko.md}` retitled from
   "Migration: OpenAI → Transformers default (v1.0.x → next)" to "Switching
   between OpenAI and Transformers embedding providers". The v1.0.x framing
@@ -152,8 +246,11 @@ work to a publishable open-source project.
   rotation, optional org binding); token-bucket rate limiter
   (`RATE_LIMIT_PER_MINUTE`); fail-closed startup gate refuses to bind to
   non-loopback hosts without tokens.
-- **Health probes** — `/healthz` (liveness, no auth) and `/readyz` (PG +
-  Qdrant + OpenAI reachability, returns 503 to drain orchestrators).
+- **Health probes** — `/healthz` (liveness, no auth) and `/readyz` (returns
+  200 unconditionally in the default server; dependency-probe builders for PG,
+  Qdrant, and OpenAI are implemented in `src/health/check-dependencies.ts` but
+  are not wired into `startOperatorServer` — probes are opt-in via the
+  `dependencyProbes` option on `createOperatorServer`).
 - **Backup + restore** — `npm run backup:create` snapshots Postgres
   (pg_dump) + Qdrant (snapshot API) to `BACKUP_DIR`. `npm run restore:smoke`
   validates the latest backup against an isolated compose stack.

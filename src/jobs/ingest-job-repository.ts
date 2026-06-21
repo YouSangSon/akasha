@@ -1,4 +1,5 @@
 import type { PgPool } from "../db/connection.js";
+import { rootLogger } from "../logger.js";
 import type { IngestJob, IngestJobRepository } from "../types.js";
 
 type IngestJobRow = {
@@ -56,6 +57,7 @@ export function createIngestJobRepository(pool: PgPool): IngestJobRepository {
     },
 
     async markFailed(jobId, error) {
+      rootLogger.error({ err: error, jobId }, "ingest job failed");
       const result = await pool.query<IngestJobRow>(
         `
           UPDATE ingest_jobs
@@ -83,7 +85,7 @@ export function createIngestJobRepository(pool: PgPool): IngestJobRepository {
 
 function serializeError(error: unknown): string {
   if (error instanceof Error) {
-    return error.stack ?? error.message;
+    return error.message;
   }
 
   return String(error);

@@ -11,6 +11,8 @@ import { runMigrations } from "../db/migrate.js";
 import { createEmbeddingProvider } from "../embedding/embedding-factory.js";
 import { createIngestJobRepository } from "../jobs/ingest-job-repository.js";
 import { createQdrantClient } from "../qdrant/client.js";
+import { createQdrantVectorIndex } from "../vector/qdrant-index.js";
+import { createPgVectorIndex } from "../vector/pgvector-index.js";
 import { createMemoryRepository } from "../store/memory-repository.js";
 import { createMemoryChunkRepository } from "../store/canonical-indexing.js";
 import { createMemoryArchiveRepository } from "../store/memory-archive-repository.js";
@@ -29,10 +31,19 @@ export async function bootstrapCanonicalServices(): Promise<CanonicalServices> {
     throw error;
   }
 
-  const qdrantClient = createQdrantClient({
-    url: config.qdrant.url,
-    apiKey: config.qdrant.apiKey,
-  });
+  let vectorIndex: CanonicalServices["vectorIndex"];
+
+  if (config.vectorBackend === "pgvector") {
+    const pgVectorIndex = createPgVectorIndex(pool);
+    await pgVectorIndex.ensureCollection(config.embedding.dimensions);
+    vectorIndex = pgVectorIndex;
+  } else {
+    const qdrantClient = createQdrantClient({
+      url: config.qdrant.url,
+      apiKey: config.qdrant.apiKey,
+    });
+    vectorIndex = createQdrantVectorIndex(qdrantClient, config.qdrant.collectionName);
+  }
 
   return {
     config: {
@@ -53,40 +64,7 @@ export async function bootstrapCanonicalServices(): Promise<CanonicalServices> {
       },
       openaiApiKey: config.openai.apiKey,
     }),
-    qdrantClient: {
-      upsert(collectionName, input) {
-        return qdrantClient.upsert(collectionName, input);
-      },
-      async deletePoints(collectionName, pointIds) {
-        // Skip the round-trip when the caller has nothing to delete.
-        // Qdrant rejects empty point lists with 400 in some versions.
-        if (pointIds.length === 0) return;
-        await qdrantClient.delete(collectionName, { points: pointIds });
-      },
-      async query(collectionName, args) {
-        const response = await qdrantClient.query(collectionName, args);
-
-        return {
-          points: response.points.map((point) => {
-            const payload =
-              point.payload && typeof point.payload === "object"
-                ? point.payload
-                : undefined;
-            const memoryRecordId =
-              typeof payload?.memory_record_id === "number"
-                ? payload.memory_record_id
-                : undefined;
-
-            return {
-              payload:
-                memoryRecordId === undefined
-                  ? undefined
-                  : { memory_record_id: memoryRecordId },
-            };
-          }),
-        };
-      },
-    },
+    vectorIndex,
     close: async () => {
       await pool.end();
     },

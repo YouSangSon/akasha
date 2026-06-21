@@ -5,7 +5,7 @@
 context-forge exposes the same tool surface through two transports:
 
 - **MCP** (stdio) — for AI clients like Claude Code and Codex CLI.
-  Entry point: `dist/src/cli.js`.
+  Entry point: `dist/src/cli.js`. All 7 tools are registered.
 - **HTTP** (JSON over POST) — for any other client.
   Entry point: `src/app/server.ts`, default bind `127.0.0.1:8787`.
 
@@ -28,7 +28,7 @@ Failure modes:
 | 401 | Missing / unknown / wrong-format `Authorization` header |
 | 403 | Token bound to a different org than body / header asks for |
 | 429 | Per-token rate limit exhausted |
-| 503 | `/readyz` saw a dependency outage |
+| 503 | `/readyz` saw a dependency outage (only when probes are injected — see health section) |
 
 ## Response envelope (HTTP)
 
@@ -91,6 +91,7 @@ type SearchMemoryInput = {
   projectKey: string;            // required
   query: string;
   userScopeId?: string;          // include user-scoped hits
+  includeUser?: boolean;         // default true; set false to suppress user-scope hits
   limit?: number;                // default 10
 };
 
@@ -126,8 +127,9 @@ hits are stably sorted ahead of user-scope hits when there's a tie.
 type BuildContextPackInput = {
   organizationId?: string;
   projectKey: string;
-  task?: string;                 // task description for ranking
+  task: string;                  // required; task description for ranking
   userScopeId?: string;
+  includeUser?: boolean;         // default true; set false to suppress user-scope hits
   limit?: number;
 };
 
@@ -158,20 +160,21 @@ of an LLM prompt.
 
 ```ts
 type ReindexMemoryInput = {
-  organizationId?: string;
-  projectKey?: string;
+  organizationId: string;        // required; throws without it (data-isolation guard)
+  projectKey: string;            // required
   userScopeId?: string;
 };
 
 type ReindexMemoryResult = {
   ok: true;
   projectKey: string;
-  scopes: ScopeRef[];
+  scopes: string[];              // e.g. ["project:my-project", "user:abc123"]
   chunkCount: number;
 };
 ```
 
 HTTP: `POST /v1/memory/reindex`
+MCP stdio: `reindex_memory`
 
 Recompute embeddings for existing chunks and upsert to Qdrant. Use after
 changing `EMBEDDING_PROVIDER` or `OPENAI_EMBEDDING_MODEL`.
@@ -215,6 +218,7 @@ type CompactMemoryResult = {
 ```
 
 HTTP: `POST /v1/memory/compact`
+MCP stdio: `compact_memory`
 
 When `dryRun=false`, the apply path runs:
 1. Plan computed via the same logic as dry-run.
@@ -223,7 +227,8 @@ When `dryRun=false`, the apply path runs:
    `qdrantPointsPending` for the sweeper.
 
 Idempotent: replays of the same UUID return the prior outcome instead of
-re-executing. Rate-limited to 1 per hour per org by default.
+re-executing. Rate-limited to 1 per hour per org by default; exceeding the
+limit returns HTTP **429** with a `Retry-After` header.
 
 ---
 
@@ -249,6 +254,7 @@ type UnarchiveMemoryResult = {
 ```
 
 HTTP: `POST /v1/memory/unarchive`
+MCP stdio: `unarchive_memory`
 
 Skip reasons:
 - `archive_not_found_or_org_mismatch` — id missing or org-scoped out
@@ -301,11 +307,24 @@ Unauthenticated. Always 200 once the process is up. No dependency check.
 
 ### `GET /readyz` — readiness
 
-Unauthenticated. Probes Postgres (`SELECT 1`), Qdrant (`/healthz`), and
-OpenAI (`/v1/models`). Returns:
+Unauthenticated. Probes live dependencies and returns:
 
-- 200 with each probe's status when all OK
-- 503 with the same envelope when any probe fails (drains a load balancer)
+- **200** with each probe's status when all pass
+- **503** with the same envelope when any dependency is unreachable (drains a
+  load balancer or fails a Kubernetes readiness check)
 
-Use this for Kubernetes readiness, Docker healthcheck, or external monitor
-integrations.
+The built-in production server (`startOperatorServer`) wires the following
+probes automatically:
+
+| Probe | Check | Always active? |
+|---|---|---|
+| `postgres` | `SELECT 1` | Yes |
+| `qdrant` | `GET /healthz` on the Qdrant host | Yes |
+| `openai` | `GET /v1/models` with your API key | Only when `EMBEDDING_PROVIDER=openai` |
+
+The OpenAI probe is skipped for `transformers` and `local` providers — those
+deployments have no API key and must not fail readiness on that account.
+
+Use this for Kubernetes readiness probes, Docker `HEALTHCHECK`, or external
+uptime monitors. The `/healthz` endpoint remains the unconditional liveness
+check (process alive, no dependency checks).

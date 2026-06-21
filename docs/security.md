@@ -60,10 +60,15 @@ type-coerced destructive runs.
 Before a memory hits Postgres or Qdrant, `assertNoSecrets(content)` in
 `src/store/secret-scrub.ts` scans for and rejects:
 
-- OpenAI / Anthropic / generic API key patterns
-- AWS access key + secret key pairs
+- OpenAI / Anthropic API key patterns (`sk-…`, `sk-ant-…`)
+- AWS access key patterns (`AKIA…`)
+- GitHub token patterns (`ghp_…`, `ghs_…`, etc.)
+- GCP API key patterns (`AIza…`)
+- Stripe secret key patterns (`sk_live_…`, `sk_test_…`)
+- Slack token patterns (`xoxb-…`, `xoxp-…`, etc.)
+- Database connection strings with embedded credentials (`://user:pass@host`)
 - PEM blocks (private keys, certificates)
-- Bearer-token-shaped strings
+- Bearer-token-shaped strings (`Authorization: Bearer …`)
 - JWT-shaped strings (header.body.sig)
 
 A hit raises `SecretDetectedError` (HTTP 400) with category names but no

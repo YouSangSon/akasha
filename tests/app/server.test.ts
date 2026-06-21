@@ -4,8 +4,11 @@ import {
   assertSafeAuthConfig,
   createOperatorServer,
   isLoopbackHost,
+  selectDependencyProbes,
 } from "../../src/app/server.js";
 import type { ToolRegistry } from "../../src/mcp/types.js";
+import type { PgPool } from "../../src/db/connection.js";
+import type { DependencyProbes } from "../../src/health/check-dependencies.js";
 
 type ServerHandle = {
   baseUrl: string;
@@ -217,7 +220,7 @@ describe("createOperatorServer", () => {
     expect(res.status).toBe(404);
   });
 
-  it("returns 500 with envelope when the tool throws", async () => {
+  it("returns 500 with a static message when the tool throws (no internal leak)", async () => {
     (
       registry.add_memory as ReturnType<typeof vi.fn>
     ).mockRejectedValueOnce(new Error("repository down"));
@@ -240,7 +243,34 @@ describe("createOperatorServer", () => {
       error: { message: string };
     };
     expect(body.success).toBe(false);
-    expect(body.error.message).toContain("repository down");
+    expect(body.error.message).toBe("internal server error");
+    expect(body.error.message).not.toContain("repository down");
+  });
+
+  it("returns 429 when the tool throws CompactionRateLimitError", async () => {
+    const { CompactionRateLimitError } = await import(
+      "../../src/compact/apply-compaction.js"
+    );
+    (
+      registry.compact_memory as ReturnType<typeof vi.fn>
+    ).mockRejectedValueOnce(new CompactionRateLimitError(90_000));
+
+    const res = await fetch(`${handle.baseUrl}/v1/memory/compact`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({ projectKey: "p" }),
+    });
+    expect(res.status).toBe(429);
+    const body = (await res.json()) as {
+      success: boolean;
+      error: { message: string };
+    };
+    expect(body.success).toBe(false);
+    expect(body.error.message).not.toContain("repository");
+    expect(res.headers.get("retry-after")).toBe("90");
   });
 
   it("routes /v1/memory/context-pack to build_context_pack", async () => {
@@ -510,5 +540,121 @@ describe("createOperatorServer (auth disabled)", () => {
     });
     expect(res.status).toBe(200);
     expect(registry.add_memory).toHaveBeenCalledOnce();
+  });
+});
+
+describe("createOperatorServer (/readyz with injected probes)", () => {
+  async function startWithProbes(probes: DependencyProbes | undefined): Promise<ServerHandle> {
+    const server = createOperatorServer({
+      registry: buildRegistry(),
+      bearerTokens: [],
+      dependencyProbes: probes,
+    });
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", () => resolve()),
+    );
+    const address = server.address() as AddressInfo;
+    return {
+      baseUrl: `http://127.0.0.1:${address.port}`,
+      close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+    };
+  }
+
+  it("returns 200 when all injected probes pass", async () => {
+    const handle = await startWithProbes({
+      postgres: vi.fn().mockResolvedValue(undefined),
+      qdrant: vi.fn().mockResolvedValue(undefined),
+    });
+    try {
+      const res = await fetch(`${handle.baseUrl}/readyz`);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { success: boolean; data: { status: string; checks: unknown[] } };
+      expect(body.success).toBe(true);
+      expect(body.data.status).toBe("ok");
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it("returns 503 when any injected probe fails", async () => {
+    const handle = await startWithProbes({
+      postgres: vi.fn().mockResolvedValue(undefined),
+      qdrant: vi.fn().mockRejectedValue(new Error("qdrant unreachable")),
+    });
+    try {
+      const res = await fetch(`${handle.baseUrl}/readyz`);
+      expect(res.status).toBe(503);
+      const body = (await res.json()) as { success: boolean; data: { status: string } };
+      expect(body.success).toBe(false);
+      expect(body.data.status).toBe("fail");
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it("returns 200 with empty checks and message when no probes configured", async () => {
+    const handle = await startWithProbes(undefined);
+    try {
+      const res = await fetch(`${handle.baseUrl}/readyz`);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { success: boolean; data: { message: string; checks: unknown[] } };
+      expect(body.success).toBe(true);
+      expect(body.data.message).toBe("no probes configured");
+    } finally {
+      await handle.close();
+    }
+  });
+});
+
+describe("selectDependencyProbes", () => {
+  function fakePool(): PgPool {
+    return {
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+      connect: vi.fn(),
+      end: vi.fn().mockResolvedValue(undefined),
+    };
+  }
+
+  function baseConfig(provider: "openai" | "transformers" | "local") {
+    return {
+      host: "127.0.0.1",
+      port: 8787,
+      databaseUrl: "postgres://localhost/test",
+      vectorBackend: "qdrant" as const,
+      qdrant: { url: "http://qdrant.local:6333", apiKey: "key-aaa", collectionName: "col" },
+      openai: { apiKey: provider === "openai" ? "sk-test" : "" },
+      embedding: {
+        provider,
+        model: "test-model",
+        dimensions: 384,
+        version: "v1" as const,
+        chunkTargetTokens: 800 as const,
+        chunkOverlapTokens: 120 as const,
+      },
+      backups: { directory: "/tmp/backups" },
+    };
+  }
+
+  it("always includes postgres and qdrant probes", () => {
+    for (const provider of ["openai", "transformers", "local"] as const) {
+      const probes = selectDependencyProbes(baseConfig(provider), fakePool());
+      expect(probes.postgres).toBeDefined();
+      expect(probes.qdrant).toBeDefined();
+    }
+  });
+
+  it("includes openai probe only when EMBEDDING_PROVIDER=openai", () => {
+    const openaiProbes = selectDependencyProbes(baseConfig("openai"), fakePool());
+    expect(openaiProbes.openai).toBeDefined();
+  });
+
+  it("omits openai probe when EMBEDDING_PROVIDER=transformers", () => {
+    const probes = selectDependencyProbes(baseConfig("transformers"), fakePool());
+    expect(probes.openai).toBeUndefined();
+  });
+
+  it("omits openai probe when EMBEDDING_PROVIDER=local", () => {
+    const probes = selectDependencyProbes(baseConfig("local"), fakePool());
+    expect(probes.openai).toBeUndefined();
   });
 });

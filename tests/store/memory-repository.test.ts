@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPgPool } from "../../src/db/connection.js";
 import { runMigrations } from "../../src/db/migrate.js";
 import { createMemoryRepository } from "../../src/store/memory-repository.js";
@@ -48,6 +48,198 @@ async function recreateTestDatabase() {
     await adminPool.end();
   }
 }
+
+describe("createMemoryRepository (unit — no PG required)", () => {
+  it("deleteMemoryRecord issues SQL with organization_id predicate and passes both id and organizationId params (SEC-5)", () => {
+    // Proof via mock-based SQL inspection: deleteMemoryRecord must scope its
+    // DELETE to the given organization_id to prevent cross-tenant deletion.
+    const queryCalls: { sql: string; params: unknown[] }[] = [];
+    const mockPool = {
+      query: vi.fn().mockImplementation((sql: string, params: unknown[]) => {
+        queryCalls.push({ sql, params });
+        return Promise.resolve({ rows: [] });
+      }),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    return repo.deleteMemoryRecord(42, "org-abc").then(() => {
+      expect(queryCalls).toHaveLength(1);
+      const { sql, params } = queryCalls[0]!;
+
+      // SQL must include the org predicate — prevents cross-tenant deletion.
+      expect(sql).toMatch(/organization_id\s*=\s*\$2/);
+
+      // id must be $1, organizationId must be $2.
+      expect(params[0]).toBe(42);
+      expect(params[1]).toBe("org-abc");
+    });
+  });
+
+  it("upsertPostgresSource pushes sourceRef filter into SQL WHERE clause (PERF-5)", () => {
+    // addMemory calls upsertPostgresSource via a transaction client.
+    // The SELECT for an existing source must pass sourceRef as $5 and use
+    // jsonb extraction so the DB filters — not JS — narrows the result set.
+    const clientQueryCalls: { sql: string; params: unknown[] }[] = [];
+    const mockClient = {
+      query: vi.fn().mockImplementation((sql: string, params?: unknown[]) => {
+        clientQueryCalls.push({ sql, params: params ?? [] });
+        // BEGIN / COMMIT return no rows; source SELECT returns empty (new insert path).
+        return Promise.resolve({ rows: [] });
+      }),
+      release: vi.fn(),
+    };
+    const mockPool = {
+      connect: vi.fn().mockResolvedValue(mockClient),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    // We expect addMemory to throw because the INSERT RETURNING comes back
+    // empty from the mock — that's fine; we only care about the SELECT shape.
+    return repo
+      .addMemory({
+        scopeType: "project",
+        scopeId: "proj-x",
+        memoryType: "fact",
+        content: "test content",
+        source: {
+          scopeType: "project",
+          scopeId: "proj-x",
+          sourceType: "document",
+          sourceRef: "docs/spec.md",
+        },
+        durability: "ephemeral",
+        importance: 0,
+      })
+      .catch(() => {
+        // Find the source SELECT (has source_ref in WHERE).
+        const sourceSelect = clientQueryCalls.find(({ sql }) =>
+          sql.includes("FROM sources") && sql.includes("source_ref"),
+        );
+
+        expect(sourceSelect).toBeDefined();
+        const { sql, params } = sourceSelect!;
+
+        // Filter must use jsonb extraction — not a plain equality — so non-JSON
+        // legacy rows don't cause a cast error.
+        expect(sql).toMatch(/source_ref::jsonb->>'sourceRef'\s*=\s*\$5/);
+
+        // $5 must be the sourceRef value itself.
+        expect(params[4]).toBe("docs/spec.md");
+
+        // SQL must include LIMIT 1 to avoid over-fetching.
+        expect(sql).toMatch(/LIMIT\s+1/i);
+      });
+  });
+
+  it("listMemory throws when organizationId is undefined and allowLegacyAnonymous is not set (SEC-read)", () => {
+    const mockPool = { query: vi.fn() };
+    const repo = createMemoryRepository(mockPool as never);
+
+    return expect(
+      repo.listMemory({ scopeType: "project", scopeId: "proj-x" }),
+    ).rejects.toThrow(/organizationId/i);
+  });
+
+  it("listMemory throws when allowLegacyAnonymous is explicitly false (SEC-read)", () => {
+    const mockPool = { query: vi.fn() };
+    const repo = createMemoryRepository(mockPool as never);
+
+    return expect(
+      repo.listMemory(
+        { scopeType: "project", scopeId: "proj-x" },
+        { allowLegacyAnonymous: false },
+      ),
+    ).rejects.toThrow(/organizationId/i);
+  });
+
+  it("listMemory does not throw when allowLegacyAnonymous is true (SEC-read)", () => {
+    const mockPool = {
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    return expect(
+      repo.listMemory(
+        { scopeType: "project", scopeId: "proj-x" },
+        { allowLegacyAnonymous: true },
+      ),
+    ).resolves.toEqual([]);
+  });
+
+  it("listMemory does not throw when organizationId is provided (SEC-read)", () => {
+    const mockPool = {
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    return expect(
+      repo.listMemory(
+        { scopeType: "project", scopeId: "proj-x" },
+        { organizationId: "org-a" },
+      ),
+    ).resolves.toEqual([]);
+  });
+
+  it("getMemoryRecordsByIds throws when organizationId is undefined and allowLegacyAnonymous is not set (SEC-read)", () => {
+    const mockPool = { query: vi.fn() };
+    const repo = createMemoryRepository(mockPool as never);
+
+    return expect(
+      repo.getMemoryRecordsByIds([1, 2]),
+    ).rejects.toThrow(/organizationId/i);
+  });
+
+  it("getMemoryRecordsByIds does not throw when allowLegacyAnonymous is true (SEC-read)", () => {
+    const mockPool = {
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    return expect(
+      repo.getMemoryRecordsByIds([1, 2], undefined, true),
+    ).resolves.toEqual([]);
+  });
+
+  it("getMemoryRecordsByIds does not throw when organizationId is provided (SEC-read)", () => {
+    const mockPool = {
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    return expect(
+      repo.getMemoryRecordsByIds([1, 2], "org-a"),
+    ).resolves.toEqual([]);
+  });
+
+  it("listMemory SQL includes a parameterized LIMIT (PERF-8)", () => {
+    // listMemory is a browse/list operation: it must always emit a bounded
+    // LIMIT so result sets can't grow without bound.
+    const queryCalls: { sql: string; params: unknown[] }[] = [];
+    const mockPool = {
+      query: vi.fn().mockImplementation((sql: string, params: unknown[]) => {
+        queryCalls.push({ sql, params });
+        return Promise.resolve({ rows: [] });
+      }),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    return repo
+      .listMemory({ scopeType: "project", scopeId: "proj-x" }, { allowLegacyAnonymous: true })
+      .then(() => {
+        expect(queryCalls).toHaveLength(1);
+        const { sql, params } = queryCalls[0]!;
+
+        // SQL must contain a parameterized LIMIT.
+        expect(sql).toMatch(/LIMIT\s+\$\d+/i);
+
+        // The LIMIT param must be a positive integer (the default cap).
+        const limitParam = params.find(
+          (p) => typeof p === "number" && p > 0,
+        );
+        expect(limitParam).toBeGreaterThan(0);
+      });
+  });
+});
 
 // PG-dependent suite: skip when POSTGRES_HOST is unset (e.g. the non-PG CI
 // job, or local dev without docker compose). The pg-integration CI job sets
@@ -255,10 +447,10 @@ describe.skipIf(!process.env.POSTGRES_HOST)("createMemoryRepository", () => {
         importance: 1,
       });
 
-      const listed = await repository.listMemory({
-        scopeType: "project",
-        scopeId: "project-alpha",
-      });
+      const listed = await repository.listMemory(
+        { scopeType: "project", scopeId: "project-alpha" },
+        { allowLegacyAnonymous: true },
+      );
       const searched = await repository.searchMemory({
         query: "local memory durable",
         scopes: [{ scopeType: "project", scopeId: "project-alpha" }],
@@ -327,11 +519,11 @@ describe.skipIf(!process.env.POSTGRES_HOST)("createMemoryRepository", () => {
         importance: 1,
       });
 
-      const hydrated = await repository.getMemoryRecordsByIds([
-        second.id,
-        first.id,
-        999999,
-      ]);
+      const hydrated = await repository.getMemoryRecordsByIds(
+        [second.id, first.id, 999999],
+        undefined,
+        true,
+      );
 
       expect(hydrated.map((record) => record.id)).toEqual([
         second.id,

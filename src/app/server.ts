@@ -2,10 +2,14 @@ import http, { type IncomingMessage, type ServerResponse } from "node:http";
 import { pathToFileURL } from "node:url";
 
 import { resolveServiceConfig, type ServiceConfig } from "../config.js";
+import { createPgPool, type PgPool } from "../db/connection.js";
 import { rootLogger, type Logger } from "../logger.js";
 import { createToolRegistry } from "../mcp/server.js";
 import type { ToolRegistry } from "../mcp/types.js";
 import {
+  buildOpenAiProbe,
+  buildPostgresProbe,
+  buildQdrantProbe,
   checkDependencies,
   type DependencyProbes,
 } from "../health/check-dependencies.js";
@@ -201,6 +205,29 @@ export function createOperatorServer(
   );
 }
 
+// Pure helper: select which dependency probes to register based on config
+// and the dedicated probe PG pool. OpenAI probe is included only when
+// EMBEDDING_PROVIDER=openai — otherwise the probe would fail on zero-key
+// (transformers / local) deployments.
+export function selectDependencyProbes(
+  config: ServiceConfig,
+  probePool: PgPool,
+): DependencyProbes {
+  const probes: DependencyProbes = {
+    postgres: buildPostgresProbe(probePool),
+    qdrant: buildQdrantProbe({
+      url: config.qdrant.url,
+      apiKey: config.qdrant.apiKey,
+    }),
+  };
+
+  if (config.embedding.provider === "openai") {
+    probes.openai = buildOpenAiProbe({ apiKey: config.openai.apiKey });
+  }
+
+  return probes;
+}
+
 export function startOperatorServer(
   options: CreateOperatorServerOptions = {},
 ) {
@@ -216,7 +243,20 @@ export function startOperatorServer(
     : loadBearerTokens(process.env);
   assertSafeAuthConfig({ tokenCount: tokens.length, host: config.host });
 
-  const server = createOperatorServer({ ...options, config, logger: log });
+  // Dedicated pool for /readyz dependency probes. Kept separate from
+  // canonical-services so /readyz works before (or without) any tool call
+  // bootstrapping the singleton. Only one `SELECT 1` is issued per probe, so
+  // it stays at a single live connection in practice (uses the pool default).
+  const probePool = createPgPool({ connectionString: config.databaseUrl });
+  const dependencyProbes =
+    options.dependencyProbes ?? selectDependencyProbes(config, probePool);
+
+  const server = createOperatorServer({
+    ...options,
+    config,
+    logger: log,
+    dependencyProbes,
+  });
 
   // Optional: background outbox sweeper for P17 compaction-apply Qdrant
   // cleanup. Opt-in via COMPACTION_SWEEP_ENABLED=true so existing deploys
@@ -245,6 +285,7 @@ export function startOperatorServer(
   });
 
   server.on("close", () => {
+    void probePool.end();
     if (sweeper) {
       void sweeper.stop();
     }
@@ -262,8 +303,7 @@ async function startSweeperOnce(
   const services = await bootstrapCanonicalServices();
   const handle = startBackgroundSweeper({
     archiveRepository: services.archiveRepository,
-    qdrantClient: services.qdrantClient,
-    collectionName: services.config.qdrant.collectionName,
+    vectorIndex: services.vectorIndex,
     logger: log,
     intervalMs: loadSweeperIntervalMs(process.env),
   });

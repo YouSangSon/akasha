@@ -101,10 +101,12 @@ function makeDeps(
           inputs.map(() => [0.1, 0.2, 0.3]),
         ),
     },
-    qdrantClient: {
+    vectorIndex: {
       upsert: vi.fn().mockResolvedValue(undefined),
+      query: vi.fn(),
+      delete: vi.fn(),
+      ensureCollection: vi.fn(),
     },
-    collectionName: "memory_chunks_v1",
     embedding: {
       provider: "local",
       model: "test-model",
@@ -159,7 +161,7 @@ describe("unarchiveCompaction (happy path)", () => {
       chunkCount: 1,
     });
     expect(repo.restoreToCanonical).toHaveBeenCalledWith(archive, "org-a");
-    expect(deps.qdrantClient.upsert).toHaveBeenCalledTimes(1);
+    expect(deps.vectorIndex.upsert).toHaveBeenCalledTimes(1);
     expect(repo.markUnarchived).toHaveBeenCalledWith(50);
   });
 

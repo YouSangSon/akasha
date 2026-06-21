@@ -40,17 +40,16 @@ function makeRepoWithPending(
 describe("runOutboxSweep", () => {
   it("returns zero counts when no pending rows", async () => {
     const { repo } = makeRepoWithPending([]);
-    const qdrant = { deletePoints: vi.fn() };
+    const vectorIndex = { delete: vi.fn(), upsert: vi.fn(), query: vi.fn(), ensureCollection: vi.fn() };
 
     const result = await runOutboxSweep({
       archiveRepository: repo,
-      qdrantClient: qdrant,
-      collectionName: "memory_chunks_v1",
+      vectorIndex,
       logger: SILENT_LOGGER,
     });
 
     expect(result).toEqual({ scanned: 0, cleaned: 0, retried: 0, failed: 0 });
-    expect(qdrant.deletePoints).not.toHaveBeenCalled();
+    expect(vectorIndex.delete).not.toHaveBeenCalled();
   });
 
   it("cleans pending rows and marks them deleted", async () => {
@@ -69,22 +68,17 @@ describe("runOutboxSweep", () => {
       },
     ];
     const { repo, markQdrantStatus } = makeRepoWithPending(pending);
-    const qdrant = { deletePoints: vi.fn().mockResolvedValue(undefined) };
+    const vectorIndex = { delete: vi.fn().mockResolvedValue(undefined), upsert: vi.fn(), query: vi.fn(), ensureCollection: vi.fn() };
 
     const result = await runOutboxSweep({
       archiveRepository: repo,
-      qdrantClient: qdrant,
-      collectionName: "memory_chunks_v1",
+      vectorIndex,
       logger: SILENT_LOGGER,
     });
 
     expect(result).toEqual({ scanned: 2, cleaned: 2, retried: 0, failed: 0 });
-    expect(qdrant.deletePoints).toHaveBeenCalledTimes(2);
-    expect(qdrant.deletePoints).toHaveBeenNthCalledWith(
-      1,
-      "memory_chunks_v1",
-      ["p1", "p2"],
-    );
+    expect(vectorIndex.delete).toHaveBeenCalledTimes(2);
+    expect(vectorIndex.delete).toHaveBeenNthCalledWith(1, ["p1", "p2"]);
     expect(markQdrantStatus.mock.calls.every((c) => c[1] === "deleted")).toBe(
       true,
     );
@@ -100,14 +94,14 @@ describe("runOutboxSweep", () => {
       },
     ];
     const { repo, markQdrantStatus } = makeRepoWithPending(pending);
-    const qdrant = {
-      deletePoints: vi.fn().mockRejectedValue(new Error("Qdrant 503")),
+    const vectorIndex = {
+      delete: vi.fn().mockRejectedValue(new Error("Qdrant 503")),
+      upsert: vi.fn(), query: vi.fn(), ensureCollection: vi.fn(),
     };
 
     const result = await runOutboxSweep({
       archiveRepository: repo,
-      qdrantClient: qdrant,
-      collectionName: "memory_chunks_v1",
+      vectorIndex,
       logger: SILENT_LOGGER,
     });
 
@@ -125,14 +119,14 @@ describe("runOutboxSweep", () => {
       },
     ];
     const { repo, markQdrantStatus } = makeRepoWithPending(pending);
-    const qdrant = {
-      deletePoints: vi.fn().mockRejectedValue(new Error("Qdrant 503")),
+    const vectorIndex = {
+      delete: vi.fn().mockRejectedValue(new Error("Qdrant 503")),
+      upsert: vi.fn(), query: vi.fn(), ensureCollection: vi.fn(),
     };
 
     const result = await runOutboxSweep({
       archiveRepository: repo,
-      qdrantClient: qdrant,
-      collectionName: "memory_chunks_v1",
+      vectorIndex,
       logger: SILENT_LOGGER,
     });
 
@@ -143,12 +137,11 @@ describe("runOutboxSweep", () => {
   it("respects custom batchSize and maxAttempts", async () => {
     const { repo } = makeRepoWithPending([]);
     const findSpy = repo.findPendingQdrantCleanup as ReturnType<typeof vi.fn>;
-    const qdrant = { deletePoints: vi.fn() };
+    const vectorIndex = { delete: vi.fn(), upsert: vi.fn(), query: vi.fn(), ensureCollection: vi.fn() };
 
     await runOutboxSweep({
       archiveRepository: repo,
-      qdrantClient: qdrant,
-      collectionName: "memory_chunks_v1",
+      vectorIndex,
       logger: SILENT_LOGGER,
       batchSize: 25,
       maxAttempts: 2,

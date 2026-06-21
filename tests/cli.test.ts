@@ -29,6 +29,7 @@ describe("parseCliArgs", () => {
       command: "reindex",
       projectKey: "project-alpha",
       userScopeId: "alice",
+      organizationId: undefined,
     });
 
     expect(parseCliArgs(["backup-verify"])).toEqual({
@@ -37,6 +38,27 @@ describe("parseCliArgs", () => {
 
     expect(parseCliArgs(["restore-smoke"])).toEqual({
       command: "restore-smoke",
+    });
+  });
+
+  it("parses reindex --organization-id flag", () => {
+    expect(
+      parseCliArgs(["reindex", "--project", "p", "--organization-id", "acme"]),
+    ).toEqual({
+      command: "reindex",
+      projectKey: "p",
+      userScopeId: undefined,
+      organizationId: "acme",
+    });
+  });
+
+  it("leaves organizationId undefined when --organization-id flag is absent", () => {
+    const parsed = parseCliArgs(["reindex", "--project", "p"]);
+    expect(parsed).toEqual({
+      command: "reindex",
+      projectKey: "p",
+      userScopeId: undefined,
+      organizationId: undefined,
     });
   });
 
@@ -72,12 +94,41 @@ describe("parseCliArgs", () => {
     expect(registry.reindex_memory).toHaveBeenCalledWith({
       projectKey: "project-alpha",
       userScopeId: "alice",
+      organizationId: "default",
     });
     expect(JSON.parse(output)).toEqual({
       ok: true,
       projectKey: "project-alpha",
       userScopeId: "alice",
       chunkCount: 3,
+    });
+  });
+
+  it("passes --organization-id to reindex_memory when provided", async () => {
+    const registry: ToolRegistry = {
+      build_context_pack: vi.fn(),
+      search_memory: vi.fn(),
+      add_memory: vi.fn(),
+      compact_memory: vi.fn(),
+      list_audit_log: vi.fn(),
+      unarchive_memory: vi.fn(),
+      reindex_memory: vi.fn().mockResolvedValue({
+        ok: true,
+        projectKey: "project-alpha",
+        userScopeId: undefined,
+        chunkCount: 5,
+      }),
+    };
+
+    await runCli(
+      ["reindex", "--project", "project-alpha", "--organization-id", "acme"],
+      { registry },
+    );
+
+    expect(registry.reindex_memory).toHaveBeenCalledWith({
+      projectKey: "project-alpha",
+      userScopeId: undefined,
+      organizationId: "acme",
     });
   });
 });

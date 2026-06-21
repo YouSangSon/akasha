@@ -16,12 +16,11 @@ import type {
   MemoryArchiveRepository,
   PendingQdrantCleanup,
 } from "../store/memory-archive-repository.js";
-import type { QdrantPointDeleter } from "./apply-compaction.js";
+import type { VectorIndex } from "../vector/vector-index.js";
 
 export type RunOutboxSweepInput = {
   archiveRepository: MemoryArchiveRepository;
-  qdrantClient: QdrantPointDeleter;
-  collectionName: string;
+  vectorIndex: VectorIndex;
   logger: Logger;
   // Tunables. Defaults follow design doc §10.
   batchSize?: number;
@@ -73,10 +72,7 @@ async function sweepOne(
   maxAttempts: number,
 ): Promise<"cleaned" | "retry" | "failed"> {
   try {
-    await input.qdrantClient.deletePoints(
-      input.collectionName,
-      row.qdrantPointIds,
-    );
+    await input.vectorIndex.delete(row.qdrantPointIds);
     await input.archiveRepository.markQdrantStatus(row.archiveId, "deleted");
     return "cleaned";
   } catch (err: unknown) {

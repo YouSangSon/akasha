@@ -1,5 +1,7 @@
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { describe, expect, it, vi } from "vitest";
-import { createToolRegistry } from "../../src/mcp/server.js";
+import { createMcpServer, createToolRegistry } from "../../src/mcp/server.js";
+import type { ToolRegistry } from "../../src/mcp/types.js";
 import type { MemoryRepository, SearchMemoryResult } from "../../src/types.js";
 
 function createRepository(): MemoryRepository {
@@ -372,17 +374,14 @@ describe("createToolRegistry", () => {
     // F4: writeCanonicalMemory now batches per-chunk embeddings into a single
     // embedBatch call instead of N sequential embed calls.
     expect(services.embeddings.embedBatch).toHaveBeenCalled();
-    expect(services.qdrantClient.upsert).toHaveBeenCalledWith(
-      "memory_chunks_v1",
-      expect.objectContaining({
-        points: expect.arrayContaining([
-          expect.objectContaining({
-            payload: expect.objectContaining({
-              memory_record_id: 501,
-            }),
+    expect(services.vectorIndex.upsert).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            memory_record_id: 501,
           }),
-        ]),
-      }),
+        }),
+      ]),
     );
   });
 
@@ -425,9 +424,9 @@ describe("createToolRegistry", () => {
 
   it("persists context pack runs when using service-backed retrieval", async () => {
     const services = createCanonicalServices();
-    services.qdrantClient.query.mockResolvedValue({
-      points: [{ payload: { memory_record_id: 12 } }],
-    });
+    services.vectorIndex.query.mockResolvedValue([
+      { id: "chunk:12", score: 0.9, payload: { memory_record_id: 12 } },
+    ]);
     services.repository.getMemoryRecordsByIds.mockResolvedValue([
       createRecord({
         id: 12,
@@ -471,6 +470,7 @@ describe("createToolRegistry", () => {
         startOffset: 0,
         endOffset: 13,
         embeddingVersion: "v1",
+        organizationId: "org-a",
         scopeType: "project",
         scopeId: "project-alpha",
         projectKey: "project-alpha",
@@ -486,6 +486,7 @@ describe("createToolRegistry", () => {
         startOffset: 0,
         endOffset: 10,
         embeddingVersion: "v1",
+        organizationId: "org-a",
         scopeType: "user",
         scopeId: "alice",
         projectKey: null,
@@ -500,6 +501,7 @@ describe("createToolRegistry", () => {
     });
 
     const result = await registry.reindex_memory({
+      organizationId: "org-a",
       projectKey: "project-alpha",
     });
 
@@ -509,26 +511,23 @@ describe("createToolRegistry", () => {
       chunkCount: 2,
       scopes: ["project:project-alpha", "user:alice"],
     });
-    expect(services.chunkRepository.listChunks).toHaveBeenCalledWith([
+    expect(services.chunkRepository.listChunks).toHaveBeenCalledWith("org-a", [
       { scopeType: "project", scopeId: "project-alpha" },
       { scopeType: "user", scopeId: "alice" },
     ]);
-    expect(services.qdrantClient.upsert).toHaveBeenCalledWith(
-      "memory_chunks_v1",
-      expect.objectContaining({
-        points: expect.arrayContaining([
-          expect.objectContaining({
-            payload: expect.objectContaining({
-              memory_record_id: 501,
-            }),
+    expect(services.vectorIndex.upsert).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            memory_record_id: 501,
           }),
-          expect.objectContaining({
-            payload: expect.objectContaining({
-              memory_record_id: 502,
-            }),
+        }),
+        expect.objectContaining({
+          payload: expect.objectContaining({
+            memory_record_id: 502,
           }),
-        ]),
-      }),
+        }),
+      ]),
     );
   });
 
@@ -596,10 +595,7 @@ describe("createToolRegistry", () => {
     expect(services.archiveRepository.createCompactionRun).toHaveBeenCalledWith(
       expect.objectContaining({ organizationId: "dev-team", dryRun: false }),
     );
-    expect(services.qdrantClient.deletePoints).toHaveBeenCalledWith(
-      "memory_chunks_v1",
-      ["pt-902"],
-    );
+    expect(services.vectorIndex.delete).toHaveBeenCalledWith(["pt-902"]);
   });
 
   it("apply path enforces multi-tenancy: organizationId flows to archiveRepository.applyCompactionRecord", async () => {
@@ -759,10 +755,14 @@ describe("createToolRegistry", () => {
     // Embedding mock: paraphrase records share a near-identical vector;
     // distinct record gets an orthogonal one. Above 0.95 threshold the
     // first two cluster together; the third stays alone.
-    (services.embeddings.embed as ReturnType<typeof vi.fn>)
-      .mockImplementationOnce(async () => [1, 0, 0])      // para1
-      .mockImplementationOnce(async () => [0.99, 0.01, 0]) // para2 — near
-      .mockImplementationOnce(async () => [0, 1, 0]);      // distinct
+    // computeSemanticGroups now calls embedBatch once with all 3 contents
+    // in input order (para1, para2, distinct), so return all 3 vectors.
+    (services.embeddings.embedBatch as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce([
+        [1, 0, 0],        // para1
+        [0.99, 0.01, 0],  // para2 — near-identical to para1
+        [0, 1, 0],        // distinct — orthogonal
+      ]);
 
     const registry = createToolRegistry({
       resolveCanonicalServices: async () => services,
@@ -779,7 +779,8 @@ describe("createToolRegistry", () => {
     // higher importance? both 0 — tie-break: lower id wins.
     expect(result.duplicateGroups[0]!.keepId).toBe("11");
     expect(result.duplicateGroups[0]!.archiveIds).toEqual(["12"]);
-    expect(services.embeddings.embed).toHaveBeenCalledTimes(3);
+    // Single batch call replaced 3 sequential embed() calls.
+    expect(services.embeddings.embedBatch).toHaveBeenCalledOnce();
   });
 
   it("rejects semantic dedup in legacy repository-override mode (no embedding client)", async () => {
@@ -837,6 +838,138 @@ describe("createToolRegistry", () => {
 
     expect(factory).toHaveBeenCalledTimes(2);
     expect(services.close).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("createMcpServer", () => {
+  it("registers all 7 tools on the MCP stdio transport", () => {
+    const registeredNames: string[] = [];
+    const spy = vi
+      .spyOn(McpServer.prototype, "registerTool")
+      .mockImplementation((name: string) => {
+        registeredNames.push(name);
+        return undefined as unknown as ReturnType<McpServer["registerTool"]>;
+      });
+
+    createMcpServer();
+
+    spy.mockRestore();
+
+    expect(registeredNames.sort()).toEqual(
+      [
+        "add_memory",
+        "search_memory",
+        "build_context_pack",
+        "reindex_memory",
+        "compact_memory",
+        "unarchive_memory",
+        "list_audit_log",
+      ].sort(),
+    );
+  });
+
+  it("dispatches reindex_memory to the registry handler", async () => {
+    const registry: ToolRegistry = {
+      add_memory: vi.fn(),
+      search_memory: vi.fn(),
+      build_context_pack: vi.fn(),
+      reindex_memory: vi.fn().mockResolvedValue({
+        ok: true,
+        projectKey: "p",
+        scopes: ["project:p"],
+        chunkCount: 3,
+      }),
+      compact_memory: vi.fn(),
+      list_audit_log: vi.fn(),
+      unarchive_memory: vi.fn(),
+    } as unknown as ToolRegistry;
+
+    const handlers: Map<string, (input: unknown) => Promise<unknown>> = new Map();
+    const spy = vi
+      .spyOn(McpServer.prototype, "registerTool")
+      .mockImplementation((name: string, _schema: unknown, handler: (input: unknown) => Promise<unknown>) => {
+        handlers.set(name, handler);
+        return undefined as unknown as ReturnType<McpServer["registerTool"]>;
+      });
+
+    createMcpServer({ registry });
+    spy.mockRestore();
+
+    const handler = handlers.get("reindex_memory")!;
+    expect(handler).toBeDefined();
+
+    const result = await handler({ organizationId: "org-a", projectKey: "p" });
+
+    expect(registry.reindex_memory).toHaveBeenCalledWith({
+      organizationId: "org-a",
+      projectKey: "p",
+    });
+    expect(result).toEqual({
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            { ok: true, projectKey: "p", scopes: ["project:p"], chunkCount: 3 },
+            null,
+            2,
+          ),
+        },
+      ],
+    });
+  });
+
+  it("dispatches unarchive_memory to the registry handler", async () => {
+    const registry: ToolRegistry = {
+      add_memory: vi.fn(),
+      search_memory: vi.fn(),
+      build_context_pack: vi.fn(),
+      reindex_memory: vi.fn(),
+      compact_memory: vi.fn(),
+      list_audit_log: vi.fn(),
+      unarchive_memory: vi.fn().mockResolvedValue({
+        ok: true,
+        outcomes: [{ archiveId: 7, status: "restored", restoredRecordId: 100, sourceRecordId: 5, chunkCount: 2 }],
+        restoredCount: 1,
+        skippedCount: 0,
+        failedCount: 0,
+      }),
+    } as unknown as ToolRegistry;
+
+    const handlers: Map<string, (input: unknown) => Promise<unknown>> = new Map();
+    const spy = vi
+      .spyOn(McpServer.prototype, "registerTool")
+      .mockImplementation((name: string, _schema: unknown, handler: (input: unknown) => Promise<unknown>) => {
+        handlers.set(name, handler);
+        return undefined as unknown as ReturnType<McpServer["registerTool"]>;
+      });
+
+    createMcpServer({ registry });
+    spy.mockRestore();
+
+    const handler = handlers.get("unarchive_memory")!;
+    expect(handler).toBeDefined();
+
+    const result = await handler({ archiveIds: [7] });
+
+    expect(registry.unarchive_memory).toHaveBeenCalledWith({ archiveIds: [7] });
+    expect(result).toEqual({
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(
+            {
+              ok: true,
+              outcomes: [{ archiveId: 7, status: "restored", restoredRecordId: 100, sourceRecordId: 5, chunkCount: 2 }],
+              restoredCount: 1,
+              skippedCount: 0,
+              failedCount: 0,
+            },
+            null,
+            2,
+          ),
+        },
+      ],
+    });
   });
 });
 
@@ -939,12 +1072,11 @@ function createCanonicalServices() {
       restoreToCanonical: vi.fn(),
       markUnarchived: vi.fn().mockResolvedValue(undefined),
     },
-    qdrantClient: {
+    vectorIndex: {
       upsert: vi.fn().mockResolvedValue(undefined),
-      query: vi.fn().mockResolvedValue({
-        points: [],
-      }),
-      deletePoints: vi.fn().mockResolvedValue(undefined),
+      query: vi.fn().mockResolvedValue([]),
+      delete: vi.fn().mockResolvedValue(undefined),
+      ensureCollection: vi.fn().mockResolvedValue(undefined),
     },
     config: {
       qdrant: {

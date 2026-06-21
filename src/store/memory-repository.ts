@@ -1,11 +1,13 @@
 import { createHash } from "node:crypto";
 import type { PgPool, PgQueryable } from "../db/connection.js";
+import { rootLogger } from "../logger.js";
 import type {
   AddMemoryInput,
   CanonicalMemoryRepository,
   MemorySource,
   SearchMemoryResult,
 } from "../types.js";
+import { assertOrganizationId } from "./assert-organization-id.js";
 
 const DEFAULT_ORG_ID = "default";
 
@@ -194,6 +196,7 @@ export function createMemoryRepository(
     },
 
     async listMemory(scope, options) {
+      assertOrganizationId(options?.organizationId, options?.allowLegacyAnonymous, "listMemory");
       const limit = clampListLimit(options?.limit);
       const params: unknown[] = [scope.scopeType, scope.scopeId];
       let orgClause = "";
@@ -219,7 +222,8 @@ export function createMemoryRepository(
       return result.rows.map(mapPostgresSearchResult);
     },
 
-    async getMemoryRecordsByIds(ids, organizationId) {
+    async getMemoryRecordsByIds(ids, organizationId, allowLegacyAnonymous) {
+      assertOrganizationId(organizationId, allowLegacyAnonymous, "getMemoryRecordsByIds");
       if (ids.length === 0) {
         return [];
       }
@@ -244,14 +248,15 @@ export function createMemoryRepository(
       return orderRecordsByIds(result.rows.map(mapPostgresSearchResult), ids);
     },
 
-    async deleteMemoryRecord(id) {
+    async deleteMemoryRecord(id, organizationId) {
       // Single-statement rollback. ON DELETE CASCADE on memory_chunks,
       // ingest_jobs, and relationships (defined in migrations/001_initial.sql)
       // removes every dependent row in the same transaction Postgres uses
       // for this DELETE — no explicit child-table cleanup required.
+      // organization_id is required to prevent cross-tenant deletion (SEC-5).
       await pool.query(
-        `DELETE FROM memory_records WHERE id = $1`,
-        [id],
+        `DELETE FROM memory_records WHERE id = $1 AND organization_id = $2`,
+        [id, organizationId],
       );
     },
   };
@@ -340,6 +345,10 @@ async function upsertPostgresSource(
   organizationId: string,
 ): Promise<PostgresSourceRow> {
   const sourceKey = requireSourceKey(input.source);
+  // Push the source_ref match into the DB — source_ref is stored as JSON
+  // {"sourceRef":...,"uri":...}, so we extract with ::jsonb->>'sourceRef'.
+  // LIMIT 1 + ORDER BY id ASC preserves the lowest-id-match semantics of
+  // the prior JS .find().
   const existingResult = await queryable.query<PostgresSourceRow>(
     `
       SELECT ${SOURCE_RETURN_COLUMNS}
@@ -348,20 +357,20 @@ async function upsertPostgresSource(
         AND scope_type = $2
         AND scope_id = $3
         AND source_type = $4
+        AND source_ref::jsonb->>'sourceRef' = $5
       ORDER BY id ASC
+      LIMIT 1
     `,
     [
       organizationId,
       input.source.scopeType,
       input.source.scopeId,
       input.source.sourceType,
+      sourceKey,
     ],
   );
 
-  const existingRow = existingResult.rows.find((row) => {
-    const metadata = parseStoredPostgresSourceRef(row.source_ref);
-    return metadata.sourceRef === sourceKey;
-  });
+  const existingRow = existingResult.rows[0];
 
   const nextSourceRef = serializeStoredPostgresSourceRef({
     sourceRef: sourceKey,
@@ -424,7 +433,7 @@ function serializeStoredPostgresSourceRef(
   return JSON.stringify(metadata);
 }
 
-function parseStoredPostgresSourceRef(
+export function parseStoredPostgresSourceRef(
   value: string,
 ): PostgresStoredSourceMetadata {
   try {
@@ -436,7 +445,12 @@ function parseStoredPostgresSourceRef(
         uri: typeof parsed.uri === "string" ? parsed.uri : null,
       };
     }
-  } catch {}
+  } catch (err) {
+    rootLogger.warn(
+      { err, valueLength: value.length },
+      "parseStoredPostgresSourceRef: failed to parse source_ref JSON; falling back to raw value",
+    );
+  }
 
   return {
     sourceRef: value,
@@ -444,6 +458,8 @@ function parseStoredPostgresSourceRef(
   };
 }
 
+// listMemory is a browse/paging contract — bound results so a large scope
+// can't return an unbounded row set. Callers that need more should paginate.
 const DEFAULT_LIST_LIMIT = 1000;
 const MAX_LIST_LIMIT = 5000;
 

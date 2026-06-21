@@ -23,7 +23,7 @@ data stays on your box.
 | **Data stays on your box** | ✅ | ✅ | partial (OpenAI calls) | partial (OpenAI calls) | ❌ (Letta Cloud) | ❌ (Zep Cloud) |
 | **MCP-native protocol** | ✅ | ✅ | ✅ (wraps Mem0) | wrapper only | wrapper only | ❌ |
 | **Multi-tenant out of the box** | ✅ (`organization_id`, token-org binding, SQL + vector filters) | ❌ | inherits Mem0 | ✅ | ✅ | ✅ |
-| **Postgres + Qdrant backend** | ✅ (canonical + vector separated) | SQLite-vec | Supabase + pgvector | varies | varies | proprietary |
+| **Postgres + vector backend** | ✅ (Qdrant default; pgvector option for Postgres-only deploy) | SQLite-vec | Supabase + pgvector | varies | varies | proprietary |
 | **OSS path actively maintained** | ✅ | ✅ | ✅ (template repo) | ✅ | ✅ | ❌ (CE deprecated 2025) |
 
 The MCP memory ecosystem norm is *free/local default* — doobidoo (1.7k★) headlines
@@ -33,7 +33,9 @@ context-forge uses too. Where context-forge distinctively goes further: a
 collection rebuild loses 0 data and reindex is one tool call), **org-scoped
 multi-tenancy at the SQL and vector layers** (peers either skip it or rely on
 the upstream framework), and **MCP-native rather than wrapper** (no shim
-between the protocol and the memory engine).
+between the protocol and the memory engine). For deployments where running a
+second service is inconvenient, set `VECTOR_BACKEND=pgvector` to store vectors
+in Postgres itself — no Qdrant required.
 
 If you need a hosted memory product with a polished UI, look at Mem0 or Letta.
 If you need a self-hosted memory MCP server with no API key required, this is
@@ -102,9 +104,9 @@ curl -X POST http://localhost:8787/v1/memory/search \
 | MCP server (`src/mcp/`) | Tool surface for Claude/Codex CLI clients (stdio) |
 | HTTP server (`src/app/`) | Same tool surface as JSON-over-HTTP for non-MCP clients |
 | Canonical store (`src/store/memory-repository.ts`) | Postgres — records, sources, ingest jobs, audit |
-| Vector index (`src/store/canonical-indexing.ts`) | Qdrant — chunked embeddings + similarity search |
+| Vector index (`src/vector/`) | Qdrant (default) or pgvector — chunked embeddings + similarity search. Set `VECTOR_BACKEND=pgvector` for Postgres-only deploy. |
 | Compaction (`src/compact/`) | Dedup (exact + semantic), decay, archive, unarchive, sweeper |
-| Embeddings (`src/embedding/`) | OpenAI `text-embedding-3-small` or offline-deterministic local |
+| Embeddings (`src/embedding/`) | `transformers` (free local ONNX, default), `openai` (`text-embedding-3-small`), or `local` (deterministic stub for CI) |
 
 Data flow: caller writes `add_memory` → record persisted to Postgres + chunked
 + embedded + upserted to Qdrant. `search_memory` → embed query → Qdrant cosine
@@ -126,8 +128,8 @@ npm run backup:create # snapshot Postgres + Qdrant to BACKUP_DIR
 ## Configuration
 
 All knobs are env vars. See [.env.example](.env.example) for the complete
-list. Required: `OPENAI_API_KEY`, `MEMORY_API_TOKENS`. Everything else has
-sensible defaults.
+list. Required: `MEMORY_API_TOKENS`. `OPENAI_API_KEY` is optional — only
+needed when `EMBEDDING_PROVIDER=openai`. Everything else has sensible defaults.
 
 ## License
 

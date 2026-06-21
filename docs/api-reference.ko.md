@@ -5,7 +5,7 @@
 context-forge는 동일한 도구 surface를 두 가지 transport로 노출합니다:
 
 - **MCP** (stdio) — Claude Code, Codex CLI 같은 AI 클라이언트용.
-  진입점: `dist/src/cli.js`.
+  진입점: `dist/src/cli.js`. 7개 도구 모두 등록됨.
 - **HTTP** (POST JSON) — 그 외 모든 클라이언트용.
   진입점: `src/app/server.ts`, 기본 바인드 `127.0.0.1:8787`.
 
@@ -28,7 +28,7 @@ curl -H "Authorization: Bearer dev-token" http://localhost:8787/v1/memory/search
 | 401 | `Authorization` 헤더 누락 / 알 수 없음 / 잘못된 형식 |
 | 403 | 토큰이 다른 org에 바인딩됨 (body / 헤더와 불일치) |
 | 429 | 토큰별 rate limit 소진 |
-| 503 | `/readyz` 가 의존성 outage 감지 |
+| 503 | `/readyz` 가 의존성 outage 감지 (probe가 주입된 경우에만 — 아래 health 섹션 참조) |
 
 ## 응답 envelope (HTTP)
 
@@ -91,6 +91,7 @@ type SearchMemoryInput = {
   projectKey: string;            // 필수
   query: string;
   userScopeId?: string;          // user-scope 결과 포함
+  includeUser?: boolean;         // 기본 true; false로 설정 시 user-scope 결과 제외
   limit?: number;                // 기본 10
 };
 
@@ -126,8 +127,9 @@ user-scope 결과보다 안정적으로 앞에 옴.
 type BuildContextPackInput = {
   organizationId?: string;
   projectKey: string;
-  task?: string;                 // 랭킹용 작업 설명
+  task: string;                  // 필수; 랭킹용 작업 설명
   userScopeId?: string;
+  includeUser?: boolean;         // 기본 true; false로 설정 시 user-scope 결과 제외
   limit?: number;
 };
 
@@ -157,20 +159,21 @@ body가 LLM 프롬프트의 cache-eligible prefix에 위치하도록.
 
 ```ts
 type ReindexMemoryInput = {
-  organizationId?: string;
-  projectKey?: string;
+  organizationId: string;        // 필수; 없으면 throw (데이터 격리 가드)
+  projectKey: string;            // 필수
   userScopeId?: string;
 };
 
 type ReindexMemoryResult = {
   ok: true;
   projectKey: string;
-  scopes: ScopeRef[];
+  scopes: string[];              // 예: ["project:my-project", "user:abc123"]
   chunkCount: number;
 };
 ```
 
 HTTP: `POST /v1/memory/reindex`
+MCP stdio: `reindex_memory`
 
 기존 chunk의 임베딩을 재계산해서 Qdrant에 upsert. `EMBEDDING_PROVIDER` 또는
 `OPENAI_EMBEDDING_MODEL` 변경 후 사용.
@@ -214,6 +217,7 @@ type CompactMemoryResult = {
 ```
 
 HTTP: `POST /v1/memory/compact`
+MCP stdio: `compact_memory`
 
 `dryRun=false` 시 apply 경로 실행:
 1. 계획은 dry-run과 동일한 로직으로 계산.
@@ -222,7 +226,7 @@ HTTP: `POST /v1/memory/compact`
    반영되어 sweeper가 처리.
 
 Idempotent: 같은 UUID로 replay 시 prior outcome 반환 (재실행하지 않음).
-기본 org당 1회/시간으로 rate-limit.
+기본 org당 1회/시간으로 rate-limit; 한도 초과 시 HTTP **429** + `Retry-After` 헤더 반환.
 
 ---
 
@@ -248,6 +252,7 @@ type UnarchiveMemoryResult = {
 ```
 
 HTTP: `POST /v1/memory/unarchive`
+MCP stdio: `unarchive_memory`
 
 Skip 사유:
 - `archive_not_found_or_org_mismatch` — id 없음 또는 org 범위 밖
@@ -300,10 +305,23 @@ HTTP: `POST /v1/audit/list`
 
 ### `GET /readyz` — readiness
 
-인증 없음. Postgres (`SELECT 1`), Qdrant (`/healthz`), OpenAI (`/v1/models`)
-프로브:
+인증 없음. 실제 의존성을 프로브하며 다음을 반환합니다:
 
-- 모두 OK → 200 (각 프로브 상태 포함)
-- 어떤 프로브든 실패 → 503 (load balancer drain)
+- **200** — 모든 프로브 통과 시 (각 상태 포함)
+- **503** — 의존성 하나라도 연결 불가 시 (load balancer drain 또는 Kubernetes
+  readiness 실패)
 
-Kubernetes readiness, Docker healthcheck, 외부 모니터 통합용으로 사용.
+내장 프로덕션 서버(`startOperatorServer`)는 다음 프로브를 자동으로 연결합니다:
+
+| 프로브 | 검사 내용 | 항상 활성? |
+|---|---|---|
+| `postgres` | `SELECT 1` | 예 |
+| `qdrant` | Qdrant 호스트 `GET /healthz` | 예 |
+| `openai` | API 키로 `GET /v1/models` | `EMBEDDING_PROVIDER=openai` 일 때만 |
+
+OpenAI 프로브는 `transformers` 및 `local` 프로바이더에서는 생략됩니다 — 해당
+배포에는 API 키가 없어 readiness 실패를 일으켜서는 안 됩니다.
+
+Kubernetes readiness probe, Docker `HEALTHCHECK`, 외부 업타임 모니터에 사용하세요.
+`/healthz` 엔드포인트는 의존성 체크 없이 프로세스 생존만 확인하는 liveness
+체크로 유지됩니다.

@@ -145,9 +145,8 @@ export function createToolRegistry(
     const vector = await services.embeddings.embed(input.query);
 
     return retrieveMemoryFromQdrant({
-      qdrantClient: services.qdrantClient,
+      vectorIndex: services.vectorIndex,
       repository: services.repository,
-      collectionName: services.config.qdrant.collectionName,
       vector,
       organizationId: input.organizationId,
       // Default-strict: undefined organizationId throws unless the operator
@@ -328,8 +327,7 @@ export function createToolRegistry(
               chunkRepository: services.chunkRepository,
               ingestJobs: services.ingestJobs,
               embeddings: services.embeddings,
-              qdrantClient: services.qdrantClient,
-              collectionName: services.config.qdrant.collectionName,
+              vectorIndex: services.vectorIndex,
               embedding: {
                 provider: services.config.embedding.provider,
                 model: services.config.embedding.model,
@@ -439,6 +437,14 @@ export function createToolRegistry(
     },
 
     async reindex_memory(input) {
+      if (!input.organizationId) {
+        throw new Error(
+          "reindex_memory requires organizationId: omitting it would reindex chunks " +
+            "across all tenants sharing the same scope, violating data isolation. " +
+            "Pass the caller's organization identifier.",
+        );
+      }
+      const organizationId: string = input.organizationId;
       const userScopeId = resolveUserScopeId({
         cwd,
         explicitUserScopeId: input.userScopeId,
@@ -463,8 +469,8 @@ export function createToolRegistry(
         reindexCanonicalMemory({
           chunkRepository: services.chunkRepository,
           embeddings: services.embeddings,
-          qdrantClient: services.qdrantClient,
-          collectionName: services.config.qdrant.collectionName,
+          vectorIndex: services.vectorIndex,
+          organizationId,
           scopes,
         }),
       );
@@ -513,6 +519,7 @@ export function createToolRegistry(
               return repository.listMemory(scopeRef, {
                 limit: input.limit,
                 organizationId: input.organizationId,
+                allowLegacyAnonymous: process.env.LEGACY_ANONYMOUS_SEARCH === "true",
               });
             },
           )
@@ -520,6 +527,7 @@ export function createToolRegistry(
             repository.listMemory(scopeRef, {
               limit: input.limit,
               organizationId: input.organizationId,
+              allowLegacyAnonymous: process.env.LEGACY_ANONYMOUS_SEARCH === "true",
             }),
           );
       const targetLabel =
@@ -572,8 +580,7 @@ export function createToolRegistry(
           },
           {
             archiveRepository: services.archiveRepository,
-            qdrantClient: services.qdrantClient,
-            collectionName: services.config.qdrant.collectionName,
+            vectorIndex: services.vectorIndex,
             embeddings: services.embeddings,
             logger: baseLogger,
           },
@@ -612,8 +619,7 @@ export function createToolRegistry(
             archiveRepository: services.archiveRepository,
             chunkRepository: services.chunkRepository,
             embeddings: services.embeddings,
-            qdrantClient: services.qdrantClient,
-            collectionName: services.config.qdrant.collectionName,
+            vectorIndex: services.vectorIndex,
             embedding: {
               provider: services.config.embedding.provider,
               model: services.config.embedding.model,
@@ -763,6 +769,19 @@ export function createMcpServer(
   );
 
   server.registerTool(
+    "reindex_memory",
+    {
+      description: "Reindex all memory chunks for a project (and user) scope into Qdrant.",
+      inputSchema: {
+        organizationId: z.string().min(1).optional(),
+        projectKey: z.string().min(1),
+        userScopeId: z.string().min(1).optional(),
+      },
+    },
+    async (input) => toToolResult(await registry.reindex_memory(input)),
+  );
+
+  server.registerTool(
     "compact_memory",
     {
       description: "Preview or apply conservative memory compaction heuristics.",
@@ -778,6 +797,18 @@ export function createMcpServer(
       },
     },
     async (input) => toToolResult(await registry.compact_memory(input)),
+  );
+
+  server.registerTool(
+    "unarchive_memory",
+    {
+      description: "Restore one or more archived memory records back to active canonical storage.",
+      inputSchema: {
+        organizationId: z.string().min(1).optional(),
+        archiveIds: z.array(z.number().int()),
+      },
+    },
+    async (input) => toToolResult(await registry.unarchive_memory(input)),
   );
 
   server.registerTool(

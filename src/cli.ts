@@ -12,6 +12,7 @@ export type ParsedCliArgs =
       command: "reindex";
       projectKey: string;
       userScopeId?: string;
+      organizationId?: string;
     }
   | {
       command: "backup-verify";
@@ -38,6 +39,7 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
   let projectKey: string | undefined;
   let userScopeId: string | undefined;
   let task: string | undefined;
+  let organizationId: string | undefined;
 
   for (let index = 0; index < rest.length; index += 1) {
     const token = rest[index];
@@ -61,6 +63,12 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
       continue;
     }
 
+    if (token === "--organization-id") {
+      organizationId = requireFlagValue(token, value);
+      index += 1;
+      continue;
+    }
+
     throw new Error(`Unsupported argument: ${token}`);
   }
 
@@ -77,6 +85,7 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
       command,
       projectKey,
       userScopeId,
+      organizationId,
     };
   }
 
@@ -113,6 +122,7 @@ export async function runCli(
       const result = await registry.reindex_memory({
         projectKey: parsed.projectKey,
         userScopeId: parsed.userScopeId,
+        organizationId: parsed.organizationId ?? "default",
       });
 
       return JSON.stringify(result, null, 2);

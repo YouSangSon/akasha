@@ -45,7 +45,10 @@ self-hosted) and run multiple `app` instances behind a load balancer.
 - [ ] **Backups** — schedule `npm run backup:create` (cron / systemd timer)
       and verify with `npm run restore:smoke` periodically.
 - [ ] **Monitoring** — wire `/readyz` to your orchestrator's readiness probe
-      and the pino logs (stderr) to your log aggregator.
+      and the pino logs (stderr) to your log aggregator. `/readyz` probes
+      Postgres and Qdrant on every request; it also probes OpenAI when
+      `EMBEDDING_PROVIDER=openai`. Returns 503 if any dependency is
+      unreachable, so your orchestrator will drain traffic automatically.
 
 ## Single-host compose deployment
 
@@ -165,10 +168,10 @@ The `npm run backup:create` script handles the rsync invocation. See
 
 ## Disaster recovery
 
-The app pool fails closed on Postgres / Qdrant / OpenAI outages — `/readyz`
-returns 503 so a load balancer drains the instance. Once dependencies
-recover, the next request bootstraps the canonical-services singleton again
-(no app restart needed for transient failures).
+**Note:** `/readyz` actively probes Postgres and Qdrant (plus OpenAI when
+`EMBEDDING_PROVIDER=openai`) and returns 503 if any dependency is unreachable.
+Once dependencies recover from a transient failure, the next request
+bootstraps the canonical-services singleton again (no app restart needed).
 
 If a host goes away entirely, restore from the latest backup:
 

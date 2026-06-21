@@ -190,7 +190,9 @@ docker compose logs --since 1h app | jq 'select(.level >= 40)'  # warn+
 ### Health probe
 
 - `GET /healthz` — 프로세스 살아 있음 (up 후 항상 200).
-- `GET /readyz` — 의존성 도달 가능. 503 → drain.
+- `GET /readyz` — readiness gate. Postgres와 Qdrant를 매 호출마다 프로브하며
+  (`EMBEDDING_PROVIDER=openai` 시 OpenAI도 포함). 모두 통과 시 200, 의존성
+  하나라도 연결 불가 시 503 반환.
 
 ### 메트릭
 

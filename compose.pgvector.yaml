@@ -1,0 +1,33 @@
+# compose.pgvector.yaml — pgvector backend override
+#
+# Swaps the plain Postgres service for pgvector/pgvector:pg16 (which ships
+# the `vector` extension) and enables the pgvector vector backend in the app.
+#
+# Usage:
+#   docker compose -f compose.yaml -f compose.pgvector.yaml up -d
+#
+# This overlay does NOT remove the qdrant service (Compose cannot delete
+# a depends_on key via override). The qdrant container will still start but
+# the app will use pgvector for all vector operations — Qdrant is unused.
+#
+# For a truly qdrant-free production deploy, omit the qdrant service from
+# your own compose file rather than using the default compose.yaml.
+#
+# ADMIN PREREQUISITE (local Docker):
+#   The pgvector/pgvector:pg16 image ships the `vector` extension but does
+#   NOT create it automatically. Run once after first `docker compose up`:
+#
+#     docker compose exec postgres psql -U postgres -c "CREATE EXTENSION IF NOT EXISTS vector;"
+#
+#   (The app checks for the extension at boot and throws a clear error if
+#   absent — it does not create it itself, as that requires superuser.)
+#   On managed Postgres (RDS/Cloud SQL/Supabase) a DB admin must enable the
+#   extension via the provider's extension panel before starting the app.
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+
+  app:
+    environment:
+      VECTOR_BACKEND: pgvector
