@@ -165,10 +165,10 @@ memory_record_id FK    from_memory_record_id   organization_id
 status                 to_memory_record_id     actor / tool
 attempts               relation_type           outcome / error_message
 last_error             created_at              duration_ms / request_id
-qdrant_status                                  metadata JSONB
-qdrant_attempts                                created_at
-qdrant_next_retry_at
-qdrant_last_error
+qdrant_status (staged — migration 007, applied by the #12 series)
+qdrant_attempts (staged — migration 007)       metadata JSONB
+qdrant_next_retry_at (staged — migration 007)  created_at
+qdrant_last_error (staged — migration 007)
 
 compaction_runs        memory_archive
 ───────────────        ──────────────
@@ -187,8 +187,12 @@ completed_at           archived_at / unarchived_at
 idempotency_key UUID   UNIQUE (compaction_run_id, source_record_id)
 ```
 
-Migrations live in `src/db/migrations/` numbered 001-008 and are applied
-on bootstrap. Each is idempotent (`CREATE … IF NOT EXISTS`).
+Migrations live in `src/db/migrations/`. The runner applies 001-006 and
+008 on bootstrap (each is idempotent, `CREATE … IF NOT EXISTS`).
+`007_ingest_jobs_qdrant_outbox.sql` is a **staged** file that adds the four
+`qdrant_*` outbox columns to `ingest_jobs`; it is NOT yet registered in
+`MIGRATION_FILES` in `src/db/migrate.ts` and will be wired in by the
+in-flight #12 outbox-sweeper series.
 
 ## Multi-tenancy
 

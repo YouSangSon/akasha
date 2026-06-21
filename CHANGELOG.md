@@ -230,8 +230,11 @@ work to a publishable open-source project.
   rotation, optional org binding); token-bucket rate limiter
   (`RATE_LIMIT_PER_MINUTE`); fail-closed startup gate refuses to bind to
   non-loopback hosts without tokens.
-- **Health probes** — `/healthz` (liveness, no auth) and `/readyz` (PG +
-  Qdrant + OpenAI reachability, returns 503 to drain orchestrators).
+- **Health probes** — `/healthz` (liveness, no auth) and `/readyz` (returns
+  200 unconditionally in the default server; dependency-probe builders for PG,
+  Qdrant, and OpenAI are implemented in `src/health/check-dependencies.ts` but
+  are not wired into `startOperatorServer` — probes are opt-in via the
+  `dependencyProbes` option on `createOperatorServer`).
 - **Backup + restore** — `npm run backup:create` snapshots Postgres
   (pg_dump) + Qdrant (snapshot API) to `BACKUP_DIR`. `npm run restore:smoke`
   validates the latest backup against an isolated compose stack.

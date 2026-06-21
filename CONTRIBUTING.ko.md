@@ -70,7 +70,7 @@ PG 의존 테스트 3개 (`tests/store/memory-repository.test.ts`,
 ### 마이그레이션
 
 SQL 파일은 `src/db/migrations/NNN_*.sql` 에 있습니다. 새 마이그레이션은
-`007_…sql` 으로 추가하고, `src/db/migrate.ts` 의 `MIGRATION_FILES` 배열과
+`009_…sql` 으로 추가하고, `src/db/migrate.ts` 의 `MIGRATION_FILES` 배열과
 production fallback용 임베디드 SQL 문자열에도 추가하세요. 모든 마이그레이션
 은 idempotent (`CREATE … IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`) 이고,
 이미 데이터가 있는 DB에서도 안전해야 합니다.

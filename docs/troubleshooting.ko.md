@@ -14,15 +14,19 @@
 (macOS / Windows) 또는 `sudo systemctl start docker` (Linux) 후 `./install.sh`
 재실행.
 
-### `OPENAI_API_KEY in .env is still the placeholder`
+### `OPENAI_API_KEY in .env is still the placeholder` (`EMBEDDING_PROVIDER=openai` 일 때만)
 
-`.env` 가 `OPENAI_API_KEY=sk-replace-me` (템플릿 기본값) 일 때 `install.sh`
-가 진행 거부. `.env` 편집해서 실제 키 붙여넣고 재실행.
+`install.sh` 는 **`EMBEDDING_PROVIDER=openai`** 로 설정되어 있고 **동시에**
+`OPENAI_API_KEY=sk-replace-me` (플레이스홀더) 인 경우에만 진행을 거부합니다.
+기본값인 `transformers` 프로바이더는 API 키가 불필요하며 영향을 받지 않습니다.
 
-OpenAI 사용 안 하려면:
+`EMBEDDING_PROVIDER=openai` 를 선택한 경우 `.env` 를 편집해 실제 키를
+붙여넣고 재실행하세요.
+
+키가 필요 없는 프로바이더를 사용하려면:
 ```bash
-EMBEDDING_PROVIDER=local
-OPENAI_API_KEY=ignored
+EMBEDDING_PROVIDER=transformers   # 기본값 — 무료 로컬 ONNX (권장)
+EMBEDDING_PROVIDER=local          # CI / 오프라인 결정론적 stub
 ```
 
 ### `Node.js ≥ 20 required`
@@ -46,22 +50,26 @@ Fail-closed startup gate. 둘 중 하나:
 - `HOST=127.0.0.1` 설정 (loopback 바인드, dev 시 인증 불필요), 또는
 - `MEMORY_API_TOKENS=...` 설정 + 원하는 곳 바인드.
 
-### `Missing required environment variable: OPENAI_API_KEY`
+### `Missing required environment variable: OPENAI_API_KEY` (`EMBEDDING_PROVIDER=openai` 일 때만)
 
-키 설정 또는 local embedding 으로 전환:
+이 에러는 `EMBEDDING_PROVIDER=openai` 일 때만 발생합니다. 키를 설정하거나
+키가 필요 없는 프로바이더로 전환하세요:
 ```bash
-EMBEDDING_PROVIDER=local
+EMBEDDING_PROVIDER=transformers   # 기본값 — 무료 로컬 ONNX
+# 또는
+EMBEDDING_PROVIDER=local          # CI / 오프라인 stub
 ```
 
 ### `Unsupported EMBEDDING_PROVIDER: <value>`
 
-`openai` 또는 `local` 만 유효. 오타 확인.
+유효한 값은 `transformers` (기본값), `openai`, `local` 입니다. 오타 확인.
 
 ### `SecretDetectedError: <category>` (HTTP 400)
 
-`add_memory` 컨텐츠가 secret 패턴 매칭. 카테고리: `openai_key`,
-`anthropic_key`, `aws_access_key`, `aws_secret`, `pem_block`,
-`bearer_token`, `jwt`, `generic_high_entropy`.
+`add_memory` 컨텐츠가 secret 패턴 매칭. 카테고리:
+`aws-access-key`, `github-token`, `anthropic-key`, `openai-key`,
+`private-key-block`, `bearer-token`, `jwt`, `gcp-api-key`, `stripe-key`,
+`slack-token`, `db-connection-string`.
 
 의도적 — secret이 vector 인덱스나 백업에 들어가면 안 됨. 컨텐츠에서 secret을
 redact (`<REDACTED>` 로 대체) 후 재시도.

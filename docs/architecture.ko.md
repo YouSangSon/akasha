@@ -162,10 +162,10 @@ memory_record_id FK    from_memory_record_id   organization_id
 status                 to_memory_record_id     actor / tool
 attempts               relation_type           outcome / error_message
 last_error             created_at              duration_ms / request_id
-qdrant_status                                  metadata JSONB
-qdrant_attempts                                created_at
-qdrant_next_retry_at
-qdrant_last_error
+qdrant_status (staged — migration 007, applied by the #12 series)
+qdrant_attempts (staged — migration 007)       metadata JSONB
+qdrant_next_retry_at (staged — migration 007)  created_at
+qdrant_last_error (staged — migration 007)
 
 compaction_runs        memory_archive
 ───────────────        ──────────────
@@ -184,8 +184,12 @@ completed_at           archived_at / unarchived_at
 idempotency_key UUID   UNIQUE (compaction_run_id, source_record_id)
 ```
 
-마이그레이션은 `src/db/migrations/` 의 001-008 번호로 부트스트랩 시 적용.
-모두 idempotent (`CREATE … IF NOT EXISTS`).
+마이그레이션은 `src/db/migrations/` 에 위치. 런너는 부트스트랩 시 001-006 과
+008 을 적용 (모두 idempotent, `CREATE … IF NOT EXISTS`).
+`007_ingest_jobs_qdrant_outbox.sql` 은 `ingest_jobs` 에 네 개의 `qdrant_*`
+outbox 컬럼을 추가하는 **staged** 파일이며, `src/db/migrate.ts` 의
+`MIGRATION_FILES` 에 아직 등록되지 않았습니다. 진행 중인 #12 outbox-sweeper
+시리즈에서 연결될 예정입니다.
 
 ## 멀티-테넌트
 

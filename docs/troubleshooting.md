@@ -14,16 +14,19 @@ an issue using the bug-report template at
 Desktop (macOS / Windows) or `sudo systemctl start docker` (Linux), then
 re-run `./install.sh`.
 
-### `OPENAI_API_KEY in .env is still the placeholder`
+### `OPENAI_API_KEY in .env is still the placeholder` (only when `EMBEDDING_PROVIDER=openai`)
 
-`install.sh` refuses to proceed when `.env` contains
-`OPENAI_API_KEY=sk-replace-me` (the template default). Edit `.env`,
-paste your real key, and re-run.
+`install.sh` refuses to proceed only when **both** `EMBEDDING_PROVIDER=openai`
+is set **and** `OPENAI_API_KEY=sk-replace-me` is still the placeholder. The
+default `transformers` provider needs no API key and is unaffected.
 
-If you don't want to use OpenAI:
+If you opted into `EMBEDDING_PROVIDER=openai`, edit `.env`, paste your real
+key, and re-run.
+
+To use a provider that needs no key, set one of:
 ```bash
-EMBEDDING_PROVIDER=local
-OPENAI_API_KEY=ignored
+EMBEDDING_PROVIDER=transformers   # default — free local ONNX (recommended)
+EMBEDDING_PROVIDER=local          # deterministic stub for CI / offline use
 ```
 
 ### `Node.js ≥ 20 required`
@@ -50,22 +53,27 @@ The fail-closed startup gate. Either:
 - Set `HOST=127.0.0.1` (loopback bind, no auth needed for dev), or
 - Set `MEMORY_API_TOKENS=...` and bind wherever you want.
 
-### `Missing required environment variable: OPENAI_API_KEY`
+### `Missing required environment variable: OPENAI_API_KEY` (only when `EMBEDDING_PROVIDER=openai`)
 
-Either set the key or switch to local embeddings:
+This error only fires when `EMBEDDING_PROVIDER=openai`. Either set the key or
+switch to a provider that needs no key:
 ```bash
-EMBEDDING_PROVIDER=local
+EMBEDDING_PROVIDER=transformers   # default — free local ONNX
+# or
+EMBEDDING_PROVIDER=local          # CI / offline stub
 ```
 
 ### `Unsupported EMBEDDING_PROVIDER: <value>`
 
-Only `openai` or `local` are valid. Check spelling.
+Valid values are `transformers` (default), `openai`, and `local`. Check
+spelling.
 
 ### `SecretDetectedError: <category>` (HTTP 400)
 
 Your `add_memory` content matched a secret pattern. Categories:
-`openai_key`, `anthropic_key`, `aws_access_key`, `aws_secret`,
-`pem_block`, `bearer_token`, `jwt`, `generic_high_entropy`.
+`aws-access-key`, `github-token`, `anthropic-key`, `openai-key`,
+`private-key-block`, `bearer-token`, `jwt`, `gcp-api-key`, `stripe-key`,
+`slack-token`, `db-connection-string`.
 
 The check is intentional — secrets shouldn't end up in vector indexes
 or backups. Redact the secret from your content (replace with

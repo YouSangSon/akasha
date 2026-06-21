@@ -215,8 +215,11 @@ CHANGELOG에서 명시적으로 표기합니다.
 - **인증 + rate limit** — `MEMORY_API_TOKENS` bearer 토큰 (다중 토큰 로테이션,
   선택적 org 바인딩); 토큰 버킷 rate limiter (`RATE_LIMIT_PER_MINUTE`);
   fail-closed 시작 가드는 토큰 없이 non-loopback 호스트 바인딩 거부.
-- **Health probe** — `/healthz` (liveness, 인증 없음) 와 `/readyz`
-  (PG + Qdrant + OpenAI 도달 가능성, 실패 시 503으로 오케스트레이터 drain).
+- **Health probe** — `/healthz` (liveness, 인증 없음) 와 `/readyz` (기본
+  서버에서는 무조건 200 반환; PG·Qdrant·OpenAI 의존성 probe 빌더는
+  `src/health/check-dependencies.ts` 에 구현되어 있으나 `startOperatorServer`
+  에 연결되어 있지 않음 — probe는 `createOperatorServer` 의 `dependencyProbes`
+  옵션을 통해 opt-in 방식으로 사용).
 - **백업 + 복원** — `npm run backup:create` 가 Postgres (pg_dump) + Qdrant
   (snapshot API) 를 `BACKUP_DIR` 로 스냅샷. `npm run restore:smoke` 가
   최신 백업을 격리된 compose 스택에서 검증.
