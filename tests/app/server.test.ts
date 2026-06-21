@@ -620,6 +620,7 @@ describe("selectDependencyProbes", () => {
       host: "127.0.0.1",
       port: 8787,
       databaseUrl: "postgres://localhost/test",
+      vectorBackend: "qdrant" as const,
       qdrant: { url: "http://qdrant.local:6333", apiKey: "key-aaa", collectionName: "col" },
       openai: { apiKey: provider === "openai" ? "sk-test" : "" },
       embedding: {

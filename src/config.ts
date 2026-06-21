@@ -8,6 +8,7 @@ export type ServiceConfig = {
   host: string;
   port: number;
   databaseUrl: string;
+  vectorBackend: "qdrant" | "pgvector";
   qdrant: {
     url: string;
     apiKey: string;
@@ -45,6 +46,17 @@ export function resolveServiceConfig(
   //   "transformers" — free local ONNX inference via @huggingface/transformers
   //                    (optional dep). Default model Xenova/all-MiniLM-L6-v2,
   //                    384-dim. First call downloads ~22MB to HF cache.
+  // VECTOR_BACKEND selects the vector-search adapter.
+  //   "qdrant"   — default; requires QDRANT_URL + QDRANT_API_KEY.
+  //   "pgvector" — Postgres-only deploy; reuses the existing PG pool.
+  const vectorBackendRaw = (env.VECTOR_BACKEND ?? "qdrant").toLowerCase();
+  if (vectorBackendRaw !== "qdrant" && vectorBackendRaw !== "pgvector") {
+    throw new Error(
+      `Unsupported VECTOR_BACKEND: ${vectorBackendRaw} (expected "qdrant" or "pgvector")`,
+    );
+  }
+  const vectorBackend: "qdrant" | "pgvector" = vectorBackendRaw;
+
   const providerRaw = (env.EMBEDDING_PROVIDER ?? "transformers").toLowerCase();
   if (
     providerRaw !== "openai" &&
@@ -75,15 +87,25 @@ export function resolveServiceConfig(
         ? env.TRANSFORMERS_EMBEDDING_MODEL ?? "Xenova/all-MiniLM-L6-v2"
         : env.EMBEDDING_MODEL ?? "local-deterministic-v1";
 
+  // Qdrant credentials are only required when qdrant is the active backend.
+  const qdrant = vectorBackend === "qdrant"
+    ? {
+        url: requireEnv(env.QDRANT_URL, "QDRANT_URL"),
+        apiKey: requireEnv(env.QDRANT_API_KEY, "QDRANT_API_KEY"),
+        collectionName: env.QDRANT_COLLECTION_NAME ?? "memory_chunks_v1",
+      }
+    : {
+        url: env.QDRANT_URL ?? "",
+        apiKey: env.QDRANT_API_KEY ?? "",
+        collectionName: env.QDRANT_COLLECTION_NAME ?? "memory_chunks_v1",
+      };
+
   return {
     host,
     port,
     databaseUrl,
-    qdrant: {
-      url: requireEnv(env.QDRANT_URL, "QDRANT_URL"),
-      apiKey: requireEnv(env.QDRANT_API_KEY, "QDRANT_API_KEY"),
-      collectionName: env.QDRANT_COLLECTION_NAME ?? "memory_chunks_v1",
-    },
+    vectorBackend,
+    qdrant,
     openai: {
       apiKey: openAiApiKey,
     },

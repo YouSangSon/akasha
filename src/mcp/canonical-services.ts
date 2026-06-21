@@ -12,6 +12,7 @@ import { createEmbeddingProvider } from "../embedding/embedding-factory.js";
 import { createIngestJobRepository } from "../jobs/ingest-job-repository.js";
 import { createQdrantClient } from "../qdrant/client.js";
 import { createQdrantVectorIndex } from "../vector/qdrant-index.js";
+import { createPgVectorIndex } from "../vector/pgvector-index.js";
 import { createMemoryRepository } from "../store/memory-repository.js";
 import { createMemoryChunkRepository } from "../store/canonical-indexing.js";
 import { createMemoryArchiveRepository } from "../store/memory-archive-repository.js";
@@ -30,10 +31,19 @@ export async function bootstrapCanonicalServices(): Promise<CanonicalServices> {
     throw error;
   }
 
-  const qdrantClient = createQdrantClient({
-    url: config.qdrant.url,
-    apiKey: config.qdrant.apiKey,
-  });
+  let vectorIndex: CanonicalServices["vectorIndex"];
+
+  if (config.vectorBackend === "pgvector") {
+    const pgVectorIndex = createPgVectorIndex(pool);
+    await pgVectorIndex.ensureCollection(config.embedding.dimensions);
+    vectorIndex = pgVectorIndex;
+  } else {
+    const qdrantClient = createQdrantClient({
+      url: config.qdrant.url,
+      apiKey: config.qdrant.apiKey,
+    });
+    vectorIndex = createQdrantVectorIndex(qdrantClient, config.qdrant.collectionName);
+  }
 
   return {
     config: {
@@ -54,7 +64,7 @@ export async function bootstrapCanonicalServices(): Promise<CanonicalServices> {
       },
       openaiApiKey: config.openai.apiKey,
     }),
-    vectorIndex: createQdrantVectorIndex(qdrantClient, config.qdrant.collectionName),
+    vectorIndex,
     close: async () => {
       await pool.end();
     },
