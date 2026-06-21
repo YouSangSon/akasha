@@ -243,10 +243,10 @@ export function startOperatorServer(
     : loadBearerTokens(process.env);
   assertSafeAuthConfig({ tokenCount: tokens.length, host: config.host });
 
-  // Dedicated single-connection pool for /readyz dependency probes. Kept
-  // separate from canonical-services so /readyz works before (or without)
-  // any tool call bootstrapping the singleton. Max 1 connection — only
-  // SELECT 1 is ever issued.
+  // Dedicated pool for /readyz dependency probes. Kept separate from
+  // canonical-services so /readyz works before (or without) any tool call
+  // bootstrapping the singleton. Only one `SELECT 1` is issued per probe, so
+  // it stays at a single live connection in practice (uses the pool default).
   const probePool = createPgPool({ connectionString: config.databaseUrl });
   const dependencyProbes =
     options.dependencyProbes ?? selectDependencyProbes(config, probePool);
