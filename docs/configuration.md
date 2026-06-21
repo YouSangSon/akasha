@@ -184,6 +184,24 @@ failed. Off by default — opt in on a single replica that runs continuously.
 When enabled, each tick processes up to 100 pending rows and gives up after 5
 attempts (rows then move to `qdrant_status='failed'` for ops review).
 
+## Ingest sweeper
+
+The ingest sweeper re-indexes memory records whose Qdrant upsert was interrupted
+by a process crash between the write-ahead `markQdrantPending` and
+`markQdrantCompleted`. Without it, crash-orphaned records remain in Qdrant's
+backlog indefinitely (invisible to search); with it enabled, they are picked up
+on the next sweep cycle. Off by default — opt in on a single continuously-running
+replica.
+
+| Variable | Default | Notes |
+|---|---|---|
+| `INGEST_SWEEP_ENABLED` | `false` | Truthy values: `true`, `1`, `yes` (case-insensitive). All others = false. |
+| `INGEST_SWEEP_INTERVAL_MS` | `30000` | Tick interval in ms. Must be ≥ 1000. |
+
+When enabled, each tick claims up to 100 due rows and gives up after 5 attempts
+(rows then move to `qdrant_status='failed'` for ops review). Backoff is
+exponential: 1 s, 2 s, 4 s, 8 s, capped at 5 min.
+
 ## Backup
 
 | Variable | Default | Notes |

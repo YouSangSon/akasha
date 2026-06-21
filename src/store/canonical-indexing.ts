@@ -2,6 +2,7 @@ import { chunkText, type TextChunk } from "../chunk/chunk-text.js";
 import { toQdrantPoint } from "../qdrant/point-mapper.js";
 import type { PgPool } from "../db/connection.js";
 import { scanForSecrets, SecretDetectedError } from "./secret-scrub.js";
+import { nextRetryDelayMs } from "../compact/ingest-sweeper.js";
 import type {
   AddMemoryInput,
   CanonicalMemoryRepository,
@@ -343,6 +344,21 @@ export async function writeCanonicalMemory(input: {
       chunks,
       embedding: input.embedding,
     });
+
+    // Write-ahead: record the intent to index BEFORE touching Qdrant. If the
+    // process crashes between here and markQdrantCompleted, the job row is left
+    // with qdrant_status='pending' and a scheduled qdrant_next_retry_at so the
+    // ingest sweeper can re-index the already-committed chunks automatically.
+    // Guard: skip write-ahead when there are no chunks (empty content) — nothing
+    // to re-index, and markCompleted below handles the overall job close-out.
+    if (storedChunks.length > 0) {
+      await input.ingestJobs.markQdrantPending({
+        jobId: job.id,
+        attempts: 0,
+        nextRetryAt: new Date(Date.now() + nextRetryDelayMs(0)),
+      });
+    }
+
     const embeddings = await input.embeddings.embedBatch(
       storedChunks.map((chunk) => chunk.content),
     );
@@ -383,6 +399,8 @@ export async function writeCanonicalMemory(input: {
           qdrantPointId: point.id,
         })),
       );
+      // Success: clear the retry schedule and mark Qdrant indexing complete.
+      await input.ingestJobs.markQdrantCompleted(job.id);
     }
 
     await input.ingestJobs.markCompleted(job.id);

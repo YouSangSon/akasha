@@ -24,6 +24,8 @@ describe("canonical indexing", () => {
         id: 801,
         status: "completed",
       }),
+      markQdrantPending: vi.fn().mockResolvedValue(undefined),
+      markQdrantCompleted: vi.fn().mockResolvedValue(undefined),
     };
     const chunkRepository = {
       insertChunks: vi.fn().mockImplementation(async (input: {
@@ -116,6 +118,24 @@ describe("canonical indexing", () => {
       { chunkId: 703, qdrantPointId: "chunk:703" },
     ]);
     expect(ingestJobs.markCompleted).toHaveBeenCalledWith(801);
+
+    // Part 5 outbox write-ahead: markQdrantPending fires after insertChunks and
+    // before qdrantClient.upsert; markQdrantCompleted fires after updatePointIds.
+    const pendingOrder = ingestJobs.markQdrantPending.mock.invocationCallOrder[0]!;
+    const upsertOrder = qdrantClient.upsert.mock.invocationCallOrder[0]!;
+    const updateOrder = chunkRepository.updatePointIds.mock.invocationCallOrder[0]!;
+    const completedOrder = ingestJobs.markQdrantCompleted.mock.invocationCallOrder[0]!;
+    expect(pendingOrder).toBeLessThan(upsertOrder);
+    expect(updateOrder).toBeLessThan(completedOrder);
+
+    expect(ingestJobs.markQdrantPending).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobId: 801,
+        attempts: 0,
+        nextRetryAt: expect.any(Date),
+      }),
+    );
+    expect(ingestJobs.markQdrantCompleted).toHaveBeenCalledWith(801);
   });
 
   it("rolls back PG state by deleting the memory record when embedding throws", async () => {
@@ -128,6 +148,8 @@ describe("canonical indexing", () => {
       create: vi.fn().mockResolvedValue({ id: 802 }),
       markCompleted: vi.fn(),
       markFailed: vi.fn(),
+      markQdrantPending: vi.fn().mockResolvedValue(undefined),
+      markQdrantCompleted: vi.fn(),
     };
     const chunkRepository = {
       insertChunks: vi.fn().mockResolvedValue([
@@ -201,6 +223,8 @@ describe("canonical indexing", () => {
       create: vi.fn().mockResolvedValue({ id: 803 }),
       markCompleted: vi.fn(),
       markFailed: vi.fn(),
+      markQdrantPending: vi.fn().mockResolvedValue(undefined),
+      markQdrantCompleted: vi.fn(),
     };
     const chunkRepository = {
       insertChunks: vi.fn().mockResolvedValue([
@@ -279,6 +303,8 @@ describe("canonical indexing", () => {
       create: vi.fn().mockResolvedValue({ id: 804 }),
       markCompleted: vi.fn(),
       markFailed: vi.fn(),
+      markQdrantPending: vi.fn().mockResolvedValue(undefined),
+      markQdrantCompleted: vi.fn(),
     };
     const chunkRepository = {
       insertChunks: vi.fn().mockResolvedValue([
@@ -337,6 +363,66 @@ describe("canonical indexing", () => {
     ).rejects.toBe(embedError);
 
     expect(repository.deleteMemoryRecord).toHaveBeenCalledWith(504);
+  });
+
+  it("skips write-ahead and qdrant upsert when insertChunks returns an empty array (empty content)", async () => {
+    const record = createRecord({ id: 505, content: "" });
+    const repository = {
+      addMemory: vi.fn().mockResolvedValue(record),
+    };
+    const ingestJobs = {
+      create: vi.fn().mockResolvedValue({ id: 805 }),
+      markCompleted: vi.fn().mockResolvedValue({ id: 805, status: "completed" }),
+      markQdrantPending: vi.fn(),
+      markQdrantCompleted: vi.fn(),
+    };
+    const chunkRepository = {
+      insertChunks: vi.fn().mockResolvedValue([]),
+      updatePointIds: vi.fn(),
+    };
+    const embeddings = {
+      embed: vi.fn(),
+      embedBatch: vi.fn().mockResolvedValue([]),
+    };
+    const qdrantClient = { upsert: vi.fn() };
+
+    const created = await writeCanonicalMemory({
+      repository: repository as never,
+      chunkRepository: chunkRepository as never,
+      ingestJobs: ingestJobs as never,
+      embeddings,
+      qdrantClient,
+      collectionName: "memory_chunks_v1",
+      embedding: {
+        provider: "openai",
+        model: "text-embedding-3-small",
+        dimensions: 1536,
+        version: "v1",
+        targetTokens: 800,
+        overlapTokens: 120,
+      },
+      memory: {
+        scopeType: "project",
+        scopeId: "project-alpha",
+        projectKey: "project-alpha",
+        memoryType: "decision",
+        content: record.content,
+        source: {
+          scopeType: "project",
+          scopeId: "project-alpha",
+          sourceType: "conversation",
+          sourceRef: "manual://session",
+        },
+      },
+    });
+
+    expect(created).toBe(record);
+    // No chunks → no write-ahead, no Qdrant writes.
+    expect(ingestJobs.markQdrantPending).not.toHaveBeenCalled();
+    expect(qdrantClient.upsert).not.toHaveBeenCalled();
+    expect(ingestJobs.markQdrantCompleted).not.toHaveBeenCalled();
+    // Overall job is still closed out.
+    expect(ingestJobs.markCompleted).toHaveBeenCalledWith(805);
   });
 
   it("refuses to persist content matching a credential pattern (no record, no chunks, no qdrant write)", async () => {
