@@ -150,4 +150,11 @@ export type IngestJobRepository = {
     error: unknown;
   }): Promise<IngestJob>;
   listPendingForRetry(input: { limit: number; now: Date }): Promise<IngestJob[]>;
+  // Atomically claim rows due for retry by nulling qdrant_next_retry_at in the
+  // same UPDATE that holds the FOR UPDATE SKIP LOCKED, preventing concurrent
+  // sweeper replicas from re-claiming the same row.
+  claimPendingForRetry(input: {
+    limit: number;
+    now: Date;
+  }): Promise<IngestJob[]>;
 };

@@ -49,6 +49,10 @@ export type MemoryChunkRepository = {
     mappings: Array<{ chunkId: number; qdrantPointId: string }>,
   ): Promise<void>;
   listChunks(scopes: ScopeRef[]): Promise<ReindexableMemoryChunk[]>;
+  // Fetch all chunks for a single memory record including the record-level
+  // metadata needed to rebuild Qdrant points. Used by the ingest sweeper to
+  // re-index a specific record's chunks without scanning by scope.
+  getChunksByRecordId(recordId: number): Promise<ReindexableMemoryChunk[]>;
   createContextPackRun(input: {
     projectKey: string;
     task: string;
@@ -200,6 +204,65 @@ export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository
           ORDER BY mc.id ASC
         `,
         params,
+      );
+
+      return result.rows.map((row) => ({
+        id: toNumber(row.id),
+        memoryRecordId: toNumber(row.memory_record_id),
+        chunkIndex: row.chunk_index,
+        content: row.content,
+        startOffset: row.start_offset,
+        endOffset: row.end_offset,
+        embeddingVersion: row.embedding_version,
+        organizationId: row.organization_id,
+        scopeType: row.scope_type,
+        scopeId: row.scope_id,
+        projectKey: row.project_key,
+        durability: row.durability,
+        kind: row.kind,
+        updatedAt: toIsoString(row.updated_at),
+      }));
+    },
+
+    async getChunksByRecordId(recordId) {
+      const result = await pool.query<{
+        id: number;
+        memory_record_id: number;
+        chunk_index: number;
+        content: string;
+        start_offset: number;
+        end_offset: number;
+        embedding_version: string;
+        organization_id: string;
+        scope_type: SearchMemoryResult["scopeType"];
+        scope_id: string;
+        project_key: string | null;
+        durability: string;
+        kind: string;
+        updated_at: string | Date;
+      }>(
+        `
+          SELECT
+            mc.id,
+            mc.memory_record_id,
+            mc.chunk_index,
+            mc.content,
+            mc.start_offset,
+            mc.end_offset,
+            mc.embedding_version,
+            mr.organization_id,
+            mr.scope_type,
+            mr.scope_id,
+            mr.project_key,
+            mr.durability,
+            mr.kind,
+            mr.updated_at
+          FROM memory_chunks mc
+          JOIN memory_records mr ON mr.id = mc.memory_record_id
+          WHERE mc.memory_record_id = $1
+          ORDER BY mc.chunk_index ASC
+        `,
+        [recordId],
       );
 
       return result.rows.map((row) => ({

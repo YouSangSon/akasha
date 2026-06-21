@@ -28,6 +28,12 @@ import {
   startBackgroundSweeper,
   type BackgroundSweeperHandle,
 } from "../compact/sweeper-loop.js";
+import {
+  loadIngestSweepEnabled,
+  loadIngestSweepIntervalMs,
+  startIngestSweeper,
+  type IngestSweeperHandle,
+} from "../compact/ingest-sweeper-loop.js";
 
 export type CreateOperatorServerOptions = {
   config?: ServiceConfig;
@@ -233,6 +239,21 @@ export function startOperatorServer(
     });
   }
 
+  // Optional: background ingest sweeper for re-indexing records whose Qdrant
+  // upsert was left pending (e.g. process crash). Opt-in via
+  // INGEST_SWEEP_ENABLED=true. Stopped on server.close().
+  let ingestSweeper: IngestSweeperHandle | null = null;
+  if (loadIngestSweepEnabled(process.env)) {
+    void startIngestSweeperOnce(log, handle => {
+      ingestSweeper = handle;
+    }).catch((err: unknown) => {
+      log.error(
+        { event: "ingest.sweep_start_failed", err },
+        "failed to start ingest sweeper; continuing without it",
+      );
+    });
+  }
+
   server.listen(config.port, config.host, () => {
     log.info(
       {
@@ -247,6 +268,9 @@ export function startOperatorServer(
   server.on("close", () => {
     if (sweeper) {
       void sweeper.stop();
+    }
+    if (ingestSweeper) {
+      void ingestSweeper.stop();
     }
   });
 
@@ -266,6 +290,23 @@ async function startSweeperOnce(
     collectionName: services.config.qdrant.collectionName,
     logger: log,
     intervalMs: loadSweeperIntervalMs(process.env),
+  });
+  attach(handle);
+}
+
+async function startIngestSweeperOnce(
+  log: Logger,
+  attach: (handle: IngestSweeperHandle) => void,
+): Promise<void> {
+  const services = await bootstrapCanonicalServices();
+  const handle = startIngestSweeper({
+    ingestJobs: services.ingestJobs,
+    chunkRepository: services.chunkRepository,
+    embeddings: services.embeddings,
+    qdrantClient: services.qdrantClient,
+    collectionName: services.config.qdrant.collectionName,
+    logger: log,
+    intervalMs: loadIngestSweepIntervalMs(process.env),
   });
   attach(handle);
 }

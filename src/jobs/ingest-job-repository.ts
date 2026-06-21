@@ -156,6 +156,44 @@ export function createIngestJobRepository(pool: PgPool): IngestJobRepository {
 
       return result.rows.map(mapJob);
     },
+
+    async claimPendingForRetry({ limit, now }) {
+      // Atomically select + claim due rows in a single UPDATE so the
+      // SKIP LOCKED lock is held when retry_at is nulled. A bare
+      // SELECT … FOR UPDATE SKIP LOCKED releases the lock at autocommit,
+      // allowing a second replica to read the same row between SELECT and
+      // UPDATE. The single-statement form prevents that race.
+      //
+      // NOTE (tradeoff): nulling retry_at to claim means a process crash
+      // after claim but before markQdrantCompleted/markQdrantPending leaves
+      // the row with retry_at=NULL and qdrant_status='pending'. That row no
+      // longer matches the claim WHERE clause, so the sweeper never
+      // re-picks it (only manual reindex_memory recovers it). An alternative
+      // sentinel (far-future timestamp as a visibility-timeout) would make
+      // crashes auto-recoverable but adds more complexity. NULL is chosen
+      // here per the design doc's example SQL; see report for the trade-off.
+      const result = await pool.query<IngestJobRow>(
+        `
+          UPDATE ingest_jobs
+          SET qdrant_next_retry_at = NULL,
+              updated_at = NOW()
+          WHERE id IN (
+            SELECT id
+            FROM ingest_jobs
+            WHERE qdrant_status = 'pending'
+              AND qdrant_next_retry_at IS NOT NULL
+              AND qdrant_next_retry_at <= $1
+            ORDER BY qdrant_next_retry_at ASC
+            LIMIT $2
+            FOR UPDATE SKIP LOCKED
+          )
+          RETURNING ${RETURNING_COLUMNS}
+        `,
+        [now, limit],
+      );
+
+      return result.rows.map(mapJob);
+    },
   };
 }
 

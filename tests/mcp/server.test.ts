@@ -874,6 +874,7 @@ function createCanonicalServices() {
       ]),
       updatePointIds: vi.fn().mockResolvedValue(undefined),
       listChunks: vi.fn().mockResolvedValue([]),
+      getChunksByRecordId: vi.fn().mockResolvedValue([]),
       createContextPackRun: vi.fn().mockResolvedValue(undefined),
     },
     ingestJobs: {
@@ -923,6 +924,7 @@ function createCanonicalServices() {
       markQdrantPending: vi.fn(),
       markQdrantFailed: vi.fn(),
       listPendingForRetry: vi.fn().mockResolvedValue([]),
+      claimPendingForRetry: vi.fn().mockResolvedValue([]),
     },
     embeddings: {
       embed: vi.fn().mockResolvedValue([0.1, 0.2, 0.3]),
