@@ -103,6 +103,16 @@ CHANGELOG에서 명시적으로 표기합니다.
 - **Silent failure 제거** — 파싱 에러, DB 에러 메시지의 스택 trace 제거, `audit_log.error_message`
   크기 제한 추가. 이전엔 조용히 실패하거나 내부 스택 정보를 노출했음.
 
+### Added (audit cycle 2)
+
+- **`/readyz` 에 실제 의존성 프로브 연결** — `startOperatorServer` 가 `DependencyProbes`
+  세트를 자동으로 생성해 전달: Postgres (`SELECT 1`) 와 Qdrant (`GET /healthz`) 는 항상
+  활성; OpenAI 프로브 (`GET /v1/models`) 는 `EMBEDDING_PROVIDER=openai` 일 때만 포함
+  되어, API 키 없는 `transformers`/`local` 배포에 영향 없음. 의존성 하나라도 연결 불가
+  시 503 반환 — 오케스트레이터를 위한 진정한 readiness gate로 동작. Postgres 프로브용
+  전용 단일-커넥션 풀을 생성하며 서버 종료 시 정리. 조건부 선택 로직은 테스트 가능성을
+  위해 내보내진 `selectDependencyProbes(config, pool)` 헬퍼에 위치.
+
 ### Performance (audit cycle 2)
 
 - **Migration 007: `ingest_jobs` outbox 컬럼** (기반 작업, 진행 중) — option-B outbox sweeper를

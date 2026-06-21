@@ -112,6 +112,18 @@ small actual impact surface.
   `audit_log.error_message` capped to prevent oversized payloads. Previously these failed
   silently or exposed internal stack details.
 
+### Added (audit cycle 2)
+
+- **`/readyz` now wires real dependency probes** — `startOperatorServer` builds
+  and passes a `DependencyProbes` set automatically: Postgres (`SELECT 1`) and
+  Qdrant (`GET /healthz`) are always active; the OpenAI probe (`GET /v1/models`)
+  is included only when `EMBEDDING_PROVIDER=openai`, so `transformers`/`local`
+  deployments without an API key are unaffected. Returns 503 when any dependency
+  is unreachable, making `/readyz` a true readiness gate for orchestrators.
+  A dedicated single-connection pool is created for the Postgres probe and torn
+  down on server close. The conditional selection logic lives in an exported
+  `selectDependencyProbes(config, pool)` helper for testability.
+
 ### Performance (audit cycle 2)
 
 - **Migration 007: `ingest_jobs` outbox columns** (foundational, in-progress) — adds

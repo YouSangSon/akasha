@@ -307,20 +307,24 @@ Unauthenticated. Always 200 once the process is up. No dependency check.
 
 ### `GET /readyz` — readiness
 
-Unauthenticated. By default (the built-in production server startup) this
-endpoint returns **200** immediately with `{ "ok": true, "checks": [],
-"message": "no probes configured" }` — it performs no dependency checks.
+Unauthenticated. Probes live dependencies and returns:
 
-Probe infrastructure exists in `src/health/check-dependencies.ts` for
-Postgres (`SELECT 1`), Qdrant (`GET /healthz`), and OpenAI (`GET
-/v1/models`), but `startOperatorServer` does not wire them. Custom
-embeddings (deployments that call `createOperatorServer` directly) can inject
-a `dependencyProbes` object to enable live checks; in that case:
+- **200** with each probe's status when all pass
+- **503** with the same envelope when any dependency is unreachable (drains a
+  load balancer or fails a Kubernetes readiness check)
 
-- 200 with each probe's status when all pass
-- 503 with the same envelope when any probe fails (drains a load balancer)
+The built-in production server (`startOperatorServer`) wires the following
+probes automatically:
 
-Use this for Kubernetes readiness, Docker healthcheck, or external monitor
-integrations once probes are wired. **Recommended follow-up:** wire the
-canonical probe set into `startOperatorServer` so out-of-the-box deployments
-get real dependency gating.
+| Probe | Check | Always active? |
+|---|---|---|
+| `postgres` | `SELECT 1` | Yes |
+| `qdrant` | `GET /healthz` on the Qdrant host | Yes |
+| `openai` | `GET /v1/models` with your API key | Only when `EMBEDDING_PROVIDER=openai` |
+
+The OpenAI probe is skipped for `transformers` and `local` providers — those
+deployments have no API key and must not fail readiness on that account.
+
+Use this for Kubernetes readiness probes, Docker `HEALTHCHECK`, or external
+uptime monitors. The `/healthz` endpoint remains the unconditional liveness
+check (process alive, no dependency checks).

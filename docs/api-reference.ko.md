@@ -305,19 +305,23 @@ HTTP: `POST /v1/audit/list`
 
 ### `GET /readyz` — readiness
 
-인증 없음. 기본 설정(내장 프로덕션 서버 시작)에서는 의존성 검사를 수행하지
-않고 즉시 **200** `{ "ok": true, "checks": [], "message": "no probes
-configured" }` 를 반환합니다.
+인증 없음. 실제 의존성을 프로브하며 다음을 반환합니다:
 
-Postgres (`SELECT 1`), Qdrant (`GET /healthz`), OpenAI (`GET /v1/models`) 프로브
-인프라가 `src/health/check-dependencies.ts` 에 구현되어 있으나,
-`startOperatorServer` 는 이를 연결하지 않습니다. `createOperatorServer` 를
-직접 호출하는 커스텀 배포에서 `dependencyProbes` 를 주입하면 실제 검사를
-활성화할 수 있으며, 이 경우:
+- **200** — 모든 프로브 통과 시 (각 상태 포함)
+- **503** — 의존성 하나라도 연결 불가 시 (load balancer drain 또는 Kubernetes
+  readiness 실패)
 
-- 모두 통과 → 200 (각 프로브 상태 포함)
-- 어떤 프로브든 실패 → 503 (load balancer drain)
+내장 프로덕션 서버(`startOperatorServer`)는 다음 프로브를 자동으로 연결합니다:
 
-Kubernetes readiness, Docker healthcheck, 외부 모니터 통합용으로 사용 (probe를
-연결한 경우). **권장 후속 작업:** `startOperatorServer` 에 정식 probe set을
-연결하여 기본 배포에서도 의존성 gating이 동작하도록 개선 필요.
+| 프로브 | 검사 내용 | 항상 활성? |
+|---|---|---|
+| `postgres` | `SELECT 1` | 예 |
+| `qdrant` | Qdrant 호스트 `GET /healthz` | 예 |
+| `openai` | API 키로 `GET /v1/models` | `EMBEDDING_PROVIDER=openai` 일 때만 |
+
+OpenAI 프로브는 `transformers` 및 `local` 프로바이더에서는 생략됩니다 — 해당
+배포에는 API 키가 없어 readiness 실패를 일으켜서는 안 됩니다.
+
+Kubernetes readiness probe, Docker `HEALTHCHECK`, 외부 업타임 모니터에 사용하세요.
+`/healthz` 엔드포인트는 의존성 체크 없이 프로세스 생존만 확인하는 liveness
+체크로 유지됩니다.

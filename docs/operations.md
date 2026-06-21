@@ -194,9 +194,9 @@ Key event names to monitor:
 ### Health probes
 
 - `GET /healthz` — process is alive (always 200 once up).
-- `GET /readyz` — always `200` in the default build (no probes wired); probe
-  builders exist in `src/health/check-dependencies.ts` for operators who wire
-  them. Currently equivalent to `/healthz`.
+- `GET /readyz` — readiness gate. Probes Postgres and Qdrant on every call;
+  also probes OpenAI when `EMBEDDING_PROVIDER=openai`. Returns 200 when all
+  pass, 503 when any dependency is unreachable.
 
 ### Metrics
 
