@@ -173,7 +173,7 @@ curl -fsS -X POST \
 LangChain, doobidoo/mcp-memory-service 등) 조사 결과, **MCP 메모리 서버
 카테고리** 의 norm 은 *무료/로컬 default*. 가장 큰 벡터 기반 MCP 메모리
 서버 (doobidoo, 1.7k★) 가 `$0` cost 와 `100% local` 을 헤드라인 차별화로
-내세움. context-forge 도 이 컨벤션을 따라, OSS 사용자가 유료 API key
+내세움. Akasha 도 이 컨벤션을 따라, OSS 사용자가 유료 API key
 없이도 `npm install` 만으로 가치를 얻도록. OpenAI 는 hosted provider 품질을
 선호하는 운영자를 위한 fully supported 옵션으로 유지됩니다.
 

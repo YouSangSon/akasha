@@ -2,7 +2,7 @@
 
 # 보안 정책
 
-이 문서는 context-forge의 보안 취약점 리포팅 방법을 다룹니다. 위협 모델과
+이 문서는 Akasha의 보안 취약점 리포팅 방법을 다룹니다. 위협 모델과
 적용된 컨트롤은 [docs/security.ko.md](docs/security.ko.md) 참고.
 
 ## 지원 버전
@@ -21,7 +21,7 @@
 
 - **GitHub Security Advisory** (권장 — 암호화, 패치 워크플로 통합):
   비공개 advisory 열기 →
-  <https://github.com/YouSangSon/context-forge/security/advisories/new>
+  <https://github.com/YouSangSon/akasha/security/advisories/new>
 - 프로젝트 통신 채널이 있다면 메인테이너에게 DM.
 
 리포트에 포함:

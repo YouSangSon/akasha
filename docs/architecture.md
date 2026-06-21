@@ -2,7 +2,7 @@
 
 # Architecture
 
-This document explains how context-forge is structured and how data flows
+This document explains how Akasha is structured and how data flows
 through it. For per-tool API details see [api-reference.md](api-reference.md);
 for env-var setup see [configuration.md](configuration.md).
 
@@ -260,7 +260,7 @@ SQL dialect leaks into orchestration code.
 
 ### Postgres-only deploy
 
-Set `VECTOR_BACKEND=pgvector` to run context-forge on a single Postgres
+Set `VECTOR_BACKEND=pgvector` to run Akasha on a single Postgres
 instance with no Qdrant service. The local compose override
 `compose.pgvector.yaml` swaps in `pgvector/pgvector:pg16`:
 

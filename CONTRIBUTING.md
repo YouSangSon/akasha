@@ -1,6 +1,6 @@
 > **English** | [한국어](CONTRIBUTING.ko.md)
 
-# Contributing to context-forge
+# Contributing to Akasha
 
 Thanks for taking the time to contribute. This document covers what we expect
 from a contribution, how to get a working dev environment, and the conventions
@@ -19,8 +19,8 @@ the codebase already follows.
 ## Dev environment
 
 ```bash
-git clone https://github.com/YouSangSon/context-forge.git
-cd context-forge
+git clone https://github.com/YouSangSon/akasha.git
+cd akasha
 cp .env.example .env
 ${EDITOR:-nano} .env       # set MEMORY_API_TOKENS (OPENAI_API_KEY only if using EMBEDDING_PROVIDER=openai)
 ./install.sh

@@ -3,7 +3,7 @@
 # Security policy
 
 This document covers how to report a security vulnerability in
-context-forge. For the threat model and in-place controls, see
+Akasha. For the threat model and in-place controls, see
 [docs/security.md](docs/security.md).
 
 ## Supported versions
@@ -23,7 +23,7 @@ Instead, send a private report to the maintainer:
 
 - **GitHub Security Advisory** (preferred — encrypted, integrated with
   the patch workflow): open a private advisory at
-  <https://github.com/YouSangSon/context-forge/security/advisories/new>.
+  <https://github.com/YouSangSon/akasha/security/advisories/new>.
 - DM the maintainer on the project's communication channel if one
   exists.
 

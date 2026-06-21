@@ -2,7 +2,7 @@
 
 # API 레퍼런스
 
-context-forge는 동일한 도구 surface를 두 가지 transport로 노출합니다:
+Akasha는 동일한 도구 surface를 두 가지 transport로 노출합니다:
 
 - **MCP** (stdio) — Claude Code, Codex CLI 같은 AI 클라이언트용.
   진입점: `dist/src/cli.js`. 7개 도구 모두 등록됨.

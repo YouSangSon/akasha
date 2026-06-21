@@ -1,6 +1,6 @@
 # Documentation Index
 
-Reference documentation for context-forge operators and contributors.
+Reference documentation for Akasha operators and contributors.
 
 | Document | Korean | Description |
 |----------|--------|-------------|

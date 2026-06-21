@@ -2,7 +2,7 @@
 
 # 아키텍처
 
-이 문서는 context-forge의 구조와 데이터 흐름을 설명합니다. 도구별 API 디테일은
+이 문서는 Akasha의 구조와 데이터 흐름을 설명합니다. 도구별 API 디테일은
 [api-reference.ko.md](api-reference.ko.md), env 변수 셋업은
 [configuration.ko.md](configuration.ko.md) 참고.
 
@@ -253,7 +253,7 @@ pgvector SQL 방언이 오케스트레이션 코드에 누출되지 않음.
 ### Postgres 단독 배포
 
 `VECTOR_BACKEND=pgvector` 설정으로 Qdrant 서비스 없이 단일 Postgres 인스턴스
-만으로 context-forge 실행 가능. 로컬 compose 오버라이드 `compose.pgvector.yaml`
+만으로 Akasha 실행 가능. 로컬 compose 오버라이드 `compose.pgvector.yaml`
 이 `pgvector/pgvector:pg16` 로 전환:
 
 ```bash

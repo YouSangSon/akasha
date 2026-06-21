@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for thinking about how to make context-forge better.
+        Thanks for thinking about how to make Akasha better.
         Open an issue first for non-trivial work — a 30-second sketch
         avoids days of work going in the wrong direction.
 

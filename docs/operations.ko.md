@@ -2,7 +2,7 @@
 
 # 운영 runbook
 
-context-forge production 운영을 위한 day-2 절차. 초기 배포는
+Akasha production 운영을 위한 day-2 절차. 초기 배포는
 [deployment.ko.md](deployment.ko.md) 참고.
 
 ## 백업
@@ -20,7 +20,7 @@ Postgres (`pg_dump --format=custom`) 와 Qdrant (snapshot API) 를
 cron 예시 (매일 03:00):
 
 ```cron
-0 3 * * * cd /opt/context-forge && /usr/bin/npm run backup:create >>/var/log/context-forge-backup.log 2>&1
+0 3 * * * cd /opt/akasha && /usr/bin/npm run backup:create >>/var/log/akasha-backup.log 2>&1
 ```
 
 systemd timer 대안 — 동작하는 unit 파일은
@@ -46,7 +46,7 @@ push. 대상 백업 디렉토리에 scope 된 SSH key (passphrase 없음) 필요
 Qdrant 매니페스트) 검증. 매 백업 사이클 끝에 실행:
 
 ```cron
-5 3 * * * cd /opt/context-forge && /usr/bin/npm run backup:verify
+5 3 * * * cd /opt/akasha && /usr/bin/npm run backup:verify
 ```
 
 ## 복원
@@ -169,7 +169,7 @@ curl -X POST http://localhost:8787/v1/memory/unarchive \
 
 ### 프로세스 로그
 
-context-forge 는 pino JSON 을 **stderr** 로 출력. aggregator가 앱 컨테이너의
+Akasha 는 pino JSON 을 **stderr** 로 출력. aggregator가 앱 컨테이너의
 stderr 수집:
 
 ```bash

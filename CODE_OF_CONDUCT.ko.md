@@ -47,7 +47,7 @@
 
 학대적, 괴롭힘, 또는 기타 수용 불가능한 행동의 사례는 비공개 GitHub Security
 Advisory 로 프로젝트 메인테이너에게 보고할 수 있습니다:
-<https://github.com/YouSangSon/context-forge/security/advisories/new>.
+<https://github.com/YouSangSon/akasha/security/advisories/new>.
 
 모든 불만은 신속하고 공정하게 검토 및 조사됩니다.
 

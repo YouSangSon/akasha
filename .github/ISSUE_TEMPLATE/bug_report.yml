@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a bug in context-forge
+description: Report a bug in Akasha
 title: "[bug] "
 labels: ["bug", "needs-triage"]
 body:

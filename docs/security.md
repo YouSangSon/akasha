@@ -2,7 +2,7 @@
 
 # Security model
 
-This document summarizes the threat surface context-forge addresses, the
+This document summarizes the threat surface Akasha addresses, the
 controls in place today, and the residual risks. For the vulnerability
 reporting policy (where to send security reports), see
 [../SECURITY.md](../SECURITY.md).
@@ -127,7 +127,7 @@ mitigate:
 
 ## Where the boundaries are
 
-context-forge is **not** a substitute for OS-level / network-level
+Akasha is **not** a substitute for OS-level / network-level
 controls. It assumes:
 
 1. The host is trusted (no malicious processes).

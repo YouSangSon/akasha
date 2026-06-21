@@ -2,7 +2,7 @@
 
 # Operations runbook
 
-Day-2 procedures for running context-forge in production. For initial
+Day-2 procedures for running Akasha in production. For initial
 deployment see [deployment.md](deployment.md).
 
 ## Backup
@@ -20,7 +20,7 @@ into `BACKUP_DIR`. Files are named `<timestamp>-postgres.dump` and
 Cron example (daily at 03:00):
 
 ```cron
-0 3 * * * cd /opt/context-forge && /usr/bin/npm run backup:create >>/var/log/context-forge-backup.log 2>&1
+0 3 * * * cd /opt/akasha && /usr/bin/npm run backup:create >>/var/log/akasha-backup.log 2>&1
 ```
 
 systemd timer alternative — see [docs/self-hosted-operations.md](self-hosted-operations.md)
@@ -49,7 +49,7 @@ integrity, pg_dump header, Qdrant snapshot manifest). Run it at the end
 of every backup cycle:
 
 ```cron
-5 3 * * * cd /opt/context-forge && /usr/bin/npm run backup:verify
+5 3 * * * cd /opt/akasha && /usr/bin/npm run backup:verify
 ```
 
 ## Restore
@@ -173,7 +173,7 @@ its original `sourceRecordId` so callers can update references.
 
 ### Process logs
 
-context-forge writes pino JSON to **stderr**. Wire your aggregator to
+Akasha writes pino JSON to **stderr**. Wire your aggregator to
 collect stderr from the app container:
 
 ```bash

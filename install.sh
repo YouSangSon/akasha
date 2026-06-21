@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# context-forge — one-command setup.
+# Akasha — one-command setup.
 #
 # Brings up Postgres + Qdrant via docker compose, installs Node deps, runs
 # migrations, builds the TypeScript output, and prints the MCP client
@@ -119,7 +119,7 @@ Add the following to your Claude Desktop config
 
 {
   "mcpServers": {
-    "context-forge": {
+    "akasha": {
       "command": "node",
       "args": ["${REPO_DIR}/dist/src/cli.js"]
     }

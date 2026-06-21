@@ -175,7 +175,7 @@ A cross-OSS survey of 11 peer projects (Chroma, txtai, mem0, Letta, Zep,
 LlamaIndex, LangChain, doobidoo/mcp-memory-service, etc.) found that the
 **MCP memory server category** norm is *free/local default*. The largest
 vector-using MCP memory server (doobidoo, 1.7k★) headlines `$0` cost and
-`100% local` as its differentiator. context-forge follows that convention
+`100% local` as its differentiator. Akasha follows that convention
 so OSS users get value from `npm install` without a paid API key. OpenAI
 remains a fully supported, well-documented option for operators who prefer
 hosted-provider quality.

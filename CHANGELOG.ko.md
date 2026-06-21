@@ -2,7 +2,7 @@
 
 # 변경 내역
 
-context-forge의 모든 주요 변경 사항이 여기 기록됩니다.
+Akasha의 모든 주요 변경 사항이 여기 기록됩니다.
 
 포맷은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/) 기반이며,
 1.0 릴리즈 이후로는 [Semantic Versioning](https://semver.org/lang/ko/spec/v2.0.0.html)
@@ -40,7 +40,7 @@ CHANGELOG에서 명시적으로 표기합니다.
   헤드라인의 *"blocks API keys / PEM / bearer / JWT before any record hits
   Postgres or Qdrant"* 약속과 비대칭. 이제 사용자 입력 3개 필드 모두 스캔
   + 발견된 카테고리 union 으로 단일 `SecretDetectedError` 발생. (PR #5,
-  [`f033903`](https://github.com/YouSangSon/context-forge/commit/f033903))
+  [`f033903`](https://github.com/YouSangSon/akasha/commit/f033903))
 - **`retrieveMemory` 가 default 로 org-blind 읽기 거부** — `organizationId`
   미지정 (token-org 바인딩 없음 + `x-organization-id` 헤더 없음 + body
   필드 없음) 요청은 이전엔 org-blind Qdrant 쿼리 + org-blind PG hydration
@@ -49,7 +49,7 @@ CHANGELOG에서 명시적으로 표기합니다.
   silent 발생. default 가 이제 strict — 명확한 에러로 거부, 운영 가이드
   포함. `LEGACY_ANONYMOUS_SEARCH=true` 로 historical 동작 opt-in 가능.
   implicit fallback 에 의존하던 배포는 **BREAKING**, `.env` 한 줄 마이그레이션.
-  (PR #6, [`809eb87`](https://github.com/YouSangSon/context-forge/commit/809eb87))
+  (PR #6, [`809eb87`](https://github.com/YouSangSon/akasha/commit/809eb87))
 
 ### Fixed
 
@@ -64,7 +64,7 @@ CHANGELOG에서 명시적으로 표기합니다.
   cleanup 자체가 실패해도 원본 에러를 caller 에게 surface 하는 best-effort
   방식. audit 권장 outbox sweeper (option B, schema migration + retry
   loop)는 follow-up 으로 deferred — 이 PR 은 schema 무변경 option A.
-  (PR #7, [`5764323`](https://github.com/YouSangSon/context-forge/commit/5764323))
+  (PR #7, [`5764323`](https://github.com/YouSangSon/akasha/commit/5764323))
 
 ### Added
 
@@ -92,7 +92,7 @@ CHANGELOG에서 명시적으로 표기합니다.
   Local 은 sequential loop (per-call overhead 0). 두 호출부 모두 batch
   후 `embeddings.length === chunks.length` 검증 — provider misbehavior 시
   silent misalignment 방지. (PR #8,
-  [`7b5afac`](https://github.com/YouSangSon/context-forge/commit/7b5afac))
+  [`7b5afac`](https://github.com/YouSangSon/akasha/commit/7b5afac))
 
 ### Security (audit cycle 2)
 
@@ -177,7 +177,7 @@ CHANGELOG에서 명시적으로 표기합니다.
   OpenAI and Transformers embedding providers"*. transformers + default-flip
   작업이 v1.0.0 에 통합된 후 v1.0.x 프레이밍은 anachronistic. 이제 양방향
   전환 reference, 1회성 마이그레이션 아님.
-  ([`a3b456a`](https://github.com/YouSangSon/context-forge/commit/a3b456a))
+  ([`a3b456a`](https://github.com/YouSangSon/akasha/commit/a3b456a))
 - **README landing 30초 가치 파악용으로 정리** — CI / License /
   MCP-compatible / Node ≥20 badges 추가, 강조형 1줄 tagline *"Persistent
   memory for AI coding agents — free, local, self-hosted"* + elevator
@@ -192,7 +192,7 @@ CHANGELOG에서 명시적으로 표기합니다.
 
 ## [1.0.0] — 2026-04-26
 
-초기 공개 릴리스. context-forge가 내부 hardening 작업에서 publishable
+초기 공개 릴리스. Akasha가 내부 hardening 작업에서 publishable
 오픈소스 프로젝트로 졸업.
 
 ### 추가됨 — OSS 패키징

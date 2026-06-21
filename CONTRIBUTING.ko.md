@@ -1,6 +1,6 @@
 > [English](CONTRIBUTING.md) | **한국어**
 
-# context-forge에 기여하기
+# Akasha에 기여하기
 
 기여해주셔서 감사합니다. 이 문서는 기여물에 대해 기대하는 것, 작동하는 개발
 환경 셋업, 그리고 코드베이스가 이미 따르고 있는 컨벤션을 다룹니다.
@@ -18,8 +18,8 @@
 ## 개발 환경
 
 ```bash
-git clone https://github.com/YouSangSon/context-forge.git
-cd context-forge
+git clone https://github.com/YouSangSon/akasha.git
+cd akasha
 cp .env.example .env
 ${EDITOR:-nano} .env       # MEMORY_API_TOKENS 설정 (OPENAI_API_KEY 는 EMBEDDING_PROVIDER=openai 일 때만 필요)
 ./install.sh

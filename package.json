@@ -1,16 +1,16 @@
 {
-  "name": "context-forge",
+  "name": "akasha-mcp",
   "version": "1.0.0",
   "description": "A persistent-memory MCP server for AI coding agents. Postgres + Qdrant backed.",
   "license": "MIT",
   "author": "YouSangSon",
-  "homepage": "https://github.com/YouSangSon/context-forge#readme",
+  "homepage": "https://github.com/YouSangSon/akasha#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/YouSangSon/context-forge.git"
+    "url": "git+https://github.com/YouSangSon/akasha.git"
   },
   "bugs": {
-    "url": "https://github.com/YouSangSon/context-forge/issues"
+    "url": "https://github.com/YouSangSon/akasha/issues"
   },
   "keywords": [
     "mcp",

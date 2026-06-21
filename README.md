@@ -1,8 +1,8 @@
 > **English** | [한국어](README.ko.md)
 
-# context-forge
+# Akasha
 
-[![CI](https://github.com/YouSangSon/context-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/YouSangSon/context-forge/actions/workflows/ci.yml)
+[![CI](https://github.com/YouSangSon/akasha/actions/workflows/ci.yml/badge.svg)](https://github.com/YouSangSon/akasha/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-compatible-blue.svg)](https://modelcontextprotocol.io/)
 [![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org/)
@@ -17,7 +17,7 @@ data stays on your box.
 
 ## How does it compare?
 
-| | **context-forge** | doobidoo/mcp-memory-service | coleam00/mcp-mem0 | mem0ai/mem0 | letta-ai/letta | getzep/zep |
+| | **Akasha** | doobidoo/mcp-memory-service | coleam00/mcp-mem0 | mem0ai/mem0 | letta-ai/letta | getzep/zep |
 |---|---|---|---|---|---|---|
 | **Free out of the box** | ✅ | ✅ | ❌ (OpenAI) | ❌ (OpenAI default) | ❌ (hosted) | ❌ (Cloud SaaS) |
 | **Data stays on your box** | ✅ | ✅ | partial (OpenAI calls) | partial (OpenAI calls) | ❌ (Letta Cloud) | ❌ (Zep Cloud) |
@@ -28,7 +28,7 @@ data stays on your box.
 
 The MCP memory ecosystem norm is *free/local default* — doobidoo (1.7k★) headlines
 `$0` cost, and the convergent free embedding model (`all-MiniLM-L6-v2`) is what
-context-forge uses too. Where context-forge distinctively goes further: a
+Akasha uses too. Where Akasha distinctively goes further: a
 **Postgres canonical store separate from the vector index** (so a Qdrant
 collection rebuild loses 0 data and reindex is one tool call), **org-scoped
 multi-tenancy at the SQL and vector layers** (peers either skip it or rely on
@@ -44,7 +44,7 @@ that.
 ## Why
 
 Conversations with coding agents lose context the moment the session ends.
-context-forge is the place those agents save what's worth remembering and
+Akasha is the place those agents save what's worth remembering and
 read it back next time:
 
 - `add_memory` — save a decision, fact, or summary
@@ -65,8 +65,8 @@ ignore orgs entirely — see
 Requires Docker (for Postgres + Qdrant) and Node.js ≥ 20.
 
 ```bash
-git clone https://github.com/YouSangSon/context-forge.git
-cd context-forge
+git clone https://github.com/YouSangSon/akasha.git
+cd akasha
 
 # 1. Copy the env template (defaults work — OPENAI_API_KEY only needed if
 #    you set EMBEDDING_PROVIDER=openai later).
@@ -80,7 +80,7 @@ ${EDITOR:-nano} .env
 cat <<EOF
 {
   "mcpServers": {
-    "context-forge": {
+    "akasha": {
       "command": "node",
       "args": ["$(pwd)/dist/src/cli.js"]
     }

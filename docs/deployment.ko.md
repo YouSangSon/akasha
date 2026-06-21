@@ -2,7 +2,7 @@
 
 # 배포
 
-이 문서는 context-forge의 production 배포를 다룹니다. 로컬 개발 셋업은
+이 문서는 Akasha의 production 배포를 다룹니다. 로컬 개발 셋업은
 [README.ko.md](../README.ko.md), 운영 절차 (백업, 복원, compaction) 는
 [operations.ko.md](operations.ko.md) 참고.
 
@@ -55,8 +55,8 @@ load balancer 뒤의 다중 `app` 인스턴스 사용.
 
 ```bash
 # 1. Clone
-git clone https://github.com/YouSangSon/context-forge.git
-cd context-forge
+git clone https://github.com/YouSangSon/akasha.git
+cd akasha
 
 # 2. production .env (dev 값 재사용 금지!)
 cp .env.example .env
@@ -117,7 +117,7 @@ Caddy가 TLS 자동 처리.
 
 ## 기존 데이터 마이그레이션
 
-기존 메모리 store를 context-forge로 이전하는 경우:
+기존 메모리 store를 Akasha로 이전하는 경우:
 
 1. **레코드를 `add_memory` 호출로 포맷** (CSV → 스크립트 → API).
 2. **Bulk insert** — HTTP API 또는 직접 Postgres COPY (이후 `reindex_memory`

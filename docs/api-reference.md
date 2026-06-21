@@ -2,7 +2,7 @@
 
 # API reference
 
-context-forge exposes the same tool surface through two transports:
+Akasha exposes the same tool surface through two transports:
 
 - **MCP** (stdio) — for AI clients like Claude Code and Codex CLI.
   Entry point: `dist/src/cli.js`. All 7 tools are registered.

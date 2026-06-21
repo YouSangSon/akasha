@@ -2,7 +2,7 @@
 
 # Changelog
 
-All notable changes to context-forge are documented here.
+All notable changes to Akasha are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
@@ -43,7 +43,7 @@ small actual impact surface.
   before any record hits Postgres or Qdrant". The guard now scans all three
   user-controlled fields and raises one `SecretDetectedError` with the
   union of categories found. (PR #5,
-  [`f033903`](https://github.com/YouSangSon/context-forge/commit/f033903))
+  [`f033903`](https://github.com/YouSangSon/akasha/commit/f033903))
 - **`retrieveMemory` refuses org-blind reads by default** — when
   `organizationId` was undefined on a request (no token-org binding, no
   `x-organization-id` header, no body field), the function fell through to
@@ -54,7 +54,7 @@ small actual impact surface.
   Set `LEGACY_ANONYMOUS_SEARCH=true` to opt back into the historical behavior.
   **BREAKING** for any deployment that relied on the implicit fallback;
   one-line `.env` migration. (PR #6,
-  [`809eb87`](https://github.com/YouSangSon/context-forge/commit/809eb87))
+  [`809eb87`](https://github.com/YouSangSon/akasha/commit/809eb87))
 
 ### Fixed
 
@@ -70,7 +70,7 @@ small actual impact surface.
   that re-throws the original error if cleanup itself fails. The audit's
   recommended outbox sweeper (option B, schema migration + retry loop) is
   deferred as a follow-up; this is the schema-unchanged option A. (PR #7,
-  [`5764323`](https://github.com/YouSangSon/context-forge/commit/5764323))
+  [`5764323`](https://github.com/YouSangSon/akasha/commit/5764323))
 
 ### Added
 
@@ -100,7 +100,7 @@ small actual impact surface.
   Transformers and Local providers loop sequentially since neither pays
   per-call overhead. Both call sites verify post-batch that `embeddings.length
   === chunks.length` so a misbehaving provider cannot silently misalign.
-  (PR #8, [`7b5afac`](https://github.com/YouSangSon/context-forge/commit/7b5afac))
+  (PR #8, [`7b5afac`](https://github.com/YouSangSon/akasha/commit/7b5afac))
 
 ### Security (audit cycle 2)
 
@@ -191,7 +191,7 @@ small actual impact surface.
   was anachronistic after collapsing the transformers + default-flip work
   into the v1.0.0 release; the operational steps are now a reference for
   switching in either direction, not a one-time migration.
-  ([`a3b456a`](https://github.com/YouSangSon/context-forge/commit/a3b456a))
+  ([`a3b456a`](https://github.com/YouSangSon/akasha/commit/a3b456a))
 - **README landing tightened for 30-second value comprehension** — added
   CI / License / MCP-compatible / Node ≥20 badges, leading tagline
   "Persistent memory for AI coding agents — free, local, self-hosted" +
@@ -206,7 +206,7 @@ small actual impact surface.
 
 ## [1.0.0] — 2026-04-26
 
-Initial public release. context-forge graduates from internal hardening
+Initial public release. Akasha graduates from internal hardening
 work to a publishable open-source project.
 
 ### Added — OSS packaging

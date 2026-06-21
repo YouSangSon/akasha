@@ -2,7 +2,7 @@
 
 # Deployment
 
-This document covers production deployment of context-forge. For local
+This document covers production deployment of Akasha. For local
 development setup, see [README.md](../README.md). For ops procedures
 (backup, restore, compaction), see [operations.md](operations.md).
 
@@ -56,8 +56,8 @@ The bundled `compose.yaml` is production-grade for single-host deployments:
 
 ```bash
 # 1. Clone
-git clone https://github.com/YouSangSon/context-forge.git
-cd context-forge
+git clone https://github.com/YouSangSon/akasha.git
+cd akasha
 
 # 2. Production .env (don't reuse dev values!)
 cp .env.example .env
@@ -118,7 +118,7 @@ Caddy handles TLS automatically.
 
 ## Migrating from existing data
 
-If you're moving an existing memory store into context-forge:
+If you're moving an existing memory store into Akasha:
 
 1. **Format your records** as `add_memory` calls (CSV → script → API).
 2. **Bulk insert** via the HTTP API or by direct Postgres COPY (followed by

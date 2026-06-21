@@ -2,7 +2,7 @@
 
 # Configuration reference
 
-context-forge is configured entirely through environment variables. There are
+Akasha is configured entirely through environment variables. There are
 no config files or runtime flags. This document is the canonical reference
 for every variable the project reads.
 
