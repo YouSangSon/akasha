@@ -40,7 +40,8 @@ describe("createQdrantVectorIndex — VectorFilter → {must} translation", () =
       query: vi.fn().mockResolvedValue({ points: [] }),
       upsert: vi.fn().mockResolvedValue(undefined),
       delete: vi.fn().mockResolvedValue(undefined),
-      recreateCollection: vi.fn().mockResolvedValue(undefined),
+      collectionExists: vi.fn().mockResolvedValue({ exists: false }),
+      createCollection: vi.fn().mockResolvedValue(undefined),
     };
   }
 
@@ -138,7 +139,8 @@ describe("createQdrantVectorIndex — point building (upsert)", () => {
       query: vi.fn(),
       upsert: vi.fn().mockResolvedValue(undefined),
       delete: vi.fn(),
-      recreateCollection: vi.fn(),
+      collectionExists: vi.fn(),
+      createCollection: vi.fn(),
     };
     const index = createQdrantVectorIndex(client as never, "memory_chunks_v1");
 
@@ -172,7 +174,8 @@ describe("createQdrantVectorIndex — point building (upsert)", () => {
       query: vi.fn(),
       upsert: vi.fn(),
       delete: vi.fn(),
-      recreateCollection: vi.fn(),
+      collectionExists: vi.fn(),
+      createCollection: vi.fn(),
     };
     const index = createQdrantVectorIndex(client as never, "memory_chunks_v1");
 
@@ -187,7 +190,8 @@ describe("createQdrantVectorIndex — delete", () => {
       query: vi.fn(),
       upsert: vi.fn(),
       delete: vi.fn().mockResolvedValue(undefined),
-      recreateCollection: vi.fn(),
+      collectionExists: vi.fn(),
+      createCollection: vi.fn(),
     };
     const index = createQdrantVectorIndex(client as never, "memory_chunks_v1");
 
@@ -200,12 +204,49 @@ describe("createQdrantVectorIndex — delete", () => {
       query: vi.fn(),
       upsert: vi.fn(),
       delete: vi.fn(),
-      recreateCollection: vi.fn(),
+      collectionExists: vi.fn(),
+      createCollection: vi.fn(),
     };
     const index = createQdrantVectorIndex(client as never, "memory_chunks_v1");
 
     await index.delete([]);
     expect(client.delete).not.toHaveBeenCalled();
+  });
+});
+
+describe("createQdrantVectorIndex — ensureCollection", () => {
+  it("creates the collection when it does not exist", async () => {
+    const client = {
+      query: vi.fn(),
+      upsert: vi.fn(),
+      delete: vi.fn(),
+      collectionExists: vi.fn().mockResolvedValue({ exists: false }),
+      createCollection: vi.fn().mockResolvedValue(undefined),
+    };
+    const index = createQdrantVectorIndex(client as never, "memory_chunks_v1");
+
+    await index.ensureCollection(1536);
+
+    expect(client.collectionExists).toHaveBeenCalledWith("memory_chunks_v1");
+    expect(client.createCollection).toHaveBeenCalledWith("memory_chunks_v1", {
+      vectors: { size: 1536, distance: "Cosine" },
+    });
+  });
+
+  it("skips createCollection when collection already exists", async () => {
+    const client = {
+      query: vi.fn(),
+      upsert: vi.fn(),
+      delete: vi.fn(),
+      collectionExists: vi.fn().mockResolvedValue({ exists: true }),
+      createCollection: vi.fn(),
+    };
+    const index = createQdrantVectorIndex(client as never, "memory_chunks_v1");
+
+    await index.ensureCollection(1536);
+
+    expect(client.collectionExists).toHaveBeenCalledWith("memory_chunks_v1");
+    expect(client.createCollection).not.toHaveBeenCalled();
   });
 });
 

@@ -2,6 +2,7 @@ import { chunkText, type TextChunk } from "../chunk/chunk-text.js";
 import type { PgPool } from "../db/connection.js";
 import { scanForSecrets, SecretDetectedError } from "./secret-scrub.js";
 import type { VectorIndex, VectorPoint } from "../vector/vector-index.js";
+import { buildVectorPoint } from "../vector/point-builder.js";
 import type {
   AddMemoryInput,
   CanonicalMemoryRepository,
@@ -321,23 +322,21 @@ export async function writeCanonicalMemory(input: {
         `embedBatch returned ${embeddings.length} vectors for ${storedChunks.length} chunks`,
       );
     }
-    const points: VectorPoint[] = storedChunks.map((chunk, index) => ({
-      id: `chunk:${chunk.id}`,
-      vector: embeddings[index] ?? [],
-      payload: {
-        chunk_id: chunk.id,
-        memory_record_id: record.id,
-        organization_id: record.organizationId ?? "default",
-        scope_type: record.scopeType,
-        scope_id: record.scopeId,
-        project_key: record.projectKey ?? null,
+    const points: VectorPoint[] = storedChunks.map((chunk, index) =>
+      buildVectorPoint({
+        chunkId: chunk.id,
+        vector: embeddings[index] ?? [],
+        memoryRecordId: record.id,
+        organizationId: record.organizationId ?? "default",
+        scopeType: record.scopeType,
+        scopeId: record.scopeId,
+        projectKey: record.projectKey ?? null,
         kind: record.memoryType,
         durability: record.durability ?? "ephemeral",
-        tags: [],
-        updated_at: record.updatedAt,
-        embedding_version: chunk.embeddingVersion,
-      },
-    }));
+        updatedAt: record.updatedAt,
+        embeddingVersion: chunk.embeddingVersion,
+      }),
+    );
 
     if (points.length > 0) {
       await input.vectorIndex.upsert(points);
@@ -381,23 +380,21 @@ export async function reindexCanonicalMemory(input: {
       `reindex embedBatch returned ${embeddings.length} vectors for ${chunks.length} chunks`,
     );
   }
-  const points: VectorPoint[] = chunks.map((chunk, index) => ({
-    id: `chunk:${chunk.id}`,
-    vector: embeddings[index] ?? [],
-    payload: {
-      chunk_id: chunk.id,
-      memory_record_id: chunk.memoryRecordId,
-      organization_id: chunk.organizationId,
-      scope_type: chunk.scopeType,
-      scope_id: chunk.scopeId,
-      project_key: chunk.projectKey,
+  const points: VectorPoint[] = chunks.map((chunk, index) =>
+    buildVectorPoint({
+      chunkId: chunk.id,
+      vector: embeddings[index] ?? [],
+      memoryRecordId: chunk.memoryRecordId,
+      organizationId: chunk.organizationId,
+      scopeType: chunk.scopeType,
+      scopeId: chunk.scopeId,
+      projectKey: chunk.projectKey,
       kind: chunk.kind,
       durability: chunk.durability,
-      tags: [],
-      updated_at: chunk.updatedAt,
-      embedding_version: chunk.embeddingVersion,
-    },
-  }));
+      updatedAt: chunk.updatedAt,
+      embeddingVersion: chunk.embeddingVersion,
+    }),
+  );
 
   if (points.length > 0) {
     await input.vectorIndex.upsert(points);

@@ -36,6 +36,7 @@ import type {
   MemoryChunkRepository,
 } from "../store/canonical-indexing.js";
 import type { VectorIndex, VectorPoint } from "../vector/vector-index.js";
+import { buildVectorPoint } from "../vector/point-builder.js";
 
 export type UnarchiveCompactionInput = {
   archiveIds: number[];
@@ -215,23 +216,21 @@ async function restoreOne(
   const embeddings = await Promise.all(
     storedChunks.map((chunk) => deps.embeddings.embed(chunk.content)),
   );
-  const points: VectorPoint[] = storedChunks.map((chunk, index) => ({
-    id: `chunk:${chunk.id}`,
-    vector: embeddings[index] ?? [],
-    payload: {
-      chunk_id: chunk.id,
-      memory_record_id: restoredRecord.id,
-      organization_id: organizationId,
-      scope_type: restoredRecord.scopeType,
-      scope_id: restoredRecord.scopeId,
-      project_key: restoredRecord.projectKey ?? null,
+  const points: VectorPoint[] = storedChunks.map((chunk, index) =>
+    buildVectorPoint({
+      chunkId: chunk.id,
+      vector: embeddings[index] ?? [],
+      memoryRecordId: restoredRecord.id,
+      organizationId,
+      scopeType: restoredRecord.scopeType,
+      scopeId: restoredRecord.scopeId,
+      projectKey: restoredRecord.projectKey ?? null,
       kind: restoredRecord.memoryType,
       durability: restoredRecord.durability ?? "ephemeral",
-      tags: [],
-      updated_at: restoredRecord.updatedAt,
-      embedding_version: chunk.embeddingVersion,
-    },
-  }));
+      updatedAt: restoredRecord.updatedAt,
+      embeddingVersion: chunk.embeddingVersion,
+    }),
+  );
 
   if (points.length > 0) {
     await deps.vectorIndex.upsert(points);

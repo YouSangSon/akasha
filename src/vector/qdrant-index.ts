@@ -1,8 +1,6 @@
 // Qdrant adapter implementing the VectorIndex port.
 //
 // All Qdrant-specific concerns live here:
-//   - The `chunk:${id}` point-id scheme
-//   - The payload shape (mirrors toQdrantPoint in point-mapper.ts)
 //   - The VectorFilter → { must: [{key, match}] } dialect translation
 //   - The empty-list guard (Qdrant rejects empty point deletes in some versions)
 //
@@ -42,10 +40,17 @@ export function createQdrantVectorIndex(
   collectionName: string,
 ): VectorIndex {
   return {
+    // Non-destructive: creates the collection only when absent.
+    // MUST NOT drop an existing collection — a live collection with data
+    // must pass through unchanged. The pgvector adapter's ensureCollection
+    // will follow the same create-if-not-exists contract.
     async ensureCollection(dimensions: number): Promise<void> {
-      await client.recreateCollection(collectionName, {
-        vectors: { size: dimensions, distance: "Cosine" },
-      });
+      const { exists } = await client.collectionExists(collectionName);
+      if (!exists) {
+        await client.createCollection(collectionName, {
+          vectors: { size: dimensions, distance: "Cosine" },
+        });
+      }
     },
 
     async upsert(points: VectorPoint[]): Promise<void> {
