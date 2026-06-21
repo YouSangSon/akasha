@@ -66,9 +66,83 @@ CHANGELOG에서 명시적으로 표기합니다.
   silent misalignment 방지. (PR #8,
   [`7b5afac`](https://github.com/YouSangSon/context-forge/commit/7b5afac))
 
-### Documentation
+### Security (audit cycle 2)
 
-- **마이그레이션 가이드 양방향 reframe** —
+- **`reindex_memory` 가 이제 org 범위로 strict 동작** — `search_memory` 의 기존 가드와 동일하게
+  `organizationId` 필수 (없으면 throw). CLI `reindex` 명령에 `--organization-id` 플래그 추가
+  (기본값 `"default"`). 이전엔 reindex 경로가 org-blind 로 모든 테넌트의 chunk 를 건드렸음.
+  ([`c2a76dd`](https://github.com/YouSangSon/context-forge/commit/c2a76dd),
+  [`9c8ab3b`](https://github.com/YouSangSon/context-forge/commit/9c8ab3b))
+- **`deleteMemoryRecord` 에 org 가드 추가** — PR #7 에서 도입된 cleanup 헬퍼가 이전엔
+  `memoryRecordId` 가 호출 org 소속인지 검증 없이 수락. cross-tenant 삭제 경로를 닫는 org 가드
+  추가 (SEC-5).
+  ([`4a36aba`](https://github.com/YouSangSon/context-forge/commit/4a36aba))
+- **HTTP 에러 처리 강화** — generic 500 응답이 이제 정적 `"internal server error"` body 반환
+  (내부 정보 노출 없음). `compact_memory` rate-limit 이 이제 500 대신 `Retry-After` 헤더와 함께
+  HTTP **429** 반환. 타입 레벨 exhaustiveness check 를 억제하던 `as never` cast 제거.
+  ([`6b2a36e`](https://github.com/YouSangSon/context-forge/commit/6b2a36e))
+- **`RATE_LIMIT_PER_MINUTE` 기본값을 `compose.yaml` 에 추가** — Compose 배포에서 이제 기본으로
+  rate limiting 활성화 (값: 60 req/min). 이전엔 Compose 파일에 해당 env var 가 없어 운영자가
+  수동 설정하지 않으면 rate cap 없이 운영됨.
+  ([`6b2a36e`](https://github.com/YouSangSon/context-forge/commit/6b2a36e))
+- **Secret scrubber 확장** — 기존 AWS, GitHub PAT, OpenAI, Anthropic, PEM, Bearer, JWT 패턴에
+  더해 GCP API key, Stripe secret/publishable key, Slack 토큰 (`xoxb-`, `xoxp-`, `xoxa-`),
+  DB 연결 문자열 (`postgres://`, `mysql://`, `mongodb+srv://`) 도 차단.
+  ([`e96c367`](https://github.com/YouSangSon/context-forge/commit/e96c367))
+- **보안 단위 테스트 추가** — rate-limit 강제, bearer-auth 경로, `resolveOrganizationId` 로직을
+  커버하는 새 테스트 스위트 추가. AND/OR SQL 우선순위 버그를 탐지하도록 SEC-1 isolation
+  assertion 강화.
+  ([`bc5c391`](https://github.com/YouSangSon/context-forge/commit/bc5c391),
+  [`f1b0cf1`](https://github.com/YouSangSon/context-forge/commit/f1b0cf1))
+
+### Fixed (audit cycle 2)
+
+- **MCP stdio transport 에 7개 도구 모두 등록** — `reindex_memory` 와 `unarchive_memory` 가
+  stdio transport 에서 누락되어 MCP 클라이언트 (Claude Code, Codex CLI) 가 HTTP 의 7개 중 5개만
+  사용 가능했음. 이제 HTTP 및 CLI 와 동등.
+  ([`77db4ea`](https://github.com/YouSangSon/context-forge/commit/77db4ea))
+- **Silent failure 제거** — 파싱 에러, DB 에러 메시지의 스택 trace 제거, `audit_log.error_message`
+  크기 제한 추가. 이전엔 조용히 실패하거나 내부 스택 정보를 노출했음.
+  ([`0b0a953`](https://github.com/YouSangSon/context-forge/commit/0b0a953))
+
+### Performance (audit cycle 2)
+
+- **Migration 007: `ingest_jobs` outbox 컬럼** (기반 작업, 진행 중) — option-B outbox sweeper를
+  위해 `ingest_jobs` 에 `status`, `retry_count`, `last_error`, `process_after`, `processed_at`
+  컬럼 추가. 스키마 파일은 `main` 에 존재 (#12, 5개 중 1번째); sweeper 등록과 retry 루프는
+  #12 브랜치에서 진행 중.
+  (#12, [`28b63d1`](https://github.com/YouSangSon/context-forge/commit/28b63d1))
+- **Migration 008: `memory_chunks` FK 인덱스** — `008_chunks_fk_index.sql` 이
+  `memory_chunks(memory_record_id)` 에 `idx_memory_chunks_record` 인덱스 추가, FK join 경로의
+  sequential scan 제거. 마이그레이션은 이제 001–008.
+  ([`2c87949`](https://github.com/YouSangSon/context-forge/commit/2c87949))
+- **`listMemory` 에 상한 추가** — browse 쿼리에 `LIMIT` 강제 (기본값 1000, 최대 5000). 이전엔
+  무제한 쿼리로 대형 테넌트의 전체 테이블을 반환할 수 있었음.
+  ([`22e4028`](https://github.com/YouSangSon/context-forge/commit/22e4028))
+- **N+1 DB 쓰기 배치 처리** — chunk insert 와 upsert 가 이제 항목별이 아닌 단일 round-trip 으로
+  일괄 처리. 기존 `embedBatch` 변경 (PR #8) 을 보완.
+  ([`3afb3eb`](https://github.com/YouSangSon/context-forge/commit/3afb3eb))
+
+### Documentation (audit cycle 2)
+
+- **문서 정확성 교정** — `docs/architecture.md`, `docs/configuration.md`, `docs/api-reference.md`,
+  `CONTRIBUTING.md`, `README.md` 의 pre-existing 오류 수정: `OPENAI_API_KEY` 를 선택 사항으로
+  표시 (`EMBEDDING_PROVIDER=openai` 시만 필요); embedding 기본값을 `transformers` 로 수정;
+  마이그레이션 범위를 001–008 로 업데이트; 스키마 다이어그램에 `ingest_jobs` outbox 컬럼 추가;
+  실제 `check-dependencies.ts` 동작에 맞게 `/readyz` probe 목록 수정; MCP 도구 목록을 7개로
+  업데이트.
+  ([`a066dc6`](https://github.com/YouSangSon/context-forge/commit/a066dc6),
+  [`1902c2f`](https://github.com/YouSangSon/context-forge/commit/1902c2f),
+  [`1ffcc30`](https://github.com/YouSangSon/context-forge/commit/1ffcc30))
+- **`AGENTS.md` 끊어진 참조 제거** — 존재하지 않는 `.vibe/context-index.md` 및
+  `.pi/skills/vibe-workflow/SKILL.md` 참조를 `README.md`, `CONTRIBUTING.md`, `docs/` 를
+  가리키는 정확한 contributor 안내로 교체.
+- **`docs/README.md` 문서 인덱스 추가** — 영어 및 한국어 mirror 를 모두 포함하여 모든 문서에
+  한 줄 설명과 링크를 제공하는 새 인덱스.
+- **`docs/self-hosted-operations.ko.md` 추가** — `self-hosted-operations.md` 의 한국어 mirror
+  (`.ko.md` 대응 파일이 없던 유일한 문서).
+
+### Documentation
   `docs/migrations/openai-to-transformers.{md,ko.md}` 제목을 *"Migration:
   OpenAI → Transformers default (v1.0.x → next)"* → *"Switching between
   OpenAI and Transformers embedding providers"*. transformers + default-flip
