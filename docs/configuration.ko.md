@@ -56,7 +56,15 @@ compose 관리 Postgres 사용 시 `DATABASE_URL` 은 `POSTGRES_*` 부분에서
 자동 빌드됩니다 (네트워크 내부 host=`postgres`). 호스트에서 마이그레이션
 스크립트 실행 시 `install.sh` 가 host를 `127.0.0.1:5432` 로 다시 씁니다.
 
+## 벡터 백엔드
+
+| 변수 | 기본값 | 메모 |
+|---|---|---|
+| `VECTOR_BACKEND` | `qdrant` | `qdrant` (기본) 또는 `pgvector`. `pgvector` 선택 시 벡터를 Postgres 에 저장 — Qdrant 서비스 불필요, Qdrant 자격증명도 불필요. 백엔드 전환 시 `reindex_memory` 필수. |
+
 ## Qdrant
+
+Qdrant 변수는 `VECTOR_BACKEND=qdrant` (기본값) 일 때만 필요합니다.
 
 | 변수 | 기본값 | 메모 |
 |---|---|---|

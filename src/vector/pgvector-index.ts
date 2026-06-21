@@ -22,6 +22,8 @@ export function createPgVectorIndex(
   pool: PgPool,
   options: CreatePgVectorIndexOptions = {},
 ): VectorIndex {
+  // tableName is a trusted-caller constant (table names can't be parameterized
+  // in SQL; callers supply either the production default or an isolated test table).
   const tableName = options.tableName ?? "memory_vectors";
 
   return {
@@ -58,7 +60,6 @@ export function createPgVectorIndex(
       // The embedding placeholder is cast to vector to prevent node-postgres
       // from serialising a JS array as a Postgres array literal, which pgvector
       // rejects. We pass the embedding as a JSON-style string "[x,y,z]".
-      const COLS_PER_ROW = 8;
       const valueClauses: string[] = [];
       const params: unknown[] = [];
 
@@ -80,10 +81,6 @@ export function createPgVectorIndex(
           `[${point.vector.join(",")}]`,
         );
       }
-
-      // Unused variable guard: COLS_PER_ROW is used to document the expected
-      // number of params per row. Suppress the lint warning with a void.
-      void COLS_PER_ROW;
 
       const sql = `
         INSERT INTO ${tableName}

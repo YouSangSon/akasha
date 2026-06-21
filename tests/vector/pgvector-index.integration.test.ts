@@ -42,6 +42,7 @@ describe.skipIf(!TEST_URL)("pgvector adapter — integration against real pgvect
     for (let attempt = 0; attempt < 30; attempt++) {
       try {
         await pool.query("SELECT 1");
+        lastErr = undefined;
         break;
       } catch (err) {
         lastErr = err;

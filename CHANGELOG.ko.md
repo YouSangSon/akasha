@@ -17,6 +17,20 @@ CHANGELOG에서 명시적으로 표기합니다.
 `2.0.0` (org guard default 동작 변경 = breaking)이 옳지만, 실제 영향 범위가
 작아 prominent breaking 경고와 함께 `1.1.0`도 합리적 선택.
 
+### Added
+
+- **pgvector 백엔드 — Postgres 단독 배포 옵션** — `VectorIndex` 포트
+  (`src/vector/vector-index.ts`) 가 벡터 백엔드를 추상화하여 시작 시
+  `VECTOR_BACKEND` 로 Qdrant 또는 pgvector 를 선택할 수 있게 됨. 새
+  `pgvector` 어댑터 (`src/vector/pgvector-index.ts`) 는 Postgres `vector`
+  확장 (HNSW 인덱스, cosine ops) 을 사용해 `memory_vectors` 테이블에 임베딩을
+  저장하며, org/scope 필터 동등성을 유지하는 동일한 `upsert`/`query`/`delete`
+  인터페이스를 제공. `VECTOR_BACKEND=pgvector` 설정 시 Qdrant 서비스 의존성이
+  완전히 제거됨. `compose.pgvector.yaml` 오버라이드
+  (`docker compose -f compose.yaml -f compose.pgvector.yaml up -d`) 로
+  로컬 개발 시 `pgvector/pgvector:pg16` 으로 전환 가능. 백엔드 전환 시
+  `reindex_memory` 필수.
+
 ### Security
 
 - **Secret scrubber가 이제 `title`, `summary` 까지 검사** —

@@ -60,7 +60,15 @@ the `POSTGRES_*` parts (with host=`postgres` inside the network). When running
 the migration script from the host, `install.sh` rewrites the host to
 `127.0.0.1:5432` for reachability.
 
+## Vector backend
+
+| Variable | Default | Notes |
+|---|---|---|
+| `VECTOR_BACKEND` | `qdrant` | `qdrant` (default) or `pgvector`. When `pgvector`, vectors are stored in Postgres — no Qdrant service needed and Qdrant credentials are not required. Switching backends requires a `reindex_memory`. |
+
 ## Qdrant
+
+Qdrant variables are only required when `VECTOR_BACKEND=qdrant` (the default).
 
 | Variable | Default | Notes |
 |---|---|---|

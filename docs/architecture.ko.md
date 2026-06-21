@@ -223,6 +223,36 @@ operation 의 경우 `metadata` JSONB 에 구조화된 디테일 (archive id, ru
 쓰기는 best-effort (실패해도 사용자 요청은 차단 안 함) 이지만 error 레벨
 로그로 ops가 audit-stream 이슈 감지 가능.
 
+## 벡터 백엔드 플러거빌리티
+
+`src/mcp/canonical-services.ts` 가 `VECTOR_BACKEND` 를 통해 벡터 백엔드
+선택 (기본값: `qdrant`):
+
+- `qdrant` **(기본)** → `src/vector/qdrant-index.ts`,
+  `@qdrant/js-client-rest` 래핑. `QDRANT_URL` + `QDRANT_API_KEY` 필요.
+- `pgvector` → `src/vector/pgvector-index.ts`, `vector` 확장을 사용해
+  Postgres 에 임베딩 저장. 기존 PG pool 재사용 — **두 번째 서비스 불필요**.
+  Qdrant 자격증명 불필요. `ensureCollection(dims)` 가 부트스트랩 시
+  확장, 테이블, HNSW 인덱스 생성 — 재시작 시 no-op (`CREATE … IF NOT EXISTS`).
+
+두 어댑터 모두 `VectorIndex` 인터페이스 (`src/vector/vector-index.ts`) 구현:
+`ensureCollection`, `upsert`, `query`, `delete`. 필터 변환 (`VectorFilter` →
+Qdrant `must` / SQL `WHERE`) 은 각 어댑터 내부에 캡슐화 — Qdrant 또는
+pgvector SQL 방언이 오케스트레이션 코드에 누출되지 않음.
+
+### Postgres 단독 배포
+
+`VECTOR_BACKEND=pgvector` 설정으로 Qdrant 서비스 없이 단일 Postgres 인스턴스
+만으로 context-forge 실행 가능. 로컬 compose 오버라이드 `compose.pgvector.yaml`
+이 `pgvector/pgvector:pg16` 로 전환:
+
+```bash
+docker compose -f compose.yaml -f compose.pgvector.yaml up -d
+```
+
+**백엔드 전환 시 reindex 필수** (`reindex_memory` 도구) — 백엔드 간 벡터
+차원과 컨텐츠 토폴로지가 다름.
+
 ## Embedding pluggability
 
 `src/embedding/embedding-factory.ts` 가 `EMBEDDING_PROVIDER` 를 통해

@@ -228,6 +228,38 @@ Reads via `list_audit_log` are org-scoped — entries from other orgs never
 leak. Writes are best-effort (failures don't block the user request) but
 logged at error level so ops can detect audit-stream issues.
 
+## Vector backend pluggability
+
+`src/mcp/canonical-services.ts` selects the vector backend via
+`VECTOR_BACKEND` (default: `qdrant`):
+
+- `qdrant` **(default)** → `src/vector/qdrant-index.ts`, wraps
+  `@qdrant/js-client-rest`. Requires `QDRANT_URL` + `QDRANT_API_KEY`.
+- `pgvector` → `src/vector/pgvector-index.ts`, stores embeddings in
+  Postgres using the `vector` extension. Reuses the existing PG pool —
+  **no second service needed**. Qdrant credentials are not required.
+  `ensureCollection(dims)` creates the extension, table, and HNSW index
+  at bootstrap; subsequent restarts are no-ops (`CREATE … IF NOT EXISTS`).
+
+Both adapters implement the `VectorIndex` interface
+(`src/vector/vector-index.ts`): `ensureCollection`, `upsert`, `query`,
+`delete`. Filter translation (`VectorFilter` → Qdrant `must` / SQL
+`WHERE`) is encapsulated inside each adapter so no Qdrant or pgvector
+SQL dialect leaks into orchestration code.
+
+### Postgres-only deploy
+
+Set `VECTOR_BACKEND=pgvector` to run context-forge on a single Postgres
+instance with no Qdrant service. The local compose override
+`compose.pgvector.yaml` swaps in `pgvector/pgvector:pg16`:
+
+```bash
+docker compose -f compose.yaml -f compose.pgvector.yaml up -d
+```
+
+**Switching backends requires a reindex** (`reindex_memory` tool) —
+vector dimensions and content topology differ between backends.
+
 ## Embedding pluggability
 
 `src/embedding/embedding-factory.ts` selects the provider via

@@ -19,6 +19,20 @@ strict SemVer suggests `2.0.0` (breaking default behavior on the org guard),
 but a `1.1.0`-with-prominent-breaking-warning is also defensible given the
 small actual impact surface.
 
+### Added
+
+- **pgvector backend — Postgres-only deploy option** — a `VectorIndex` port
+  (`src/vector/vector-index.ts`) abstracts the vector backend so either Qdrant
+  or pgvector can be selected at startup via `VECTOR_BACKEND`. The new
+  `pgvector` adapter (`src/vector/pgvector-index.ts`) stores embeddings in a
+  `memory_vectors` table using the Postgres `vector` extension (HNSW index,
+  cosine ops) and provides the same `upsert`/`query`/`delete` interface with
+  org/scope filter parity. Setting `VECTOR_BACKEND=pgvector` removes the
+  Qdrant service dependency entirely; the `compose.pgvector.yaml` overlay
+  (`docker compose -f compose.yaml -f compose.pgvector.yaml up -d`) swaps in
+  `pgvector/pgvector:pg16` for local development. Switching backends requires
+  `reindex_memory`.
+
 ### Security
 
 - **Secret scrubber now covers `title` and `summary`, not only `content`** —

@@ -83,3 +83,39 @@ jobs:
           POSTGRES_PORT: "5432"
           DATABASE_URL: postgres://memory:memory@127.0.0.1:5432/memory_os
         run: npm test
+
+  pgvector-integration:
+    name: pgvector integration tests
+    runs-on: ubuntu-latest
+    services:
+      pgvector:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: memory
+          POSTGRES_PASSWORD: memory
+          POSTGRES_DB: memory_pgv
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U memory -d memory_pgv"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Run pgvector integration suite
+        env:
+          PGVECTOR_TEST_URL: postgres://memory:memory@127.0.0.1:5433/memory_pgv
+        run: npx vitest run tests/vector/pgvector-index.integration.test.ts
