@@ -11,9 +11,11 @@ Akasha production 운영을 위한 day-2 절차. 초기 배포는
 npm run backup:create
 ```
 
-Postgres (`pg_dump --format=custom`) 와 Qdrant (snapshot API) 를
-`BACKUP_DIR` 로 스냅샷. 파일명: `<timestamp>-postgres.dump`,
-`<timestamp>-qdrant.tar`.
+Postgres (`pg_dump` 를 gzip으로 압축) 와 Qdrant (snapshot API) 를
+`BACKUP_DIR` 로 스냅샷하고 checksum manifest를 씁니다. 파일명:
+`postgres-YYYYMMDD-HHMM.sql.gz`, `qdrant-YYYYMMDD-HHMM.snapshot`,
+`qdrant-memory_chunks_v1-YYYYMMDD-HHMM.json` (metadata sidecar),
+`manifest-YYYYMMDD-HHMM.json`.
 
 ### 스케줄
 
@@ -28,8 +30,8 @@ systemd timer 대안 — 동작하는 unit 파일은
 
 ### 오프-호스트 복제
 
-`.env` 에 `BACKUP_TARGET_HOST=user@host` 설정 시 로컬 스냅샷 완료 후 rsync
-push. 대상 백업 디렉토리에 scope 된 SSH key (passphrase 없음) 필요.
+`.env` 에 `BACKUP_TARGET_HOST=user@host` 설정 시 로컬 스냅샷 완료 후 scp
+copy. 대상 백업 디렉토리에 scope 된 SSH key (passphrase 없음) 필요.
 
 ### Retention
 
@@ -42,8 +44,9 @@ push. 대상 백업 디렉토리에 scope 된 SSH key (passphrase 없음) 필요
 
 ### 검증
 
-`npm run backup:verify` 가 최신 스냅샷의 구조 (gzip 무결성, pg_dump 헤더,
-Qdrant 매니페스트) 검증. 매 백업 사이클 끝에 실행:
+`npm run backup:verify` 는 최신 manifest가 24시간 미만인지, 로컬 artifact
+checksum이 맞는지, `BACKUP_TARGET_HOST` 의 off-host 복사본도 같은 checksum인지
+검증합니다. 매 백업 사이클 끝에 실행:
 
 ```cron
 5 3 * * * cd /opt/akasha && /usr/bin/npm run backup:verify
@@ -67,16 +70,16 @@ npm run restore:smoke
 # 1. 망가진 인스턴스 트래픽 중단.
 docker compose stop app
 
-# 2. Postgres 데이터 디렉토리 drop + 복원.
+# 2. Postgres 데이터 디렉토리 drop + gzip SQL dump 복원.
 docker compose down -v postgres
 docker compose up -d postgres
-docker compose exec -T postgres pg_restore -U memory -d memory_os \
-  --clean --if-exists < /var/lib/developer-memory-os/backups/<timestamp>-postgres.dump
+gunzip -c /var/lib/developer-memory-os/backups/postgres-YYYYMMDD-HHMM.sql.gz \
+  | docker compose exec -T postgres psql -U memory -d memory_os
 
 # 3. Qdrant 스냅샷 복원.
 docker compose exec qdrant curl -X POST \
   http://localhost:6333/collections/memory_chunks_v1/snapshots/upload \
-  -F snapshot=@/var/lib/developer-memory-os/backups/<timestamp>-qdrant.tar
+  -F snapshot=@/var/lib/developer-memory-os/backups/qdrant-YYYYMMDD-HHMM.snapshot
 
 # 4. 검증 + 트래픽 재개.
 docker compose start app
@@ -144,6 +147,32 @@ ORDER BY archived_at DESC;
 영구 outage, 스키마 drift. 근본 원인 수정 후 수동
 `UPDATE memory_archive SET qdrant_status='pending'` 으로 re-enqueue.
 
+## Ingest sweeper
+
+`add_memory` 는 vector upsert 전에 write-ahead ingest job을 기록합니다. Postgres
+commit 이후 vector indexing 완료 전에 프로세스가 crash되면 ingest sweeper가 이미
+commit된 chunk를 다시 임베딩해 활성 벡터 백엔드에 기록합니다.
+
+지속 실행 replica 정확히 1개에서 활성화:
+
+```bash
+INGEST_SWEEP_ENABLED=true
+INGEST_SWEEP_INTERVAL_MS=30000
+```
+
+실패한 ingest row 확인:
+
+```sql
+SELECT id, organization_id, memory_record_id, qdrant_attempts, qdrant_last_error
+FROM ingest_jobs
+WHERE qdrant_status = 'failed'
+ORDER BY updated_at DESC;
+```
+
+근본 원인을 고친 뒤 `qdrant_status='pending'`,
+`qdrant_next_retry_at=NOW()` 로 바꾸면 re-enqueue 됩니다. 기존 메시지가 더 이상
+유용하지 않으면 `qdrant_last_error` 도 비웁니다.
+
 ## Unarchive
 
 Apply 가 실수였을 때 archive 된 레코드 복원:
@@ -190,9 +219,10 @@ docker compose logs --since 1h app | jq 'select(.level >= 40)'  # warn+
 ### Health probe
 
 - `GET /healthz` — 프로세스 살아 있음 (up 후 항상 200).
-- `GET /readyz` — readiness gate. Postgres와 Qdrant를 매 호출마다 프로브하며
-  (`EMBEDDING_PROVIDER=openai` 시 OpenAI도 포함). 모두 통과 시 200, 의존성
-  하나라도 연결 불가 시 503 반환.
+- `GET /readyz` — readiness gate. Postgres는 항상 프로브합니다. 또한
+  `VECTOR_BACKEND=qdrant` 일 때 Qdrant, `EMBEDDING_PROVIDER=openai` 일 때
+  OpenAI를 프로브합니다. `VECTOR_BACKEND=pgvector` 배포는 readiness에 Qdrant가
+  필요하지 않습니다. 활성 프로브가 모두 통과하면 200, 하나라도 실패하면 503.
 
 ### 메트릭
 

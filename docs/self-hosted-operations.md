@@ -24,7 +24,7 @@ curl http://127.0.0.1:8787/healthz
 Expected response:
 
 ```json
-{"ok":true,"host":"127.0.0.1","port":8787}
+{"success":true,"data":{"ok":true,"host":"127.0.0.1","port":8787}}
 ```
 
 ## Nightly backups
@@ -49,9 +49,10 @@ The backup scripts create and copy:
 
 - `postgres-YYYYMMDD-HHMM.sql.gz`
 - `qdrant-YYYYMMDD-HHMM.snapshot`
+- `qdrant-memory_chunks_v1-YYYYMMDD-HHMM.json`
 - `manifest-YYYYMMDD-HHMM.json`
 
-The Qdrant script also keeps the snapshot metadata JSON sidecar in `BACKUP_DIR`.
+The Qdrant metadata sidecar name includes the collection name.
 
 ## Backup verification
 

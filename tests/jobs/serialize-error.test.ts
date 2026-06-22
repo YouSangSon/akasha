@@ -10,6 +10,7 @@ function makeValidJobRow(): IngestJob {
   return {
     id: 1,
     memoryRecordId: 42,
+    organizationId: "default",
     status: "failed",
     attempts: 1,
     lastError: null,

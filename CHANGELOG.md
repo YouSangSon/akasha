@@ -58,6 +58,16 @@ small actual impact surface.
 
 ### Fixed
 
+- **Backend-aware readiness and tenant attribution fixes** — `/readyz` now
+  probes Qdrant only when `VECTOR_BACKEND=qdrant`, so `VECTOR_BACKEND=pgvector`
+  deployments no longer fail readiness because Qdrant is absent. Qdrant
+  bootstrap now calls the non-destructive `ensureCollection(dimensions)` path.
+  `ingest_jobs` and `context_pack_runs` now write `organization_id`
+  explicitly instead of relying on the database default.
+- **Paged reindexing for large scopes** — `reindex_memory` now reads chunks,
+  embeds, upserts, and updates point IDs in bounded pages instead of loading an
+  entire project/user scope into memory. Stale-vector deletes still complete
+  before any upsert page starts, preserving shrink-reindex semantics.
 - **Rollback PG state when `writeCanonicalMemory` hits a downstream failure** —
   embedding 5xx, OpenAI rate-limit, or Qdrant upsert errors used to leave
   orphan `memory_records` + `memory_chunks` rows behind with no Qdrant points

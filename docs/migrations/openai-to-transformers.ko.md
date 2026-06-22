@@ -126,21 +126,22 @@ Postgres 에는 canonical chunk 텍스트가 그대로 남아 있으므로, 새 
 
 ```bash
 # CLI 를 통해:
-node dist/src/cli.js reindex --scope-type=org --scope-id=default
+node dist/src/cli.js reindex --project my-project --organization-id default
 
-# MCP 도구로, reindex 대상 scope 마다:
-#   reindex_memory({ scopes: [{ scope_type: "org", scope_id: "default" }] })
+# MCP 도구로:
+#   reindex_memory({ projectKey: "my-project", organizationId: "default" })
 
 # 또는 HTTP 라우트로:
 curl -fsS -X POST \
   -H "Authorization: Bearer ${MEMORY_API_TOKENS}" \
   -H "Content-Type: application/json" \
-  -d '{"scopes":[{"scope_type":"org","scope_id":"default"}]}' \
+  -d '{"projectKey":"my-project","organizationId":"default"}' \
   "http://localhost:${PORT:-8787}/v1/memory/reindex"
 ```
 
-reindex 는 주어진 scope의 모든 chunk를 enumerate, 현재 설정된 provider
-(이제 transformers/384-dim) 로 임베딩, fresh point 를 Qdrant 에 upsert.
+reindex 는 해당 organization의 project chunk를 bounded page 단위로 enumerate,
+각 page를 현재 설정된 provider (이제 transformers/384-dim) 로 임베딩하고,
+fresh point 를 활성 벡터 백엔드 (Qdrant 또는 pgvector) 에 upsert 합니다.
 Idempotent — 재실행 안전.
 
 ### 7단계 — 정상 동작 확인
@@ -150,7 +151,7 @@ Idempotent — 재실행 안전.
 curl -fsS -X POST \
   -H "Authorization: Bearer ${MEMORY_API_TOKENS}" \
   -H "Content-Type: application/json" \
-  -d '{"query":"이미 저장된 메모리에 있는 텍스트","scopes":[...]}' \
+  -d '{"projectKey":"my-project","organizationId":"default","query":"이미 저장된 메모리에 있는 텍스트"}' \
   "http://localhost:${PORT:-8787}/v1/memory/search"
 ```
 

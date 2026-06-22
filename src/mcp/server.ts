@@ -395,6 +395,7 @@ export function createToolRegistry(
             );
 
             await services.chunkRepository.createContextPackRun({
+              organizationId: input.organizationId ?? "default",
               projectKey: input.projectKey,
               task: input.task,
               selectedMemoryIds,

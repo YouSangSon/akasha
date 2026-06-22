@@ -18,6 +18,7 @@ const CLAIM_VISIBILITY_TIMEOUT_MS = 5 * 60 * 1_000; // 5 minutes
 type IngestJobRow = {
   id: number;
   memory_record_id: number;
+  organization_id: string;
   status: IngestJob["status"];
   attempts: number;
   last_error: string | null;
@@ -32,6 +33,7 @@ type IngestJobRow = {
 const RETURNING_COLUMNS = `
   id,
   memory_record_id,
+  organization_id,
   status,
   attempts,
   last_error,
@@ -48,11 +50,11 @@ export function createIngestJobRepository(pool: PgPool): IngestJobRepository {
     async create(input) {
       const result = await pool.query<IngestJobRow>(
         `
-          INSERT INTO ingest_jobs (memory_record_id, status)
-          VALUES ($1, 'pending')
+          INSERT INTO ingest_jobs (memory_record_id, organization_id, status)
+          VALUES ($1, $2, 'pending')
           RETURNING ${RETURNING_COLUMNS}
         `,
-        [input.memoryRecordId],
+        [input.memoryRecordId, input.organizationId],
       );
 
       return mapJob(requireSingleRow(result.rows[0], "ingest job"));
@@ -226,6 +228,7 @@ function mapJob(row: IngestJobRow): IngestJob {
   return {
     id: toNumber(row.id),
     memoryRecordId: toNumber(row.memory_record_id),
+    organizationId: row.organization_id,
     status: row.status,
     attempts: row.attempts,
     lastError: row.last_error,

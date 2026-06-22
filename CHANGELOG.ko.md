@@ -53,6 +53,16 @@ CHANGELOG에서 명시적으로 표기합니다.
 
 ### Fixed
 
+- **백엔드-aware readiness 및 tenant attribution 수정** — `/readyz` 는 이제
+  `VECTOR_BACKEND=qdrant` 일 때만 Qdrant를 프로브하므로
+  `VECTOR_BACKEND=pgvector` 배포가 Qdrant 부재 때문에 readiness 실패하지 않음.
+  Qdrant bootstrap도 비파괴 `ensureCollection(dimensions)` 경로를 호출.
+  `ingest_jobs`, `context_pack_runs` 는 DB 기본값에 의존하지 않고
+  `organization_id` 를 명시적으로 기록.
+- **대량 scope용 paged reindex** — `reindex_memory` 는 이제 전체
+  project/user scope를 메모리에 올리지 않고 chunk 읽기, 임베딩, upsert, point id
+  갱신을 bounded page 단위로 처리. stale-vector delete는 모든 upsert page보다
+  먼저 완료되어 shrink-reindex semantics를 보존.
 - **`writeCanonicalMemory` 의 downstream 실패 시 PG state 롤백** —
   embedding 5xx, OpenAI rate-limit, Qdrant upsert 에러 발생 시 이전엔
   Qdrant point 가 없는 orphan `memory_records` + `memory_chunks` 행을

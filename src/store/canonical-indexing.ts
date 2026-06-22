@@ -41,6 +41,11 @@ export type ReindexableMemoryChunk = StoredMemoryChunk & {
   updatedAt: string;
 };
 
+export type ListChunksOptions = {
+  afterChunkId?: number;
+  limit?: number;
+};
+
 export type MemoryChunkRepository = {
   insertChunks(input: {
     record: SearchMemoryResult;
@@ -50,12 +55,17 @@ export type MemoryChunkRepository = {
   updatePointIds(
     mappings: Array<{ chunkId: number; qdrantPointId: string }>,
   ): Promise<void>;
-  listChunks(organizationId: string, scopes: ScopeRef[]): Promise<ReindexableMemoryChunk[]>;
+  listChunks(
+    organizationId: string,
+    scopes: ScopeRef[],
+    options?: ListChunksOptions,
+  ): Promise<ReindexableMemoryChunk[]>;
   // Fetch all chunks for a single memory record including the record-level
   // metadata needed to rebuild vector points. Used by the ingest sweeper to
   // re-index a specific record's chunks without scanning by scope.
   getChunksByRecordId(recordId: number): Promise<ReindexableMemoryChunk[]>;
   createContextPackRun(input: {
+    organizationId: string;
     projectKey: string;
     task: string;
     selectedMemoryIds: string[];
@@ -190,7 +200,7 @@ export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository
       );
     },
 
-    async listChunks(organizationId, scopes) {
+    async listChunks(organizationId, scopes, options) {
       if (scopes.length === 0) {
         return [];
       }
@@ -202,6 +212,12 @@ export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository
         const scopeIdIndex = params.push(scope.scopeId);
         return `(mr.scope_type = $${scopeTypeIndex} AND mr.scope_id = $${scopeIdIndex})`;
       });
+      const cursorClause = options?.afterChunkId === undefined
+        ? ""
+        : `AND mc.id > $${params.push(options.afterChunkId)}`;
+      const limitClause = options?.limit === undefined
+        ? ""
+        : `LIMIT $${params.push(options.limit)}`;
       const result = await pool.query<{
         id: number;
         memory_record_id: number;
@@ -237,7 +253,9 @@ export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository
           FROM memory_chunks mc
           JOIN memory_records mr ON mr.id = mc.memory_record_id
           WHERE mr.organization_id = $1 AND (${scopeClauses.join(" OR ")})
+          ${cursorClause}
           ORDER BY mc.id ASC
+          ${limitClause}
         `,
         params,
       );
@@ -323,13 +341,15 @@ export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository
       await pool.query(
         `
           INSERT INTO context_pack_runs (
+            organization_id,
             project_key,
             task,
             selected_memory_ids,
             pack_markdown
-          ) VALUES ($1, $2, $3::jsonb, $4)
+          ) VALUES ($1, $2, $3, $4::jsonb, $5)
         `,
         [
+          input.organizationId,
           input.projectKey,
           input.task,
           JSON.stringify(input.selectedMemoryIds),
@@ -365,7 +385,10 @@ export async function writeCanonicalMemory(input: {
   }
 
   const record = await input.repository.addMemory(input.memory);
-  const job = await input.ingestJobs.create({ memoryRecordId: record.id });
+  const job = await input.ingestJobs.create({
+    memoryRecordId: record.id,
+    organizationId: record.organizationId ?? "default",
+  });
 
   try {
     const chunks = chunkText({
@@ -451,40 +474,51 @@ export async function reindexCanonicalMemory(input: {
   vectorIndex: VectorIndex;
   organizationId: string;
   scopes: ScopeRef[];
+  batchSize?: number;
 }): Promise<{ chunkCount: number }> {
-  const chunks = await input.chunkRepository.listChunks(input.organizationId, input.scopes);
-  const embeddings = await input.embeddings.embedBatch(
-    chunks.map((chunk) => chunk.content),
-  );
-  if (embeddings.length !== chunks.length) {
-    throw new Error(
-      `reindex embedBatch returned ${embeddings.length} vectors for ${chunks.length} chunks`,
-    );
+  const batchSize = normalizeReindexBatchSize(input.batchSize);
+  let foundChunks = false;
+
+  await forEachReindexChunkPage(input, batchSize, async (chunks) => {
+    foundChunks = true;
+    await input.vectorIndex.deleteByRecordIds([
+      ...new Set(chunks.map((chunk) => chunk.memoryRecordId)),
+    ]);
+  });
+
+  if (!foundChunks) {
+    return { chunkCount: 0 };
   }
-  const points: VectorPoint[] = chunks.map((chunk, index) =>
-    buildVectorPoint({
-      chunkId: chunk.id,
-      vector: embeddings[index] ?? [],
-      memoryRecordId: chunk.memoryRecordId,
-      organizationId: chunk.organizationId,
-      scopeType: chunk.scopeType,
-      scopeId: chunk.scopeId,
-      projectKey: chunk.projectKey,
-      kind: chunk.kind,
-      durability: chunk.durability,
-      updatedAt: chunk.updatedAt,
-      embeddingVersion: chunk.embeddingVersion,
-    }),
-  );
 
-  // Clear stale vectors before upserting the current set. Without this, if a
-  // record's chunk count shrinks (e.g. 3 → 2), the old chunk:3 vector is
-  // orphaned in the index forever. The no-op guard in deleteByRecordIds means
-  // an empty recordIds array is safe.
-  const recordIds = [...new Set(chunks.map((c) => c.memoryRecordId))];
-  await input.vectorIndex.deleteByRecordIds(recordIds);
+  // Clear stale vectors for every page before any upsert starts. Deleting after
+  // a page has been reinserted is unsafe when one memory record spans pages: a
+  // later delete for that same record could erase vectors inserted earlier.
+  let chunkCount = 0;
+  await forEachReindexChunkPage(input, batchSize, async (chunks) => {
+    const embeddings = await input.embeddings.embedBatch(
+      chunks.map((chunk) => chunk.content),
+    );
+    if (embeddings.length !== chunks.length) {
+      throw new Error(
+        `reindex embedBatch returned ${embeddings.length} vectors for ${chunks.length} chunks`,
+      );
+    }
+    const points: VectorPoint[] = chunks.map((chunk, index) =>
+      buildVectorPoint({
+        chunkId: chunk.id,
+        vector: embeddings[index] ?? [],
+        memoryRecordId: chunk.memoryRecordId,
+        organizationId: chunk.organizationId,
+        scopeType: chunk.scopeType,
+        scopeId: chunk.scopeId,
+        projectKey: chunk.projectKey,
+        kind: chunk.kind,
+        durability: chunk.durability,
+        updatedAt: chunk.updatedAt,
+        embeddingVersion: chunk.embeddingVersion,
+      }),
+    );
 
-  if (points.length > 0) {
     await input.vectorIndex.upsert(points);
     await input.chunkRepository.updatePointIds(
       points.map((point, index) => ({
@@ -492,9 +526,50 @@ export async function reindexCanonicalMemory(input: {
         qdrantPointId: point.id,
       })),
     );
-  }
+    chunkCount += chunks.length;
+  });
 
-  return { chunkCount: chunks.length };
+  return { chunkCount };
+}
+
+async function forEachReindexChunkPage(
+  input: {
+    chunkRepository: MemoryChunkRepository;
+    organizationId: string;
+    scopes: ScopeRef[];
+  },
+  batchSize: number,
+  onPage: (chunks: ReindexableMemoryChunk[]) => Promise<void> | void,
+): Promise<void> {
+  let afterChunkId: number | undefined;
+  while (true) {
+    const chunks = await input.chunkRepository.listChunks(
+      input.organizationId,
+      input.scopes,
+      afterChunkId === undefined
+        ? { limit: batchSize }
+        : { afterChunkId, limit: batchSize },
+    );
+    if (chunks.length === 0) {
+      return;
+    }
+
+    await onPage(chunks);
+    afterChunkId = chunks[chunks.length - 1]!.id;
+    if (chunks.length < batchSize) {
+      return;
+    }
+  }
+}
+
+function normalizeReindexBatchSize(batchSize: number | undefined): number {
+  if (batchSize === undefined) {
+    return 500;
+  }
+  if (!Number.isInteger(batchSize) || batchSize < 1) {
+    throw new Error("reindex batchSize must be a positive integer");
+  }
+  return Math.min(batchSize, 5_000);
 }
 
 function requireSingleRow<TRow>(row: TRow | undefined, label: string): TRow {

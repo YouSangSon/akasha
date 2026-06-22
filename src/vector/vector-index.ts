@@ -27,7 +27,8 @@ export interface VectorIndex {
   query(vector: number[], filter: VectorFilter, limit: number): Promise<VectorHit[]>;
   delete(ids: string[]): Promise<void>;
   /** Remove all vectors whose memory_record_id payload field matches any of the
-   *  given record IDs. Used by reindexCanonicalMemory to clear stale chunks
-   *  before upserting the current set. No-op when recordIds is empty. */
+   *  given record IDs. Used by reindexCanonicalMemory to clear stale chunks;
+   *  callers must finish all reindex deletes before starting upsert pages.
+   *  No-op when recordIds is empty. */
   deleteByRecordIds(recordIds: number[]): Promise<void>;
 }

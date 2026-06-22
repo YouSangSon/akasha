@@ -14,8 +14,11 @@ Tool inputs and outputs are identical; only the wire format differs.
 
 ## Authentication (HTTP only)
 
-Every `/v1/*` route requires a bearer token. `/healthz` and `/readyz` are
-unauthenticated.
+When `MEMORY_API_TOKENS` is configured, every `/v1/*` route requires a bearer
+token. `/healthz` and `/readyz` are unauthenticated. For local development
+only, an empty token list is allowed when the server binds to loopback
+(`127.0.0.1`, `localhost`, or `::1`); binding to a non-loopback host without
+tokens fails at startup.
 
 ```bash
 curl -H "Authorization: Bearer dev-token" http://localhost:8787/v1/memory/search ...
@@ -28,7 +31,7 @@ Failure modes:
 | 401 | Missing / unknown / wrong-format `Authorization` header |
 | 403 | Token bound to a different org than body / header asks for |
 | 429 | Per-token rate limit exhausted |
-| 503 | `/readyz` saw a dependency outage (only when probes are injected — see health section) |
+| 503 | `/readyz` saw a dependency outage (see health section) |
 
 ## Response envelope (HTTP)
 
@@ -115,9 +118,10 @@ type SearchMemoryResult = {
 
 HTTP: `POST /v1/memory/search`
 
-Behavior: query gets embedded → Qdrant cosine search (filtered by org +
-scope) → top-K hydrated from Postgres → ranked → returned. Project-scope
-hits are stably sorted ahead of user-scope hits when there's a tie.
+Behavior: query gets embedded → active vector backend similarity search
+(filtered by org + scope) → top-K hydrated from Postgres → ranked → returned.
+Project-scope hits are stably sorted ahead of user-scope hits when there's a
+tie.
 
 ---
 
@@ -156,7 +160,7 @@ of an LLM prompt.
 
 ---
 
-### reindex_memory — rebuild Qdrant points from Postgres chunks
+### reindex_memory — rebuild the active vector index from Postgres chunks
 
 ```ts
 type ReindexMemoryInput = {
@@ -176,8 +180,9 @@ type ReindexMemoryResult = {
 HTTP: `POST /v1/memory/reindex`
 MCP stdio: `reindex_memory`
 
-Recompute embeddings for existing chunks and upsert to Qdrant. Use after
-changing `EMBEDDING_PROVIDER` or `OPENAI_EMBEDDING_MODEL`.
+Recompute embeddings for existing chunks and upsert to the configured vector
+backend (`qdrant` or `pgvector`). Use after changing `EMBEDDING_PROVIDER` or
+`OPENAI_EMBEDDING_MODEL`.
 
 ---
 
@@ -222,7 +227,8 @@ MCP stdio: `compact_memory`
 
 When `dryRun=false`, the apply path runs:
 1. Plan computed via the same logic as dry-run.
-2. Per record: PG CTE archives + deletes (TOCTOU-guarded), Qdrant deletes.
+2. Per record: PG CTE archives + deletes (TOCTOU-guarded), active vector
+   backend deletes.
 3. Failures isolated per record; partial failures populate
    `qdrantPointsPending` for the sweeper.
 
@@ -319,11 +325,13 @@ probes automatically:
 | Probe | Check | Always active? |
 |---|---|---|
 | `postgres` | `SELECT 1` | Yes |
-| `qdrant` | `GET /healthz` on the Qdrant host | Yes |
+| `qdrant` | `GET /healthz` on the Qdrant host | Only when `VECTOR_BACKEND=qdrant` |
 | `openai` | `GET /v1/models` with your API key | Only when `EMBEDDING_PROVIDER=openai` |
 
 The OpenAI probe is skipped for `transformers` and `local` providers — those
 deployments have no API key and must not fail readiness on that account.
+The Qdrant probe is skipped for `VECTOR_BACKEND=pgvector` deployments because
+vectors live in Postgres in that mode.
 
 Use this for Kubernetes readiness probes, Docker `HEALTHCHECK`, or external
 uptime monitors. The `/healthz` endpoint remains the unconditional liveness

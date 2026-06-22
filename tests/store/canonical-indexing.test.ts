@@ -97,7 +97,10 @@ describe("canonical indexing", () => {
 
     expect(created).toBe(record);
     expect(repository.addMemory).toHaveBeenCalledOnce();
-    expect(ingestJobs.create).toHaveBeenCalledWith({ memoryRecordId: 501 });
+    expect(ingestJobs.create).toHaveBeenCalledWith({
+      memoryRecordId: 501,
+      organizationId: "default",
+    });
     expect(chunkRepository.insertChunks).toHaveBeenCalledOnce();
     // Single batch call replaces three sequential embed() calls.
     expect(embeddings.embedBatch).toHaveBeenCalledOnce();
@@ -645,52 +648,80 @@ describe("canonical indexing", () => {
     expect(repository.addMemory).not.toHaveBeenCalled();
   });
 
-  it("reindexes stored chunks back into qdrant for all requested scopes", async () => {
+  it("reindexes stored chunks in pages without deleting a record after partial upsert", async () => {
+    const chunks = [
+      {
+        id: 701,
+        memoryRecordId: 501,
+        chunkIndex: 0,
+        content: "Project chunk 1",
+        startOffset: 0,
+        endOffset: 15,
+        embeddingVersion: "v1",
+        organizationId: "org-a",
+        scopeType: "project" as const,
+        scopeId: "project-alpha",
+        projectKey: "project-alpha",
+        durability: "durable",
+        kind: "decision",
+        updatedAt: "2026-03-29T00:00:00.000Z",
+      },
+      {
+        id: 702,
+        memoryRecordId: 501,
+        chunkIndex: 1,
+        content: "Project chunk 2",
+        startOffset: 16,
+        endOffset: 31,
+        embeddingVersion: "v1",
+        organizationId: "org-a",
+        scopeType: "project" as const,
+        scopeId: "project-alpha",
+        projectKey: "project-alpha",
+        durability: "durable",
+        kind: "decision",
+        updatedAt: "2026-03-29T00:00:00.000Z",
+      },
+      {
+        id: 703,
+        memoryRecordId: 502,
+        chunkIndex: 0,
+        content: "User chunk",
+        startOffset: 0,
+        endOffset: 10,
+        embeddingVersion: "v1",
+        organizationId: "org-a",
+        scopeType: "user" as const,
+        scopeId: "alice",
+        projectKey: null,
+        durability: "ephemeral",
+        kind: "fact",
+        updatedAt: "2026-03-29T00:00:00.000Z",
+      },
+    ];
     const chunkRepository = {
-      listChunks: vi.fn().mockResolvedValue([
-        {
-          id: 701,
-          memoryRecordId: 501,
-          chunkIndex: 0,
-          content: "Project chunk",
-          startOffset: 0,
-          endOffset: 13,
-          embeddingVersion: "v1",
-          organizationId: "org-a",
-          scopeType: "project",
-          scopeId: "project-alpha",
-          projectKey: "project-alpha",
-          durability: "durable",
-          kind: "decision",
-          updatedAt: "2026-03-29T00:00:00.000Z",
+      listChunks: vi.fn().mockImplementation(
+        async (
+          _organizationId: string,
+          _scopes: unknown[],
+          options?: { afterChunkId?: number; limit?: number },
+        ) => {
+          const afterChunkId = options?.afterChunkId ?? 0;
+          const limit = options?.limit ?? chunks.length;
+          return chunks
+            .filter((chunk) => chunk.id > afterChunkId)
+            .slice(0, limit);
         },
-        {
-          id: 702,
-          memoryRecordId: 502,
-          chunkIndex: 0,
-          content: "User chunk",
-          startOffset: 0,
-          endOffset: 10,
-          embeddingVersion: "v1",
-          organizationId: "org-a",
-          scopeType: "user",
-          scopeId: "alice",
-          projectKey: null,
-          durability: "ephemeral",
-          kind: "fact",
-          updatedAt: "2026-03-29T00:00:00.000Z",
-        },
-      ]),
+      ),
       updatePointIds: vi.fn().mockResolvedValue(undefined),
     };
     const embeddings = {
       embed: vi.fn(),
-      // F4: reindexCanonicalMemory now uses embedBatch — single call returning
-      // both vectors in input order.
-      embedBatch: vi.fn().mockResolvedValue([
-        [0.1, 0.2],
-        [0.3, 0.4],
-      ]),
+      embedBatch: vi
+        .fn()
+        .mockImplementation(async (inputs: string[]) =>
+          inputs.map((_input, index) => [index + 0.1, index + 0.2]),
+        ),
     };
     const vectorIndex = {
       upsert: vi.fn().mockResolvedValue(undefined),
@@ -709,27 +740,69 @@ describe("canonical indexing", () => {
         { scopeType: "project", scopeId: "project-alpha" },
         { scopeType: "user", scopeId: "alice" },
       ],
+      batchSize: 2,
     });
 
-    expect(result).toEqual({ chunkCount: 2 });
-    expect(chunkRepository.listChunks).toHaveBeenCalledWith("org-a", [
+    expect(result).toEqual({ chunkCount: 3 });
+    const scopes = [
       { scopeType: "project", scopeId: "project-alpha" },
       { scopeType: "user", scopeId: "alice" },
-    ]);
-    expect(embeddings.embedBatch).toHaveBeenCalledOnce();
-    // FU4: stale vectors must be cleared before upserting the current set.
-    expect(vectorIndex.deleteByRecordIds).toHaveBeenCalledWith(
-      expect.arrayContaining([501, 502]),
+    ];
+    expect(chunkRepository.listChunks).toHaveBeenNthCalledWith(
+      1,
+      "org-a",
+      scopes,
+      { limit: 2 },
     );
-    expect(vectorIndex.upsert).toHaveBeenCalledWith(
+    expect(chunkRepository.listChunks).toHaveBeenNthCalledWith(
+      2,
+      "org-a",
+      scopes,
+      { limit: 2, afterChunkId: 702 },
+    );
+    expect(chunkRepository.listChunks).toHaveBeenNthCalledWith(
+      3,
+      "org-a",
+      scopes,
+      { limit: 2 },
+    );
+    expect(chunkRepository.listChunks).toHaveBeenNthCalledWith(
+      4,
+      "org-a",
+      scopes,
+      { limit: 2, afterChunkId: 702 },
+    );
+
+    const deleteOrders = vectorIndex.deleteByRecordIds.mock.invocationCallOrder;
+    const firstUpsertOrder = vectorIndex.upsert.mock.invocationCallOrder[0]!;
+    expect(Math.max(...deleteOrders)).toBeLessThan(firstUpsertOrder);
+    expect(vectorIndex.deleteByRecordIds).toHaveBeenNthCalledWith(1, [501]);
+    expect(vectorIndex.deleteByRecordIds).toHaveBeenNthCalledWith(2, [502]);
+
+    expect(embeddings.embedBatch).toHaveBeenCalledTimes(2);
+    expect(embeddings.embedBatch).toHaveBeenNthCalledWith(1, [
+      "Project chunk 1",
+      "Project chunk 2",
+    ]);
+    expect(embeddings.embedBatch).toHaveBeenNthCalledWith(2, ["User chunk"]);
+    expect(vectorIndex.upsert).toHaveBeenCalledTimes(2);
+    expect(vectorIndex.upsert).toHaveBeenNthCalledWith(
+      1,
       expect.arrayContaining([
         expect.objectContaining({ id: "chunk:701" }),
         expect.objectContaining({ id: "chunk:702" }),
       ]),
     );
-    expect(chunkRepository.updatePointIds).toHaveBeenCalledWith([
+    expect(vectorIndex.upsert).toHaveBeenNthCalledWith(
+      2,
+      [expect.objectContaining({ id: "chunk:703" })],
+    );
+    expect(chunkRepository.updatePointIds).toHaveBeenNthCalledWith(1, [
       { chunkId: 701, qdrantPointId: "chunk:701" },
       { chunkId: 702, qdrantPointId: "chunk:702" },
+    ]);
+    expect(chunkRepository.updatePointIds).toHaveBeenNthCalledWith(2, [
+      { chunkId: 703, qdrantPointId: "chunk:703" },
     ]);
   });
 
@@ -870,6 +943,40 @@ describe("canonical indexing", () => {
       expect(params).toContain("shared-project");
       expect(params).toContain("user-x");
     });
+  });
+
+  it("listChunks supports cursor pagination by chunk id", async () => {
+    const queryCalls: { sql: string; params: unknown[] }[] = [];
+    const mockPool = {
+      query: vi.fn().mockImplementation((sql: string, params: unknown[]) => {
+        queryCalls.push({ sql, params });
+        return Promise.resolve({ rows: [] });
+      }),
+    };
+    const repo = createMemoryChunkRepository(mockPool as never);
+
+    await repo.listChunks(
+      "org-a",
+      [
+        { scopeType: "project", scopeId: "shared-project" },
+        { scopeType: "user", scopeId: "user-x" },
+      ],
+      { afterChunkId: 900, limit: 250 },
+    );
+
+    expect(queryCalls).toHaveLength(1);
+    const { sql, params } = queryCalls[0]!;
+    expect(sql).toMatch(/mc\.id\s*>\s*\$6/);
+    expect(sql).toMatch(/ORDER BY mc\.id ASC\s+LIMIT\s+\$7/);
+    expect(params).toEqual([
+      "org-a",
+      "project",
+      "shared-project",
+      "user",
+      "user-x",
+      900,
+      250,
+    ]);
   });
 });
 

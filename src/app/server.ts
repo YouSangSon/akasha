@@ -221,11 +221,14 @@ export function selectDependencyProbes(
 ): DependencyProbes {
   const probes: DependencyProbes = {
     postgres: buildPostgresProbe(probePool),
-    qdrant: buildQdrantProbe({
+  };
+
+  if (config.vectorBackend === "qdrant") {
+    probes.qdrant = buildQdrantProbe({
       url: config.qdrant.url,
       apiKey: config.qdrant.apiKey,
-    }),
-  };
+    });
+  }
 
   if (config.embedding.provider === "openai") {
     probes.openai = buildOpenAiProbe({ apiKey: config.openai.apiKey });

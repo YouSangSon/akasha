@@ -615,12 +615,15 @@ describe("selectDependencyProbes", () => {
     };
   }
 
-  function baseConfig(provider: "openai" | "transformers" | "local") {
+  function baseConfig(
+    provider: "openai" | "transformers" | "local",
+    vectorBackend: "qdrant" | "pgvector" = "qdrant",
+  ) {
     return {
       host: "127.0.0.1",
       port: 8787,
       databaseUrl: "postgres://localhost/test",
-      vectorBackend: "qdrant" as const,
+      vectorBackend,
       qdrant: { url: "http://qdrant.local:6333", apiKey: "key-aaa", collectionName: "col" },
       openai: { apiKey: provider === "openai" ? "sk-test" : "" },
       embedding: {
@@ -635,11 +638,19 @@ describe("selectDependencyProbes", () => {
     };
   }
 
-  it("always includes postgres and qdrant probes", () => {
+  it("includes postgres and qdrant probes for the qdrant vector backend", () => {
     for (const provider of ["openai", "transformers", "local"] as const) {
-      const probes = selectDependencyProbes(baseConfig(provider), fakePool());
+      const probes = selectDependencyProbes(baseConfig(provider, "qdrant"), fakePool());
       expect(probes.postgres).toBeDefined();
       expect(probes.qdrant).toBeDefined();
+    }
+  });
+
+  it("omits the qdrant probe for the pgvector backend", () => {
+    for (const provider of ["openai", "transformers", "local"] as const) {
+      const probes = selectDependencyProbes(baseConfig(provider, "pgvector"), fakePool());
+      expect(probes.postgres).toBeDefined();
+      expect(probes.qdrant).toBeUndefined();
     }
   });
 

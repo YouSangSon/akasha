@@ -50,8 +50,8 @@ Beyond the free/local/multi-tenant basics above, Akasha is built to be
 operated in production:
 
 - **Canonical store, derived index.** Postgres holds the truth; the vector
-  index is rebuildable. A wiped Qdrant collection costs 0 data — `reindex_memory`
-  re-embeds from Postgres chunks in one call.
+  index is rebuildable. A wiped vector index costs 0 data — one
+  `reindex_memory` tool call re-embeds Postgres chunks in bounded pages.
 - **Crash-safe ingest.** Writes record a write-ahead intent before touching the
   vector store; a background sweeper retries any upsert that failed mid-flight
   (visibility-timeout claim, `FOR UPDATE SKIP LOCKED`). No silent index drift.
@@ -167,8 +167,8 @@ curl -sX POST http://localhost:8787/v1/memory/context-pack \
 | Embeddings (`src/embedding/`) | `transformers` (free local ONNX, default), `openai` (`text-embedding-3-small`), or `local` (deterministic stub for CI) |
 
 Data flow: caller writes `add_memory` → record persisted to Postgres + chunked
-+ embedded + upserted to Qdrant. `search_memory` → embed query → Qdrant cosine
-search → hydrate from Postgres → rank → return. See
++ embedded + upserted to the active vector backend. `search_memory` → embed
+query → vector similarity search → hydrate from Postgres → rank → return. See
 [docs/architecture.md](docs/architecture.md) for design details.
 
 ## Configuration
