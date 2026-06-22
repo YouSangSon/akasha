@@ -136,11 +136,15 @@ unarchiveCompaction (src/compact/unarchive-compaction.ts)
   │    ├─ restoreToCanonical  (원본 timestamp + source_id 보존하며
   │    │                       memory_records INSERT; 새 BIGSERIAL id)
   │    ├─ chunkText + insertChunks
-  │    ├─ embeddings.embed (chunk별)
+  │    ├─ embeddings.embedBatch (복원 archive별)
   │    ├─ qdrantClient.upsert (새 point id)
   │    ├─ chunkRepository.updatePointIds
   │    └─ markUnarchived (unarchived_at = NOW() 설정)
 ```
+
+복구 경로는 provider 일관성을 가드합니다. `embedBatch` 는 저장된 chunk마다
+정확히 하나의 vector를 반환해야 하며, 개수가 다르면 해당 archive만 failed
+outcome 으로 보고합니다.
 
 Archive 별 실패 격리: 한 archive 복원 실패가 batch 전체를 죽이지 않음;
 응답에 archive별 `outcomes[]` 포함 → 호출자가 정확히 무엇이 성공/실패했는지

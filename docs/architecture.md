@@ -140,11 +140,14 @@ unarchiveCompaction (src/compact/unarchive-compaction.ts)
   │    ├─ restoreToCanonical  (INSERT memory_records preserving original
   │    │                       timestamps + source_id; new BIGSERIAL id)
   │    ├─ chunkText + insertChunks
-  │    ├─ embeddings.embed (per chunk)
+  │    ├─ embeddings.embedBatch (per restored archive)
   │    ├─ qdrantClient.upsert (new point ids)
   │    ├─ chunkRepository.updatePointIds
   │    └─ markUnarchived (set unarchived_at = NOW())
 ```
+
+The restore path guards provider consistency: `embedBatch` must return one
+vector per stored chunk, or that archive is reported as a failed outcome.
 
 Per-archive failure isolation: one bad restore doesn't kill the batch;
 the response carries per-archive `outcomes[]` so callers see exactly

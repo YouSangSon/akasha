@@ -7,7 +7,7 @@
 //      timestamps + source_id. New row gets a fresh BIGSERIAL id.
 //   4. Re-chunk content via existing chunkText
 //   5. insertChunks (writes memory_chunks rows with the new record id)
-//   6. Embed each chunk via EmbeddingClient
+//   6. Embed restored chunks via one EmbeddingClient.embedBatch call
 //   7. vectorIndex.upsert points with the new chunk ids
 //   8. updatePointIds back to memory_chunks
 //   9. markUnarchived(archiveId) — set unarchived_at = NOW()
@@ -213,9 +213,15 @@ async function restoreOne(
     embedding: deps.embedding,
   });
 
-  const embeddings = await Promise.all(
-    storedChunks.map((chunk) => deps.embeddings.embed(chunk.content)),
+  const embeddings = await deps.embeddings.embedBatch(
+    storedChunks.map((chunk) => chunk.content),
   );
+  if (embeddings.length !== storedChunks.length) {
+    throw new Error(
+      `unarchive embedBatch returned ${embeddings.length} vectors for ${storedChunks.length} chunks`,
+    );
+  }
+
   const points: VectorPoint[] = storedChunks.map((chunk, index) =>
     buildVectorPoint({
       chunkId: chunk.id,
