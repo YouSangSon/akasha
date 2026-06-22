@@ -42,11 +42,12 @@ services:
         condition: service_started
     environment:
       BACKUP_DIR: ${BACKUP_DIR:-/var/lib/developer-memory-os/backups}
-      BACKUP_TARGET_HOST: ${BACKUP_TARGET_HOST:-backup@example.internal}
+      BACKUP_TARGET_HOST: ${BACKUP_TARGET_HOST:-}
       DATABASE_URL: postgres://${POSTGRES_USER:-memory}:${POSTGRES_PASSWORD:-memory}@postgres:5432/${POSTGRES_DB:-memory_os}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-transformers}
       HOST: 0.0.0.0
       NODE_ENV: ${NODE_ENV:-production}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-replace-me}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
       PORT: ${PORT:-8787}
       POSTGRES_DB: ${POSTGRES_DB:-memory_os}

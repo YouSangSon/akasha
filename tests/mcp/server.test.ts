@@ -1131,6 +1131,34 @@ describe("createMcpServer", () => {
     // strip it and this assertion would fail.
     expect(parsed).toMatchObject({ projectKey: "p", semanticDedupThreshold: 0.95 });
   });
+
+  it("requires organizationId in the reindex_memory inputSchema", async () => {
+    type SchemaArg = { inputSchema: Record<string, z.ZodTypeAny> };
+    let capturedSchema: SchemaArg | undefined;
+
+    const spy = vi
+      .spyOn(McpServer.prototype, "registerTool")
+      .mockImplementation((name: string, schema: unknown, _handler: unknown) => {
+        if (name === "reindex_memory") {
+          capturedSchema = schema as SchemaArg;
+        }
+        return undefined as unknown as ReturnType<McpServer["registerTool"]>;
+      });
+
+    createMcpServer({ registry: {} as unknown as ToolRegistry });
+    spy.mockRestore();
+
+    expect(capturedSchema).toBeDefined();
+
+    const schema = z.object(capturedSchema!.inputSchema);
+    expect(() => schema.parse({ projectKey: "p" })).toThrow();
+    expect(
+      schema.parse({ organizationId: "org-a", projectKey: "p" }),
+    ).toMatchObject({
+      organizationId: "org-a",
+      projectKey: "p",
+    });
+  });
 });
 
 function createCanonicalServices() {

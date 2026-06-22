@@ -15,7 +15,7 @@ reporting policy (where to send security reports), see
 | MCP stdio | Local-only (parent process invokes the binary); inherits parent's identity |
 | Postgres | Direct DB access bypasses all app-layer controls; back up + restrict |
 | Qdrant | Vector access bypasses scope/auth filters; backup separately, network-isolate |
-| OpenAI calls | Content sent for embedding leaves your network; `EMBEDDING_PROVIDER=local` keeps it on-box |
+| OpenAI calls | Content sent for embedding leaves your network; `EMBEDDING_PROVIDER=transformers` keeps useful semantic embeddings on-box (`local` is a deterministic CI/offline stub) |
 
 ## Controls
 
@@ -115,8 +115,9 @@ mitigate:
   Use short-lived tokens + rotation.
 - **Embedding provider sees content.** With `EMBEDDING_PROVIDER=openai`,
   every record's content is sent to OpenAI for embedding. If your
-  compliance posture forbids that, switch to `local` and accept the
-  quality trade-off.
+  compliance posture forbids that, use `transformers` for local semantic
+  embeddings. Use `local` only as a deterministic CI/offline stub when
+  retrieval quality is not important.
 - **Token storage at rest** is application-side (env vars, .env files).
   No KMS integration today.
 - **Postgres backups contain plaintext content.** Encrypt at rest at

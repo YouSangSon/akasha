@@ -121,7 +121,7 @@ the next request after recovery rebuilds the singleton.
 
 ## Data issues
 
-### Search returns no results after a fresh `add_memory`
+### Search returns no results after `add_memory`
 
 Common causes:
 1. **Wrong project key** — `searchMemory` is project-scoped; search the
@@ -129,10 +129,12 @@ Common causes:
 2. **Embedding provider mismatch** — if you switched `EMBEDDING_PROVIDER`
    without reindexing, old chunks have incompatible vectors. Run
    `reindex_memory`.
-3. **Ingest job pending** — `add_memory` returns immediately even if
-   chunking / embedding is still in progress. Query
-   `SELECT status FROM ingest_jobs WHERE memory_record_id = <id>` to
-   confirm completion.
+3. **Interrupted vector indexing** — `add_memory` normally waits for
+   chunking, embedding, and vector upsert before returning. If the process
+   crashed or the vector store failed mid-write, inspect the ingest outbox:
+   `SELECT status, qdrant_status, qdrant_next_retry_at, qdrant_last_error FROM ingest_jobs WHERE memory_record_id = <id>`.
+   Enable `INGEST_SWEEP_ENABLED=true` on one continuously running replica to
+   retry rows with `qdrant_status='pending'`.
 
 ### Duplicate records keep appearing
 

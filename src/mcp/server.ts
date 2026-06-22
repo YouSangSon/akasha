@@ -792,7 +792,7 @@ export function createMcpServer(
     {
       description: "Reindex all memory chunks for a project (and user) scope into Qdrant.",
       inputSchema: {
-        organizationId: z.string().min(1).optional(),
+        organizationId: z.string().min(1),
         projectKey: z.string().min(1),
         userScopeId: z.string().min(1).optional(),
       },

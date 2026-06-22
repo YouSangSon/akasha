@@ -30,6 +30,20 @@ export type RunRestoreSmokeInput = {
   stopEnvironment: () => Promise<void>;
 };
 
+export type RestoreSmokeToolInput = {
+  projectKey: string;
+  userScopeId?: string;
+  organizationId?: string;
+};
+
+export function buildRestoreSmokeToolInput(input: RestoreSmokeToolInput) {
+  return {
+    projectKey: input.projectKey,
+    ...(input.userScopeId ? { userScopeId: input.userScopeId } : {}),
+    ...(input.organizationId ? { organizationId: input.organizationId } : {}),
+  };
+}
+
 export async function runRestoreSmoke(input: RunRestoreSmokeInput) {
   try {
     await input.startEnvironment();
@@ -164,6 +178,7 @@ async function main() {
   const projectName = process.env.RESTORE_SMOKE_PROJECT ?? "restore-smoke";
   const projectKey = process.env.RESTORE_SMOKE_PROJECT_KEY ?? "project-alpha";
   const userScopeId = process.env.RESTORE_SMOKE_USER_SCOPE_ID?.trim();
+  const organizationId = process.env.RESTORE_SMOKE_ORGANIZATION_ID?.trim();
   const searchQuery = process.env.RESTORE_SMOKE_SEARCH_QUERY ?? "continue work";
   const packTask = process.env.RESTORE_SMOKE_PACK_TASK ?? "continue work";
   const appPort = process.env.RESTORE_APP_PORT ?? "18787";
@@ -227,9 +242,13 @@ async function main() {
         },
         async () => {
           const registry = createToolRegistry({ cwd: process.cwd() });
-          const result = await registry.search_memory({
+          const toolInput = buildRestoreSmokeToolInput({
             projectKey,
             userScopeId,
+            organizationId,
+          });
+          const result = await registry.search_memory({
+            ...toolInput,
             query: searchQuery,
           });
 
@@ -245,9 +264,13 @@ async function main() {
         },
         async () => {
           const registry = createToolRegistry({ cwd: process.cwd() });
-          const result = await registry.build_context_pack({
+          const toolInput = buildRestoreSmokeToolInput({
             projectKey,
             userScopeId,
+            organizationId,
+          });
+          const result = await registry.build_context_pack({
+            ...toolInput,
             task: packTask,
           });
 
