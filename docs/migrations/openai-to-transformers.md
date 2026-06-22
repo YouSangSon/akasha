@@ -129,22 +129,23 @@ recreated Qdrant collection.
 
 ```bash
 # Via the CLI:
-node dist/src/cli.js reindex --scope-type=org --scope-id=default
+node dist/src/cli.js reindex --project my-project --organization-id default
 
-# Or via the MCP tool, for each scope you want to reindex:
-#   reindex_memory({ scopes: [{ scope_type: "org", scope_id: "default" }] })
+# Or via the MCP tool:
+#   reindex_memory({ projectKey: "my-project", organizationId: "default" })
 
 # Or via the HTTP route:
 curl -fsS -X POST \
   -H "Authorization: Bearer ${MEMORY_API_TOKENS}" \
   -H "Content-Type: application/json" \
-  -d '{"scopes":[{"scope_type":"org","scope_id":"default"}]}' \
+  -d '{"projectKey":"my-project","organizationId":"default"}' \
   "http://localhost:${PORT:-8787}/v1/memory/reindex"
 ```
 
-The reindex enumerates every chunk in the given scope, embeds it with the
-currently-configured provider (now transformers/384-dim), and upserts the
-fresh points into Qdrant. Idempotent — safe to re-run.
+The reindex enumerates project chunks for the given organization in bounded
+pages, embeds each page with the currently-configured provider (now
+transformers/384-dim), and upserts fresh points into the active vector backend
+(Qdrant or pgvector). Idempotent — safe to re-run.
 
 ### Step 7 — Sanity check
 
@@ -153,7 +154,7 @@ fresh points into Qdrant. Idempotent — safe to re-run.
 curl -fsS -X POST \
   -H "Authorization: Bearer ${MEMORY_API_TOKENS}" \
   -H "Content-Type: application/json" \
-  -d '{"query":"any text from a known memory","scopes":[...]}' \
+  -d '{"projectKey":"my-project","organizationId":"default","query":"any text from a known memory"}' \
   "http://localhost:${PORT:-8787}/v1/memory/search"
 ```
 

@@ -14,8 +14,10 @@ Akasha는 동일한 도구 surface를 두 가지 transport로 노출합니다:
 
 ## 인증 (HTTP 전용)
 
-모든 `/v1/*` 라우트는 bearer 토큰이 필요합니다. `/healthz`, `/readyz` 는
-인증 없음.
+`MEMORY_API_TOKENS` 가 설정되어 있으면 모든 `/v1/*` 라우트에 bearer 토큰이
+필요합니다. `/healthz`, `/readyz` 는 인증 없음. 로컬 개발에서만 토큰 목록이
+비어 있어도 loopback (`127.0.0.1`, `localhost`, `::1`) 바인딩이면 허용됩니다.
+토큰 없이 non-loopback host에 바인딩하면 startup에서 실패합니다.
 
 ```bash
 curl -H "Authorization: Bearer dev-token" http://localhost:8787/v1/memory/search ...
@@ -28,7 +30,7 @@ curl -H "Authorization: Bearer dev-token" http://localhost:8787/v1/memory/search
 | 401 | `Authorization` 헤더 누락 / 알 수 없음 / 잘못된 형식 |
 | 403 | 토큰이 다른 org에 바인딩됨 (body / 헤더와 불일치) |
 | 429 | 토큰별 rate limit 소진 |
-| 503 | `/readyz` 가 의존성 outage 감지 (probe가 주입된 경우에만 — 아래 health 섹션 참조) |
+| 503 | `/readyz` 가 의존성 outage 감지 (아래 health 섹션 참조) |
 
 ## 응답 envelope (HTTP)
 
@@ -115,9 +117,9 @@ type SearchMemoryResult = {
 
 HTTP: `POST /v1/memory/search`
 
-동작: 쿼리 임베딩 → Qdrant 코사인 검색 (org + scope 필터) → top-K를
-Postgres에서 hydrate → 랭킹 → 반환. 동점인 경우 project-scope 결과가
-user-scope 결과보다 안정적으로 앞에 옴.
+동작: 쿼리 임베딩 → 활성 vector backend 유사도 검색 (org + scope 필터) →
+top-K를 Postgres에서 hydrate → 랭킹 → 반환. 동점인 경우 project-scope
+결과가 user-scope 결과보다 안정적으로 앞에 옴.
 
 ---
 
@@ -155,7 +157,7 @@ body가 LLM 프롬프트의 cache-eligible prefix에 위치하도록.
 
 ---
 
-### reindex_memory — Postgres chunks에서 Qdrant 포인트 재구축
+### reindex_memory — Postgres chunks에서 활성 vector index 재구축
 
 ```ts
 type ReindexMemoryInput = {
@@ -175,8 +177,9 @@ type ReindexMemoryResult = {
 HTTP: `POST /v1/memory/reindex`
 MCP stdio: `reindex_memory`
 
-기존 chunk의 임베딩을 재계산해서 Qdrant에 upsert. `EMBEDDING_PROVIDER` 또는
-`OPENAI_EMBEDDING_MODEL` 변경 후 사용.
+기존 chunk의 임베딩을 재계산해서 설정된 vector backend (`qdrant` 또는
+`pgvector`) 에 upsert. `EMBEDDING_PROVIDER` 또는 `OPENAI_EMBEDDING_MODEL`
+변경 후 사용.
 
 ---
 
@@ -221,7 +224,7 @@ MCP stdio: `compact_memory`
 
 `dryRun=false` 시 apply 경로 실행:
 1. 계획은 dry-run과 동일한 로직으로 계산.
-2. 레코드별: PG CTE가 archive + 삭제 (TOCTOU 가드), Qdrant 삭제.
+2. 레코드별: PG CTE가 archive + 삭제 (TOCTOU 가드), 활성 vector backend 삭제.
 3. 실패는 레코드별 격리; 부분 실패는 `qdrantPointsPending` 카운터에
    반영되어 sweeper가 처리.
 
@@ -316,11 +319,13 @@ HTTP: `POST /v1/audit/list`
 | 프로브 | 검사 내용 | 항상 활성? |
 |---|---|---|
 | `postgres` | `SELECT 1` | 예 |
-| `qdrant` | Qdrant 호스트 `GET /healthz` | 예 |
+| `qdrant` | Qdrant 호스트 `GET /healthz` | `VECTOR_BACKEND=qdrant` 일 때만 |
 | `openai` | API 키로 `GET /v1/models` | `EMBEDDING_PROVIDER=openai` 일 때만 |
 
 OpenAI 프로브는 `transformers` 및 `local` 프로바이더에서는 생략됩니다 — 해당
 배포에는 API 키가 없어 readiness 실패를 일으켜서는 안 됩니다.
+`VECTOR_BACKEND=pgvector` 배포에서는 벡터가 Postgres에 있으므로 Qdrant 프로브도
+생략됩니다.
 
 Kubernetes readiness probe, Docker `HEALTHCHECK`, 외부 업타임 모니터에 사용하세요.
 `/healthz` 엔드포인트는 의존성 체크 없이 프로세스 생존만 확인하는 liveness

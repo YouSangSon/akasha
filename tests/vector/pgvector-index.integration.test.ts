@@ -523,9 +523,9 @@ describe.skipIf(!TEST_URL)("ingest sweeper recovery — integration against real
     const pastTime = new Date(Date.now() - 60_000); // 1 minute ago
     await pool.query(
       `INSERT INTO ingest_jobs
-         (memory_record_id, status, qdrant_status, qdrant_attempts, qdrant_next_retry_at)
-       VALUES ($1, 'processing', 'pending', 0, $2)`,
-      [recordId, pastTime],
+         (memory_record_id, organization_id, status, qdrant_status, qdrant_attempts, qdrant_next_retry_at)
+       VALUES ($1, $2, 'processing', 'pending', 0, $3)`,
+      [recordId, orgId, pastTime],
     );
 
     // 5. Build real repositories that talk to the seeded DB.

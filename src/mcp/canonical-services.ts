@@ -42,7 +42,12 @@ export async function bootstrapCanonicalServices(): Promise<CanonicalServices> {
       url: config.qdrant.url,
       apiKey: config.qdrant.apiKey,
     });
-    vectorIndex = createQdrantVectorIndex(qdrantClient, config.qdrant.collectionName);
+    const qdrantVectorIndex = createQdrantVectorIndex(
+      qdrantClient,
+      config.qdrant.collectionName,
+    );
+    await qdrantVectorIndex.ensureCollection(config.embedding.dimensions);
+    vectorIndex = qdrantVectorIndex;
   }
 
   return {

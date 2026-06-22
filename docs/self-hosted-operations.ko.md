@@ -26,7 +26,7 @@ curl http://127.0.0.1:8787/healthz
 예상 응답:
 
 ```json
-{"ok":true,"host":"127.0.0.1","port":8787}
+{"success":true,"data":{"ok":true,"host":"127.0.0.1","port":8787}}
 ```
 
 ## 야간 백업
@@ -51,9 +51,10 @@ npm run backup:create
 
 - `postgres-YYYYMMDD-HHMM.sql.gz`
 - `qdrant-YYYYMMDD-HHMM.snapshot`
+- `qdrant-memory_chunks_v1-YYYYMMDD-HHMM.json`
 - `manifest-YYYYMMDD-HHMM.json`
 
-Qdrant 스크립트는 스냅샷 메타데이터 JSON 사이드카도 `BACKUP_DIR`에 보관합니다.
+Qdrant metadata sidecar 파일명에는 collection 이름이 포함됩니다.
 
 ## 백업 검증
 

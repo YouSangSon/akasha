@@ -11,9 +11,11 @@ deployment see [deployment.md](deployment.md).
 npm run backup:create
 ```
 
-Snapshots Postgres (`pg_dump --format=custom`) and Qdrant (snapshot API)
-into `BACKUP_DIR`. Files are named `<timestamp>-postgres.dump` and
-`<timestamp>-qdrant.tar`.
+Snapshots Postgres (`pg_dump` piped through gzip) and Qdrant (snapshot API)
+into `BACKUP_DIR`, then writes a manifest with checksums. Files are named
+`postgres-YYYYMMDD-HHMM.sql.gz`, `qdrant-YYYYMMDD-HHMM.snapshot`,
+`qdrant-memory_chunks_v1-YYYYMMDD-HHMM.json` (metadata sidecar), and
+`manifest-YYYYMMDD-HHMM.json`.
 
 ### Schedule
 
@@ -29,7 +31,7 @@ for a working unit file.
 ### Off-host replication
 
 Set `BACKUP_TARGET_HOST=user@host` in `.env` and the script appends an
-rsync push after the local snapshot completes. Requires SSH key auth (no
+scp copy after the local snapshot completes. Requires SSH key auth (no
 passphrase) scoped to the destination's backup directory.
 
 ### Retention
@@ -44,9 +46,9 @@ sibling cron job:
 
 ### Verification
 
-`npm run backup:verify` validates the latest snapshot's structure (gzip
-integrity, pg_dump header, Qdrant snapshot manifest). Run it at the end
-of every backup cycle:
+`npm run backup:verify` validates the newest manifest is less than 24 hours
+old, verifies local artifact checksums, and verifies the off-host copies on
+`BACKUP_TARGET_HOST`. Run it at the end of every backup cycle:
 
 ```cron
 5 3 * * * cd /opt/akasha && /usr/bin/npm run backup:verify
@@ -71,16 +73,16 @@ alert — your backups are unreliable.
 # 1. Stop traffic to the bad instance.
 docker compose stop app
 
-# 2. Drop and recreate Postgres data dir; restore from dump.
+# 2. Drop and recreate Postgres data dir; restore from the gzip SQL dump.
 docker compose down -v postgres
 docker compose up -d postgres
-docker compose exec -T postgres pg_restore -U memory -d memory_os \
-  --clean --if-exists < /var/lib/developer-memory-os/backups/<timestamp>-postgres.dump
+gunzip -c /var/lib/developer-memory-os/backups/postgres-YYYYMMDD-HHMM.sql.gz \
+  | docker compose exec -T postgres psql -U memory -d memory_os
 
 # 3. Restore Qdrant snapshot.
 docker compose exec qdrant curl -X POST \
   http://localhost:6333/collections/memory_chunks_v1/snapshots/upload \
-  -F snapshot=@/var/lib/developer-memory-os/backups/<timestamp>-qdrant.tar
+  -F snapshot=@/var/lib/developer-memory-os/backups/qdrant-YYYYMMDD-HHMM.snapshot
 
 # 4. Verify and resume traffic.
 docker compose start app
@@ -148,6 +150,33 @@ Likely causes: Qdrant collection name mismatch (after a `QDRANT_COLLECTION_NAME`
 change), permanent Qdrant outage, or schema drift. Once root cause is fixed,
 manually `UPDATE memory_archive SET qdrant_status='pending'` to re-enqueue.
 
+## Ingest sweeper
+
+`add_memory` records a write-ahead ingest job before vector upsert. If the
+process crashes after Postgres commit but before vector indexing completes,
+the ingest sweeper re-embeds those committed chunks and writes them to the
+active vector backend.
+
+Enable it on exactly one continuously-running replica:
+
+```bash
+INGEST_SWEEP_ENABLED=true
+INGEST_SWEEP_INTERVAL_MS=30000
+```
+
+Check failed ingest rows:
+
+```sql
+SELECT id, organization_id, memory_record_id, qdrant_attempts, qdrant_last_error
+FROM ingest_jobs
+WHERE qdrant_status = 'failed'
+ORDER BY updated_at DESC;
+```
+
+After fixing the underlying cause, re-enqueue a row by setting
+`qdrant_status='pending'`, `qdrant_next_retry_at=NOW()`, and clearing
+`qdrant_last_error` if the old message is no longer useful.
+
 ## Unarchive
 
 Restore archived records when an apply was a mistake:
@@ -194,9 +223,11 @@ Key event names to monitor:
 ### Health probes
 
 - `GET /healthz` — process is alive (always 200 once up).
-- `GET /readyz` — readiness gate. Probes Postgres and Qdrant on every call;
-  also probes OpenAI when `EMBEDDING_PROVIDER=openai`. Returns 200 when all
-  pass, 503 when any dependency is unreachable.
+- `GET /readyz` — readiness gate. Always probes Postgres. It also probes
+  Qdrant when `VECTOR_BACKEND=qdrant` and OpenAI when
+  `EMBEDDING_PROVIDER=openai`. `VECTOR_BACKEND=pgvector` deployments do not
+  require Qdrant for readiness. Returns 200 when all active probes pass, 503
+  when any active dependency is unreachable.
 
 ### Metrics
 

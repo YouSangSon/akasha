@@ -134,6 +134,7 @@ export type IngestJobQdrantStatus = "pending" | "completed" | "failed";
 export type IngestJob = {
   id: number;
   memoryRecordId: number;
+  organizationId: string;
   status: IngestJobStatus;
   attempts: number;
   lastError: string | null;
@@ -146,7 +147,7 @@ export type IngestJob = {
 };
 
 export type IngestJobRepository = {
-  create(input: { memoryRecordId: number }): Promise<IngestJob>;
+  create(input: { memoryRecordId: number; organizationId: string }): Promise<IngestJob>;
   markCompleted(jobId: number): Promise<IngestJob>;
   markFailed(jobId: number, error: unknown): Promise<IngestJob>;
   markQdrantCompleted(jobId: number): Promise<IngestJob>;

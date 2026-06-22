@@ -1,7 +1,7 @@
 // Duplicate detection over a record set. This first pass uses content-string
 // equality (after whitespace normalization) which catches the most common
 // case: the same fact captured twice from independent sessions. Semantic
-// near-duplicate detection (paraphrases via Qdrant cosine KNN) is the next
+// near-duplicate detection (paraphrases via vector KNN) is the next
 // PR — its interface plugs in here without changing the caller.
 
 export type DuplicateGroup<T> = {

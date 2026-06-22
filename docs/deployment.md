@@ -45,10 +45,11 @@ self-hosted) and run multiple `app` instances behind a load balancer.
 - [ ] **Backups** — schedule `npm run backup:create` (cron / systemd timer)
       and verify with `npm run restore:smoke` periodically.
 - [ ] **Monitoring** — wire `/readyz` to your orchestrator's readiness probe
-      and the pino logs (stderr) to your log aggregator. `/readyz` probes
-      Postgres and Qdrant on every request; it also probes OpenAI when
-      `EMBEDDING_PROVIDER=openai`. Returns 503 if any dependency is
-      unreachable, so your orchestrator will drain traffic automatically.
+      and the pino logs (stderr) to your log aggregator. `/readyz` always
+      probes Postgres, probes Qdrant only when `VECTOR_BACKEND=qdrant`, and
+      probes OpenAI only when `EMBEDDING_PROVIDER=openai`. Returns 503 if any
+      active dependency is unreachable, so your orchestrator will drain traffic
+      automatically.
 
 ## Single-host compose deployment
 
@@ -77,6 +78,10 @@ docker compose logs -f app
 # 4. Verify
 curl http://localhost:8787/readyz | jq
 ```
+
+For Postgres-only deployments, set `VECTOR_BACKEND=pgvector`, enable the
+`vector` extension once as a database admin, and omit Qdrant credentials.
+`/readyz` will not probe Qdrant in this mode.
 
 ## Behind a reverse proxy
 
@@ -154,7 +159,7 @@ Qdrant-compatible endpoint.
 
 ## Off-host backups
 
-`BACKUP_TARGET_HOST` activates an rsync push to a remote host after the
+`BACKUP_TARGET_HOST` activates an scp copy to a remote host after the
 local snapshot completes. Set up an SSH key with no passphrase scoped to
 that host's `/var/lib/developer-memory-os/backups` directory:
 
@@ -163,15 +168,17 @@ BACKUP_DIR=/var/lib/developer-memory-os/backups
 BACKUP_TARGET_HOST=backup@backup.example.com
 ```
 
-The `npm run backup:create` script handles the rsync invocation. See
+The `npm run backup:create` script handles the scp invocation. See
 [docs/operations.md](operations.md) for the schedule + retention policy.
 
 ## Disaster recovery
 
-**Note:** `/readyz` actively probes Postgres and Qdrant (plus OpenAI when
-`EMBEDDING_PROVIDER=openai`) and returns 503 if any dependency is unreachable.
-Once dependencies recover from a transient failure, the next request
-bootstraps the canonical-services singleton again (no app restart needed).
+**Note:** `/readyz` actively probes Postgres, the active vector backend
+(Qdrant only when `VECTOR_BACKEND=qdrant`; pgvector uses Postgres), and OpenAI
+when `EMBEDDING_PROVIDER=openai`. It returns 503 if any active dependency is
+unreachable. Once dependencies recover from a transient failure, the next
+request bootstraps the canonical-services singleton again (no app restart
+needed).
 
 If a host goes away entirely, restore from the latest backup:
 

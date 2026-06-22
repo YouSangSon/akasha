@@ -90,10 +90,14 @@ describe.skipIf(!process.env.POSTGRES_HOST)("createIngestJobRepository", () => {
       });
 
       const jobs = createIngestJobRepository(pool);
-      const job = await jobs.create({ memoryRecordId: createdMemory.id });
+      const job = await jobs.create({
+        memoryRecordId: createdMemory.id,
+        organizationId: "default",
+      });
 
       expect(job).toMatchObject({
         memoryRecordId: createdMemory.id,
+        organizationId: "default",
         status: "pending",
         attempts: 0,
         lastError: null,
@@ -300,5 +304,5 @@ async function createJob(pool: PgPool): Promise<IngestJob> {
   });
 
   const jobs = createIngestJobRepository(pool);
-  return jobs.create({ memoryRecordId: memory.id });
+  return jobs.create({ memoryRecordId: memory.id, organizationId: "default" });
 }

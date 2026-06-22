@@ -158,6 +158,7 @@ function createUserRepository(userScopeId: string): MemoryRepository {
 function createRecord(
   overrides: {
     id: number;
+    organizationId?: string;
     scopeType?: SearchMemoryResult["scopeType"];
     memoryType: SearchMemoryResult["memoryType"];
     content: string;
@@ -168,6 +169,9 @@ function createRecord(
 ): SearchMemoryResult {
   return {
     id: overrides.id,
+    ...(overrides.organizationId
+      ? { organizationId: overrides.organizationId }
+      : {}),
     sourceId: overrides.id + 100,
     scopeType: overrides.scopeType ?? "project",
     scopeId: overrides.scopeId ?? "project-alpha",
@@ -370,7 +374,10 @@ describe("createToolRegistry", () => {
       summary: "Decision: index canonical memory into qdrant on write.",
     });
     expect(services.repository.addMemory).toHaveBeenCalledOnce();
-    expect(services.ingestJobs.create).toHaveBeenCalledWith({ memoryRecordId: 501 });
+    expect(services.ingestJobs.create).toHaveBeenCalledWith({
+      memoryRecordId: 501,
+      organizationId: "default",
+    });
     expect(services.chunkRepository.insertChunks).toHaveBeenCalledOnce();
     // F4: writeCanonicalMemory now batches per-chunk embeddings into a single
     // embedBatch call instead of N sequential embed calls.
@@ -384,6 +391,38 @@ describe("createToolRegistry", () => {
         }),
       ]),
     );
+  });
+
+  it("preserves a non-default organization on service-backed ingest jobs", async () => {
+    const services = createCanonicalServices();
+    services.repository.addMemory.mockResolvedValueOnce(
+      createRecord({
+        id: 501,
+        organizationId: "org-a",
+        memoryType: "decision",
+        content: "Decision: index canonical memory into the active vector backend.",
+        sourceType: "conversation",
+        externalId: "decision:manual",
+      }),
+    );
+    const registry = createToolRegistry({
+      resolveCanonicalServices: async () => services,
+    });
+
+    await registry.add_memory({
+      organizationId: "org-a",
+      projectKey: "project-alpha",
+      kind: "decision",
+      content: "Decision: index canonical memory into the active vector backend.",
+    });
+
+    expect(services.repository.addMemory).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: "org-a" }),
+    );
+    expect(services.ingestJobs.create).toHaveBeenCalledWith({
+      memoryRecordId: 501,
+      organizationId: "org-a",
+    });
   });
 
   it("searches project and user memories together by default", async () => {
@@ -445,14 +484,15 @@ describe("createToolRegistry", () => {
     const result = await registry.build_context_pack({
       projectKey: "project-alpha",
       // Strict-org guard demands either organizationId or the LEGACY_ANONYMOUS_SEARCH
-      // escape hatch — pass the explicit "default" tenant so this test stays
-      // focused on context-pack persistence, not legacy-anonymous behavior.
-      organizationId: "default",
+      // escape hatch. Use a non-default tenant so the persistence row proves it
+      // keeps the request's org attribution instead of falling back to "default".
+      organizationId: "org-a",
       task: "continue work",
     });
 
     expect(result.selectedMemoryIds).toEqual(["project:project-alpha:12"]);
     expect(services.chunkRepository.createContextPackRun).toHaveBeenCalledWith({
+      organizationId: "org-a",
       projectKey: "project-alpha",
       task: "continue work",
       selectedMemoryIds: ["project:project-alpha:12"],
@@ -512,10 +552,27 @@ describe("createToolRegistry", () => {
       chunkCount: 2,
       scopes: ["project:project-alpha", "user:alice"],
     });
-    expect(services.chunkRepository.listChunks).toHaveBeenCalledWith("org-a", [
+    const scopes = [
       { scopeType: "project", scopeId: "project-alpha" },
       { scopeType: "user", scopeId: "alice" },
-    ]);
+    ];
+    expect(services.chunkRepository.listChunks).toHaveBeenNthCalledWith(
+      1,
+      "org-a",
+      scopes,
+      { limit: 500 },
+    );
+    expect(services.chunkRepository.listChunks).toHaveBeenNthCalledWith(
+      2,
+      "org-a",
+      scopes,
+      { limit: 500 },
+    );
+    expect(services.vectorIndex.deleteByRecordIds).toHaveBeenCalledWith([501, 502]);
+    const deleteOrder =
+      services.vectorIndex.deleteByRecordIds.mock.invocationCallOrder[0]!;
+    const upsertOrder = services.vectorIndex.upsert.mock.invocationCallOrder[0]!;
+    expect(deleteOrder).toBeLessThan(upsertOrder);
     expect(services.vectorIndex.upsert).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({

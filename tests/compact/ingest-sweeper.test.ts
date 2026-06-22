@@ -23,6 +23,7 @@ function makeJob(overrides: Partial<IngestJob> = {}): IngestJob {
   return {
     id: 1,
     memoryRecordId: 10,
+    organizationId: "default",
     status: "completed",
     attempts: 0,
     lastError: null,

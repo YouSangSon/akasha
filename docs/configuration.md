@@ -170,18 +170,20 @@ When a token has no binding (legacy form):
 ## Personal / single-tenant use
 
 `organization_id` is just a string label, not a "company" or "account" concept —
-there is no separate signup or user system. Every record-bearing table declares
-`organization_id TEXT NOT NULL DEFAULT 'default'`, so a request that omits the
-org silently lands in the `'default'` tenant. For one-person use you do **not**
-need to think about orgs at all.
+there is no separate signup or user system. Record-bearing tables default writes
+to `'default'` when the caller omits an org, but read paths are strict by
+default: pass `organizationId` (or bind the token to an org) for
+search/context-pack/compact reads unless you explicitly set
+`LEGACY_ANONYMOUS_SEARCH=true`. For one-person use, pick one org label and use
+it consistently.
 
 Three personal setups, in order of increasing isolation:
 
 | Use case | `MEMORY_API_TOKENS` | `HOST` | What you get |
 |---|---|---|---|
-| Local solo, no auth | (empty) | `127.0.0.1` | All data in `'default'` org. The fail-closed startup gate permits this only on loopback. |
-| Local solo, token-protected | `mytoken` (no `:`) | `127.0.0.1` or LAN | Token verified, org label still defaults to `'default'`. |
-| Future-proof single tenant | `mytoken:yousang-personal` | any | Already isolated under one named tenant — adding a second person later is one more comma-separated entry, no schema change. |
+| Local solo, no auth | (empty) | `127.0.0.1` | Writes can use the `'default'` org. Pass `organizationId: "default"` on reads, or opt into `LEGACY_ANONYMOUS_SEARCH=true`. |
+| Local solo, token-protected | `mytoken` (no `:`) | `127.0.0.1` or LAN | Token verified. Pass `x-organization-id: default` or body `organizationId` for strict read paths. |
+| Future-proof single tenant | `mytoken:yousang-personal` | any | Requests are isolated under one named tenant via the token binding — adding a second person later is one more comma-separated entry, no schema change. |
 
 Multi-tenancy is the **N=1 special case** of the same code path, so there is no
 "personal mode" flag and no separate query path to maintain. If you want strict
@@ -235,9 +237,37 @@ exponential: 1 s, 2 s, 4 s, 8 s, capped at 5 min.
 | Variable | Default | Notes |
 |---|---|---|
 | `BACKUP_DIR` | `./.developer-memory-os/backups` | Where `npm run backup:create` writes. |
-| `BACKUP_TARGET_HOST` | unset | Optional rsync target for off-host replication. |
+| `BACKUP_TARGET_HOST` | unset | Optional SSH/scp target for off-host replication. |
+| `BACKUP_TARGET_DIR` | `BACKUP_DIR` | Optional remote directory used by backup copy and verification scripts. |
 
 See [docs/operations.md](operations.md) for the backup/restore workflow.
+
+## Logging and MCP identity
+
+| Variable | Default | Notes |
+|---|---|---|
+| `LOG_LEVEL` | `info` in production, `debug` otherwise | pino log level. Logs go to stderr so MCP stdio JSON-RPC stays clean. |
+| `DEVELOPER_MEMORY_USER_ID` | derived from `git config user.email`, then OS username | Stable user-scope id used when a tool needs user memory and no explicit `userScopeId` is supplied. |
+| `DMO_CWD` | `process.cwd()` | MCP stdio startup working directory override; mainly useful when launching the built CLI from another directory. |
+
+## Restore smoke
+
+`npm run restore:smoke` is an operator verification helper, not part of normal
+request serving. It restores the newest manifest from `BACKUP_DIR` into an
+isolated compose project and validates search/context-pack behavior.
+
+| Variable | Default | Notes |
+|---|---|---|
+| `RESTORE_POSTGRES_URL` | required | Connection string for the isolated restore Postgres. |
+| `RESTORE_QDRANT_URL` | required | URL for the isolated restore Qdrant. |
+| `RESTORE_SMOKE_POSTGRES_RESTORE_CMD` | required | Shell command that restores `RESTORE_SMOKE_POSTGRES_ARTIFACT_PATH`. |
+| `RESTORE_SMOKE_QDRANT_RESTORE_CMD` | required | Shell command that restores `RESTORE_SMOKE_QDRANT_ARTIFACT_PATH`. |
+| `RESTORE_SMOKE_PROJECT` | `restore-smoke` | Docker Compose project name for the isolated stack. |
+| `RESTORE_SMOKE_PROJECT_KEY` | `project-alpha` | Project key used by smoke-search and context-pack checks. |
+| `RESTORE_SMOKE_USER_SCOPE_ID` | unset | Optional user scope included in restore checks. |
+| `RESTORE_SMOKE_SEARCH_QUERY` | `continue work` | Query used by the restored search check. |
+| `RESTORE_SMOKE_PACK_TASK` | `continue work` | Task text used by the restored context-pack check. |
+| `RESTORE_APP_PORT` | `18787` | Host port expected for the isolated app service. |
 
 ## Common configurations
 

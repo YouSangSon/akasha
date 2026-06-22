@@ -163,18 +163,20 @@ MEMORY_API_TOKENS=alpha-token:dev-team,legacy-token
 ## 개인 / 단일 테넌트 사용
 
 `organization_id` 는 단순한 문자열 라벨이며 "회사" 나 "계정" 개념이 아닙니다 —
-별도 가입이나 사용자 시스템은 존재하지 않습니다. 레코드 보유 테이블은 모두
-`organization_id TEXT NOT NULL DEFAULT 'default'` 로 선언되어 있어, org 를
-지정하지 않은 요청은 자동으로 `'default'` 테넌트에 저장됩니다. 1인 사용에서는
-org 를 **전혀 의식할 필요가 없습니다**.
+별도 가입이나 사용자 시스템은 존재하지 않습니다. 레코드 보유 테이블은 org 를
+생략한 쓰기를 `'default'` 로 저장하지만, 읽기 경로는 기본적으로 strict 입니다:
+search/context-pack/compact 읽기에는 `organizationId` 를 전달하거나 토큰을 org에
+바인딩하세요. 명시적으로 `LEGACY_ANONYMOUS_SEARCH=true` 를 설정한 경우에만
+과거의 org-blind 읽기를 허용합니다. 1인 사용에서도 하나의 org 라벨을 정하고
+일관되게 사용하세요.
 
 격리 강도가 점점 높아지는 3가지 개인 사용 셋업:
 
 | 사용 사례 | `MEMORY_API_TOKENS` | `HOST` | 결과 |
 |---|---|---|---|
-| 로컬 솔로, 인증 없음 | (빈 값) | `127.0.0.1` | 모든 데이터가 `'default'` org. fail-closed 시작 게이트는 loopback 일 때만 이 조합을 허용. |
-| 로컬 솔로, 토큰 보호 | `mytoken` (콜론 없음) | `127.0.0.1` 또는 LAN | 토큰만 검증, org 라벨은 `'default'`. |
-| 향후 확장 대비 단일 테넌트 | `mytoken:yousang-personal` | 자유 | 이미 명명된 단일 테넌트로 격리 — 추후 인원 추가는 콤마 구분 항목 1줄 추가뿐, 스키마 변경 불필요. |
+| 로컬 솔로, 인증 없음 | (빈 값) | `127.0.0.1` | 쓰기는 `'default'` org 를 사용할 수 있음. 읽기에는 `organizationId: "default"` 를 전달하거나 `LEGACY_ANONYMOUS_SEARCH=true` 를 명시. |
+| 로컬 솔로, 토큰 보호 | `mytoken` (콜론 없음) | `127.0.0.1` 또는 LAN | 토큰 검증. strict 읽기 경로에는 `x-organization-id: default` 또는 body `organizationId` 전달. |
+| 향후 확장 대비 단일 테넌트 | `mytoken:yousang-personal` | 자유 | 토큰 바인딩으로 명명된 단일 테넌트에 격리 — 추후 인원 추가는 콤마 구분 항목 1줄 추가뿐, 스키마 변경 불필요. |
 
 멀티 테넌시는 같은 코드 경로의 **N=1 특수 케이스**이므로 "personal mode" 플래그나
 별도 쿼리 경로가 존재하지 않습니다. 향후 진짜 사용자별 격리 (예: 여러 개인에게
@@ -225,9 +227,37 @@ ingest sweeper 는 write-ahead `markQdrantPending` 과 `markQdrantCompleted`
 | 변수 | 기본값 | 메모 |
 |---|---|---|
 | `BACKUP_DIR` | `./.developer-memory-os/backups` | `npm run backup:create` 의 출력 디렉토리. |
-| `BACKUP_TARGET_HOST` | unset | 옵션. 오프-호스트 복제용 rsync 대상. |
+| `BACKUP_TARGET_HOST` | unset | 옵션. 오프-호스트 복제용 SSH/scp 대상. |
+| `BACKUP_TARGET_DIR` | `BACKUP_DIR` | 옵션. 백업 복사와 검증 스크립트가 사용하는 원격 디렉토리. |
 
 백업/복원 워크플로는 [docs/operations.md](operations.md) 참고.
+
+## 로깅과 MCP identity
+
+| 변수 | 기본값 | 메모 |
+|---|---|---|
+| `LOG_LEVEL` | production은 `info`, 그 외는 `debug` | pino 로그 레벨. MCP stdio JSON-RPC를 깨지 않도록 로그는 stderr로 출력. |
+| `DEVELOPER_MEMORY_USER_ID` | `git config user.email` 기반 해시, 없으면 OS username | 도구가 user memory를 필요로 하고 `userScopeId`가 명시되지 않았을 때 쓰는 안정적인 user-scope id. |
+| `DMO_CWD` | `process.cwd()` | MCP stdio 시작 작업 디렉토리 override. 빌드된 CLI를 다른 디렉토리에서 실행할 때 유용. |
+
+## Restore smoke
+
+`npm run restore:smoke` 는 일반 request serving 경로가 아닌 운영 검증 helper입니다.
+`BACKUP_DIR` 의 최신 manifest를 격리된 compose 프로젝트에 복원하고 search /
+context-pack 동작을 검증합니다.
+
+| 변수 | 기본값 | 메모 |
+|---|---|---|
+| `RESTORE_POSTGRES_URL` | 필수 | 격리 restore Postgres 연결 문자열. |
+| `RESTORE_QDRANT_URL` | 필수 | 격리 restore Qdrant URL. |
+| `RESTORE_SMOKE_POSTGRES_RESTORE_CMD` | 필수 | `RESTORE_SMOKE_POSTGRES_ARTIFACT_PATH` 를 복원하는 shell command. |
+| `RESTORE_SMOKE_QDRANT_RESTORE_CMD` | 필수 | `RESTORE_SMOKE_QDRANT_ARTIFACT_PATH` 를 복원하는 shell command. |
+| `RESTORE_SMOKE_PROJECT` | `restore-smoke` | 격리 stack의 Docker Compose project 이름. |
+| `RESTORE_SMOKE_PROJECT_KEY` | `project-alpha` | smoke search와 context-pack check에 쓰는 project key. |
+| `RESTORE_SMOKE_USER_SCOPE_ID` | unset | restore check에 포함할 선택적 user scope. |
+| `RESTORE_SMOKE_SEARCH_QUERY` | `continue work` | 복원된 search check에 쓰는 query. |
+| `RESTORE_SMOKE_PACK_TASK` | `continue work` | 복원된 context-pack check에 쓰는 task text. |
+| `RESTORE_APP_PORT` | `18787` | 격리 app 서비스에 기대하는 host port. |
 
 ## 흔한 설정
 
