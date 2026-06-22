@@ -15,6 +15,9 @@ summaries. Postgres for canonical state, Qdrant for vector search, ONNX
 embeddings running locally — **no API key required**, `$0` cost, your
 data stays on your box.
 
+> Named after the *Akashic records* — the mythical compendium of all
+> knowledge. Akasha is where your agents write down what's worth remembering.
+
 ## How does it compare?
 
 | | **Akasha** | doobidoo/mcp-memory-service | coleam00/mcp-mem0 | mem0ai/mem0 | letta-ai/letta | getzep/zep |
@@ -41,18 +44,49 @@ If you need a hosted memory product with a polished UI, look at Mem0 or Letta.
 If you need a self-hosted memory MCP server with no API key required, this is
 that.
 
+## Features
+
+Beyond the free/local/multi-tenant basics above, Akasha is built to be
+operated in production:
+
+- **Canonical store, derived index.** Postgres holds the truth; the vector
+  index is rebuildable. A wiped Qdrant collection costs 0 data — `reindex_memory`
+  re-embeds from Postgres chunks in one call.
+- **Crash-safe ingest.** Writes record a write-ahead intent before touching the
+  vector store; a background sweeper retries any upsert that failed mid-flight
+  (visibility-timeout claim, `FOR UPDATE SKIP LOCKED`). No silent index drift.
+- **Secrets scrubbed at write.** Content is scanned before it ever lands —
+  API keys, PEM blocks, bearer tokens, and JWTs are rejected (`SecretDetectedError`)
+  rather than persisted.
+- **Compaction with a dry run.** Exact + semantic dedup and time-decay archival
+  are previewed by default (`dryRun: true`); apply is idempotent and
+  rate-limited. Archived records are restorable via `unarchive_memory`.
+- **Audited and rate-limited.** Every tool call lands in an org-scoped audit log;
+  per-token rate limits protect the HTTP API.
+- **Dual transport, one tool surface.** The same 7 tools serve MCP clients over
+  stdio and any other client over JSON-HTTP.
+- **Production health probes.** `/healthz` (liveness) and a dependency-aware
+  `/readyz` (readiness) drive Kubernetes / load-balancer health checks.
+- **Pluggable vector backend.** Qdrant by default, or `VECTOR_BACKEND=pgvector`
+  to run on Postgres alone.
+
 ## Why
 
 Conversations with coding agents lose context the moment the session ends.
 Akasha is the place those agents save what's worth remembering and
-read it back next time:
+read it back next time. The same 7 tools are exposed over MCP stdio and
+JSON-HTTP — full request/response schemas live in
+[docs/api-reference.md](docs/api-reference.md).
 
-- `add_memory` — save a decision, fact, or summary
-- `search_memory` — vector + scope-filtered retrieval
-- `build_context_pack` — generate a compact pack to seed a new session
-- `compact_memory` — prune duplicates and decayed records (apply or dry-run)
-- `unarchive_memory` — restore archived records for forensic recovery
-- `list_audit_log` — audit trail for compliance / debugging
+| Tool | What it does | HTTP route |
+|------|--------------|------------|
+| `add_memory` | Save a decision, fact, or summary (secret-scrubbed at write) | `POST /v1/memory` |
+| `search_memory` | Vector + scope-filtered retrieval | `POST /v1/memory/search` |
+| `build_context_pack` | Generate a compact pack to seed a new session | `POST /v1/memory/context-pack` |
+| `compact_memory` | Prune duplicates and decayed records (apply or dry-run) | `POST /v1/memory/compact` |
+| `reindex_memory` | Rebuild the vector index from Postgres (0 data loss) | `POST /v1/memory/reindex` |
+| `unarchive_memory` | Restore archived records for forensic recovery | `POST /v1/memory/unarchive` |
+| `list_audit_log` | Read the audit trail for compliance / debugging | `POST /v1/audit/list` |
 
 Multi-tenant (`organization_id` per record), bearer-token authenticated,
 audit-logged, and rate-limited. Designed to run as a single-user MCP server
@@ -89,12 +123,36 @@ cat <<EOF
 EOF
 ```
 
-For HTTP-API clients (CLIs other than MCP):
+## Worked example
+
+Save a decision, search it back, then build a pack to seed a fresh session —
+over the HTTP API (the MCP tools take the same fields). Responses are
+abbreviated for illustration.
+
 ```bash
-curl -X POST http://localhost:8787/v1/memory/search \
-  -H "Authorization: Bearer $MEMORY_API_TOKENS" \
-  -H "Content-Type: application/json" \
-  -d '{"projectKey": "my-project", "query": "what did we decide about caching"}'
+TOKEN=$MEMORY_API_TOKENS   # from your .env
+
+# 1. Save a memory.
+curl -sX POST http://localhost:8787/v1/memory \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"projectKey":"checkout","kind":"decision",
+       "content":"Use idempotency keys on POST /charge to make retries safe."}'
+# → {"success":true,"data":{"ok":true,"memoryId":"project:checkout:42",
+#                           "summary":"Use idempotency keys on POST /charge…"}}
+
+# 2. Search semantically — no keyword match needed.
+curl -sX POST http://localhost:8787/v1/memory/search \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"projectKey":"checkout","query":"how do we avoid double-charging?"}'
+# → {"success":true,"data":{"ok":true,"results":[
+#      {"id":42,"memoryType":"decision","score":0.83,
+#       "content":"Use idempotency keys on POST /charge…"}]}}
+
+# 3. Build a context pack to paste into a new agent session.
+curl -sX POST http://localhost:8787/v1/memory/context-pack \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"projectKey":"checkout","task":"add refund endpoint"}'
+# → data.packMarkdown is ready to drop into your prompt.
 ```
 
 ## Architecture
@@ -113,6 +171,37 @@ Data flow: caller writes `add_memory` → record persisted to Postgres + chunked
 search → hydrate from Postgres → rank → return. See
 [docs/architecture.md](docs/architecture.md) for design details.
 
+## Configuration
+
+All knobs are env vars. The three a first-timer usually touches:
+
+| Var | Default | Purpose |
+|-----|---------|---------|
+| `MEMORY_API_TOKENS` | _(required)_ | Bearer tokens for the HTTP API; `token:org` binds a token to an org |
+| `EMBEDDING_PROVIDER` | `transformers` | `transformers` (free local ONNX), `openai`, or `local` (CI stub) |
+| `VECTOR_BACKEND` | `qdrant` | `qdrant`, or `pgvector` for a Postgres-only deploy |
+
+`OPENAI_API_KEY` is optional — only needed when `EMBEDDING_PROVIDER=openai`.
+Everything else has sensible defaults. See [.env.example](.env.example) for the
+complete list and [docs/configuration.md](docs/configuration.md) for types,
+defaults, and examples.
+
+## Documentation
+
+Full operator and contributor docs live in [`docs/`](docs/README.md). Every
+page has a Korean (`*.ko.md`) mirror.
+
+| Topic | Description |
+|-------|-------------|
+| [Architecture](docs/architecture.md) | Component diagram, data flow, embedding providers, migration history |
+| [Configuration](docs/configuration.md) | Every environment variable with types, defaults, examples |
+| [API reference](docs/api-reference.md) | HTTP endpoints and MCP tool schemas |
+| [Deployment](docs/deployment.md) | Docker Compose setup, production checklist |
+| [Operations](docs/operations.md) | Day-to-day tasks: health checks, compaction, audit log |
+| [Security](docs/security.md) | Auth model, secret scrubber, org isolation, threat model |
+| [Self-hosted operations](docs/self-hosted-operations.md) | Backup, restore, and smoke-test runbook |
+| [Troubleshooting](docs/troubleshooting.md) | Common failure modes and resolution steps |
+
 ## Common commands
 
 ```bash
@@ -125,11 +214,13 @@ npm run db:migrate    # apply pending migrations
 npm run backup:create # snapshot Postgres + Qdrant to BACKUP_DIR
 ```
 
-## Configuration
+## Contributing & security
 
-All knobs are env vars. See [.env.example](.env.example) for the complete
-list. Required: `MEMORY_API_TOKENS`. `OPENAI_API_KEY` is optional — only
-needed when `EMBEDDING_PROVIDER=openai`. Everything else has sensible defaults.
+- **Contributing:** see [CONTRIBUTING.md](CONTRIBUTING.md) and the
+  [Code of Conduct](CODE_OF_CONDUCT.md).
+- **Security:** report vulnerabilities per [SECURITY.md](SECURITY.md) — please
+  don't open public issues for them.
+- **Changes:** the [CHANGELOG](CHANGELOG.md) tracks releases.
 
 ## License
 
