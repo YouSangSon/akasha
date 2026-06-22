@@ -6,6 +6,10 @@
 // run on every tool call).
 
 import { resolveServiceConfig } from "../config.js";
+import {
+  createAuditLogRepository,
+  type AuditLogRepository,
+} from "../audit/audit-log-repository.js";
 import { createPgPool } from "../db/connection.js";
 import { runMigrations } from "../db/migrate.js";
 import { createEmbeddingProvider } from "../embedding/embedding-factory.js";
@@ -16,7 +20,11 @@ import { createPgVectorIndex } from "../vector/pgvector-index.js";
 import { createMemoryRepository } from "../store/memory-repository.js";
 import { createMemoryChunkRepository } from "../store/canonical-indexing.js";
 import { createMemoryArchiveRepository } from "../store/memory-archive-repository.js";
-import type { CanonicalServices, CreateToolRegistryOptions } from "./types.js";
+import type {
+  CanonicalServices,
+  CreateToolRegistryOptions,
+  WithCanonicalServices,
+} from "./types.js";
 
 export async function bootstrapCanonicalServices(): Promise<CanonicalServices> {
   const config = resolveServiceConfig();
@@ -60,6 +68,7 @@ export async function bootstrapCanonicalServices(): Promise<CanonicalServices> {
     repository: createMemoryRepository(pool),
     chunkRepository: createMemoryChunkRepository(pool),
     ingestJobs: createIngestJobRepository(pool),
+    auditLog: createAuditLogRepository(pool),
     archiveRepository: createMemoryArchiveRepository(pool),
     embeddings: createEmbeddingProvider({
       config: {
@@ -81,9 +90,22 @@ export type CanonicalServicesResolverOptions = Pick<
   "resolveCanonicalServices"
 >;
 
-export type WithCanonicalServices = <T>(
-  callback: (services: CanonicalServices) => Promise<T>,
-) => Promise<T>;
+export type { WithCanonicalServices } from "./types.js";
+
+export function createServiceBackedAuditLog(
+  withCanonicalServices: WithCanonicalServices,
+): AuditLogRepository {
+  return {
+    record(entry) {
+      return withCanonicalServices((services) => services.auditLog.record(entry));
+    },
+    listByOrganization(organizationId, options) {
+      return withCanonicalServices((services) =>
+        services.auditLog.listByOrganization(organizationId, options),
+      );
+    },
+  };
+}
 
 export function createCanonicalServicesResolver(
   options: CanonicalServicesResolverOptions,

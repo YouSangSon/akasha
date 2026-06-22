@@ -23,7 +23,10 @@ import {
   reindexCanonicalMemory,
   writeCanonicalMemory,
 } from "../store/canonical-indexing.js";
-import { createCanonicalServicesResolver } from "./canonical-services.js";
+import {
+  createCanonicalServicesResolver,
+  createServiceBackedAuditLog,
+} from "./canonical-services.js";
 import type {
   AddMemoryInput,
   CanonicalMemoryRepository,
@@ -82,6 +85,21 @@ export function createToolRegistry(
   options: CreateToolRegistryOptions = {},
 ): ToolRegistry {
   const cwd = options.cwd ?? process.cwd();
+  const withCanonicalServices =
+    options.withCanonicalServices ??
+    createCanonicalServicesResolver({
+      resolveCanonicalServices: options.resolveCanonicalServices,
+    });
+  const serviceBackedAuditLog =
+    !hasRepositoryOverrides(options) && !options.retrieveMemory
+      ? createServiceBackedAuditLog(withCanonicalServices)
+      : undefined;
+  const auditLog =
+    options.auditLog ??
+    (options.resolveCanonicalServices && !options.withCanonicalServices
+      ? undefined
+      : serviceBackedAuditLog);
+  const auditLogForListing = options.auditLog ?? serviceBackedAuditLog;
 
   async function withRepositories<T>(
     input: {
@@ -133,10 +151,6 @@ export function createToolRegistry(
   ): Promise<T> {
     return withCanonicalServices((services) => callback(services.repository));
   }
-
-  const withCanonicalServices = createCanonicalServicesResolver({
-    resolveCanonicalServices: options.resolveCanonicalServices,
-  });
 
   async function retrieveRecordsWithCanonicalServices(
     services: CanonicalServices,
@@ -248,7 +262,7 @@ export function createToolRegistry(
       log.info({ event: "tool.complete", durationMs }, "tool completed");
 
       // Best-effort audit write — never block or fail the caller.
-      void options.auditLog
+      void auditLog
         ?.record({
           organizationId: input.organizationId ?? "default",
           actor: defaultActor,
@@ -271,7 +285,7 @@ export function createToolRegistry(
       const errorMessage =
         error instanceof Error ? error.message : String(error);
 
-      void options.auditLog
+      void auditLog
         ?.record({
           organizationId: input.organizationId ?? "default",
           actor: defaultActor,
@@ -643,13 +657,13 @@ export function createToolRegistry(
     },
 
     async list_audit_log(input) {
-      if (!options.auditLog) {
+      if (!auditLogForListing) {
         throw new Error(
           "audit log not configured: pass options.auditLog to enable list_audit_log",
         );
       }
       const organizationId = input.organizationId ?? "default";
-      const entries = await options.auditLog.listByOrganization(
+      const entries = await auditLogForListing.listByOrganization(
         organizationId,
         { limit: input.limit },
       );
@@ -712,8 +726,12 @@ export function createMcpServer(
       userRepository: options.userRepository,
       resolveRepository: options.resolveRepository,
       resolveCanonicalServices: options.resolveCanonicalServices,
+      withCanonicalServices: options.withCanonicalServices,
       defaultUserScopeId: options.defaultUserScopeId,
       retrieveMemory: options.retrieveMemory,
+      logger: options.logger,
+      auditLog: options.auditLog,
+      defaultActor: options.defaultActor,
     });
 
   const server = new McpServer({

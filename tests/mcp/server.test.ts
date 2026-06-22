@@ -2,6 +2,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { describe, expect, it, vi } from "vitest";
 import * as z from "zod/v4";
 import { createMcpServer, createToolRegistry } from "../../src/mcp/server.js";
+import type { AuditLogRepository } from "../../src/audit/audit-log-repository.js";
+import type { Logger } from "../../src/logger.js";
 import type { ToolRegistry } from "../../src/mcp/types.js";
 import type { MemoryRepository, SearchMemoryResult } from "../../src/types.js";
 
@@ -190,6 +192,28 @@ function createRecord(
       createdAt: "2026-03-29T00:00:00.000Z",
     },
   };
+}
+
+function buildAuditLog(): AuditLogRepository {
+  return {
+    record: vi.fn().mockResolvedValue(undefined),
+    listByOrganization: vi.fn().mockResolvedValue([]),
+  };
+}
+
+function buildLogger(): Logger {
+  const childLogger = {
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+  };
+
+  return {
+    child: vi.fn(() => childLogger),
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+  } as unknown as Logger;
 }
 
 describe("createToolRegistry", () => {
@@ -926,6 +950,49 @@ describe("createMcpServer", () => {
     );
   });
 
+  it("forwards auditLog, defaultActor, and logger to the auto-created registry", async () => {
+    const auditLog = buildAuditLog();
+    const logger = buildLogger();
+    const handlers: Map<string, (input: unknown) => Promise<unknown>> = new Map();
+    const spy = vi
+      .spyOn(McpServer.prototype, "registerTool")
+      .mockImplementation((name: string, _schema: unknown, handler: (input: unknown) => Promise<unknown>) => {
+        handlers.set(name, handler);
+        return undefined as unknown as ReturnType<McpServer["registerTool"]>;
+      });
+
+    createMcpServer({
+      repository: createRepository(),
+      auditLog,
+      defaultActor: "alice@example.com",
+      logger,
+    });
+    spy.mockRestore();
+
+    await handlers.get("add_memory")!({
+      organizationId: "dev-team",
+      projectKey: "project-alpha",
+      kind: "decision",
+      content: "Decision: audit MCP-created registries.",
+    });
+
+    expect(auditLog.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: "dev-team",
+        actor: "alice@example.com",
+        tool: "add_memory",
+        projectKey: "project-alpha",
+        outcome: "ok",
+      }),
+    );
+    expect(logger.child).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tool: "add_memory",
+        projectKey: "project-alpha",
+      }),
+    );
+  });
+
   it("dispatches reindex_memory to the registry handler", async () => {
     const registry: ToolRegistry = {
       add_memory: vi.fn(),
@@ -1151,6 +1218,10 @@ function createCanonicalServices() {
       markQdrantFailed: vi.fn(),
       listPendingForRetry: vi.fn().mockResolvedValue([]),
       claimPendingForRetry: vi.fn().mockResolvedValue([]),
+    },
+    auditLog: {
+      record: vi.fn().mockResolvedValue(undefined),
+      listByOrganization: vi.fn().mockResolvedValue([]),
     },
     embeddings: {
       embed: vi.fn().mockResolvedValue([0.1, 0.2, 0.3]),

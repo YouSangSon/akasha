@@ -7,6 +7,7 @@ import {
   selectDependencyProbes,
 } from "../../src/app/server.js";
 import type { ToolRegistry } from "../../src/mcp/types.js";
+import type { Logger } from "../../src/logger.js";
 import type { PgPool } from "../../src/db/connection.js";
 import type { DependencyProbes } from "../../src/health/check-dependencies.js";
 
@@ -69,6 +70,21 @@ function buildRegistry(): ToolRegistry {
       failedCount: 0,
     }),
   };
+}
+
+function buildLogger(): Logger {
+  const childLogger = {
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+  };
+
+  return {
+    child: vi.fn(() => childLogger),
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+  } as unknown as Logger;
 }
 
 async function startTestServer(
@@ -354,6 +370,41 @@ describe("createOperatorServer", () => {
     });
     expect(compact.status).toBe(200);
     expect(registry.compact_memory).toHaveBeenCalledOnce();
+  });
+
+  it("builds the default registry with lazy audit wiring when no registry is injected", async () => {
+    vi.resetModules();
+    const defaultRegistry = buildRegistry();
+    const createToolRegistryMock = vi.fn(() => defaultRegistry);
+    vi.doMock("../../src/mcp/server.js", () => ({
+      createToolRegistry: createToolRegistryMock,
+    }));
+
+    const logger = buildLogger();
+    try {
+      const { createOperatorServer: createOperatorServerWithMock } = await import(
+        "../../src/app/server.js"
+      );
+      createOperatorServerWithMock({
+        bearerTokens: [],
+        logger,
+      });
+    } finally {
+      vi.doUnmock("../../src/mcp/server.js");
+      vi.resetModules();
+    }
+
+    expect(createToolRegistryMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        logger,
+        defaultActor: expect.any(String),
+        auditLog: expect.objectContaining({
+          record: expect.any(Function),
+          listByOrganization: expect.any(Function),
+        }),
+        withCanonicalServices: expect.any(Function),
+      }),
+    );
   });
 });
 
