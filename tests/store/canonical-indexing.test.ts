@@ -294,6 +294,84 @@ describe("canonical indexing", () => {
     expect(chunkRepository.updatePointIds).not.toHaveBeenCalled();
   });
 
+  it("deletes upserted vector points when updating chunk point ids fails", async () => {
+    const record = createRecord({ id: 506, content: "post upsert sql failure" });
+    const updateError = new Error("PG update failed");
+    const repository = {
+      addMemory: vi.fn().mockResolvedValue(record),
+      deleteMemoryRecord: vi.fn().mockResolvedValue(undefined),
+    };
+    const ingestJobs = {
+      create: vi.fn().mockResolvedValue({ id: 806 }),
+      markCompleted: vi.fn(),
+      markFailed: vi.fn(),
+      markQdrantPending: vi.fn().mockResolvedValue(undefined),
+      markQdrantCompleted: vi.fn(),
+    };
+    const chunkRepository = {
+      insertChunks: vi.fn().mockResolvedValue([
+        {
+          id: 904,
+          memoryRecordId: 506,
+          chunkIndex: 0,
+          content: "post upsert sql failure",
+          startOffset: 0,
+          endOffset: 23,
+          embeddingVersion: "v1",
+        },
+      ]),
+      updatePointIds: vi.fn().mockRejectedValue(updateError),
+    };
+    const embeddings = {
+      embed: vi.fn(),
+      embedBatch: vi.fn().mockResolvedValue([[0.1, 0.2]]),
+    };
+    const vectorIndex = {
+      upsert: vi.fn().mockResolvedValue(undefined),
+      query: vi.fn(),
+      delete: vi.fn().mockResolvedValue(undefined),
+      deleteByRecordIds: vi.fn().mockResolvedValue(undefined),
+      ensureCollection: vi.fn(),
+    };
+
+    await expect(
+      writeCanonicalMemory({
+        repository: repository as never,
+        chunkRepository: chunkRepository as never,
+        ingestJobs: ingestJobs as never,
+        embeddings,
+        vectorIndex,
+        embedding: {
+          provider: "openai",
+          model: "text-embedding-3-small",
+          dimensions: 1536,
+          version: "v1",
+          targetTokens: 800,
+          overlapTokens: 120,
+        },
+        memory: {
+          scopeType: "project",
+          scopeId: "project-alpha",
+          projectKey: "project-alpha",
+          memoryType: "decision",
+          content: record.content,
+          source: {
+            scopeType: "project",
+            scopeId: "project-alpha",
+            sourceType: "conversation",
+            sourceRef: "manual://session",
+          },
+        },
+      }),
+    ).rejects.toBe(updateError);
+
+    expect(vectorIndex.upsert).toHaveBeenCalledOnce();
+    expect(vectorIndex.delete).toHaveBeenCalledWith(["chunk:904"]);
+    expect(repository.deleteMemoryRecord).toHaveBeenCalledWith(506, "default");
+    expect(ingestJobs.markQdrantCompleted).not.toHaveBeenCalled();
+    expect(ingestJobs.markCompleted).not.toHaveBeenCalled();
+  });
+
   it("re-throws the original error when rollback delete itself fails (best-effort cleanup)", async () => {
     const record = createRecord({ id: 504, content: "double-fail content" });
     const cleanupError = new Error("PG connection lost during rollback");

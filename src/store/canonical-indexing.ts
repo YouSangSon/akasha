@@ -389,6 +389,7 @@ export async function writeCanonicalMemory(input: {
     memoryRecordId: record.id,
     organizationId: record.organizationId ?? "default",
   });
+  let upsertedPointIds: string[] = [];
 
   try {
     const chunks = chunkText({
@@ -442,6 +443,7 @@ export async function writeCanonicalMemory(input: {
 
     if (points.length > 0) {
       await input.vectorIndex.upsert(points);
+      upsertedPointIds = points.map((point) => point.id);
       await input.chunkRepository.updatePointIds(
         points.map((point, index) => ({
           chunkId: storedChunks[index]!.id,
@@ -458,11 +460,12 @@ export async function writeCanonicalMemory(input: {
   } catch (error: unknown) {
     // Rollback the partial PG state. Schema-level ON DELETE CASCADE removes
     // memory_chunks, ingest_jobs (including this job row), and relationships
-    // in the same statement, so a single DELETE on memory_records leaves the
-    // store consistent — no orphan dead state, no Qdrant point would have
-    // been visible (upsert either failed or was never reached). Cleanup is
-    // best-effort: if it itself fails, the original error still surfaces to
-    // the caller; the orphan can be resolved later via reindex_memory.
+    // in the same statement. If vector points became visible before a later
+    // SQL/job step failed, delete those points too. Cleanup is best-effort:
+    // if it itself fails, the original error still surfaces to the caller.
+    if (upsertedPointIds.length > 0) {
+      await input.vectorIndex.delete(upsertedPointIds).catch(() => undefined);
+    }
     await input.repository.deleteMemoryRecord(record.id, record.organizationId ?? "default").catch(() => undefined);
     throw error;
   }
