@@ -1380,6 +1380,89 @@ describe("createMcpServer resources and prompts", () => {
     await server.close();
   });
 
+  it("uses the default recent memory query when query is omitted", async () => {
+    const registry = buildRegistryForMcpProtocol();
+    const server = createMcpServer({ registry });
+    const client = await createInMemoryClient(server);
+
+    await client.readResource({
+      uri: "akasha://memory/recent/project-alpha?organizationId=org-a",
+    });
+
+    expect(registry.search_memory).toHaveBeenCalledWith({
+      organizationId: "org-a",
+      projectKey: "project-alpha",
+      query: "recent decisions constraints open questions",
+    });
+
+    await client.close();
+    await server.close();
+  });
+
+  it.each([
+    "akasha://memory/recent/project-alpha?query=",
+    "akasha://memory/recent/project-alpha?limit=",
+    "akasha://memory/recent/project-alpha?limit=0",
+    "akasha://memory/recent/project-alpha?limit=-1",
+    "akasha://memory/recent/project-alpha?limit=1.5",
+    "akasha://memory/recent/project-alpha?limit=NaN",
+  ])("rejects invalid recent memory resource params for %s", async (uri) => {
+    const registry = buildRegistryForMcpProtocol();
+    const server = createMcpServer({ registry });
+    const client = await createInMemoryClient(server);
+
+    await expect(client.readResource({ uri })).rejects.toThrow();
+    expect(registry.search_memory).not.toHaveBeenCalled();
+
+    await client.close();
+    await server.close();
+  });
+
+  it("reads the Akasha context-pack resource with validated params", async () => {
+    const registry = buildRegistryForMcpProtocol();
+    const server = createMcpServer({ registry });
+    const client = await createInMemoryClient(server);
+
+    const result = await client.readResource({
+      uri: "akasha://context-pack/project-alpha/continue%20implementation?organizationId=org-a&limit=3",
+    });
+
+    expect(registry.build_context_pack).toHaveBeenCalledWith({
+      organizationId: "org-a",
+      projectKey: "project-alpha",
+      task: "continue implementation",
+      limit: 3,
+    });
+    expect(result.contents[0]).toEqual(
+      expect.objectContaining({
+        uri: "akasha://context-pack/project-alpha/continue%20implementation?organizationId=org-a&limit=3",
+        mimeType: "text/markdown",
+        text: "# Context Pack\n\n- Decision: use Postgres",
+      }),
+    );
+
+    await client.close();
+    await server.close();
+  });
+
+  it.each([
+    "akasha://context-pack/project-alpha/continue%20implementation?limit=",
+    "akasha://context-pack/project-alpha/continue%20implementation?limit=0",
+    "akasha://context-pack/project-alpha/continue%20implementation?limit=-1",
+    "akasha://context-pack/project-alpha/continue%20implementation?limit=1.5",
+    "akasha://context-pack/project-alpha/continue%20implementation?limit=NaN",
+  ])("rejects invalid context-pack resource params for %s", async (uri) => {
+    const registry = buildRegistryForMcpProtocol();
+    const server = createMcpServer({ registry });
+    const client = await createInMemoryClient(server);
+
+    await expect(client.readResource({ uri })).rejects.toThrow();
+    expect(registry.build_context_pack).not.toHaveBeenCalled();
+
+    await client.close();
+    await server.close();
+  });
+
   it("lists and returns Akasha prompts", async () => {
     const server = createMcpServer({ registry: buildRegistryForMcpProtocol() });
     const client = await createInMemoryClient(server);
@@ -1401,6 +1484,21 @@ describe("createMcpServer resources and prompts", () => {
       expect.objectContaining({
         type: "text",
         text: expect.stringContaining("continue implementation"),
+      }),
+    );
+
+    const storePrompt = await client.getPrompt({
+      name: "akasha_store_memory",
+      arguments: {
+        projectKey: "project-alpha",
+        kind: "decision",
+        content: "Decision: keep resource reads side-effect free.",
+      },
+    });
+    expect(storePrompt.messages[0]?.content).toEqual(
+      expect.objectContaining({
+        type: "text",
+        text: expect.stringContaining("Decision: keep resource reads side-effect free."),
       }),
     );
 

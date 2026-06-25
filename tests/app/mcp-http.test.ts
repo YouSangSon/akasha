@@ -141,6 +141,48 @@ describe("Streamable HTTP /mcp", () => {
     await client.close();
   });
 
+  it("serves MCP resources and prompts over Streamable HTTP", async () => {
+    handle = await startServer(["token-a"]);
+    const client = await connectMcp(handle.baseUrl, "token-a");
+
+    const resources = await client.listResourceTemplates();
+    expect(resources.resourceTemplates.map((resource) => resource.name)).toEqual(
+      expect.arrayContaining(["recent-project-memory", "context-pack"]),
+    );
+
+    const resource = await client.readResource({
+      uri: "akasha://memory/recent/p?query=q",
+    });
+    expect(resource.contents[0]).toEqual(
+      expect.objectContaining({
+        uri: "akasha://memory/recent/p?query=q",
+        mimeType: "application/json",
+      }),
+    );
+
+    const prompts = await client.listPrompts();
+    expect(prompts.prompts.map((prompt) => prompt.name)).toEqual(
+      expect.arrayContaining(["akasha_session_start", "akasha_store_memory"]),
+    );
+
+    const prompt = await client.getPrompt({
+      name: "akasha_store_memory",
+      arguments: {
+        projectKey: "p",
+        kind: "decision",
+        content: "Decision: keep MCP resources read-only.",
+      },
+    });
+    expect(prompt.messages[0]?.content).toEqual(
+      expect.objectContaining({
+        type: "text",
+        text: expect.stringContaining("keep MCP resources read-only"),
+      }),
+    );
+
+    await client.close();
+  });
+
   it("rejects non-loopback browser origins", async () => {
     handle = await startServer(["token-a"]);
     const res = await fetch(`${handle.baseUrl}/mcp`, {
