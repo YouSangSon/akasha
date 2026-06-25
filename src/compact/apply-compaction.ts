@@ -235,7 +235,9 @@ export async function applyCompaction(
 
     // Sequential Qdrant deletes — see design §4.4.
     try {
-      await deps.vectorIndex.delete(archiveResult.qdrantPointIds);
+      await deps.vectorIndex.delete(archiveResult.qdrantPointIds, {
+        organizationId: input.organizationId,
+      });
       qdrantPointsDeleted += archiveResult.qdrantPointIds.length;
       await deps.archiveRepository.markQdrantStatus(
         archiveResult.archiveId,

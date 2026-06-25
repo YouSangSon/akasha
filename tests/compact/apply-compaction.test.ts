@@ -191,6 +191,12 @@ describe("applyCompaction (apply path - happy path)", () => {
     expect(result.archivedIds.sort()).toEqual(["2", "3"]);
     expect(createCompactionRun).toHaveBeenCalledOnce();
     expect(qdrant.delete).toHaveBeenCalledTimes(2);
+    expect(qdrant.delete).toHaveBeenNthCalledWith(1, ["p1", "p2"], {
+      organizationId: "org-a",
+    });
+    expect(qdrant.delete).toHaveBeenNthCalledWith(2, ["p3"], {
+      organizationId: "org-a",
+    });
     expect(markQdrantStatus).toHaveBeenCalledTimes(2);
     expect(markQdrantStatus.mock.calls[0]![1]).toBe("deleted");
     expect(completeCompactionRun).toHaveBeenCalledWith(

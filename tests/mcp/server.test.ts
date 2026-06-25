@@ -699,7 +699,9 @@ describe("createToolRegistry", () => {
     expect(services.archiveRepository.createCompactionRun).toHaveBeenCalledWith(
       expect.objectContaining({ organizationId: "dev-team", dryRun: false }),
     );
-    expect(services.vectorIndex.delete).toHaveBeenCalledWith(["pt-902"]);
+    expect(services.vectorIndex.delete).toHaveBeenCalledWith(["pt-902"], {
+      organizationId: "dev-team",
+    });
   });
 
   it("apply path enforces multi-tenancy: organizationId flows to archiveRepository.applyCompactionRecord", async () => {
