@@ -1,5 +1,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { BearerToken } from "../../src/app/middleware/bearer-auth.js";
@@ -301,6 +303,83 @@ describe("Streamable HTTP /mcp", () => {
       body: oversizedBody,
     });
 
-    expect(res.ok).toBe(false);
+    expect(res.status).toBe(413);
+  });
+
+  it("closes the per-request MCP server and transport when POST JSON is invalid", async () => {
+    const serverCloseSpy = vi.spyOn(McpServer.prototype, "close");
+    const transportCloseSpy = vi.spyOn(StreamableHTTPServerTransport.prototype, "close");
+    handle = await startServer(["token-a"]);
+
+    const res = await fetch(`${handle.baseUrl}/mcp`, {
+      method: "POST",
+      headers: {
+        authorization: "Bearer token-a",
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      body: "{",
+    });
+
+    expect(res.status).toBe(400);
+    expect(serverCloseSpy).toHaveBeenCalled();
+    expect(transportCloseSpy).toHaveBeenCalled();
+  });
+
+  it("closes the per-request MCP server and transport when POST body exceeds the size cap", async () => {
+    const serverCloseSpy = vi.spyOn(McpServer.prototype, "close");
+    const transportCloseSpy = vi.spyOn(StreamableHTTPServerTransport.prototype, "close");
+    handle = await startServer(["token-a"]);
+    const oversizedBody = JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        payload: "x".repeat(1_000_100),
+      },
+    });
+
+    const res = await fetch(`${handle.baseUrl}/mcp`, {
+      method: "POST",
+      headers: {
+        authorization: "Bearer token-a",
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      body: oversizedBody,
+    });
+
+    expect(res.status).toBe(413);
+    expect(serverCloseSpy).toHaveBeenCalled();
+    expect(transportCloseSpy).toHaveBeenCalled();
+  });
+
+  it("closes the per-request MCP server and transport when request handling throws", async () => {
+    const serverCloseSpy = vi.spyOn(McpServer.prototype, "close");
+    const transportCloseSpy = vi.spyOn(StreamableHTTPServerTransport.prototype, "close");
+    const handleRequestSpy = vi
+      .spyOn(StreamableHTTPServerTransport.prototype, "handleRequest")
+      .mockRejectedValueOnce(new Error("boom"));
+    handle = await startServer(["token-a"]);
+
+    const res = await fetch(`${handle.baseUrl}/mcp`, {
+      method: "POST",
+      headers: {
+        authorization: "Bearer token-a",
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {},
+      }),
+    });
+
+    expect(res.status).toBe(500);
+    expect(handleRequestSpy).toHaveBeenCalled();
+    expect(serverCloseSpy).toHaveBeenCalled();
+    expect(transportCloseSpy).toHaveBeenCalled();
   });
 });

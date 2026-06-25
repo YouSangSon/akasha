@@ -112,7 +112,10 @@ function registerAkashaResources(server: McpServer, registry: ToolRegistry): voi
       const resourceUrl = parseResourceUrl(uri);
       const projectKey = getPathSegment(resourceUrl, 1, "projectKey");
       const query = parseRecentMemoryQuery(resourceUrl);
-      const organizationId = resourceUrl.searchParams.get("organizationId") ?? undefined;
+      const organizationId = parseOptionalNonEmptySearchParam(
+        resourceUrl,
+        "organizationId",
+      );
       const limit = parseOptionalPositiveInteger(
         resourceUrl.searchParams.get("limit"),
         "limit",
@@ -148,7 +151,10 @@ function registerAkashaResources(server: McpServer, registry: ToolRegistry): voi
       const resourceUrl = parseResourceUrl(uri);
       const projectKey = getPathSegment(resourceUrl, 0, "projectKey");
       const task = getPathSegment(resourceUrl, 1, "task");
-      const organizationId = resourceUrl.searchParams.get("organizationId") ?? undefined;
+      const organizationId = parseOptionalNonEmptySearchParam(
+        resourceUrl,
+        "organizationId",
+      );
       const limit = parseOptionalPositiveInteger(
         resourceUrl.searchParams.get("limit"),
         "limit",
@@ -198,6 +204,20 @@ function parseRecentMemoryQuery(resourceUrl: URL): string {
     throw new Error("Query must be a non-empty string when provided.");
   }
   return query;
+}
+
+function parseOptionalNonEmptySearchParam(
+  resourceUrl: URL,
+  label: string,
+): string | undefined {
+  const rawValue = resourceUrl.searchParams.get(label);
+  if (rawValue === null) {
+    return undefined;
+  }
+  if (rawValue.length === 0) {
+    throw new Error(`${label} must be a non-empty string when provided.`);
+  }
+  return rawValue;
 }
 
 function parseOptionalPositiveInteger(

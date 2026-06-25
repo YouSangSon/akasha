@@ -178,6 +178,7 @@ export const TOOL_DESCRIPTORS = [
       projectKey: z.string(),
       dryRun: z.boolean(),
       archivedIds: z.array(z.string()),
+      mergedIds: z.array(z.string()),
       duplicateGroups: z.array(duplicateGroupOutputSchema),
       decayCandidates: z.array(decayCandidateOutputSchema),
       promotionCandidates: z.array(z.string()),

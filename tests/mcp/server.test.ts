@@ -1248,6 +1248,10 @@ describe("createMcpServer structured outputs", () => {
     expect(compactMemory?.outputSchema).toEqual(
       expect.objectContaining({
         properties: expect.objectContaining({
+          mergedIds: expect.objectContaining({
+            type: "array",
+            items: expect.objectContaining({ type: "string" }),
+          }),
           duplicateGroups: expect.objectContaining({
             items: expect.objectContaining({
               properties: expect.objectContaining({
@@ -1276,6 +1280,21 @@ describe("createMcpServer structured outputs", () => {
         }),
       }),
     );
+    expect(() =>
+      z.object(
+        TOOL_DESCRIPTORS.find((descriptor) => descriptor.name === "compact_memory")!
+          .outputSchema,
+      ).parse({
+        ok: true,
+        projectKey: "project-alpha",
+        dryRun: true,
+        archivedIds: [],
+        duplicateGroups: [],
+        decayCandidates: [],
+        promotionCandidates: [],
+        summary: "noop",
+      }),
+    ).toThrow(/mergedIds/i);
 
     const unarchiveMemory = tools.tools.find((tool) => tool.name === "unarchive_memory");
     expect(unarchiveMemory?.outputSchema).toEqual(
@@ -1400,6 +1419,7 @@ describe("createMcpServer resources and prompts", () => {
   });
 
   it.each([
+    "akasha://memory/recent/project-alpha?organizationId=",
     "akasha://memory/recent/project-alpha?query=",
     "akasha://memory/recent/project-alpha?limit=",
     "akasha://memory/recent/project-alpha?limit=0",
@@ -1446,6 +1466,7 @@ describe("createMcpServer resources and prompts", () => {
   });
 
   it.each([
+    "akasha://context-pack/project-alpha/continue%20implementation?organizationId=",
     "akasha://context-pack/project-alpha/continue%20implementation?limit=",
     "akasha://context-pack/project-alpha/continue%20implementation?limit=0",
     "akasha://context-pack/project-alpha/continue%20implementation?limit=-1",

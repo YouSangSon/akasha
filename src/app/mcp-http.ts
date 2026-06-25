@@ -70,15 +70,28 @@ export async function handleMcpHttpRequest(
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
   });
+  let cleanupInFinally = true;
+  let cleanedUp = false;
+  const cleanup = async () => {
+    if (cleanedUp) {
+      return;
+    }
+    cleanedUp = true;
+    await Promise.allSettled([
+      transport.close(),
+      server.close(),
+    ]);
+  };
+  const cleanupOnClose = () => {
+    void cleanup();
+  };
+  res.once("close", cleanupOnClose);
 
   try {
     await server.connect(transport);
     const parsedBody = req.method === "POST" ? await readJsonBody(req) : undefined;
     await transport.handleRequest(req, res, parsedBody);
-    res.on("close", () => {
-      void transport.close().catch(() => undefined);
-      void server.close().catch(() => undefined);
-    });
+    cleanupInFinally = false;
   } catch (error: unknown) {
     logger.error({ event: "mcp_http.error", err: error }, "MCP HTTP request failed");
     if (!res.headersSent) {
@@ -87,6 +100,10 @@ export async function handleMcpHttpRequest(
         return;
       }
       sendJsonRpcError(res, 500, -32603, "Internal server error");
+    }
+  } finally {
+    if (cleanupInFinally) {
+      await cleanup();
     }
   }
 }
