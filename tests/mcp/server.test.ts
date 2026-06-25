@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { describe, expect, it, vi } from "vitest";
 import * as z from "zod/v4";
 import { createMcpServer, createToolRegistry } from "../../src/mcp/server.js";
+import { createToolRegistry as createToolRegistryDirect } from "../../src/mcp/tool-registry.js";
 import type { AuditLogRepository } from "../../src/audit/audit-log-repository.js";
 import type { Logger } from "../../src/logger.js";
 import { TOOL_DESCRIPTORS } from "../../src/mcp/tool-schemas.js";
@@ -218,6 +219,26 @@ function buildLogger(): Logger {
 }
 
 describe("createToolRegistry", () => {
+  it("keeps createToolRegistry available from the split registry module and server re-export", async () => {
+    const directRegistry = createToolRegistryDirect({
+      repository: createRepository(),
+      defaultUserScopeId: "user-a",
+    });
+    const serverRegistry = createToolRegistry({
+      repository: createRepository(),
+      defaultUserScopeId: "user-a",
+    });
+
+    expect(Object.keys(directRegistry).sort()).toEqual(Object.keys(serverRegistry).sort());
+    await expect(
+      directRegistry.add_memory({
+        projectKey: "p",
+        kind: "decision",
+        content: "split registry works",
+      }),
+    ).resolves.toMatchObject({ ok: true });
+  });
+
   it("registers the four MVP tools", () => {
     const registry = createToolRegistry();
 

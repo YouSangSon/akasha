@@ -1,0 +1,94 @@
+import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import os from "node:os";
+import type { AddMemoryInput, ScopeType } from "../types.js";
+
+export function formatMemoryIdentifier(record: {
+  scopeType: string;
+  scopeId: string;
+  id: number;
+}): string {
+  return `${record.scopeType}:${record.scopeId}:${record.id}`;
+}
+
+export function requireProjectKey(
+  projectKey: string | undefined,
+  scope: ScopeType,
+): string {
+  if (!projectKey) {
+    throw new Error(`projectKey is required for ${scope} scope operations`);
+  }
+
+  return projectKey;
+}
+
+export function requireUserScopeId(userScopeId: string | undefined): string {
+  if (!userScopeId) {
+    throw new Error("userScopeId could not be resolved");
+  }
+
+  return userScopeId;
+}
+
+export function normalizeLimit(limit: number | undefined): number {
+  return Math.max(1, Math.min(limit ?? 10, 100));
+}
+
+export function toMemoryType(kind: string): AddMemoryInput["memoryType"] {
+  switch (kind) {
+    case "decision":
+    case "summary":
+    case "fact":
+      return kind;
+    default:
+      throw new Error(`Unsupported memory kind: ${kind}`);
+  }
+}
+
+export function summarize(content: string): string {
+  return content.slice(0, 80);
+}
+
+export function resolveUserScopeId(input: {
+  cwd: string;
+  explicitUserScopeId?: string;
+  defaultUserScopeId?: string;
+}): string {
+  if (input.explicitUserScopeId) {
+    return input.explicitUserScopeId;
+  }
+
+  if (input.defaultUserScopeId) {
+    return input.defaultUserScopeId;
+  }
+
+  const configuredUserId = process.env.DEVELOPER_MEMORY_USER_ID?.trim();
+
+  if (configuredUserId) {
+    return configuredUserId;
+  }
+
+  const gitEmail = readGitEmail(input.cwd);
+
+  if (gitEmail) {
+    return `git-${createHash("sha256").update(gitEmail).digest("hex").slice(0, 12)}`;
+  }
+
+  return `local-${sanitizeScopeId(os.userInfo().username)}`;
+}
+
+function readGitEmail(cwd: string): string | null {
+  try {
+    return execFileSync("git", ["config", "user.email"], {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return null;
+  }
+}
+
+function sanitizeScopeId(value: string): string {
+  return value.replace(/[^a-zA-Z0-9_-]+/g, "-");
+}
