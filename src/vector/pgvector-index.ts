@@ -47,12 +47,6 @@
 //   SQL — an empty embedding would produce "[]"::vector which pgvector rejects,
 //   aborting the entire batch without a useful error message.
 //
-// ORPHAN VECTORS ON REINDEX (KNOWN FOLLOW-UP):
-//   When a document is re-chunked with fewer chunks than before, the stale
-//   extra vectors remain in the table (upsert-only, no sweep). This affects
-//   the Qdrant path too (both are upsert-only on reindex). Track as a
-//   follow-up: add a scope-aware delete-then-upsert path on reindex.
-
 import type { PgPool } from "../db/connection.js";
 import type {
   VectorDeleteOptions,

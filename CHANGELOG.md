@@ -11,6 +11,11 @@ changes; CHANGELOG entries call those out explicitly.
 
 ## [Unreleased]
 
+- Docs: public docs now describe descriptor-shared validation, non-root
+  container runtime defaults, production credential replacement, and atomic
+  archive-cleanup claim semantics; stale pgvector reindex follow-up comments
+  removed to match current behavior.
+
 Post-release audit cycle. v1.0.0 shipped with 0 OSS users, so this window
 was the safe time to tighten default-strict behavior on multi-tenancy
 boundaries and harden the secret-scrubber surface — all the changes below

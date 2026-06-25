@@ -50,6 +50,12 @@ defense-in-depth.
 non-strict-boolean 값 거부. `true` / `false` / 생략 (기본 `true`) 만 핸들러로
 도달. 우발적 type-coerced destructive 실행 방지.
 
+### 컨테이너 런타임 하드닝
+
+production app 컨테이너는 non-root 사용자로 실행됩니다. 이 기본값을 유지하고,
+배포 전에는 모든 개발용 자격증명을 교체하며, 명시적 필요가 없다면 writeable
+secret 마운트나 Docker socket 마운트는 피하세요.
+
 ### Secret 스크럽
 
 메모리가 Postgres 또는 Qdrant 에 도달하기 전 `src/store/secret-scrub.ts` 의

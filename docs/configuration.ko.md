@@ -83,8 +83,12 @@ Qdrant 변수는 `VECTOR_BACKEND=qdrant` (기본값) 일 때만 필요합니다.
 | 변수 | 기본값 | 메모 |
 |---|---|---|
 | `QDRANT_URL` | `http://localhost:6333` | compose 내부: `http://qdrant:6333`. |
-| `QDRANT_API_KEY` | `local-qdrant-key` | production 에서는 변경. |
+| `QDRANT_API_KEY` | `local-qdrant-key` | 개발 전용 기본값. production 에서는 강한 값으로 생성해서 교체. |
 | `QDRANT_COLLECTION_NAME` | `memory_chunks_v1` | 버전 bump 시 reindex 필요. |
+
+compose 기본 자격증명은 로컬 개발 전용입니다. production 운영자는 첫 배포 전에
+`POSTGRES_PASSWORD`, `QDRANT_API_KEY`, `MEMORY_API_TOKENS` 의 모든 값을
+생성한 secret으로 교체해야 합니다.
 
 ## 서버 바인드 (HTTP API)
 

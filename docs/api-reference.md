@@ -12,6 +12,11 @@ Akasha exposes the same tool surface through two transports:
 Both transports invoke the same handler functions in `src/mcp/server.ts`.
 Tool inputs and outputs are identical; only the wire format differs.
 
+HTTP and MCP tool calls share the same zod-backed shared tool schema
+definitions. HTTP requests are validated after bearer-token organization
+resolution and before registry dispatch; malformed tool bodies return 400 and
+do not call the tool handler.
+
 ## Authentication (HTTP only)
 
 When `MEMORY_API_TOKENS` is configured, every `/v1/*` route requires a bearer

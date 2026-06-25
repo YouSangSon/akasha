@@ -87,8 +87,12 @@ Qdrant variables are only required when `VECTOR_BACKEND=qdrant` (the default).
 | Variable | Default | Notes |
 |---|---|---|
 | `QDRANT_URL` | `http://localhost:6333` | Inside compose: `http://qdrant:6333`. |
-| `QDRANT_API_KEY` | `local-qdrant-key` | Change in production. |
+| `QDRANT_API_KEY` | `local-qdrant-key` | Development-only default. Generate a strong replacement in production. |
 | `QDRANT_COLLECTION_NAME` | `memory_chunks_v1` | Bumping the version triggers a reindex. |
+
+The compose defaults are for local development only. Production operators
+should replace `POSTGRES_PASSWORD`, `QDRANT_API_KEY`, and every
+`MEMORY_API_TOKENS` value with generated secrets before the first deploy.
 
 ## Server bind (HTTP API)
 

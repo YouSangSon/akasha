@@ -24,10 +24,10 @@ for env-var setup see [configuration.md](configuration.md).
 └────────────────┬────────────────────────────────────────────────┘
                  │
 ┌────────────────▼────────────────────────────────────────────────┐
-│ Tool registry  (src/mcp/server.ts)                              │
-│   add_memory / search_memory / build_context_pack /             │
-│   reindex_memory / compact_memory / unarchive_memory /          │
-│   list_audit_log                                                │
+│ Tool descriptors + registry                                     │
+│   src/mcp/tool-schemas.ts     → shared zod schemas + routes     │
+│   src/mcp/tool-registry.ts    → audited registry wrappers       │
+│   src/mcp/tool-handlers.ts    → tool implementations            │
 └────────────────┬────────────────────────────────────────────────┘
                  │
 ┌────────────────▼────────────────────────────────────────────────┐
@@ -127,6 +127,13 @@ Qdrant delete leaves an orphan vector in Qdrant. The sweeper
 (`src/compact/sweeper-loop.ts`, opt-in) reconciles. Reverse order would
 leave a live `memory_records` row pointing at a deleted Qdrant point — a
 user-visible "search hit vanishes" bug.
+
+The cleanup sweeper claims pending archive rows with a single
+`UPDATE memory_archive SET qdrant_next_retry_at = claim_until
+WHERE id IN (SELECT id FROM memory_archive FOR UPDATE SKIP LOCKED)
+RETURNING id, organization_id, qdrant_point_ids, qdrant_attempt_count`
+statement and pushes `qdrant_next_retry_at` into a short visibility window.
+If a worker crashes after claim, the row becomes due again after that window.
 
 ## Data flow: unarchive (P19.1)
 

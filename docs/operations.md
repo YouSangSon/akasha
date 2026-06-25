@@ -127,6 +127,10 @@ COMPACTION_SWEEP_ENABLED=true
 COMPACTION_SWEEP_INTERVAL_MS=30000
 ```
 
+Each tick atomically claims pending archive rows and pushes
+`qdrant_next_retry_at` into a short visibility window. If a worker crashes
+after claim, the row becomes due again when that window expires.
+
 Then check the audit log for sweep activity:
 
 ```bash
@@ -149,6 +153,8 @@ ORDER BY archived_at DESC;
 Likely causes: Qdrant collection name mismatch (after a `QDRANT_COLLECTION_NAME`
 change), permanent Qdrant outage, or schema drift. Once root cause is fixed,
 manually `UPDATE memory_archive SET qdrant_status='pending'` to re-enqueue.
+Treat failed rows as an operator-review queue rather than a silent background
+retry forever.
 
 ## Ingest sweeper
 

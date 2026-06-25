@@ -55,6 +55,13 @@ and any other non-strict-boolean value. Only `true` / `false` /
 omitted (defaults to `true`) reach the handler. Prevents accidental
 type-coerced destructive runs.
 
+### Container runtime hardening
+
+The production app container runs as a non-root user. Keep that default in
+place, replace all development credentials before shipping, and avoid mounting
+writeable secrets or Docker sockets into the container unless you explicitly
+need them.
+
 ### Secret scrubbing
 
 Before a memory hits Postgres or Qdrant, `assertNoSecrets(content)` in
