@@ -1244,6 +1244,73 @@ describe("createMcpServer structured outputs", () => {
       expect(tool.outputSchema).toEqual(expect.objectContaining({ type: "object" }));
     }
 
+    const compactMemory = tools.tools.find((tool) => tool.name === "compact_memory");
+    expect(compactMemory?.outputSchema).toEqual(
+      expect.objectContaining({
+        properties: expect.objectContaining({
+          duplicateGroups: expect.objectContaining({
+            items: expect.objectContaining({
+              properties: expect.objectContaining({
+                keepId: expect.any(Object),
+                archiveIds: expect.any(Object),
+              }),
+            }),
+          }),
+          decayCandidates: expect.objectContaining({
+            items: expect.objectContaining({
+              properties: expect.objectContaining({
+                id: expect.any(Object),
+                score: expect.any(Object),
+              }),
+            }),
+          }),
+          applyStats: expect.objectContaining({
+            properties: expect.objectContaining({
+              archived: expect.any(Object),
+              skipped: expect.any(Object),
+              qdrantPointsDeleted: expect.any(Object),
+              qdrantPointsPending: expect.any(Object),
+              durationMs: expect.any(Object),
+            }),
+          }),
+        }),
+      }),
+    );
+
+    const unarchiveMemory = tools.tools.find((tool) => tool.name === "unarchive_memory");
+    expect(unarchiveMemory?.outputSchema).toEqual(
+      expect.objectContaining({
+        properties: expect.objectContaining({
+          outcomes: expect.objectContaining({
+            items: expect.objectContaining({
+              anyOf: expect.arrayContaining([
+                expect.objectContaining({
+                  properties: expect.objectContaining({
+                    status: expect.objectContaining({ const: "restored" }),
+                    restoredRecordId: expect.any(Object),
+                    sourceRecordId: expect.any(Object),
+                    chunkCount: expect.any(Object),
+                  }),
+                }),
+                expect.objectContaining({
+                  properties: expect.objectContaining({
+                    status: expect.objectContaining({ const: "skipped" }),
+                    reason: expect.any(Object),
+                  }),
+                }),
+                expect.objectContaining({
+                  properties: expect.objectContaining({
+                    status: expect.objectContaining({ const: "failed" }),
+                    error: expect.any(Object),
+                  }),
+                }),
+              ]),
+            }),
+          }),
+        }),
+      }),
+    );
+
     await client.close();
     await server.close();
   });

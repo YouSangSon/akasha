@@ -47,10 +47,47 @@ const contextPackSectionsOutputSchema = z.object({
   relevant_notes: z.array(memoryRecordOutputSchema),
 });
 
-const archiveOutcomeOutputSchema = z.object({
-  archiveId: z.number(),
-  status: z.string(),
-}).passthrough();
+const duplicateGroupOutputSchema = z
+  .object({
+    keepId: z.string(),
+    archiveIds: z.array(z.string()),
+  })
+  .passthrough();
+
+const decayCandidateOutputSchema = z
+  .object({
+    id: z.string(),
+    score: z.number(),
+  })
+  .passthrough();
+
+const compactionApplyStatsOutputSchema = z.object({
+  archived: z.number(),
+  skipped: z.number(),
+  qdrantPointsDeleted: z.number(),
+  qdrantPointsPending: z.number(),
+  durationMs: z.number(),
+});
+
+const archiveOutcomeOutputSchema = z.union([
+  z.object({
+    archiveId: z.number(),
+    status: z.literal("restored"),
+    restoredRecordId: z.number(),
+    sourceRecordId: z.number(),
+    chunkCount: z.number(),
+  }),
+  z.object({
+    archiveId: z.number(),
+    status: z.literal("skipped"),
+    reason: z.string(),
+  }),
+  z.object({
+    archiveId: z.number(),
+    status: z.literal("failed"),
+    error: z.string(),
+  }),
+]);
 
 export const TOOL_DESCRIPTORS = [
   {
@@ -141,12 +178,12 @@ export const TOOL_DESCRIPTORS = [
       projectKey: z.string(),
       dryRun: z.boolean(),
       archivedIds: z.array(z.string()),
-      duplicateGroups: z.array(z.object({}).passthrough()),
-      decayCandidates: z.array(z.object({}).passthrough()),
+      duplicateGroups: z.array(duplicateGroupOutputSchema),
+      decayCandidates: z.array(decayCandidateOutputSchema),
       promotionCandidates: z.array(z.string()),
       summary: z.string(),
       compactionRunId: z.string().optional(),
-      applyStats: z.object({}).passthrough().optional(),
+      applyStats: compactionApplyStatsOutputSchema.optional(),
     },
   },
   {
