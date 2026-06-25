@@ -12,7 +12,7 @@ Akasha exposes the same tool surface through three access paths:
 - **JSON HTTP** — for any other client under `/v1/*`.
   Entry point: `src/app/server.ts`, default bind `127.0.0.1:8787`.
 
-Both transports share the same descriptor/schema/registry path in
+All three access paths share the same descriptor/schema/registry path in
 `src/mcp/tool-schemas.ts` and `src/mcp/tool-registry.ts`, then dispatch to the
 tool implementations in `src/mcp/tool-handlers.ts`. Tool inputs and outputs are
 identical; only the wire format differs.
@@ -24,9 +24,9 @@ do not call the tool handler.
 
 ## Authentication (HTTP only)
 
-When `MEMORY_API_TOKENS` is configured, every `/v1/*` route requires a bearer
-token. `/healthz` and `/readyz` are unauthenticated. For local development
-only, an empty token list is allowed when the server binds to loopback
+When `MEMORY_API_TOKENS` is configured, every `/mcp` and `/v1/*` route requires
+a bearer token. `/healthz` and `/readyz` are unauthenticated. For local
+development only, an empty token list is allowed when the server binds to loopback
 (`127.0.0.1`, `localhost`, or `::1`); binding to a non-loopback host without
 tokens fails at startup.
 

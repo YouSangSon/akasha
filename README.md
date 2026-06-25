@@ -163,8 +163,8 @@ curl -sX POST http://localhost:8787/v1/memory/context-pack \
 
 | Layer | Responsibility |
 |-------|----------------|
-| MCP server (`src/mcp/`) | Tool surface for Claude/Codex CLI clients (stdio) |
-| HTTP server (`src/app/`) | Same tool surface as JSON-over-HTTP for non-MCP clients |
+| MCP server (`src/mcp/`) | Shared MCP server surface: tool descriptors, schemas, registry, and handlers |
+| HTTP server (`src/app/`) | Serves MCP Streamable HTTP at `/mcp` plus JSON HTTP under `/v1/*` |
 | Canonical store (`src/store/memory-repository.ts`) | Postgres — records, sources, ingest jobs, audit |
 | Vector index (`src/vector/`) | Qdrant (default) or pgvector — chunked embeddings + similarity search. Set `VECTOR_BACKEND=pgvector` for Postgres-only deploy. |
 | Compaction (`src/compact/`) | Dedup (exact + semantic), decay, archive, unarchive, sweeper |

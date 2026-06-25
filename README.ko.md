@@ -162,8 +162,8 @@ curl -sX POST http://localhost:8787/v1/memory/context-pack \
 
 | 레이어 | 책임 |
 |-------|------|
-| MCP 서버 (`src/mcp/`) | Claude/Codex CLI용 stdio 도구 surface |
-| HTTP 서버 (`src/app/`) | 같은 도구를 JSON-over-HTTP로 노출 |
+| MCP 서버 (`src/mcp/`) | 공유 MCP 서버 surface: tool descriptor, schema, registry, handler |
+| HTTP 서버 (`src/app/`) | `/mcp` 의 MCP Streamable HTTP 와 `/v1/*` 아래 JSON HTTP 를 제공합니다 |
 | Canonical store (`src/store/memory-repository.ts`) | Postgres — 레코드, 소스, ingest job, 감사 |
 | Vector index (`src/vector/`) | Qdrant (기본) 또는 pgvector — 청크 임베딩 + 유사도 검색. `VECTOR_BACKEND=pgvector` 로 Postgres 단독 배포 가능. |
 | Compaction (`src/compact/`) | 중복 제거 (exact + 시맨틱), decay, archive, unarchive, sweeper |
