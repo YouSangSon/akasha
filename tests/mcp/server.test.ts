@@ -1349,6 +1349,66 @@ describe("createMcpServer structured outputs", () => {
   });
 });
 
+describe("createMcpServer resources and prompts", () => {
+  it("lists and reads Akasha memory resources", async () => {
+    const registry = buildRegistryForMcpProtocol();
+    const server = createMcpServer({ registry });
+    const client = await createInMemoryClient(server);
+
+    const templates = await client.listResourceTemplates();
+    expect(templates.resourceTemplates.map((resource) => resource.name)).toEqual(
+      expect.arrayContaining(["recent-project-memory", "context-pack"]),
+    );
+
+    const recent = await client.readResource({
+      uri: "akasha://memory/recent/project-alpha?organizationId=org-a&query=Postgres",
+    });
+    const [recentContent] = recent.contents;
+    expect(recentContent).toEqual(
+      expect.objectContaining({
+        uri: "akasha://memory/recent/project-alpha?organizationId=org-a&query=Postgres",
+        mimeType: "application/json",
+      }),
+    );
+    expect(
+      JSON.parse(recentContent && "text" in recentContent ? recentContent.text : "{}"),
+    ).toEqual(
+      expect.objectContaining({ ok: true, projectKey: "project-alpha" }),
+    );
+
+    await client.close();
+    await server.close();
+  });
+
+  it("lists and returns Akasha prompts", async () => {
+    const server = createMcpServer({ registry: buildRegistryForMcpProtocol() });
+    const client = await createInMemoryClient(server);
+
+    const prompts = await client.listPrompts();
+    expect(prompts.prompts.map((prompt) => prompt.name)).toEqual(
+      expect.arrayContaining(["akasha_session_start", "akasha_store_memory"]),
+    );
+
+    const prompt = await client.getPrompt({
+      name: "akasha_session_start",
+      arguments: {
+        projectKey: "project-alpha",
+        task: "continue implementation",
+        organizationId: "org-a",
+      },
+    });
+    expect(prompt.messages[0]?.content).toEqual(
+      expect.objectContaining({
+        type: "text",
+        text: expect.stringContaining("continue implementation"),
+      }),
+    );
+
+    await client.close();
+    await server.close();
+  });
+});
+
 function buildRegistryForMcpProtocol(): ToolRegistry {
   return {
     add_memory: vi.fn().mockResolvedValue({
