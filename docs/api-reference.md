@@ -9,8 +9,10 @@ Akasha exposes the same tool surface through two transports:
 - **HTTP** (JSON over POST) — for any other client.
   Entry point: `src/app/server.ts`, default bind `127.0.0.1:8787`.
 
-Both transports invoke the same handler functions in `src/mcp/server.ts`.
-Tool inputs and outputs are identical; only the wire format differs.
+Both transports share the same descriptor/schema/registry path in
+`src/mcp/tool-schemas.ts` and `src/mcp/tool-registry.ts`, then dispatch to the
+tool implementations in `src/mcp/tool-handlers.ts`. Tool inputs and outputs are
+identical; only the wire format differs.
 
 HTTP and MCP tool calls share the same zod-backed shared tool schema
 definitions. HTTP requests are validated after bearer-token organization

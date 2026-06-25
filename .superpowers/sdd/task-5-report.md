@@ -168,3 +168,37 @@ git status --short --untracked-files=all
 ### Concerns
 
 - None on scope or verification.
+
+### Task 5 follow-up: stale API handler-location fix
+
+Reviewer follow-up fixed:
+
+- Updated `docs/api-reference.md:12` and `docs/api-reference.ko.md:12` to stop
+  claiming both transports call handler functions in `src/mcp/server.ts`.
+- Reworded both lines to match the architecture docs: both transports share the
+  descriptor/schema/registry path in `src/mcp/tool-schemas.ts` and
+  `src/mcp/tool-registry.ts`, then dispatch to `src/mcp/tool-handlers.ts`.
+
+Drift-test coverage decision:
+
+- Strengthened `tests/scripts/public-docs-drift.test.ts`.
+- The existing check only asserted generic shared-schema wording, so it would
+  not fail if the stale `src/mcp/server.ts` handler-location claim reappeared.
+- Added assertions that both API docs mention `src/mcp/tool-handlers.ts` and do
+  not mention `src/mcp/server.ts`.
+
+Verification rerun:
+
+```bash
+npm test -- tests/scripts/public-docs-drift.test.ts
+npm run typecheck
+npm test
+```
+
+Results:
+
+```text
+tests/scripts/public-docs-drift.test.ts: passed (3 tests)
+npm run typecheck: exit code 0
+npm test: 43 passed, 2 skipped; 393 passed, 27 skipped
+```
