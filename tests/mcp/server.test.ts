@@ -614,7 +614,10 @@ describe("createToolRegistry", () => {
       scopes,
       { limit: 500 },
     );
-    expect(services.vectorIndex.deleteByRecordIds).toHaveBeenCalledWith([501, 502]);
+    expect(services.vectorIndex.deleteByRecordIds).toHaveBeenCalledWith(
+      [501, 502],
+      { organizationId: "org-a" },
+    );
     const deleteOrder =
       services.vectorIndex.deleteByRecordIds.mock.invocationCallOrder[0]!;
     const upsertOrder = services.vectorIndex.upsert.mock.invocationCallOrder[0]!;

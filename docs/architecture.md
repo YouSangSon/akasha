@@ -240,7 +240,7 @@ token's bound org disagrees with a record's org.
 ## Audit trail
 
 Every tool invocation produces an `audit_log` row via the `instrument()`
-wrapper in `src/mcp/server.ts`. The row captures org, actor, tool name,
+wrapper in `src/mcp/tool-registry.ts`. The row captures org, actor, tool name,
 project key, outcome (`ok`/`error`), error message, duration ms, request
 id, and (for destructive operations) `metadata` JSONB with structured
 detail (archived ids, run ids, etc.).

@@ -854,8 +854,12 @@ describe("canonical indexing", () => {
     const deleteOrders = vectorIndex.deleteByRecordIds.mock.invocationCallOrder;
     const firstUpsertOrder = vectorIndex.upsert.mock.invocationCallOrder[0]!;
     expect(Math.max(...deleteOrders)).toBeLessThan(firstUpsertOrder);
-    expect(vectorIndex.deleteByRecordIds).toHaveBeenNthCalledWith(1, [501]);
-    expect(vectorIndex.deleteByRecordIds).toHaveBeenNthCalledWith(2, [502]);
+    expect(vectorIndex.deleteByRecordIds).toHaveBeenNthCalledWith(1, [501], {
+      organizationId: "org-a",
+    });
+    expect(vectorIndex.deleteByRecordIds).toHaveBeenNthCalledWith(2, [502], {
+      organizationId: "org-a",
+    });
 
     expect(embeddings.embedBatch).toHaveBeenCalledTimes(2);
     expect(embeddings.embedBatch).toHaveBeenNthCalledWith(1, [

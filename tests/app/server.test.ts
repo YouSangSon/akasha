@@ -226,6 +226,89 @@ describe("createOperatorServer", () => {
     expect(registry.search_memory).not.toHaveBeenCalled();
   });
 
+  it("rejects add_memory default/project-scope payloads without projectKey before dispatch", async () => {
+    const defaultScope = await fetch(`${handle.baseUrl}/v1/memory`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        kind: "decision",
+        content: "missing project",
+      }),
+    });
+    expect(defaultScope.status).toBe(400);
+    expect(registry.add_memory).not.toHaveBeenCalled();
+
+    const projectScope = await fetch(`${handle.baseUrl}/v1/memory`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        scope: "project",
+        kind: "decision",
+        content: "missing project",
+      }),
+    });
+    expect(projectScope.status).toBe(400);
+    const body = (await projectScope.json()) as {
+      success: boolean;
+      error: { message: string };
+    };
+    expect(body.success).toBe(false);
+    expect(body.error.message).toContain("projectKey");
+    expect(registry.add_memory).not.toHaveBeenCalled();
+  });
+
+  it("rejects unsupported add_memory kind before dispatch", async () => {
+    const res = await fetch(`${handle.baseUrl}/v1/memory`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        projectKey: "p",
+        kind: "note",
+        content: "unsupported kind",
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as {
+      success: boolean;
+      error: { message: string };
+    };
+    expect(body.success).toBe(false);
+    expect(body.error.message).toContain("kind");
+    expect(registry.add_memory).not.toHaveBeenCalled();
+  });
+
+  it("allows add_memory user-scope payloads without projectKey before dispatch", async () => {
+    const res = await fetch(`${handle.baseUrl}/v1/memory`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        scope: "user",
+        kind: "fact",
+        content: "user scoped fact",
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(registry.add_memory).toHaveBeenCalledWith({
+      scope: "user",
+      kind: "fact",
+      content: "user scoped fact",
+    });
+  });
+
   it("validates the token-resolved organizationId through the shared schema", async () => {
     await handle.close();
     registry = buildRegistry();
@@ -384,6 +467,58 @@ describe("createOperatorServer", () => {
     });
     expect(numberRes.status).toBe(400);
     expect(registry.compact_memory).not.toHaveBeenCalled();
+  });
+
+  it("rejects compact_memory default/project-scope payloads without projectKey before dispatch", async () => {
+    const defaultScope = await fetch(`${handle.baseUrl}/v1/memory/compact`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({ dryRun: true }),
+    });
+    expect(defaultScope.status).toBe(400);
+    expect(registry.compact_memory).not.toHaveBeenCalled();
+
+    const projectScope = await fetch(`${handle.baseUrl}/v1/memory/compact`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({ scope: "project", dryRun: true }),
+    });
+    expect(projectScope.status).toBe(400);
+    const body = (await projectScope.json()) as {
+      success: boolean;
+      error: { message: string };
+    };
+    expect(body.success).toBe(false);
+    expect(body.error.message).toContain("projectKey");
+    expect(registry.compact_memory).not.toHaveBeenCalled();
+  });
+
+  it("allows compact_memory user-scope payloads without projectKey before dispatch", async () => {
+    const res = await fetch(`${handle.baseUrl}/v1/memory/compact`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        scope: "user",
+        userScopeId: "alice",
+        dryRun: true,
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(registry.compact_memory).toHaveBeenCalledWith({
+      scope: "user",
+      userScopeId: "alice",
+      dryRun: true,
+    });
   });
 
   it("accepts POST /v1/memory/compact when dryRun is omitted (defaults to dry-run)", async () => {

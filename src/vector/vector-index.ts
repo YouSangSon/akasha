@@ -34,5 +34,8 @@ export interface VectorIndex {
    *  given record IDs. Used by reindexCanonicalMemory to clear stale chunks;
    *  callers must finish all reindex deletes before starting upsert pages.
    *  No-op when recordIds is empty. */
-  deleteByRecordIds(recordIds: number[]): Promise<void>;
+  deleteByRecordIds(
+    recordIds: number[],
+    options?: VectorDeleteOptions,
+  ): Promise<void>;
 }

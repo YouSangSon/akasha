@@ -3,6 +3,8 @@ import { createHash } from "node:crypto";
 import os from "node:os";
 import type { AddMemoryInput, ScopeType } from "../types.js";
 
+export const SUPPORTED_MEMORY_KINDS = ["decision", "summary", "fact"] as const;
+
 export function formatMemoryIdentifier(record: {
   scopeType: string;
   scopeId: string;

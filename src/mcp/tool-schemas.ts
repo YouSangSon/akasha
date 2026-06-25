@@ -1,5 +1,6 @@
 import * as z from "zod/v4";
 import type { ToolRegistry } from "./types.js";
+import { SUPPORTED_MEMORY_KINDS } from "./tool-utils.js";
 
 export type ToolName = keyof ToolRegistry;
 
@@ -28,7 +29,7 @@ export const TOOL_DESCRIPTORS = [
       projectKey: z.string().min(1).optional(),
       scope: z.enum(["project", "user"]).optional(),
       userScopeId: z.string().min(1).optional(),
-      kind: z.string().min(1),
+      kind: z.enum(SUPPORTED_MEMORY_KINDS),
       content: z.string().min(1),
     },
   },
@@ -116,11 +117,40 @@ export function descriptorForTool(name: ToolName): ToolDescriptor {
   return descriptor;
 }
 
+function addProjectKeyRequiredIssue(ctx: z.RefinementCtx, toolName: ToolName): void {
+  ctx.addIssue({
+    code: "custom",
+    path: ["projectKey"],
+    message: `projectKey is required for default/project-scope ${toolName}`,
+  });
+}
+
+function scopeRequiresProjectKey(input: {
+  readonly scope?: unknown;
+  readonly projectKey?: unknown;
+}): boolean {
+  return input.scope !== "user" && typeof input.projectKey !== "string";
+}
+
+function validationSchemaForTool(toolName: ToolName): z.ZodType<Record<string, unknown>> {
+  const schema = z.object(descriptorForTool(toolName).inputSchema);
+
+  if (toolName === "add_memory" || toolName === "compact_memory") {
+    return schema.superRefine((input, ctx) => {
+      if (scopeRequiresProjectKey(input)) {
+        addProjectKeyRequiredIssue(ctx, toolName);
+      }
+    }) as z.ZodType<Record<string, unknown>>;
+  }
+
+  return schema as z.ZodType<Record<string, unknown>>;
+}
+
 export function validateToolInput(
   toolName: ToolName,
   input: Record<string, unknown>,
 ): ToolInputValidation {
-  const schema = z.object(descriptorForTool(toolName).inputSchema);
+  const schema = validationSchemaForTool(toolName);
   const parsed = schema.safeParse(input);
   if (parsed.success) {
     return { ok: true, data: parsed.data as Record<string, unknown> };

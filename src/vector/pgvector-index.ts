@@ -360,8 +360,18 @@ export function createPgVectorIndex(
       await pool.query(`DELETE FROM ${tableName} WHERE point_id = ANY($1)`, [ids]);
     },
 
-    async deleteByRecordIds(recordIds: number[]): Promise<void> {
+    async deleteByRecordIds(
+      recordIds: number[],
+      options: VectorDeleteOptions = {},
+    ): Promise<void> {
       if (recordIds.length === 0) return;
+      if (options.organizationId) {
+        await pool.query(
+          `DELETE FROM ${tableName} WHERE memory_record_id = ANY($1) AND organization_id = $2`,
+          [recordIds, options.organizationId],
+        );
+        return;
+      }
       await pool.query(
         `DELETE FROM ${tableName} WHERE memory_record_id = ANY($1)`,
         [recordIds],

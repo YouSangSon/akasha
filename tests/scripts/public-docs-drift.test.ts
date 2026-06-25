@@ -21,6 +21,21 @@ describe("public documentation drift checks", () => {
     expect(read("docs/api-reference.ko.md")).not.toContain("src/mcp/server.ts");
   });
 
+  it("documents the current audit instrumentation module in architecture docs", () => {
+    expect(read("docs/architecture.md")).toContain(
+      "instrument()`\nwrapper in `src/mcp/tool-registry.ts`",
+    );
+    expect(read("docs/architecture.ko.md")).toContain(
+      "`src/mcp/tool-registry.ts` 의 `instrument()` wrapper",
+    );
+    expect(read("docs/architecture.md")).not.toContain(
+      "instrument()`\nwrapper in `src/mcp/server.ts`",
+    );
+    expect(read("docs/architecture.ko.md")).not.toContain(
+      "`src/mcp/server.ts` 의 `instrument()` wrapper",
+    );
+  });
+
   it("documents non-root container runtime in security docs", () => {
     expect(read("docs/security.md")).toContain("non-root");
     expect(read("docs/security.ko.md")).toContain("non-root");

@@ -58,6 +58,32 @@ function makeVec(dims: number, coords: number[]): number[] {
   return norm === 0 ? v : v.map((x) => x / norm);
 }
 
+describe("pgvector adapter — deleteByRecordIds SQL shape", () => {
+  it("deletes by record id only when no organizationId is supplied", async () => {
+    const { pool, query } = makeMockPool();
+    const index = createPgVectorIndex(pool, { tableName: "memory_vectors_test" });
+
+    await index.deleteByRecordIds([101, 202]);
+
+    expect(query).toHaveBeenCalledWith(
+      "DELETE FROM memory_vectors_test WHERE memory_record_id = ANY($1)",
+      [[101, 202]],
+    );
+  });
+
+  it("adds organization_id predicate when organizationId is supplied", async () => {
+    const { pool, query } = makeMockPool();
+    const index = createPgVectorIndex(pool, { tableName: "memory_vectors_test" });
+
+    await index.deleteByRecordIds([101, 202], { organizationId: "org-a" });
+
+    expect(query).toHaveBeenCalledWith(
+      "DELETE FROM memory_vectors_test WHERE memory_record_id = ANY($1) AND organization_id = $2",
+      [[101, 202], "org-a"],
+    );
+  });
+});
+
 describe.skipIf(!TEST_URL)("pgvector adapter — integration against real pgvector", () => {
   const TABLE = "test_memory_vectors";
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion

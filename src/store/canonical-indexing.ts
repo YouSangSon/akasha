@@ -484,9 +484,10 @@ export async function reindexCanonicalMemory(input: {
 
   await forEachReindexChunkPage(input, batchSize, async (chunks) => {
     foundChunks = true;
-    await input.vectorIndex.deleteByRecordIds([
-      ...new Set(chunks.map((chunk) => chunk.memoryRecordId)),
-    ]);
+    await input.vectorIndex.deleteByRecordIds(
+      [...new Set(chunks.map((chunk) => chunk.memoryRecordId))],
+      { organizationId: input.organizationId },
+    );
   });
 
   if (!foundChunks) {
