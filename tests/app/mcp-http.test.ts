@@ -2,6 +2,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { BearerToken } from "../../src/app/middleware/bearer-auth.js";
 import { createOperatorServer } from "../../src/app/server.js";
 import type { ToolRegistry } from "../../src/mcp/types.js";
 
@@ -65,7 +66,7 @@ function buildRegistry(): ToolRegistry {
 }
 
 async function startServer(
-  tokens: ReadonlyArray<string>,
+  tokens: ReadonlyArray<string | BearerToken>,
   registry = buildRegistry(),
 ): Promise<ServerHandle & { registry: ToolRegistry }> {
   const server = createOperatorServer({ registry, bearerTokens: tokens });
@@ -159,5 +160,105 @@ describe("Streamable HTTP /mcp", () => {
     });
 
     expect(res.status).toBe(403);
+  });
+
+  it("returns a failed MCP tool result when a bound token org disagrees with the call", async () => {
+    handle = await startServer([
+      { token: "bound-token", organizationId: "org-a" },
+    ]);
+    const client = await connectMcp(handle.baseUrl, "bound-token");
+
+    const result = await client.callTool({
+      name: "search_memory",
+      arguments: {
+        organizationId: "org-b",
+        projectKey: "p",
+        query: "q",
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content).toEqual([
+      {
+        type: "text",
+        text: "organizationId mismatch: token is bound to a different organization",
+      },
+    ]);
+    expect(handle.registry.search_memory).not.toHaveBeenCalled();
+
+    await client.close();
+  });
+
+  it("injects the bound token org into MCP tool calls that omit organizationId", async () => {
+    handle = await startServer([
+      { token: "bound-token", organizationId: "org-a" },
+    ]);
+    const client = await connectMcp(handle.baseUrl, "bound-token");
+
+    const result = await client.callTool({
+      name: "search_memory",
+      arguments: {
+        projectKey: "p",
+        query: "q",
+      },
+    });
+
+    expect(result.isError).not.toBe(true);
+    expect(handle.registry.search_memory).toHaveBeenCalledWith({
+      organizationId: "org-a",
+      projectKey: "p",
+      query: "q",
+    });
+
+    await client.close();
+  });
+
+  it("accepts IPv6 loopback origins", async () => {
+    handle = await startServer(["token-a"]);
+    const res = await fetch(`${handle.baseUrl}/mcp`, {
+      method: "POST",
+      headers: {
+        authorization: "Bearer token-a",
+        origin: "http://[::1]:4317",
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-03-26",
+          capabilities: {},
+          clientInfo: { name: "ipv6-test", version: "1.0.0" },
+        },
+      }),
+    });
+
+    expect(res.status).not.toBe(403);
+  });
+
+  it("rejects oversized POST bodies", async () => {
+    handle = await startServer(["token-a"]);
+    const oversizedBody = JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        payload: "x".repeat(1_000_100),
+      },
+    });
+
+    const res = await fetch(`${handle.baseUrl}/mcp`, {
+      method: "POST",
+      headers: {
+        authorization: "Bearer token-a",
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      body: oversizedBody,
+    });
+
+    expect(res.ok).toBe(false);
   });
 });
