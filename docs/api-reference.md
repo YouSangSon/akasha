@@ -2,14 +2,17 @@
 
 # API reference
 
-Akasha exposes the same tool surface through two transports:
+Akasha exposes the same tool surface through three access paths:
 
-- **MCP** (stdio) — for AI clients like Claude Code and Codex CLI.
+- **MCP stdio** — for AI clients like Claude Code and Codex CLI.
   Entry point: `dist/src/cli.js`. All 7 tools are registered.
-- **HTTP** (JSON over POST) — for any other client.
+- **MCP Streamable HTTP** — for MCP clients that connect over HTTP.
+  Primary documented endpoint: `POST /mcp` for JSON-RPC requests. The SDK
+  transport also supports GET and DELETE on the same `/mcp` endpoint.
+- **JSON HTTP** — for any other client under `/v1/*`.
   Entry point: `src/app/server.ts`, default bind `127.0.0.1:8787`.
 
-Both transports share the same descriptor/schema/registry path in
+All three access paths share the same descriptor/schema/registry path in
 `src/mcp/tool-schemas.ts` and `src/mcp/tool-registry.ts`, then dispatch to the
 tool implementations in `src/mcp/tool-handlers.ts`. Tool inputs and outputs are
 identical; only the wire format differs.
@@ -21,9 +24,9 @@ do not call the tool handler.
 
 ## Authentication (HTTP only)
 
-When `MEMORY_API_TOKENS` is configured, every `/v1/*` route requires a bearer
-token. `/healthz` and `/readyz` are unauthenticated. For local development
-only, an empty token list is allowed when the server binds to loopback
+When `MEMORY_API_TOKENS` is configured, every `/mcp` and `/v1/*` route requires
+a bearer token. `/healthz` and `/readyz` are unauthenticated. For local
+development only, an empty token list is allowed when the server binds to loopback
 (`127.0.0.1`, `localhost`, or `::1`); binding to a non-loopback host without
 tokens fails at startup.
 
@@ -40,7 +43,7 @@ Failure modes:
 | 429 | Per-token rate limit exhausted |
 | 503 | `/readyz` saw a dependency outage (see health section) |
 
-## Response envelope (HTTP)
+## Response shapes
 
 All HTTP responses use a consistent envelope:
 
@@ -53,6 +56,27 @@ All HTTP responses use a consistent envelope:
 ```
 
 MCP responses use the SDK's native shape — no envelope.
+
+Tool results are also exposed to MCP clients as both:
+
+- `structuredContent` — the JSON object form of the tool result.
+- `content` — JSON text content for clients that read tool output as text.
+
+The payload is the same information in both fields.
+
+## MCP resources and prompts
+
+Resources:
+
+- `akasha://memory/recent/{projectKey}` — JSON search result. Query params:
+  `organizationId`, `query`, `limit`.
+- `akasha://context-pack/{projectKey}/{task}` — markdown context pack. Query
+  params: `organizationId`, `limit`.
+
+Prompts:
+
+- `akasha_session_start` — builds a context pack for a new agent session.
+- `akasha_store_memory` — template for asking an agent to store durable memory.
 
 ## Tools
 
@@ -213,6 +237,7 @@ type CompactMemoryResult = {
   projectKey: string;
   dryRun: boolean;
   archivedIds: string[];         // empty in dry-run
+  mergedIds: string[];           // record ids represented by duplicateGroups
   duplicateGroups: Array<{ keepId: string; archiveIds: string[] }>;
   decayCandidates: Array<{ id: string; score: number }>;
   promotionCandidates: string[];

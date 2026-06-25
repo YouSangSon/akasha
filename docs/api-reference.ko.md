@@ -2,14 +2,17 @@
 
 # API 레퍼런스
 
-Akasha는 동일한 도구 surface를 두 가지 transport로 노출합니다:
+Akasha는 동일한 도구 surface를 세 가지 접근 경로로 노출합니다:
 
-- **MCP** (stdio) — Claude Code, Codex CLI 같은 AI 클라이언트용.
+- **MCP stdio** — Claude Code, Codex CLI 같은 AI 클라이언트용.
   진입점: `dist/src/cli.js`. 7개 도구 모두 등록됨.
-- **HTTP** (POST JSON) — 그 외 모든 클라이언트용.
+- **MCP Streamable HTTP** — HTTP로 연결하는 MCP 클라이언트용.
+  기본 문서화 대상 엔드포인트는 JSON-RPC 요청용 `POST /mcp` 입니다. SDK
+  transport는 같은 `/mcp` 엔드포인트에서 GET, DELETE 도 지원합니다.
+- **JSON HTTP** — `/v1/*` 아래의 비-MCP 클라이언트용.
   진입점: `src/app/server.ts`, 기본 바인드 `127.0.0.1:8787`.
 
-두 transport 모두 `src/mcp/tool-schemas.ts` 와 `src/mcp/tool-registry.ts`
+세 가지 접근 경로 모두 `src/mcp/tool-schemas.ts` 와 `src/mcp/tool-registry.ts`
 의 같은 descriptor/schema/registry 경로를 공유한 뒤
 `src/mcp/tool-handlers.ts` 의 tool 구현으로 dispatch합니다. 도구 입출력은
 동일하고 wire 포맷만 다릅니다.
@@ -20,8 +23,8 @@ HTTP 요청은 bearer token의 organization 해석 이후, registry dispatch 이
 
 ## 인증 (HTTP 전용)
 
-`MEMORY_API_TOKENS` 가 설정되어 있으면 모든 `/v1/*` 라우트에 bearer 토큰이
-필요합니다. `/healthz`, `/readyz` 는 인증 없음. 로컬 개발에서만 토큰 목록이
+`MEMORY_API_TOKENS` 가 설정되어 있으면 모든 `/mcp`, `/v1/*` 라우트에 bearer
+토큰이 필요합니다. `/healthz`, `/readyz` 는 인증 없음. 로컬 개발에서만 토큰 목록이
 비어 있어도 loopback (`127.0.0.1`, `localhost`, `::1`) 바인딩이면 허용됩니다.
 토큰 없이 non-loopback host에 바인딩하면 startup에서 실패합니다.
 
@@ -38,7 +41,7 @@ curl -H "Authorization: Bearer dev-token" http://localhost:8787/v1/memory/search
 | 429 | 토큰별 rate limit 소진 |
 | 503 | `/readyz` 가 의존성 outage 감지 (아래 health 섹션 참조) |
 
-## 응답 envelope (HTTP)
+## 응답 shape
 
 모든 HTTP 응답은 일관된 envelope을 사용합니다:
 
@@ -51,6 +54,27 @@ curl -H "Authorization: Bearer dev-token" http://localhost:8787/v1/memory/search
 ```
 
 MCP 응답은 SDK 네이티브 shape을 사용 — envelope 없음.
+
+도구 결과는 MCP 클라이언트에 다음 두 형태로도 노출됩니다:
+
+- `structuredContent` — 도구 결과의 JSON 객체 형태.
+- `content` — 텍스트로 도구 출력을 읽는 클라이언트를 위한 JSON 문자열.
+
+두 필드는 동일한 정보를 담고 있습니다.
+
+## MCP 리소스와 프롬프트
+
+리소스:
+
+- `akasha://memory/recent/{projectKey}` — JSON 검색 결과. 쿼리 파라미터:
+  `organizationId`, `query`, `limit`.
+- `akasha://context-pack/{projectKey}/{task}` — markdown 컨텍스트 팩. 쿼리
+  파라미터: `organizationId`, `limit`.
+
+프롬프트:
+
+- `akasha_session_start` — 새 에이전트 세션용 컨텍스트 팩을 생성합니다.
+- `akasha_store_memory` — 에이전트가 durable memory를 저장하도록 요청하는 템플릿.
 
 ## 도구
 
@@ -209,6 +233,7 @@ type CompactMemoryResult = {
   projectKey: string;
   dryRun: boolean;
   archivedIds: string[];         // dry-run 시 비어있음
+  mergedIds: string[];           // duplicateGroups 로 표현된 record id
   duplicateGroups: Array<{ keepId: string; archiveIds: string[] }>;
   decayCandidates: Array<{ id: string; score: number }>;
   promotionCandidates: string[];

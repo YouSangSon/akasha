@@ -63,8 +63,9 @@ operated in production:
   rate-limited. Archived records are restorable via `unarchive_memory`.
 - **Audited and rate-limited.** Every tool call lands in an org-scoped audit log;
   per-token rate limits protect the HTTP API.
-- **Dual transport, one tool surface.** The same 7 tools serve MCP clients over
-  stdio and any other client over JSON-HTTP.
+- **Dual MCP transports plus JSON HTTP.** MCP clients can use stdio or
+  Streamable HTTP at `POST /mcp`; scripts and non-MCP clients can keep using
+  JSON HTTP under `/v1/*`.
 - **Production health probes.** `/healthz` (liveness) and a dependency-aware
   `/readyz` (readiness) drive Kubernetes / load-balancer health checks.
 - **Pluggable vector backend.** Qdrant by default, or `VECTOR_BACKEND=pgvector`
@@ -74,8 +75,9 @@ operated in production:
 
 Conversations with coding agents lose context the moment the session ends.
 Akasha is the place those agents save what's worth remembering and
-read it back next time. The same 7 tools are exposed over MCP stdio and
-JSON-HTTP — full request/response schemas live in
+read it back next time. The same 7 tools are exposed over MCP stdio,
+MCP Streamable HTTP at `POST /mcp`, and JSON-HTTP under `/v1/*` — full
+request/response schemas live in
 [docs/api-reference.md](docs/api-reference.md).
 HTTP and MCP share the same seven-tool schema surface, so validation and
 payload shapes stay aligned across both transports.
@@ -161,8 +163,8 @@ curl -sX POST http://localhost:8787/v1/memory/context-pack \
 
 | Layer | Responsibility |
 |-------|----------------|
-| MCP server (`src/mcp/`) | Tool surface for Claude/Codex CLI clients (stdio) |
-| HTTP server (`src/app/`) | Same tool surface as JSON-over-HTTP for non-MCP clients |
+| MCP server (`src/mcp/`) | Shared MCP server surface: tool descriptors, schemas, registry, and handlers |
+| HTTP server (`src/app/`) | Serves MCP Streamable HTTP at `/mcp` plus JSON HTTP under `/v1/*` |
 | Canonical store (`src/store/memory-repository.ts`) | Postgres — records, sources, ingest jobs, audit |
 | Vector index (`src/vector/`) | Qdrant (default) or pgvector — chunked embeddings + similarity search. Set `VECTOR_BACKEND=pgvector` for Postgres-only deploy. |
 | Compaction (`src/compact/`) | Dedup (exact + semantic), decay, archive, unarchive, sweeper |

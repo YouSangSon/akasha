@@ -24,6 +24,7 @@ import {
   loadRateLimitFromEnv,
   type RateLimiter,
 } from "./middleware/rate-limit.js";
+import { handleMcpHttpRequest } from "./mcp-http.js";
 import { createMemoryRoutes, type Route } from "./routes/memory.js";
 import {
   bootstrapCanonicalServices,
@@ -157,6 +158,18 @@ export function createOperatorServer(
             res.writeHead(503, { "content-type": "application/json" });
             res.end(JSON.stringify({ success: false, data: report }));
           }
+          return;
+        }
+
+        if (req.url === "/mcp") {
+          await handleMcpHttpRequest({
+            req,
+            res,
+            registry,
+            bearerTokens: tokens,
+            rateLimiter,
+            logger: log,
+          });
           return;
         }
 

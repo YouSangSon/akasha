@@ -1,3 +1,5 @@
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { describe, expect, it, vi } from "vitest";
 import * as z from "zod/v4";
@@ -8,6 +10,13 @@ import type { Logger } from "../../src/logger.js";
 import { TOOL_DESCRIPTORS } from "../../src/mcp/tool-schemas.js";
 import type { ToolRegistry } from "../../src/mcp/types.js";
 import type { MemoryRepository, SearchMemoryResult } from "../../src/types.js";
+
+async function createInMemoryClient(server: McpServer): Promise<Client> {
+  const client = new Client({ name: "akasha-test-client", version: "1.0.0" });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+  return client;
+}
 
 function createRepository(): MemoryRepository {
   const listedRecords = [
@@ -1085,6 +1094,12 @@ describe("createMcpServer", () => {
           ),
         },
       ],
+      structuredContent: {
+        ok: true,
+        projectKey: "p",
+        scopes: ["project:p"],
+        chunkCount: 3,
+      },
     });
   });
 
@@ -1139,6 +1154,13 @@ describe("createMcpServer", () => {
           ),
         },
       ],
+      structuredContent: {
+        ok: true,
+        outcomes: [{ archiveId: 7, status: "restored", restoredRecordId: 100, sourceRecordId: 5, chunkCount: 2 }],
+        restoredCount: 1,
+        skippedCount: 0,
+        failedCount: 0,
+      },
     });
   });
 
@@ -1205,6 +1227,372 @@ describe("createMcpServer", () => {
     });
   });
 });
+
+describe("createMcpServer structured outputs", () => {
+  it("advertises output schemas for all registered tools", async () => {
+    const server = createMcpServer({
+      registry: buildRegistryForMcpProtocol(),
+    });
+    const client = await createInMemoryClient(server);
+
+    const tools = await client.listTools();
+
+    expect(tools.tools.map((tool) => tool.name).sort()).toEqual(
+      TOOL_DESCRIPTORS.map((tool) => tool.name).sort(),
+    );
+    for (const tool of tools.tools) {
+      expect(tool.outputSchema).toEqual(expect.objectContaining({ type: "object" }));
+    }
+
+    const compactMemory = tools.tools.find((tool) => tool.name === "compact_memory");
+    expect(compactMemory?.outputSchema).toEqual(
+      expect.objectContaining({
+        properties: expect.objectContaining({
+          mergedIds: expect.objectContaining({
+            type: "array",
+            items: expect.objectContaining({ type: "string" }),
+          }),
+          duplicateGroups: expect.objectContaining({
+            items: expect.objectContaining({
+              properties: expect.objectContaining({
+                keepId: expect.any(Object),
+                archiveIds: expect.any(Object),
+              }),
+            }),
+          }),
+          decayCandidates: expect.objectContaining({
+            items: expect.objectContaining({
+              properties: expect.objectContaining({
+                id: expect.any(Object),
+                score: expect.any(Object),
+              }),
+            }),
+          }),
+          applyStats: expect.objectContaining({
+            properties: expect.objectContaining({
+              archived: expect.any(Object),
+              skipped: expect.any(Object),
+              qdrantPointsDeleted: expect.any(Object),
+              qdrantPointsPending: expect.any(Object),
+              durationMs: expect.any(Object),
+            }),
+          }),
+        }),
+      }),
+    );
+    expect(() =>
+      z.object(
+        TOOL_DESCRIPTORS.find((descriptor) => descriptor.name === "compact_memory")!
+          .outputSchema,
+      ).parse({
+        ok: true,
+        projectKey: "project-alpha",
+        dryRun: true,
+        archivedIds: [],
+        duplicateGroups: [],
+        decayCandidates: [],
+        promotionCandidates: [],
+        summary: "noop",
+      }),
+    ).toThrow(/mergedIds/i);
+
+    const unarchiveMemory = tools.tools.find((tool) => tool.name === "unarchive_memory");
+    expect(unarchiveMemory?.outputSchema).toEqual(
+      expect.objectContaining({
+        properties: expect.objectContaining({
+          outcomes: expect.objectContaining({
+            items: expect.objectContaining({
+              anyOf: expect.arrayContaining([
+                expect.objectContaining({
+                  properties: expect.objectContaining({
+                    status: expect.objectContaining({ const: "restored" }),
+                    restoredRecordId: expect.any(Object),
+                    sourceRecordId: expect.any(Object),
+                    chunkCount: expect.any(Object),
+                  }),
+                }),
+                expect.objectContaining({
+                  properties: expect.objectContaining({
+                    status: expect.objectContaining({ const: "skipped" }),
+                    reason: expect.any(Object),
+                  }),
+                }),
+                expect.objectContaining({
+                  properties: expect.objectContaining({
+                    status: expect.objectContaining({ const: "failed" }),
+                    error: expect.any(Object),
+                  }),
+                }),
+              ]),
+            }),
+          }),
+        }),
+      }),
+    );
+
+    await client.close();
+    await server.close();
+  });
+
+  it("returns structuredContent while retaining JSON text content", async () => {
+    const server = createMcpServer({
+      registry: buildRegistryForMcpProtocol(),
+    });
+    const client = await createInMemoryClient(server);
+
+    const result = await client.callTool({
+      name: "search_memory",
+      arguments: {
+        organizationId: "org-a",
+        projectKey: "project-alpha",
+        query: "Postgres",
+      },
+    });
+
+    expect(result.structuredContent).toEqual(
+      expect.objectContaining({
+        ok: true,
+        projectKey: "project-alpha",
+        query: "Postgres",
+      }),
+    );
+    expect(result.content).toEqual([
+      {
+        type: "text",
+        text: JSON.stringify(result.structuredContent, null, 2),
+      },
+    ]);
+
+    await client.close();
+    await server.close();
+  });
+});
+
+describe("createMcpServer resources and prompts", () => {
+  it("lists and reads Akasha memory resources", async () => {
+    const registry = buildRegistryForMcpProtocol();
+    const server = createMcpServer({ registry });
+    const client = await createInMemoryClient(server);
+
+    const templates = await client.listResourceTemplates();
+    expect(templates.resourceTemplates.map((resource) => resource.name)).toEqual(
+      expect.arrayContaining(["recent-project-memory", "context-pack"]),
+    );
+
+    const recent = await client.readResource({
+      uri: "akasha://memory/recent/project-alpha?organizationId=org-a&query=Postgres",
+    });
+    const [recentContent] = recent.contents;
+    expect(recentContent).toEqual(
+      expect.objectContaining({
+        uri: "akasha://memory/recent/project-alpha?organizationId=org-a&query=Postgres",
+        mimeType: "application/json",
+      }),
+    );
+    expect(
+      JSON.parse(recentContent && "text" in recentContent ? recentContent.text : "{}"),
+    ).toEqual(
+      expect.objectContaining({ ok: true, projectKey: "project-alpha" }),
+    );
+
+    await client.close();
+    await server.close();
+  });
+
+  it("uses the default recent memory query when query is omitted", async () => {
+    const registry = buildRegistryForMcpProtocol();
+    const server = createMcpServer({ registry });
+    const client = await createInMemoryClient(server);
+
+    await client.readResource({
+      uri: "akasha://memory/recent/project-alpha?organizationId=org-a",
+    });
+
+    expect(registry.search_memory).toHaveBeenCalledWith({
+      organizationId: "org-a",
+      projectKey: "project-alpha",
+      query: "recent decisions constraints open questions",
+    });
+
+    await client.close();
+    await server.close();
+  });
+
+  it.each([
+    "akasha://memory/recent/project-alpha?organizationId=",
+    "akasha://memory/recent/project-alpha?query=",
+    "akasha://memory/recent/project-alpha?limit=",
+    "akasha://memory/recent/project-alpha?limit=0",
+    "akasha://memory/recent/project-alpha?limit=-1",
+    "akasha://memory/recent/project-alpha?limit=1.5",
+    "akasha://memory/recent/project-alpha?limit=NaN",
+  ])("rejects invalid recent memory resource params for %s", async (uri) => {
+    const registry = buildRegistryForMcpProtocol();
+    const server = createMcpServer({ registry });
+    const client = await createInMemoryClient(server);
+
+    await expect(client.readResource({ uri })).rejects.toThrow();
+    expect(registry.search_memory).not.toHaveBeenCalled();
+
+    await client.close();
+    await server.close();
+  });
+
+  it("reads the Akasha context-pack resource with validated params", async () => {
+    const registry = buildRegistryForMcpProtocol();
+    const server = createMcpServer({ registry });
+    const client = await createInMemoryClient(server);
+
+    const result = await client.readResource({
+      uri: "akasha://context-pack/project-alpha/continue%20implementation?organizationId=org-a&limit=3",
+    });
+
+    expect(registry.build_context_pack).toHaveBeenCalledWith({
+      organizationId: "org-a",
+      projectKey: "project-alpha",
+      task: "continue implementation",
+      limit: 3,
+    });
+    expect(result.contents[0]).toEqual(
+      expect.objectContaining({
+        uri: "akasha://context-pack/project-alpha/continue%20implementation?organizationId=org-a&limit=3",
+        mimeType: "text/markdown",
+        text: "# Context Pack\n\n- Decision: use Postgres",
+      }),
+    );
+
+    await client.close();
+    await server.close();
+  });
+
+  it.each([
+    "akasha://context-pack/project-alpha/continue%20implementation?organizationId=",
+    "akasha://context-pack/project-alpha/continue%20implementation?limit=",
+    "akasha://context-pack/project-alpha/continue%20implementation?limit=0",
+    "akasha://context-pack/project-alpha/continue%20implementation?limit=-1",
+    "akasha://context-pack/project-alpha/continue%20implementation?limit=1.5",
+    "akasha://context-pack/project-alpha/continue%20implementation?limit=NaN",
+  ])("rejects invalid context-pack resource params for %s", async (uri) => {
+    const registry = buildRegistryForMcpProtocol();
+    const server = createMcpServer({ registry });
+    const client = await createInMemoryClient(server);
+
+    await expect(client.readResource({ uri })).rejects.toThrow();
+    expect(registry.build_context_pack).not.toHaveBeenCalled();
+
+    await client.close();
+    await server.close();
+  });
+
+  it("lists and returns Akasha prompts", async () => {
+    const server = createMcpServer({ registry: buildRegistryForMcpProtocol() });
+    const client = await createInMemoryClient(server);
+
+    const prompts = await client.listPrompts();
+    expect(prompts.prompts.map((prompt) => prompt.name)).toEqual(
+      expect.arrayContaining(["akasha_session_start", "akasha_store_memory"]),
+    );
+
+    const prompt = await client.getPrompt({
+      name: "akasha_session_start",
+      arguments: {
+        projectKey: "project-alpha",
+        task: "continue implementation",
+        organizationId: "org-a",
+      },
+    });
+    expect(prompt.messages[0]?.content).toEqual(
+      expect.objectContaining({
+        type: "text",
+        text: expect.stringContaining("continue implementation"),
+      }),
+    );
+
+    const storePrompt = await client.getPrompt({
+      name: "akasha_store_memory",
+      arguments: {
+        projectKey: "project-alpha",
+        kind: "decision",
+        content: "Decision: keep resource reads side-effect free.",
+      },
+    });
+    expect(storePrompt.messages[0]?.content).toEqual(
+      expect.objectContaining({
+        type: "text",
+        text: expect.stringContaining("Decision: keep resource reads side-effect free."),
+      }),
+    );
+
+    await client.close();
+    await server.close();
+  });
+});
+
+function buildRegistryForMcpProtocol(): ToolRegistry {
+  return {
+    add_memory: vi.fn().mockResolvedValue({
+      ok: true,
+      memoryId: "101",
+      summary: "stored",
+    }),
+    search_memory: vi.fn().mockResolvedValue({
+      ok: true,
+      projectKey: "project-alpha",
+      query: "Postgres",
+      results: [
+        createRecord({
+          id: 12,
+          organizationId: "org-a",
+          memoryType: "decision",
+          content: "Decision: use Postgres for canonical state.",
+          sourceType: "decision",
+          externalId: "adr-1",
+        }),
+      ],
+    }),
+    build_context_pack: vi.fn().mockResolvedValue({
+      ok: true,
+      projectKey: "project-alpha",
+      packMarkdown: "# Context Pack\n\n- Decision: use Postgres",
+      selectedMemoryIds: ["project:project-alpha:12"],
+      sections: {
+        project_summary: [],
+        recent_decisions: [],
+        constraints: [],
+        open_questions: [],
+        relevant_notes: [],
+      },
+    }),
+    reindex_memory: vi.fn().mockResolvedValue({
+      ok: true,
+      projectKey: "project-alpha",
+      scopes: ["project:project-alpha"],
+      chunkCount: 1,
+    }),
+    compact_memory: vi.fn().mockResolvedValue({
+      ok: true,
+      projectKey: "project-alpha",
+      dryRun: true,
+      archivedIds: [],
+      duplicateGroups: [],
+      decayCandidates: [],
+      promotionCandidates: [],
+      summary: "noop",
+    }),
+    unarchive_memory: vi.fn().mockResolvedValue({
+      ok: true,
+      outcomes: [],
+      restoredCount: 0,
+      skippedCount: 0,
+      failedCount: 0,
+    }),
+    list_audit_log: vi.fn().mockResolvedValue({
+      ok: true,
+      organizationId: "org-a",
+      entries: [],
+    }),
+  };
+}
 
 function createCanonicalServices() {
   const createdRecord = createRecord({
