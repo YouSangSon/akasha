@@ -61,8 +61,9 @@ Postgres 에 저장할 수 있습니다 — Qdrant 불필요.
   아카이빙된 레코드는 `unarchive_memory` 로 복원 가능합니다.
 - **감사 + rate limit.** 모든 도구 호출은 org-scoped 감사 로그에 남고, 토큰별
   rate limit 이 HTTP API 를 보호합니다.
-- **dual transport, 단일 도구 surface.** 동일한 7개 도구가 MCP 클라이언트에는
-  stdio 로, 그 외 클라이언트에는 JSON-HTTP 로 제공됩니다.
+- **두 MCP transport + JSON HTTP.** MCP 클라이언트는 stdio 또는
+  `POST /mcp` 의 Streamable HTTP 를 사용할 수 있고, 스크립트와 비-MCP
+  클라이언트는 계속 `/v1/*` 아래 JSON HTTP 를 사용할 수 있습니다.
 - **프로덕션 health probe.** `/healthz` (liveness) 와 의존성 인지형 `/readyz`
   (readiness) 가 Kubernetes / 로드밸런서 헬스체크를 구동합니다.
 - **교체 가능한 벡터 백엔드.** 기본 Qdrant, 또는 `VECTOR_BACKEND=pgvector` 로
@@ -72,8 +73,9 @@ Postgres 에 저장할 수 있습니다 — Qdrant 불필요.
 
 코딩 에이전트와의 대화는 세션이 끝나는 순간 컨텍스트를 잃습니다.
 Akasha는 그 에이전트가 *기억할 가치가 있는 것*을 저장하고 다음에 다시
-읽어올 수 있는 장소입니다. 동일한 7개 도구가 MCP stdio 와 JSON-HTTP
-양쪽으로 노출됩니다 — 전체 요청/응답 스키마는
+읽어올 수 있는 장소입니다. 동일한 7개 도구가 MCP stdio, `POST /mcp` 의
+MCP Streamable HTTP, 그리고 `/v1/*` 아래 JSON-HTTP 로 노출됩니다 —
+전체 요청/응답 스키마는
 [docs/api-reference.ko.md](docs/api-reference.ko.md) 참고.
 HTTP와 MCP는 동일한 7개 도구 schema surface를 공유하므로 두 transport에서
 검증과 payload shape가 어긋나지 않습니다.

@@ -21,6 +21,32 @@ describe("public documentation drift checks", () => {
     expect(read("docs/api-reference.ko.md")).not.toContain("src/mcp/server.ts");
   });
 
+  it("documents MCP streamable HTTP, resources, and prompts in public docs", () => {
+    const readme = read("README.md");
+    const readmeKo = read("README.ko.md");
+    const apiReference = read("docs/api-reference.md");
+    const apiReferenceKo = read("docs/api-reference.ko.md");
+
+    expect(readme).toContain("MCP Streamable HTTP");
+    expect(readme).toContain("POST /mcp");
+    expect(readmeKo).toContain("MCP Streamable HTTP");
+    expect(readmeKo).toContain("POST /mcp");
+
+    expect(apiReference).toContain("MCP Streamable HTTP");
+    expect(apiReference).toContain("POST /mcp");
+    expect(apiReference).toContain("akasha_session_start");
+    expect(apiReference).toContain("akasha_store_memory");
+    expect(apiReference).toContain("akasha://memory/recent/{projectKey}");
+    expect(apiReference).toContain("akasha://context-pack/{projectKey}/{task}");
+
+    expect(apiReferenceKo).toContain("MCP Streamable HTTP");
+    expect(apiReferenceKo).toContain("POST /mcp");
+    expect(apiReferenceKo).toContain("akasha_session_start");
+    expect(apiReferenceKo).toContain("akasha_store_memory");
+    expect(apiReferenceKo).toContain("akasha://memory/recent/{projectKey}");
+    expect(apiReferenceKo).toContain("akasha://context-pack/{projectKey}/{task}");
+  });
+
   it("documents the current audit instrumentation module in architecture docs", () => {
     expect(read("docs/architecture.md")).toContain(
       "instrument()`\nwrapper in `src/mcp/tool-registry.ts`",
