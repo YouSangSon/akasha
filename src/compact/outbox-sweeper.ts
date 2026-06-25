@@ -4,8 +4,9 @@
 // failure; this sweeper retries them idempotently.
 //
 // Idempotent: Qdrant's delete-by-id is a no-op for already-deleted points,
-// and findPendingQdrantCleanup uses FOR UPDATE SKIP LOCKED so multi-replica
-// sweepers cooperate without leader election.
+// and claimPendingQdrantCleanup uses one UPDATE ... FOR UPDATE SKIP LOCKED ...
+// RETURNING statement so multi-replica sweepers cooperate without leader
+// election or find-then-update races.
 //
 // Caller decides cadence (setInterval, cron, or one-shot). Default policy
 // per design doc §10: scan up to 100 rows per cycle, fail-mark after 5
@@ -25,6 +26,7 @@ export type RunOutboxSweepInput = {
   // Tunables. Defaults follow design doc §10.
   batchSize?: number;
   maxAttempts?: number;
+  now?: () => Date;
 };
 
 export type SweepResult = {
@@ -42,10 +44,12 @@ export async function runOutboxSweep(
 ): Promise<SweepResult> {
   const batchSize = input.batchSize ?? DEFAULT_BATCH_SIZE;
   const maxAttempts = input.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
+  const getNow = input.now ?? (() => new Date());
 
-  const pending = await input.archiveRepository.findPendingQdrantCleanup(
-    batchSize,
-  );
+  const pending = await input.archiveRepository.claimPendingQdrantCleanup({
+    limit: batchSize,
+    now: getNow(),
+  });
 
   let cleaned = 0;
   let retried = 0;

@@ -55,6 +55,7 @@ function makeRepo(
     markQdrantStatus: vi.fn(),
     completeCompactionRun: vi.fn(),
     findPendingQdrantCleanup: vi.fn().mockResolvedValue([]),
+    claimPendingQdrantCleanup: vi.fn().mockResolvedValue([]),
     acquireScopeLock: vi.fn(),
     countRecentApplyRuns: vi.fn().mockResolvedValue(0),
     findArchiveByIds: vi.fn().mockResolvedValue(archives),

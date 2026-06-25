@@ -145,6 +145,32 @@ describe.skipIf(!process.env.POSTGRES_HOST)("runMigrations", () => {
     }
   });
 
+  it("applies migration 009 retry visibility column to memory_archive", async () => {
+    const pool = createPgPool({
+      connectionString: testConnectionString,
+    });
+
+    try {
+      await runMigrations(pool);
+
+      const result = await pool.query<InformationSchemaColumnRow>(`
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'memory_archive'
+          AND column_name = 'qdrant_next_retry_at'
+      `);
+
+      expect(result.rows.map((row) => row.column_name)).toEqual([
+        "qdrant_next_retry_at",
+      ]);
+    } finally {
+      await pool.end();
+    }
+  });
+});
+
+describe("readPostgresMigrationSql", () => {
   it("falls back to the embedded Postgres migration when the sql asset is unavailable", () => {
     const sql = readPostgresMigrationSql({
       readFile(filePath) {
@@ -157,9 +183,10 @@ describe.skipIf(!process.env.POSTGRES_HOST)("runMigrations", () => {
     expect(sql).toContain("CREATE TABLE IF NOT EXISTS sources");
     expect(sql).toContain("CREATE TABLE IF NOT EXISTS ingest_jobs");
     // The embedded snapshot must mirror every on-disk migration so bundled-
-    // dist deployments see the same schema as file-based runs. Migration 007
-    // was the latest addition.
+    // dist deployments see the same schema as file-based runs.
     expect(sql).toContain("qdrant_status");
     expect(sql).toContain("idx_ingest_jobs_qdrant_pending_retry");
+    expect(sql).toContain("qdrant_next_retry_at");
+    expect(sql).toContain("idx_memory_archive_qdrant_pending_retry");
   });
 });

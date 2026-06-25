@@ -61,6 +61,7 @@ function makeRepoMocks(overrides: Partial<MemoryArchiveRepository> = {}) {
   const markQdrantStatus = vi.fn().mockResolvedValue(undefined);
   const completeCompactionRun = vi.fn().mockResolvedValue(undefined);
   const findPendingQdrantCleanup = vi.fn().mockResolvedValue([]);
+  const claimPendingQdrantCleanup = vi.fn().mockResolvedValue([]);
   const acquireScopeLock = vi.fn().mockResolvedValue(true);
   const countRecentApplyRuns = vi.fn().mockResolvedValue(0);
 
@@ -71,6 +72,7 @@ function makeRepoMocks(overrides: Partial<MemoryArchiveRepository> = {}) {
     markQdrantStatus,
     completeCompactionRun,
     findPendingQdrantCleanup,
+    claimPendingQdrantCleanup,
     acquireScopeLock,
     countRecentApplyRuns,
     findArchiveByIds: vi.fn().mockResolvedValue([]),

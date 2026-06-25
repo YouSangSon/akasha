@@ -1319,6 +1319,7 @@ function createCanonicalServices() {
       markQdrantStatus: vi.fn().mockResolvedValue(undefined),
       completeCompactionRun: vi.fn().mockResolvedValue(undefined),
       findPendingQdrantCleanup: vi.fn().mockResolvedValue([]),
+      claimPendingQdrantCleanup: vi.fn().mockResolvedValue([]),
       acquireScopeLock: vi.fn().mockResolvedValue(true),
       countRecentApplyRuns: vi.fn().mockResolvedValue(0),
       findArchiveByIds: vi.fn().mockResolvedValue([]),
