@@ -76,7 +76,9 @@ async function sweepOne(
   maxAttempts: number,
 ): Promise<"cleaned" | "retry" | "failed"> {
   try {
-    await input.vectorIndex.delete(row.qdrantPointIds);
+    await input.vectorIndex.delete(row.qdrantPointIds, {
+      organizationId: row.organizationId,
+    });
     await input.archiveRepository.markQdrantStatus(row.archiveId, "deleted");
     return "cleaned";
   } catch (err: unknown) {

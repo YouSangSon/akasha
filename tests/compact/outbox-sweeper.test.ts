@@ -70,6 +70,9 @@ describe("runOutboxSweep", () => {
     expect(result).toEqual({ scanned: 1, cleaned: 1, retried: 0, failed: 0 });
     expect(claimPendingQdrantCleanup).toHaveBeenCalledWith({ limit: 100, now });
     expect(repo.findPendingQdrantCleanup).not.toHaveBeenCalled();
+    expect(vectorIndex.delete).toHaveBeenCalledWith(["p9"], {
+      organizationId: "org-a",
+    });
   });
 
   it("returns zero counts when no pending rows", async () => {
@@ -112,7 +115,9 @@ describe("runOutboxSweep", () => {
 
     expect(result).toEqual({ scanned: 2, cleaned: 2, retried: 0, failed: 0 });
     expect(vectorIndex.delete).toHaveBeenCalledTimes(2);
-    expect(vectorIndex.delete).toHaveBeenNthCalledWith(1, ["p1", "p2"]);
+    expect(vectorIndex.delete).toHaveBeenNthCalledWith(1, ["p1", "p2"], {
+      organizationId: "org-a",
+    });
     expect(markQdrantStatus.mock.calls.every((c) => c[1] === "deleted")).toBe(
       true,
     );

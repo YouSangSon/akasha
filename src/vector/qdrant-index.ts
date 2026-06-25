@@ -7,8 +7,14 @@
 // Nothing outside this file should reference QdrantClient or Qdrant filter
 // syntax. This is the single place to swap for a pgvector adapter.
 
-import type { QdrantClient } from "@qdrant/js-client-rest";
-import type { VectorFilter, VectorHit, VectorIndex, VectorPoint } from "./vector-index.js";
+import type { QdrantClient, Schemas } from "@qdrant/js-client-rest";
+import type {
+  VectorDeleteOptions,
+  VectorFilter,
+  VectorHit,
+  VectorIndex,
+  VectorPoint,
+} from "./vector-index.js";
 
 type QdrantFilterClause = {
   key: string;
@@ -75,10 +81,24 @@ export function createQdrantVectorIndex(
       }));
     },
 
-    async delete(ids: string[]): Promise<void> {
+    async delete(ids: string[], options: VectorDeleteOptions = {}): Promise<void> {
       // Guard: Qdrant rejects empty point lists with 400 in some versions.
       if (ids.length === 0) return;
-      await client.delete(collectionName, { points: ids });
+      const selector: Schemas["PointsSelector"] = options.organizationId
+        ? {
+            filter: {
+              must: [
+                { has_id: ids },
+                {
+                  key: "organization_id",
+                  match: { value: options.organizationId },
+                },
+              ],
+            },
+          }
+        : { points: ids };
+
+      await client.delete(collectionName, selector);
     },
 
     async deleteByRecordIds(recordIds: number[]): Promise<void> {

@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { createQdrantVectorIndex } from "../../src/vector/qdrant-index.js";
-import type { VectorFilter, VectorPoint } from "../../src/vector/vector-index.js";
+import type {
+  VectorDeleteOptions,
+  VectorFilter,
+  VectorPoint,
+} from "../../src/vector/vector-index.js";
 
 // FakeVectorIndex — a minimal in-memory VectorIndex for use by other tests.
 // Exported so downstream unit tests can import it instead of building their own.
@@ -21,9 +25,16 @@ export function createFakeVectorIndex() {
       const key = JSON.stringify(filter);
       return (queryResults.get(key) ?? []) as never;
     },
-    async delete(ids: string[]) {
+    async delete(ids: string[], options: VectorDeleteOptions = {}) {
       for (const id of ids) {
-        stored.delete(id);
+        const point = stored.get(id);
+        if (
+          point !== undefined &&
+          (!options.organizationId ||
+            point.payload["organization_id"] === options.organizationId)
+        ) {
+          stored.delete(id);
+        }
       }
     },
     async deleteByRecordIds(recordIds: number[]) {
@@ -192,7 +203,7 @@ describe("createQdrantVectorIndex — point building (upsert)", () => {
 });
 
 describe("createQdrantVectorIndex — delete", () => {
-  it("calls Qdrant delete with point ids", async () => {
+  it("calls Qdrant delete with point ids when organizationId is omitted", async () => {
     const client = {
       query: vi.fn(),
       upsert: vi.fn(),
@@ -204,6 +215,28 @@ describe("createQdrantVectorIndex — delete", () => {
 
     await index.delete(["chunk:1", "chunk:2"]);
     expect(client.delete).toHaveBeenCalledWith("memory_chunks_v1", { points: ["chunk:1", "chunk:2"] });
+  });
+
+  it("calls Qdrant delete with id and organization filters when organizationId is provided", async () => {
+    const client = {
+      query: vi.fn(),
+      upsert: vi.fn(),
+      delete: vi.fn().mockResolvedValue(undefined),
+      collectionExists: vi.fn(),
+      createCollection: vi.fn(),
+    };
+    const index = createQdrantVectorIndex(client as never, "memory_chunks_v1");
+
+    await index.delete(["chunk:1", "chunk:2"], { organizationId: "org-a" });
+
+    expect(client.delete).toHaveBeenCalledWith("memory_chunks_v1", {
+      filter: {
+        must: [
+          { has_id: ["chunk:1", "chunk:2"] },
+          { key: "organization_id", match: { value: "org-a" } },
+        ],
+      },
+    });
   });
 
   it("skips Qdrant delete call when ids array is empty (guards against Qdrant 400)", async () => {

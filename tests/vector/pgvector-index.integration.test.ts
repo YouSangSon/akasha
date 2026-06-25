@@ -18,8 +18,20 @@ import { runMigrations } from "../../src/db/migrate.js";
 import { createIngestJobRepository } from "../../src/jobs/ingest-job-repository.js";
 import { createMemoryChunkRepository } from "../../src/store/canonical-indexing.js";
 import { runIngestSweep } from "../../src/compact/ingest-sweeper.js";
+import type { PgPool } from "../../src/db/connection.js";
 
 const TEST_URL = process.env.PGVECTOR_TEST_URL;
+
+function makeMockPool(): { pool: PgPool; query: ReturnType<typeof vi.fn> } {
+  const query = vi.fn().mockResolvedValue({ rows: [] });
+  const pool = {
+    query,
+    connect: vi.fn(),
+    end: vi.fn(),
+  } as unknown as PgPool;
+
+  return { pool, query };
+}
 
 // Helper: cosine similarity between two equal-length vectors.
 function cosineSimilarity(a: number[], b: number[]): number {
@@ -419,6 +431,41 @@ describe.skipIf(!TEST_URL)("pgvector adapter — integration against real pgvect
         },
       ]),
     ).rejects.toThrow(/empty embedding vector/);
+  });
+});
+
+describe("pgvector adapter — delete SQL", () => {
+  it("deletes by point ids only when organizationId is omitted", async () => {
+    const { pool, query } = makeMockPool();
+    const index = createPgVectorIndex(pool, { tableName: "test_memory_vectors" });
+
+    await index.delete(["chunk:1", "chunk:2"]);
+
+    expect(query).toHaveBeenCalledWith(
+      "DELETE FROM test_memory_vectors WHERE point_id = ANY($1)",
+      [["chunk:1", "chunk:2"]],
+    );
+  });
+
+  it("adds an organization_id predicate when organizationId is provided", async () => {
+    const { pool, query } = makeMockPool();
+    const index = createPgVectorIndex(pool, { tableName: "test_memory_vectors" });
+
+    await index.delete(["chunk:1", "chunk:2"], { organizationId: "org-a" });
+
+    expect(query).toHaveBeenCalledWith(
+      "DELETE FROM test_memory_vectors WHERE point_id = ANY($1) AND organization_id = $2",
+      [["chunk:1", "chunk:2"], "org-a"],
+    );
+  });
+
+  it("skips SQL when ids are empty", async () => {
+    const { pool, query } = makeMockPool();
+    const index = createPgVectorIndex(pool, { tableName: "test_memory_vectors" });
+
+    await index.delete([], { organizationId: "org-a" });
+
+    expect(query).not.toHaveBeenCalled();
   });
 });
 

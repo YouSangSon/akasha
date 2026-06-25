@@ -54,7 +54,13 @@
 //   follow-up: add a scope-aware delete-then-upsert path on reindex.
 
 import type { PgPool } from "../db/connection.js";
-import type { VectorFilter, VectorHit, VectorIndex, VectorPoint } from "./vector-index.js";
+import type {
+  VectorDeleteOptions,
+  VectorFilter,
+  VectorHit,
+  VectorIndex,
+  VectorPoint,
+} from "./vector-index.js";
 
 // Max rows per INSERT batch — 8 params/row × 8000 = 64000 < 65535 cap.
 const UPSERT_BATCH_ROWS = 8000;
@@ -348,8 +354,15 @@ export function createPgVectorIndex(
       }
     },
 
-    async delete(ids: string[]): Promise<void> {
+    async delete(ids: string[], options: VectorDeleteOptions = {}): Promise<void> {
       if (ids.length === 0) return;
+      if (options.organizationId) {
+        await pool.query(
+          `DELETE FROM ${tableName} WHERE point_id = ANY($1) AND organization_id = $2`,
+          [ids, options.organizationId],
+        );
+        return;
+      }
       await pool.query(`DELETE FROM ${tableName} WHERE point_id = ANY($1)`, [ids]);
     },
 
