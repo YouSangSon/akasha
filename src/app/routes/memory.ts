@@ -1,6 +1,11 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Logger } from "../../logger.js";
 import { CompactionRateLimitError } from "../../compact/apply-compaction.js";
+import {
+  TOOL_ROUTES,
+  type ToolName,
+  validateToolInput,
+} from "../../mcp/tool-schemas.js";
 import type { ToolRegistry } from "../../mcp/types.js";
 import { SecretDetectedError } from "../../store/secret-scrub.js";
 import type { BearerToken } from "../middleware/bearer-auth.js";
@@ -52,33 +57,6 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
   }
 }
 
-type ToolName =
-  | "add_memory"
-  | "search_memory"
-  | "build_context_pack"
-  | "reindex_memory"
-  | "compact_memory"
-  | "list_audit_log"
-  | "unarchive_memory";
-
-// Per-tool body validators run AFTER JSON parse but BEFORE the registry call.
-// Their job is to reject inputs that would coerce the registry into a
-// surprising state (e.g., `dryRun: "false"` is a truthy string but would
-// trigger the destructive branch once compaction-apply ships in P17). The
-// gate here is intentionally minimal — full schema validation lives in P17.
-type BodyValidator = (body: Record<string, unknown>) => string | null;
-
-function validateCompactBody(body: Record<string, unknown>): string | null {
-  if ("dryRun" in body && typeof body.dryRun !== "boolean") {
-    return "dryRun must be a boolean";
-  }
-  return null;
-}
-
-const TOOL_VALIDATORS: Partial<Record<ToolName, BodyValidator>> = {
-  compact_memory: validateCompactBody,
-};
-
 // Resolution order for the request's organizationId:
 //   1. token binding (server-enforced, takes precedence — caller cannot escape)
 //   2. x-organization-id header
@@ -122,15 +100,6 @@ function buildHandler<K extends ToolName>(toolName: K, ctx: RouteContext) {
 
       const bodyRecord = body as Record<string, unknown>;
 
-      const validator = TOOL_VALIDATORS[toolName];
-      if (validator) {
-        const validationError = validator(bodyRecord);
-        if (validationError !== null) {
-          sendError(res, 400, validationError);
-          return;
-        }
-      }
-
       const resolved = resolveOrganizationId(
         req,
         bodyRecord.organizationId,
@@ -151,12 +120,16 @@ function buildHandler<K extends ToolName>(toolName: K, ctx: RouteContext) {
           ? { ...bodyRecord, organizationId: resolved.organizationId }
           : bodyRecord;
 
-      // The registry method accepts a typed input but the request body is
-      // unvalidated JSON — a system boundary cast is required here.
+      const validation = validateToolInput(toolName, enrichedInput);
+      if (!validation.ok) {
+        sendError(res, 400, validation.message);
+        return;
+      }
+
       const handler = ctx.registry[toolName] as (
         input: Record<string, unknown>,
       ) => Promise<unknown>;
-      const result = await handler(enrichedInput);
+      const result = await handler(validation.data);
       sendOk(res, 200, result);
     } catch (error: unknown) {
       if (error instanceof SecretDetectedError) {
@@ -184,37 +157,9 @@ function buildHandler<K extends ToolName>(toolName: K, ctx: RouteContext) {
 }
 
 export function createMemoryRoutes(ctx: RouteContext): Route[] {
-  return [
-    { method: "POST", path: "/v1/memory", handle: buildHandler("add_memory", ctx) },
-    {
-      method: "POST",
-      path: "/v1/memory/search",
-      handle: buildHandler("search_memory", ctx),
-    },
-    {
-      method: "POST",
-      path: "/v1/memory/context-pack",
-      handle: buildHandler("build_context_pack", ctx),
-    },
-    {
-      method: "POST",
-      path: "/v1/memory/reindex",
-      handle: buildHandler("reindex_memory", ctx),
-    },
-    {
-      method: "POST",
-      path: "/v1/memory/compact",
-      handle: buildHandler("compact_memory", ctx),
-    },
-    {
-      method: "POST",
-      path: "/v1/audit/list",
-      handle: buildHandler("list_audit_log", ctx),
-    },
-    {
-      method: "POST",
-      path: "/v1/memory/unarchive",
-      handle: buildHandler("unarchive_memory", ctx),
-    },
-  ];
+  return TOOL_ROUTES.map((route) => ({
+    method: route.method,
+    path: route.path,
+    handle: buildHandler(route.name, ctx),
+  }));
 }

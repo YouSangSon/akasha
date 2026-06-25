@@ -202,6 +202,57 @@ describe("createOperatorServer", () => {
     expect(registry.search_memory).toHaveBeenCalledOnce();
   });
 
+  it("rejects invalid HTTP input with the shared tool schema before dispatch", async () => {
+    const res = await fetch(`${handle.baseUrl}/v1/memory/search`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        projectKey: "p",
+        query: "anything",
+        limit: "5",
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as {
+      success: boolean;
+      error: { message: string };
+    };
+    expect(body.success).toBe(false);
+    expect(body.error.message).toContain("invalid request body for search_memory");
+    expect(registry.search_memory).not.toHaveBeenCalled();
+  });
+
+  it("validates the token-resolved organizationId through the shared schema", async () => {
+    await handle.close();
+    registry = buildRegistry();
+    handle = await startTestServer(registry, [
+      { token: "bound-token", organizationId: "org-a" },
+    ]);
+
+    const res = await fetch(`${handle.baseUrl}/v1/memory/search`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer bound-token",
+      },
+      body: JSON.stringify({
+        projectKey: "p",
+        query: "anything",
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(registry.search_memory).toHaveBeenCalledWith({
+      projectKey: "p",
+      query: "anything",
+      organizationId: "org-a",
+    });
+  });
+
   it("returns 400 on invalid JSON body", async () => {
     const res = await fetch(`${handle.baseUrl}/v1/memory`, {
       method: "POST",
@@ -355,7 +406,7 @@ describe("createOperatorServer", () => {
         "content-type": "application/json",
         authorization: `Bearer ${tokens[0]}`,
       },
-      body: JSON.stringify({ projectKey: "p" }),
+      body: JSON.stringify({ organizationId: "org-a", projectKey: "p" }),
     });
     expect(reindex.status).toBe(200);
     expect(registry.reindex_memory).toHaveBeenCalledOnce();

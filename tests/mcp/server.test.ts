@@ -4,6 +4,7 @@ import * as z from "zod/v4";
 import { createMcpServer, createToolRegistry } from "../../src/mcp/server.js";
 import type { AuditLogRepository } from "../../src/audit/audit-log-repository.js";
 import type { Logger } from "../../src/logger.js";
+import { TOOL_DESCRIPTORS } from "../../src/mcp/tool-schemas.js";
 import type { ToolRegistry } from "../../src/mcp/types.js";
 import type { MemoryRepository, SearchMemoryResult } from "../../src/types.js";
 
@@ -924,6 +925,24 @@ describe("createToolRegistry", () => {
 });
 
 describe("createMcpServer", () => {
+  it("declares one descriptor for every ToolRegistry method", () => {
+    const descriptorNames = TOOL_DESCRIPTORS.map((descriptor) => descriptor.name).sort();
+    expect(descriptorNames).toEqual([
+      "add_memory",
+      "build_context_pack",
+      "compact_memory",
+      "list_audit_log",
+      "reindex_memory",
+      "search_memory",
+      "unarchive_memory",
+    ]);
+
+    for (const descriptor of TOOL_DESCRIPTORS) {
+      expect(descriptor.description.length).toBeGreaterThan(20);
+      expect(Object.keys(descriptor.inputSchema).length).toBeGreaterThan(0);
+    }
+  });
+
   it("registers all 7 tools on the MCP stdio transport", () => {
     const registeredNames: string[] = [];
     const spy = vi

@@ -4,7 +4,6 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import os from "node:os";
 import { pathToFileURL } from "node:url";
-import * as z from "zod/v4";
 import { buildCompactionPlan } from "../compact/compact-memory.js";
 import { applyCompaction } from "../compact/apply-compaction.js";
 import { unarchiveCompaction } from "../compact/unarchive-compaction.js";
@@ -27,6 +26,7 @@ import {
   createCanonicalServicesResolver,
   createServiceBackedAuditLog,
 } from "./canonical-services.js";
+import { TOOL_DESCRIPTORS } from "./tool-schemas.js";
 import type {
   AddMemoryInput,
   CanonicalMemoryRepository,
@@ -739,109 +739,21 @@ export function createMcpServer(
     version: "0.1.0",
   });
 
-  server.registerTool(
-    "add_memory",
-    {
-      description: "Persist a memory record for a project or user scope.",
-      inputSchema: {
-        organizationId: z.string().min(1).optional(),
-        projectKey: z.string().min(1).optional(),
-        scope: z.enum(["project", "user"]).optional(),
-        userScopeId: z.string().min(1).optional(),
-        kind: z.string().min(1),
-        content: z.string().min(1),
+  for (const descriptor of TOOL_DESCRIPTORS) {
+    server.registerTool(
+      descriptor.name,
+      {
+        description: descriptor.description,
+        inputSchema: descriptor.inputSchema,
       },
-    },
-    async (input) => toToolResult(await registry.add_memory(input)),
-  );
-
-  server.registerTool(
-    "search_memory",
-    {
-      description: "Search persisted memory records across one or more scopes.",
-      inputSchema: {
-        organizationId: z.string().min(1).optional(),
-        projectKey: z.string().min(1),
-        query: z.string().min(1),
-        userScopeId: z.string().min(1).optional(),
-        includeUser: z.boolean().optional(),
-        limit: z.number().int().positive().optional(),
+      async (input: Record<string, unknown>) => {
+        const handler = registry[descriptor.name] as (
+          toolInput: typeof input,
+        ) => Promise<unknown>;
+        return toToolResult(await handler(input));
       },
-    },
-    async (input) => toToolResult(await registry.search_memory(input)),
-  );
-
-  server.registerTool(
-    "build_context_pack",
-    {
-      description: "Search memory and assemble a markdown context pack.",
-      inputSchema: {
-        organizationId: z.string().min(1).optional(),
-        projectKey: z.string().min(1),
-        task: z.string().min(1),
-        userScopeId: z.string().min(1).optional(),
-        includeUser: z.boolean().optional(),
-        limit: z.number().int().positive().optional(),
-      },
-    },
-    async (input) => toToolResult(await registry.build_context_pack(input)),
-  );
-
-  server.registerTool(
-    "reindex_memory",
-    {
-      description: "Reindex all memory chunks for a project (and user) scope into Qdrant.",
-      inputSchema: {
-        organizationId: z.string().min(1),
-        projectKey: z.string().min(1),
-        userScopeId: z.string().min(1).optional(),
-      },
-    },
-    async (input) => toToolResult(await registry.reindex_memory(input)),
-  );
-
-  server.registerTool(
-    "compact_memory",
-    {
-      description: "Preview or apply conservative memory compaction heuristics.",
-      inputSchema: {
-        organizationId: z.string().min(1).optional(),
-        projectKey: z.string().min(1).optional(),
-        scope: z.enum(["project", "user"]).optional(),
-        userScopeId: z.string().min(1).optional(),
-        dryRun: z.boolean().optional(),
-        limit: z.number().int().positive().max(5000).optional(),
-        decayThreshold: z.number().nonnegative().optional(),
-        halfLifeDays: z.number().positive().optional(),
-        semanticDedupThreshold: z.number().positive().max(1).optional(),
-      },
-    },
-    async (input) => toToolResult(await registry.compact_memory(input)),
-  );
-
-  server.registerTool(
-    "unarchive_memory",
-    {
-      description: "Restore one or more archived memory records back to active canonical storage.",
-      inputSchema: {
-        organizationId: z.string().min(1).optional(),
-        archiveIds: z.array(z.number().int()),
-      },
-    },
-    async (input) => toToolResult(await registry.unarchive_memory(input)),
-  );
-
-  server.registerTool(
-    "list_audit_log",
-    {
-      description: "Return recent audit log entries scoped to a single organization.",
-      inputSchema: {
-        organizationId: z.string().min(1).optional(),
-        limit: z.number().int().positive().max(1000).optional(),
-      },
-    },
-    async (input) => toToolResult(await registry.list_audit_log(input)),
-  );
+    );
+  }
 
   return server;
 }
