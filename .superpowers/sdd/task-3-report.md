@@ -154,3 +154,7 @@ Result:
 ### Concerns
 
 - None.
+
+### Controller correction
+
+- The fix subagent returned final commit `f968c58`; the `08cf986` value above is a stale intermediate hash from before the final commit landed.

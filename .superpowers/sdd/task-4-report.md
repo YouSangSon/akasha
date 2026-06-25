@@ -177,3 +177,7 @@ Results:
 ### Concerns
 
 - None.
+
+### Controller correction
+
+- The fix subagent returned final commit `f6d4289`; the `3658373` value above is a stale intermediate hash from before the final commit landed.
