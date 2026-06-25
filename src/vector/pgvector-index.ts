@@ -47,14 +47,14 @@
 //   SQL — an empty embedding would produce "[]"::vector which pgvector rejects,
 //   aborting the entire batch without a useful error message.
 //
-// ORPHAN VECTORS ON REINDEX (KNOWN FOLLOW-UP):
-//   When a document is re-chunked with fewer chunks than before, the stale
-//   extra vectors remain in the table (upsert-only, no sweep). This affects
-//   the Qdrant path too (both are upsert-only on reindex). Track as a
-//   follow-up: add a scope-aware delete-then-upsert path on reindex.
-
 import type { PgPool } from "../db/connection.js";
-import type { VectorFilter, VectorHit, VectorIndex, VectorPoint } from "./vector-index.js";
+import type {
+  VectorDeleteOptions,
+  VectorFilter,
+  VectorHit,
+  VectorIndex,
+  VectorPoint,
+} from "./vector-index.js";
 
 // Max rows per INSERT batch — 8 params/row × 8000 = 64000 < 65535 cap.
 const UPSERT_BATCH_ROWS = 8000;
@@ -348,13 +348,30 @@ export function createPgVectorIndex(
       }
     },
 
-    async delete(ids: string[]): Promise<void> {
+    async delete(ids: string[], options: VectorDeleteOptions = {}): Promise<void> {
       if (ids.length === 0) return;
+      if (options.organizationId) {
+        await pool.query(
+          `DELETE FROM ${tableName} WHERE point_id = ANY($1) AND organization_id = $2`,
+          [ids, options.organizationId],
+        );
+        return;
+      }
       await pool.query(`DELETE FROM ${tableName} WHERE point_id = ANY($1)`, [ids]);
     },
 
-    async deleteByRecordIds(recordIds: number[]): Promise<void> {
+    async deleteByRecordIds(
+      recordIds: number[],
+      options: VectorDeleteOptions = {},
+    ): Promise<void> {
       if (recordIds.length === 0) return;
+      if (options.organizationId) {
+        await pool.query(
+          `DELETE FROM ${tableName} WHERE memory_record_id = ANY($1) AND organization_id = $2`,
+          [recordIds, options.organizationId],
+        );
+        return;
+      }
       await pool.query(
         `DELETE FROM ${tableName} WHERE memory_record_id = ANY($1)`,
         [recordIds],

@@ -235,6 +235,7 @@ export type CreateToolRegistryOptions = {
   userRepository?: MemoryRepository;
   resolveRepository?: (projectKey: string) => MemoryRepository;
   resolveCanonicalServices?: () => MaybePromise<CanonicalServices>;
+  withCanonicalServices?: WithCanonicalServices;
   defaultUserScopeId?: string;
   retrieveMemory?: RetrieveMemoryService;
   logger?: Logger;
@@ -258,8 +259,13 @@ export type CanonicalServices = {
   repository: CanonicalMemoryRepository;
   chunkRepository: MemoryChunkRepository;
   ingestJobs: IngestJobRepository;
+  auditLog: AuditLogRepository;
   archiveRepository: MemoryArchiveRepository;
   embeddings: EmbeddingClient;
   vectorIndex: VectorIndex;
   close?: () => MaybePromise<void>;
 };
+
+export type WithCanonicalServices = <T>(
+  callback: (services: CanonicalServices) => Promise<T>,
+) => Promise<T>;

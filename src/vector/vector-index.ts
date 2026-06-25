@@ -21,14 +21,21 @@ export type VectorHit = {
   payload: Record<string, unknown>;
 };
 
+export type VectorDeleteOptions = {
+  organizationId?: string;
+};
+
 export interface VectorIndex {
   ensureCollection(dimensions: number): Promise<void>;
   upsert(points: VectorPoint[]): Promise<void>;
   query(vector: number[], filter: VectorFilter, limit: number): Promise<VectorHit[]>;
-  delete(ids: string[]): Promise<void>;
+  delete(ids: string[], options?: VectorDeleteOptions): Promise<void>;
   /** Remove all vectors whose memory_record_id payload field matches any of the
    *  given record IDs. Used by reindexCanonicalMemory to clear stale chunks;
    *  callers must finish all reindex deletes before starting upsert pages.
    *  No-op when recordIds is empty. */
-  deleteByRecordIds(recordIds: number[]): Promise<void>;
+  deleteByRecordIds(
+    recordIds: number[],
+    options?: VectorDeleteOptions,
+  ): Promise<void>;
 }

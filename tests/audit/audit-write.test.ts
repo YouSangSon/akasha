@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createToolRegistry } from "../../src/mcp/server.js";
 import type { AuditLogRepository } from "../../src/audit/audit-log-repository.js";
+import type { CanonicalServices } from "../../src/mcp/types.js";
 import type { MemoryRepository, SearchMemoryResult } from "../../src/types.js";
 
 function buildAuditLog(): AuditLogRepository {
@@ -159,5 +160,46 @@ describe("audit logging at the tool boundary", () => {
       }),
     ).resolves.toBeDefined();
     // No assertion needed: absence of an auditLog object means nothing to call.
+  });
+
+  it("lists audit rows from canonical services when direct auditLog options are absent", async () => {
+    const auditLog: AuditLogRepository = {
+      record: vi.fn().mockResolvedValue(undefined),
+      listByOrganization: vi.fn().mockResolvedValue([
+        {
+          id: 42,
+          organizationId: "dev-team",
+          actor: "alice@example.com",
+          tool: "add_memory",
+          projectKey: "project-alpha",
+          outcome: "ok",
+          errorMessage: null,
+          durationMs: 12,
+          requestId: "req-42",
+          createdAt: "2026-04-25T00:00:00.000Z",
+        },
+      ]),
+    };
+    const services = { auditLog } as unknown as CanonicalServices;
+    const registry = createToolRegistry({
+      resolveCanonicalServices: async () => services,
+    });
+
+    const result = await registry.list_audit_log({
+      organizationId: "dev-team",
+      limit: 1,
+    });
+
+    expect(auditLog.listByOrganization).toHaveBeenCalledWith("dev-team", {
+      limit: 1,
+    });
+    expect(result.entries).toEqual([
+      expect.objectContaining({
+        id: 42,
+        organizationId: "dev-team",
+        actor: "alice@example.com",
+        tool: "add_memory",
+      }),
+    ]);
   });
 });

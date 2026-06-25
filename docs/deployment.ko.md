@@ -32,7 +32,8 @@ load balancer 뒤의 다중 `app` 인스턴스 사용.
 ## 배포 전 체크리스트
 
 - [ ] **강한 secret** — `POSTGRES_PASSWORD`, `QDRANT_API_KEY`,
-      `MEMORY_API_TOKENS` 기본값에서 변경. 패스워드 매니저 사용.
+      `MEMORY_API_TOKENS` 는 개발용 기본값 대신 생성한 secret으로 교체.
+      패스워드 매니저 사용.
 - [ ] **바인드 / TLS** — `HOST=0.0.0.0` 은 TLS 종단하는 reverse proxy 뒤에서만.
       proxy 없이 `0.0.0.0` 으로 인터넷 직접 노출은 지원하지 않음.
 - [ ] **토큰-org 바인딩** — production `MEMORY_API_TOKENS` 는 토큰을 org에
@@ -138,11 +139,13 @@ DB에서 안전. 새 버전 배포하면 부트스트랩이 pending 마이그레
 load balancer 뒤의 다중 replica 가능; 각 replica가 자체 bucket 가지므로
 클라이언트가 약간 느슨한 rate limit을 볼 수 있음.
 
-**Sweeper 조정**: 현재는 `COMPACTION_SWEEP_ENABLED=true` 를 **단 하나의**
-replica 에서만 활성. sweeper는 SQL 레벨에서 `FOR UPDATE SKIP LOCKED` 사용
-멀티-replica 안전이지만, 각 replica가 자체 setInterval 발동 → 다중 sweeper
-실행은 cycle당 Qdrant 호출이 불필요하게 많아짐. 향후 leader election 추가
-가능성 있음; 그 전까지는 한 replica 선택.
+**Sweeper 조정**: 기본값으로는 `COMPACTION_SWEEP_ENABLED=true` 를 **단 하나의**
+replica 에서만 켭니다. 각 sweep tick은 atomic 한
+`UPDATE ... WHERE id IN (SELECT ... FOR UPDATE SKIP LOCKED) RETURNING`
+문 하나로 pending archive row를 claim하고 `qdrant_next_retry_at` 을 짧은
+visibility window 로 밀어 worker 크래시 후에도 자동 재처리되게 합니다.
+더 높은 cleanup throughput 이 필요하면 여러 replica 를 켤 수 있지만,
+불필요한 중복 Qdrant 트래픽을 피하려면 기본 권장값은 여전히 단일 replica 입니다.
 
 **Postgres 스케일링**: read replica 미지원 (`searchMemory`, `listMemory` 는
 항상 primary 읽음). 높은 read 볼륨은 vertical scale.

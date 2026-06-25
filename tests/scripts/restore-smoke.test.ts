@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { runRestoreSmoke } from "../../scripts/restore-smoke.js";
+import {
+  buildRestoreSmokeToolInput,
+  runRestoreSmoke,
+} from "../../scripts/restore-smoke.js";
 
 describe("runRestoreSmoke", () => {
   it("restores Postgres and Qdrant, starts the app, then checks one search and one context pack", async () => {
@@ -74,5 +77,27 @@ describe("runRestoreSmoke", () => {
     expect(restoreQdrant).not.toHaveBeenCalled();
     expect(startApp).not.toHaveBeenCalled();
     expect(stopEnvironment).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("buildRestoreSmokeToolInput", () => {
+  it("passes organizationId through to strict restore-smoke read calls", () => {
+    expect(
+      buildRestoreSmokeToolInput({
+        projectKey: "project-alpha",
+        userScopeId: "alice",
+        organizationId: "org-a",
+      }),
+    ).toEqual({
+      projectKey: "project-alpha",
+      userScopeId: "alice",
+      organizationId: "org-a",
+    });
+  });
+
+  it("omits optional fields when restore smoke runs in legacy mode", () => {
+    expect(buildRestoreSmokeToolInput({ projectKey: "project-alpha" })).toEqual({
+      projectKey: "project-alpha",
+    });
   });
 });

@@ -113,16 +113,19 @@ org 요청. 둘 중 하나:
 
 ## 데이터 이슈
 
-### Fresh `add_memory` 후 검색 결과 없음
+### `add_memory` 후 검색 결과 없음
 
 흔한 원인:
 1. **잘못된 project key** — `searchMemory` 는 project-scoped; `add_memory`
    에서 사용한 정확한 key로 검색.
 2. **Embedding provider 불일치** — reindex 없이 `EMBEDDING_PROVIDER` 변경 시
    기존 chunk가 호환 안 되는 vector. `reindex_memory` 실행.
-3. **Ingest job pending** — `add_memory` 는 chunking / embedding 진행 중에도
-   즉시 반환. `SELECT status FROM ingest_jobs WHERE memory_record_id = <id>`
-   로 완료 확인.
+3. **Vector indexing 중단** — `add_memory` 는 정상적으로 chunking, embedding,
+   vector upsert 완료를 기다린 뒤 반환. 프로세스 크래시나 vector store 오류가
+   write 중간에 발생했다면 ingest outbox 확인:
+   `SELECT status, qdrant_status, qdrant_next_retry_at, qdrant_last_error FROM ingest_jobs WHERE memory_record_id = <id>`.
+   `qdrant_status='pending'` row 재시도는 연속 실행 replica 하나에서
+   `INGEST_SWEEP_ENABLED=true` 활성화.
 
 ### 중복 레코드가 계속 나타남
 

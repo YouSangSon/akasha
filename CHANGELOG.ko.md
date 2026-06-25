@@ -11,6 +11,10 @@ CHANGELOG에서 명시적으로 표기합니다.
 
 ## [Unreleased]
 
+- 문서: 공개 문서가 descriptor 공유 검증, non-root 컨테이너 런타임 기본값,
+  production 자격증명 교체, atomic archive-cleanup claim semantics를 반영하도록
+  정렬되었고, 현재 동작과 맞지 않던 pgvector reindex follow-up 주석을 제거함.
+
 릴리스 후 audit 사이클. v1.0.0이 OSS 사용자 0명 상태로 출시되어 — 멀티
 테넌시 boundary 의 default-strict 강화 + secret-scrubber surface 보강을
 이 시점에 묶어 처리. 다음 release에서 함께 배포 예정. SemVer 엄격 적용 시

@@ -24,10 +24,10 @@ for env-var setup see [configuration.md](configuration.md).
 └────────────────┬────────────────────────────────────────────────┘
                  │
 ┌────────────────▼────────────────────────────────────────────────┐
-│ Tool registry  (src/mcp/server.ts)                              │
-│   add_memory / search_memory / build_context_pack /             │
-│   reindex_memory / compact_memory / unarchive_memory /          │
-│   list_audit_log                                                │
+│ Tool descriptors + registry                                     │
+│   src/mcp/tool-schemas.ts     → shared zod schemas + routes     │
+│   src/mcp/tool-registry.ts    → audited registry wrappers       │
+│   src/mcp/tool-handlers.ts    → tool implementations            │
 └────────────────┬────────────────────────────────────────────────┘
                  │
 ┌────────────────▼────────────────────────────────────────────────┐
@@ -128,6 +128,13 @@ Qdrant delete leaves an orphan vector in Qdrant. The sweeper
 leave a live `memory_records` row pointing at a deleted Qdrant point — a
 user-visible "search hit vanishes" bug.
 
+The cleanup sweeper claims pending archive rows with a single
+`UPDATE memory_archive SET qdrant_next_retry_at = claim_until
+WHERE id IN (SELECT id FROM memory_archive FOR UPDATE SKIP LOCKED)
+RETURNING id, organization_id, qdrant_point_ids, qdrant_attempt_count`
+statement and pushes `qdrant_next_retry_at` into a short visibility window.
+If a worker crashes after claim, the row becomes due again after that window.
+
 ## Data flow: unarchive (P19.1)
 
 ```
@@ -140,11 +147,14 @@ unarchiveCompaction (src/compact/unarchive-compaction.ts)
   │    ├─ restoreToCanonical  (INSERT memory_records preserving original
   │    │                       timestamps + source_id; new BIGSERIAL id)
   │    ├─ chunkText + insertChunks
-  │    ├─ embeddings.embed (per chunk)
+  │    ├─ embeddings.embedBatch (per restored archive)
   │    ├─ qdrantClient.upsert (new point ids)
   │    ├─ chunkRepository.updatePointIds
   │    └─ markUnarchived (set unarchived_at = NOW())
 ```
+
+The restore path guards provider consistency: `embedBatch` must return one
+vector per stored chunk, or that archive is reported as a failed outcome.
 
 Per-archive failure isolation: one bad restore doesn't kill the batch;
 the response carries per-archive `outcomes[]` so callers see exactly
@@ -230,7 +240,7 @@ token's bound org disagrees with a record's org.
 ## Audit trail
 
 Every tool invocation produces an `audit_log` row via the `instrument()`
-wrapper in `src/mcp/server.ts`. The row captures org, actor, tool name,
+wrapper in `src/mcp/tool-registry.ts`. The row captures org, actor, tool name,
 project key, outcome (`ok`/`error`), error message, duration ms, request
 id, and (for destructive operations) `metadata` JSONB with structured
 detail (archived ids, run ids, etc.).

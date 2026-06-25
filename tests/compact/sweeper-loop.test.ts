@@ -22,6 +22,7 @@ function makeRepo(): MemoryArchiveRepository {
     markQdrantStatus: vi.fn().mockResolvedValue(undefined),
     completeCompactionRun: vi.fn(),
     findPendingQdrantCleanup: vi.fn().mockResolvedValue([]),
+    claimPendingQdrantCleanup: vi.fn().mockResolvedValue([]),
     acquireScopeLock: vi.fn(),
     countRecentApplyRuns: vi.fn().mockResolvedValue(0),
     findArchiveByIds: vi.fn().mockResolvedValue([]),
@@ -50,7 +51,7 @@ describe("startBackgroundSweeper", () => {
     ).toThrow(/intervalMs must be ≥ 1000/);
   });
 
-  it("calls findPendingQdrantCleanup on each tick", async () => {
+  it("claims pending qdrant cleanup on each tick", async () => {
     const repo = makeRepo();
     const handle = startBackgroundSweeper({
       archiveRepository: repo,
@@ -59,13 +60,13 @@ describe("startBackgroundSweeper", () => {
       intervalMs: 1000,
     });
 
-    expect(repo.findPendingQdrantCleanup).not.toHaveBeenCalled();
+    expect(repo.claimPendingQdrantCleanup).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(1000);
-    expect(repo.findPendingQdrantCleanup).toHaveBeenCalledTimes(1);
+    expect(repo.claimPendingQdrantCleanup).toHaveBeenCalledTimes(1);
 
     await vi.advanceTimersByTimeAsync(1000);
-    expect(repo.findPendingQdrantCleanup).toHaveBeenCalledTimes(2);
+    expect(repo.claimPendingQdrantCleanup).toHaveBeenCalledTimes(2);
 
     await handle.stop();
   });
@@ -80,17 +81,17 @@ describe("startBackgroundSweeper", () => {
     });
 
     await vi.advanceTimersByTimeAsync(1000);
-    expect(repo.findPendingQdrantCleanup).toHaveBeenCalledTimes(1);
+    expect(repo.claimPendingQdrantCleanup).toHaveBeenCalledTimes(1);
 
     await handle.stop();
 
     await vi.advanceTimersByTimeAsync(5000);
-    expect(repo.findPendingQdrantCleanup).toHaveBeenCalledTimes(1);
+    expect(repo.claimPendingQdrantCleanup).toHaveBeenCalledTimes(1);
   });
 
   it("swallows tick errors and continues looping", async () => {
     const repo = makeRepo();
-    (repo.findPendingQdrantCleanup as ReturnType<typeof vi.fn>)
+    (repo.claimPendingQdrantCleanup as ReturnType<typeof vi.fn>)
       .mockRejectedValueOnce(new Error("transient PG failure"))
       .mockResolvedValueOnce([]);
 
@@ -104,7 +105,7 @@ describe("startBackgroundSweeper", () => {
     await vi.advanceTimersByTimeAsync(1000);
     await vi.advanceTimersByTimeAsync(1000);
 
-    expect(repo.findPendingQdrantCleanup).toHaveBeenCalledTimes(2);
+    expect(repo.claimPendingQdrantCleanup).toHaveBeenCalledTimes(2);
     await handle.stop();
   });
 });

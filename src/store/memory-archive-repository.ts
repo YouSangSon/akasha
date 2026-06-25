@@ -8,10 +8,12 @@
 //   3. markQdrantStatus     — flip row to 'deleted' (or 'failed') after the
 //                              cross-store Qdrant call resolves
 //   4. completeRun          — final outcome counters + status
-//   5. findPendingQdrantCleanup — sweeper scan
+//   5. claimPendingQdrantCleanup — atomic sweeper claim
 //   6. findRunByIdempotencyKey  — replay defense
 
 import type { PgPool } from "../db/connection.js";
+
+const QDRANT_CLEANUP_VISIBILITY_TIMEOUT_MS = 60_000;
 
 export type CompactionRunStatus = "pending" | "completed" | "failed";
 export type ArchiveReason = "duplicate" | "decay";
@@ -85,6 +87,10 @@ export type MemoryArchiveRepository = {
   ): Promise<void>;
   completeCompactionRun(input: CompleteCompactionRunInput): Promise<void>;
   findPendingQdrantCleanup(limit: number): Promise<PendingQdrantCleanup[]>;
+  claimPendingQdrantCleanup(input: {
+    limit: number;
+    now: Date;
+  }): Promise<PendingQdrantCleanup[]>;
   acquireScopeLock(args: {
     organizationId: string;
     scopeType: string;
@@ -225,26 +231,37 @@ export function createMemoryArchiveRepository(
                       kind, title, content, summary, durability, importance,
                       source_id, created_at, updated_at
           ),
+          deleted_with_points AS (
+            SELECT
+              d.*,
+              COALESCE((
+                SELECT array_agg(mc.qdrant_point_id)
+                FROM memory_chunks mc
+                WHERE mc.memory_record_id = d.id
+                  AND mc.qdrant_point_id IS NOT NULL
+              ), '{}') AS qdrant_point_ids
+            FROM deleted d
+          ),
           inserted AS (
             INSERT INTO memory_archive (
               compaction_run_id, organization_id, source_record_id,
               archive_reason, scope_type, scope_id, project_key, kind, title,
               content, summary, durability, importance, decay_score,
-              kept_record_id, qdrant_point_ids, source_id,
+              kept_record_id, qdrant_point_ids, qdrant_next_retry_at, source_id,
               original_created_at, original_updated_at
             )
             SELECT
-              $3, d.organization_id, d.id, $4,
-              d.scope_type, d.scope_id, d.project_key, d.kind, d.title,
-              d.content, d.summary, d.durability, d.importance, $5, $6,
-              COALESCE((
-                SELECT array_agg(qdrant_point_id)
-                FROM memory_chunks
-                WHERE memory_record_id = d.id
-                  AND qdrant_point_id IS NOT NULL
-              ), '{}'),
-              d.source_id, d.created_at, d.updated_at
-            FROM deleted d
+              $3, dwp.organization_id, dwp.id, $4,
+              dwp.scope_type, dwp.scope_id, dwp.project_key, dwp.kind, dwp.title,
+              dwp.content, dwp.summary, dwp.durability, dwp.importance, $5, $6,
+              dwp.qdrant_point_ids,
+              CASE
+                WHEN array_length(dwp.qdrant_point_ids, 1) > 0
+                THEN NOW()
+                ELSE NULL
+              END,
+              dwp.source_id, dwp.created_at, dwp.updated_at
+            FROM deleted_with_points dwp
             ON CONFLICT (compaction_run_id, source_record_id) DO NOTHING
             RETURNING id AS archive_id, qdrant_point_ids
           )
@@ -279,22 +296,38 @@ export function createMemoryArchiveRepository(
             UPDATE memory_archive
             SET qdrant_status = 'deleted',
                 qdrant_cleaned_at = NOW(),
-                qdrant_attempt_count = qdrant_attempt_count + 1
+                qdrant_attempt_count = qdrant_attempt_count + 1,
+                qdrant_next_retry_at = NULL
             WHERE id = $1
           `,
           [archiveId],
         );
         return;
       }
+      if (status === "failed") {
+        await pool.query(
+          `
+            UPDATE memory_archive
+            SET qdrant_status = 'failed',
+                qdrant_attempt_count = qdrant_attempt_count + 1,
+                qdrant_last_error = $2,
+                qdrant_next_retry_at = NULL
+            WHERE id = $1
+          `,
+          [archiveId, errorMessage ?? null],
+        );
+        return;
+      }
       await pool.query(
         `
           UPDATE memory_archive
-          SET qdrant_status = $2,
+          SET qdrant_status = 'pending',
               qdrant_attempt_count = qdrant_attempt_count + 1,
-              qdrant_last_error = $3
+              qdrant_last_error = $2,
+              qdrant_next_retry_at = NOW() + INTERVAL '30 seconds'
           WHERE id = $1
         `,
-        [archiveId, status, errorMessage ?? null],
+        [archiveId, errorMessage ?? null],
       );
     },
 
@@ -324,9 +357,8 @@ export function createMemoryArchiveRepository(
     },
 
     async findPendingQdrantCleanup(limit) {
-      // SKIP LOCKED so multi-replica sweepers cooperate without leader election.
-      // The 60-second age guard avoids racing with the same run that just
-      // committed PG and is about to call Qdrant itself.
+      // Read-only compatibility wrapper for tests/manual monitoring. Sweeper
+      // workers must use claimPendingQdrantCleanup for atomic visibility.
       const result = await pool.query<{
         id: number;
         organization_id: string;
@@ -337,14 +369,54 @@ export function createMemoryArchiveRepository(
           SELECT id, organization_id, qdrant_point_ids, qdrant_attempt_count
           FROM memory_archive
           WHERE qdrant_status = 'pending'
+            AND qdrant_next_retry_at IS NOT NULL
+            AND qdrant_next_retry_at <= NOW()
             AND archived_at < NOW() - INTERVAL '60 seconds'
             AND array_length(qdrant_point_ids, 1) > 0
-          ORDER BY archived_at
+          ORDER BY qdrant_next_retry_at ASC, archived_at ASC
           LIMIT $1
-          FOR UPDATE SKIP LOCKED
         `,
         [limit],
       );
+      return result.rows.map((row) => ({
+        archiveId: row.id,
+        organizationId: row.organization_id,
+        qdrantPointIds: row.qdrant_point_ids ?? [],
+        attemptCount: row.qdrant_attempt_count,
+      }));
+    },
+
+    async claimPendingQdrantCleanup({ limit, now }) {
+      const claimUntil = new Date(
+        now.getTime() + QDRANT_CLEANUP_VISIBILITY_TIMEOUT_MS,
+      );
+      const result = await pool.query<{
+        id: number;
+        organization_id: string;
+        qdrant_point_ids: string[];
+        qdrant_attempt_count: number;
+      }>(
+        `
+          UPDATE memory_archive
+          SET qdrant_next_retry_at = $3,
+              qdrant_last_error = NULL
+          WHERE id IN (
+            SELECT id
+            FROM memory_archive
+            WHERE qdrant_status = 'pending'
+              AND qdrant_next_retry_at IS NOT NULL
+              AND qdrant_next_retry_at <= $1
+              AND archived_at < $1::timestamptz - INTERVAL '60 seconds'
+              AND array_length(qdrant_point_ids, 1) > 0
+            ORDER BY qdrant_next_retry_at ASC, archived_at ASC
+            LIMIT $2
+            FOR UPDATE SKIP LOCKED
+          )
+          RETURNING id, organization_id, qdrant_point_ids, qdrant_attempt_count
+        `,
+        [now.toISOString(), limit, claimUntil.toISOString()],
+      );
+
       return result.rows.map((row) => ({
         archiveId: row.id,
         organizationId: row.organization_id,

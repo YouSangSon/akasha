@@ -61,6 +61,7 @@ function makeRepoMocks(overrides: Partial<MemoryArchiveRepository> = {}) {
   const markQdrantStatus = vi.fn().mockResolvedValue(undefined);
   const completeCompactionRun = vi.fn().mockResolvedValue(undefined);
   const findPendingQdrantCleanup = vi.fn().mockResolvedValue([]);
+  const claimPendingQdrantCleanup = vi.fn().mockResolvedValue([]);
   const acquireScopeLock = vi.fn().mockResolvedValue(true);
   const countRecentApplyRuns = vi.fn().mockResolvedValue(0);
 
@@ -71,6 +72,7 @@ function makeRepoMocks(overrides: Partial<MemoryArchiveRepository> = {}) {
     markQdrantStatus,
     completeCompactionRun,
     findPendingQdrantCleanup,
+    claimPendingQdrantCleanup,
     acquireScopeLock,
     countRecentApplyRuns,
     findArchiveByIds: vi.fn().mockResolvedValue([]),
@@ -189,6 +191,12 @@ describe("applyCompaction (apply path - happy path)", () => {
     expect(result.archivedIds.sort()).toEqual(["2", "3"]);
     expect(createCompactionRun).toHaveBeenCalledOnce();
     expect(qdrant.delete).toHaveBeenCalledTimes(2);
+    expect(qdrant.delete).toHaveBeenNthCalledWith(1, ["p1", "p2"], {
+      organizationId: "org-a",
+    });
+    expect(qdrant.delete).toHaveBeenNthCalledWith(2, ["p3"], {
+      organizationId: "org-a",
+    });
     expect(markQdrantStatus).toHaveBeenCalledTimes(2);
     expect(markQdrantStatus.mock.calls[0]![1]).toBe("deleted");
     expect(completeCompactionRun).toHaveBeenCalledWith(

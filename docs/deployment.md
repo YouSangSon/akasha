@@ -32,7 +32,8 @@ self-hosted) and run multiple `app` instances behind a load balancer.
 ## Pre-deployment checklist
 
 - [ ] **Strong secrets** — change `POSTGRES_PASSWORD`, `QDRANT_API_KEY`,
-      `MEMORY_API_TOKENS` from the defaults. Use a password manager.
+      `MEMORY_API_TOKENS` from the development defaults. Use generated secrets
+      from a password manager.
 - [ ] **Bind / TLS** — `HOST=0.0.0.0` only behind a reverse proxy that
       terminates TLS. Direct internet exposure with `0.0.0.0` and no proxy
       is not supported.
@@ -143,11 +144,12 @@ fine; clients may see slightly looser rate limiting because each replica
 has its own bucket.
 
 **Sweeper coordination**: enable `COMPACTION_SWEEP_ENABLED=true` on **only
-one** replica today. The sweeper uses `FOR UPDATE SKIP LOCKED` so it's
-multi-replica-safe at the SQL level, but each replica also fires its own
-setInterval — running multiple sweepers means more Qdrant calls per cycle
-than necessary. A future release may add leader election; until then, pick
-one replica.
+one** replica by default. Each sweep tick claims pending archive rows with one
+atomic `UPDATE ... WHERE id IN (SELECT ... FOR UPDATE SKIP LOCKED) RETURNING`
+statement, pushing `qdrant_next_retry_at` into a short visibility window so a
+crashed worker's rows become due again automatically. Operators who need
+higher cleanup throughput can enable more replicas, but one enabled replica is
+still the recommended baseline to avoid unnecessary duplicate Qdrant traffic.
 
 **Postgres scaling**: read replicas are not yet supported (`searchMemory`
 and `listMemory` always read from the primary). For high read volume,

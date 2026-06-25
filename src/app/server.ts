@@ -25,7 +25,11 @@ import {
   type RateLimiter,
 } from "./middleware/rate-limit.js";
 import { createMemoryRoutes, type Route } from "./routes/memory.js";
-import { bootstrapCanonicalServices } from "../mcp/canonical-services.js";
+import {
+  bootstrapCanonicalServices,
+  createCanonicalServicesResolver,
+  createServiceBackedAuditLog,
+} from "../mcp/canonical-services.js";
 import {
   loadSweeperEnabled,
   loadSweeperIntervalMs,
@@ -102,7 +106,7 @@ export function createOperatorServer(
   const tokens: BearerToken[] = options.bearerTokens
     ? normalizeTokens(options.bearerTokens)
     : loadBearerTokens(process.env);
-  const registry = options.registry ?? createToolRegistry({ logger: log });
+  const registry = options.registry ?? createDefaultToolRegistry(log);
   const routes: Route[] = createMemoryRoutes({ registry, logger: log });
 
   let rateLimiter: RateLimiter | null = options.rateLimiter ?? null;
@@ -209,6 +213,18 @@ export function createOperatorServer(
       }
     },
   );
+}
+
+function createDefaultToolRegistry(log: Logger): ToolRegistry {
+  const withCanonicalServices = createCanonicalServicesResolver({});
+  const auditLog = createServiceBackedAuditLog(withCanonicalServices);
+
+  return createToolRegistry({
+    logger: log,
+    defaultActor: "http-api",
+    withCanonicalServices,
+    auditLog,
+  });
 }
 
 // Pure helper: select which dependency probes to register based on config

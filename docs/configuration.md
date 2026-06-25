@@ -87,8 +87,12 @@ Qdrant variables are only required when `VECTOR_BACKEND=qdrant` (the default).
 | Variable | Default | Notes |
 |---|---|---|
 | `QDRANT_URL` | `http://localhost:6333` | Inside compose: `http://qdrant:6333`. |
-| `QDRANT_API_KEY` | `local-qdrant-key` | Change in production. |
+| `QDRANT_API_KEY` | `local-qdrant-key` | Development-only default. Generate a strong replacement in production. |
 | `QDRANT_COLLECTION_NAME` | `memory_chunks_v1` | Bumping the version triggers a reindex. |
+
+The compose defaults are for local development only. Production operators
+should replace `POSTGRES_PASSWORD`, `QDRANT_API_KEY`, and every
+`MEMORY_API_TOKENS` value with generated secrets before the first deploy.
 
 ## Server bind (HTTP API)
 
@@ -124,7 +128,7 @@ For air-gapped deployments, pre-populate that cache directory.
 
 **Switching providers requires a reindex** — different vector dimensions or
 content semantics produce incompatible Qdrant points. Run
-`npm run reindex_memory` (or the `reindex_memory` MCP tool) after switching.
+the `reindex_memory` MCP tool or `POST /v1/memory/reindex` after switching.
 For the v1.0.x → transformers-default upgrade specifically, see the
 step-by-step playbook in
 [docs/migrations/openai-to-transformers.md](migrations/openai-to-transformers.md)
@@ -237,7 +241,7 @@ exponential: 1 s, 2 s, 4 s, 8 s, capped at 5 min.
 | Variable | Default | Notes |
 |---|---|---|
 | `BACKUP_DIR` | `./.developer-memory-os/backups` | Where `npm run backup:create` writes. |
-| `BACKUP_TARGET_HOST` | unset | Optional SSH/scp target for off-host replication. |
+| `BACKUP_TARGET_HOST` | unset | Optional SSH/scp target for off-host replication. Leave empty to keep `backup:create` local-only; `backup:verify` requires a non-empty remote target. |
 | `BACKUP_TARGET_DIR` | `BACKUP_DIR` | Optional remote directory used by backup copy and verification scripts. |
 
 See [docs/operations.md](operations.md) for the backup/restore workflow.
@@ -264,6 +268,7 @@ isolated compose project and validates search/context-pack behavior.
 | `RESTORE_SMOKE_QDRANT_RESTORE_CMD` | required | Shell command that restores `RESTORE_SMOKE_QDRANT_ARTIFACT_PATH`. |
 | `RESTORE_SMOKE_PROJECT` | `restore-smoke` | Docker Compose project name for the isolated stack. |
 | `RESTORE_SMOKE_PROJECT_KEY` | `project-alpha` | Project key used by smoke-search and context-pack checks. |
+| `RESTORE_SMOKE_ORGANIZATION_ID` | unset | Optional organization id passed to strict search/context-pack checks. Set this for default-strict restores unless you intentionally use `LEGACY_ANONYMOUS_SEARCH=true`. |
 | `RESTORE_SMOKE_USER_SCOPE_ID` | unset | Optional user scope included in restore checks. |
 | `RESTORE_SMOKE_SEARCH_QUERY` | `continue work` | Query used by the restored search check. |
 | `RESTORE_SMOKE_PACK_TASK` | `continue work` | Task text used by the restored context-pack check. |
@@ -285,6 +290,7 @@ Embedding stays offline. No external API key required.
 ### Single-user with OpenAI
 
 ```bash
+EMBEDDING_PROVIDER=openai
 OPENAI_API_KEY=sk-...
 MEMORY_API_TOKENS=local-dev-token
 HOST=127.0.0.1
@@ -299,6 +305,7 @@ PORT=8787
 DATABASE_URL=postgres://memory:STRONG_PW@db.internal:5432/memory_os
 QDRANT_URL=https://qdrant.internal:6333
 QDRANT_API_KEY=STRONG_QDRANT_KEY
+EMBEDDING_PROVIDER=openai
 OPENAI_API_KEY=sk-prod-...
 MEMORY_API_TOKENS=team-a-token:team-a,team-b-token:team-b,ops-token:ops
 RATE_LIMIT_PER_MINUTE=300

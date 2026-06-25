@@ -176,8 +176,24 @@ describe("MemoryArchiveRepository.markQdrantStatus", () => {
 
     await repo.markQdrantStatus(42, "failed", "Qdrant 503");
 
+    const sql = query.mock.calls[0]![0] as string;
     const params = query.mock.calls[0]![1] as unknown[];
-    expect(params).toEqual([42, "failed", "Qdrant 503"]);
+    expect(sql).toContain("qdrant_status = 'failed'");
+    expect(sql).toContain("qdrant_next_retry_at = NULL");
+    expect(params).toEqual([42, "Qdrant 503"]);
+  });
+
+  it("schedules the next retry when status='pending'", async () => {
+    const { pool, query } = makeMockPool(async () => ({ rows: [] }));
+    const repo = createMemoryArchiveRepository(pool);
+
+    await repo.markQdrantStatus(42, "pending", "Qdrant 503");
+
+    const sql = query.mock.calls[0]![0] as string;
+    const params = query.mock.calls[0]![1] as unknown[];
+    expect(sql).toContain("qdrant_status = 'pending'");
+    expect(sql).toContain("qdrant_next_retry_at = NOW() + INTERVAL '30 seconds'");
+    expect(params).toEqual([42, "Qdrant 503"]);
   });
 });
 
@@ -219,7 +235,7 @@ describe("MemoryArchiveRepository.findPendingQdrantCleanup", () => {
     ]);
   });
 
-  it("filters by qdrant_status='pending' and skips locked rows", async () => {
+  it("filters due pending rows without claiming locks", async () => {
     const { pool, query } = makeMockPool(async () => ({ rows: [] }));
     const repo = createMemoryArchiveRepository(pool);
 
@@ -227,7 +243,45 @@ describe("MemoryArchiveRepository.findPendingQdrantCleanup", () => {
 
     const sql = query.mock.calls[0]![0] as string;
     expect(sql).toContain("qdrant_status = 'pending'");
+    expect(sql).toContain("qdrant_next_retry_at <= NOW()");
+    expect(sql).not.toContain("FOR UPDATE SKIP LOCKED");
+  });
+});
+
+describe("MemoryArchiveRepository.claimPendingQdrantCleanup", () => {
+  it("claims rows with one UPDATE using FOR UPDATE SKIP LOCKED and retry visibility", async () => {
+    const now = new Date("2026-06-25T00:00:00.000Z");
+    const { pool, query } = makeMockPool(async () => ({
+      rows: [
+        {
+          id: 1,
+          organization_id: "org-a",
+          qdrant_point_ids: ["pa1"],
+          qdrant_attempt_count: 2,
+        },
+      ],
+    }));
+    const repo = createMemoryArchiveRepository(pool);
+
+    const result = await repo.claimPendingQdrantCleanup({ limit: 10, now });
+
+    expect(result).toEqual([
+      {
+        archiveId: 1,
+        organizationId: "org-a",
+        qdrantPointIds: ["pa1"],
+        attemptCount: 2,
+      },
+    ]);
+    const sql = query.mock.calls[0]![0] as string;
+    const params = query.mock.calls[0]![1] as unknown[];
+    expect(sql).toContain("UPDATE memory_archive");
     expect(sql).toContain("FOR UPDATE SKIP LOCKED");
+    expect(sql).toContain("qdrant_next_retry_at = $3");
+    expect(sql).toContain("archived_at < $1::timestamptz - INTERVAL '60 seconds'");
+    expect(params[0]).toBe(now.toISOString());
+    expect(params[1]).toBe(10);
+    expect(params[2]).toBe("2026-06-25T00:01:00.000Z");
   });
 });
 

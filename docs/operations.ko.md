@@ -124,6 +124,10 @@ COMPACTION_SWEEP_ENABLED=true
 COMPACTION_SWEEP_INTERVAL_MS=30000
 ```
 
+각 tick은 pending archive row를 atomic 하게 claim하고
+`qdrant_next_retry_at` 을 짧은 visibility window 로 밀어둡니다. claim 이후
+worker 가 크래시되면 window 만료 후 해당 row가 다시 due 상태가 됩니다.
+
 audit log에서 sweep 활동 확인:
 
 ```bash
@@ -146,6 +150,8 @@ ORDER BY archived_at DESC;
 흔한 원인: `QDRANT_COLLECTION_NAME` 변경 후 collection 이름 불일치, Qdrant
 영구 outage, 스키마 drift. 근본 원인 수정 후 수동
 `UPDATE memory_archive SET qdrant_status='pending'` 으로 re-enqueue.
+`failed` row는 백그라운드가 무한 재시도하는 상태가 아니라 운영자가 검토해야
+하는 큐로 취급하세요.
 
 ## Ingest sweeper
 

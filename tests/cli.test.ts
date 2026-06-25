@@ -3,6 +3,12 @@ import { parseCliArgs, runCli } from "../src/cli.js";
 import type { ToolRegistry } from "../src/mcp/server.js";
 
 describe("parseCliArgs", () => {
+  it("can import public MCP server exports after module split", async () => {
+    const module = await import("../src/mcp/server.js");
+    expect(typeof module.createMcpServer).toBe("function");
+    expect(typeof module.createToolRegistry).toBe("function");
+  });
+
   it("parses the pack command", () => {
     const parsed = parseCliArgs([
       "pack",

@@ -55,6 +55,7 @@ function makeRepo(
     markQdrantStatus: vi.fn(),
     completeCompactionRun: vi.fn(),
     findPendingQdrantCleanup: vi.fn().mockResolvedValue([]),
+    claimPendingQdrantCleanup: vi.fn().mockResolvedValue([]),
     acquireScopeLock: vi.fn(),
     countRecentApplyRuns: vi.fn().mockResolvedValue(0),
     findArchiveByIds: vi.fn().mockResolvedValue(archives),
@@ -167,6 +168,50 @@ describe("unarchiveCompaction (happy path)", () => {
     expect(repo.markUnarchived).toHaveBeenCalledWith(50);
   });
 
+  it("batches embeddings once for all restored chunks", async () => {
+    const archive = makeArchive();
+    const repo = makeRepo([archive]);
+    const deps = makeDeps(repo);
+    (deps.chunkRepository.insertChunks as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce([
+        {
+          id: 7000,
+          memoryRecordId: 999,
+          chunkIndex: 0,
+          content: "Decision: ship Friday",
+          startOffset: 0,
+          endOffset: 21,
+          embeddingVersion: "v1",
+        },
+        {
+          id: 7001,
+          memoryRecordId: 999,
+          chunkIndex: 1,
+          content: "Rollback plan: Monday",
+          startOffset: 22,
+          endOffset: 43,
+          embeddingVersion: "v1",
+        },
+      ]);
+
+    const result = await unarchiveCompaction(
+      { archiveIds: [50], organizationId: "org-a", actor: "test" },
+      deps,
+    );
+
+    expect(result.outcomes[0]).toMatchObject({
+      archiveId: 50,
+      status: "restored",
+      chunkCount: 2,
+    });
+    expect(deps.embeddings.embedBatch).toHaveBeenCalledOnce();
+    expect(deps.embeddings.embedBatch).toHaveBeenCalledWith([
+      "Decision: ship Friday",
+      "Rollback plan: Monday",
+    ]);
+    expect(deps.embeddings.embed).not.toHaveBeenCalled();
+  });
+
   it("forwards organizationId to findArchiveByIds and restoreToCanonical", async () => {
     const archive = makeArchive({ organizationId: "finance-team" });
     const repo = makeRepo([archive]);
@@ -264,5 +309,33 @@ describe("unarchiveCompaction (failure isolation)", () => {
       status: "failed",
       error: "PG full",
     });
+  });
+
+  it("isolates embedBatch length mismatches to the affected archive", async () => {
+    const repo = makeRepo([makeArchive({ id: 50 }), makeArchive({ id: 51 })]);
+    const deps = makeDeps(repo);
+    (deps.embeddings.embedBatch as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce([]);
+
+    const result = await unarchiveCompaction(
+      { archiveIds: [50, 51], organizationId: "org-a", actor: "ops" },
+      deps,
+    );
+
+    expect(result.restoredCount).toBe(1);
+    expect(result.failedCount).toBe(1);
+    expect(result.outcomes[0]).toMatchObject({
+      archiveId: 50,
+      status: "failed",
+      error: expect.stringContaining(
+        "unarchive embedBatch returned 0 vectors for 1 chunks",
+      ),
+    });
+    expect(result.outcomes[1]).toMatchObject({
+      archiveId: 51,
+      status: "restored",
+    });
+    expect(repo.markUnarchived).toHaveBeenCalledOnce();
+    expect(repo.markUnarchived).toHaveBeenCalledWith(51);
   });
 });

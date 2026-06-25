@@ -7,6 +7,7 @@ import {
   selectDependencyProbes,
 } from "../../src/app/server.js";
 import type { ToolRegistry } from "../../src/mcp/types.js";
+import type { Logger } from "../../src/logger.js";
 import type { PgPool } from "../../src/db/connection.js";
 import type { DependencyProbes } from "../../src/health/check-dependencies.js";
 
@@ -69,6 +70,21 @@ function buildRegistry(): ToolRegistry {
       failedCount: 0,
     }),
   };
+}
+
+function buildLogger(): Logger {
+  const childLogger = {
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+  };
+
+  return {
+    child: vi.fn(() => childLogger),
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+  } as unknown as Logger;
 }
 
 async function startTestServer(
@@ -184,6 +200,140 @@ describe("createOperatorServer", () => {
     });
     expect(res.status).toBe(200);
     expect(registry.search_memory).toHaveBeenCalledOnce();
+  });
+
+  it("rejects invalid HTTP input with the shared tool schema before dispatch", async () => {
+    const res = await fetch(`${handle.baseUrl}/v1/memory/search`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        projectKey: "p",
+        query: "anything",
+        limit: "5",
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as {
+      success: boolean;
+      error: { message: string };
+    };
+    expect(body.success).toBe(false);
+    expect(body.error.message).toContain("invalid request body for search_memory");
+    expect(registry.search_memory).not.toHaveBeenCalled();
+  });
+
+  it("rejects add_memory default/project-scope payloads without projectKey before dispatch", async () => {
+    const defaultScope = await fetch(`${handle.baseUrl}/v1/memory`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        kind: "decision",
+        content: "missing project",
+      }),
+    });
+    expect(defaultScope.status).toBe(400);
+    expect(registry.add_memory).not.toHaveBeenCalled();
+
+    const projectScope = await fetch(`${handle.baseUrl}/v1/memory`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        scope: "project",
+        kind: "decision",
+        content: "missing project",
+      }),
+    });
+    expect(projectScope.status).toBe(400);
+    const body = (await projectScope.json()) as {
+      success: boolean;
+      error: { message: string };
+    };
+    expect(body.success).toBe(false);
+    expect(body.error.message).toContain("projectKey");
+    expect(registry.add_memory).not.toHaveBeenCalled();
+  });
+
+  it("rejects unsupported add_memory kind before dispatch", async () => {
+    const res = await fetch(`${handle.baseUrl}/v1/memory`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        projectKey: "p",
+        kind: "note",
+        content: "unsupported kind",
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as {
+      success: boolean;
+      error: { message: string };
+    };
+    expect(body.success).toBe(false);
+    expect(body.error.message).toContain("kind");
+    expect(registry.add_memory).not.toHaveBeenCalled();
+  });
+
+  it("allows add_memory user-scope payloads without projectKey before dispatch", async () => {
+    const res = await fetch(`${handle.baseUrl}/v1/memory`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        scope: "user",
+        kind: "fact",
+        content: "user scoped fact",
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(registry.add_memory).toHaveBeenCalledWith({
+      scope: "user",
+      kind: "fact",
+      content: "user scoped fact",
+    });
+  });
+
+  it("validates the token-resolved organizationId through the shared schema", async () => {
+    await handle.close();
+    registry = buildRegistry();
+    handle = await startTestServer(registry, [
+      { token: "bound-token", organizationId: "org-a" },
+    ]);
+
+    const res = await fetch(`${handle.baseUrl}/v1/memory/search`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer bound-token",
+      },
+      body: JSON.stringify({
+        projectKey: "p",
+        query: "anything",
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(registry.search_memory).toHaveBeenCalledWith({
+      projectKey: "p",
+      query: "anything",
+      organizationId: "org-a",
+    });
   });
 
   it("returns 400 on invalid JSON body", async () => {
@@ -319,6 +469,58 @@ describe("createOperatorServer", () => {
     expect(registry.compact_memory).not.toHaveBeenCalled();
   });
 
+  it("rejects compact_memory default/project-scope payloads without projectKey before dispatch", async () => {
+    const defaultScope = await fetch(`${handle.baseUrl}/v1/memory/compact`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({ dryRun: true }),
+    });
+    expect(defaultScope.status).toBe(400);
+    expect(registry.compact_memory).not.toHaveBeenCalled();
+
+    const projectScope = await fetch(`${handle.baseUrl}/v1/memory/compact`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({ scope: "project", dryRun: true }),
+    });
+    expect(projectScope.status).toBe(400);
+    const body = (await projectScope.json()) as {
+      success: boolean;
+      error: { message: string };
+    };
+    expect(body.success).toBe(false);
+    expect(body.error.message).toContain("projectKey");
+    expect(registry.compact_memory).not.toHaveBeenCalled();
+  });
+
+  it("allows compact_memory user-scope payloads without projectKey before dispatch", async () => {
+    const res = await fetch(`${handle.baseUrl}/v1/memory/compact`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        scope: "user",
+        userScopeId: "alice",
+        dryRun: true,
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(registry.compact_memory).toHaveBeenCalledWith({
+      scope: "user",
+      userScopeId: "alice",
+      dryRun: true,
+    });
+  });
+
   it("accepts POST /v1/memory/compact when dryRun is omitted (defaults to dry-run)", async () => {
     const res = await fetch(`${handle.baseUrl}/v1/memory/compact`, {
       method: "POST",
@@ -339,7 +541,7 @@ describe("createOperatorServer", () => {
         "content-type": "application/json",
         authorization: `Bearer ${tokens[0]}`,
       },
-      body: JSON.stringify({ projectKey: "p" }),
+      body: JSON.stringify({ organizationId: "org-a", projectKey: "p" }),
     });
     expect(reindex.status).toBe(200);
     expect(registry.reindex_memory).toHaveBeenCalledOnce();
@@ -354,6 +556,41 @@ describe("createOperatorServer", () => {
     });
     expect(compact.status).toBe(200);
     expect(registry.compact_memory).toHaveBeenCalledOnce();
+  });
+
+  it("builds the default registry with lazy audit wiring when no registry is injected", async () => {
+    vi.resetModules();
+    const defaultRegistry = buildRegistry();
+    const createToolRegistryMock = vi.fn(() => defaultRegistry);
+    vi.doMock("../../src/mcp/server.js", () => ({
+      createToolRegistry: createToolRegistryMock,
+    }));
+
+    const logger = buildLogger();
+    try {
+      const { createOperatorServer: createOperatorServerWithMock } = await import(
+        "../../src/app/server.js"
+      );
+      createOperatorServerWithMock({
+        bearerTokens: [],
+        logger,
+      });
+    } finally {
+      vi.doUnmock("../../src/mcp/server.js");
+      vi.resetModules();
+    }
+
+    expect(createToolRegistryMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        logger,
+        defaultActor: expect.any(String),
+        auditLog: expect.objectContaining({
+          record: expect.any(Function),
+          listByOrganization: expect.any(Function),
+        }),
+        withCanonicalServices: expect.any(Function),
+      }),
+    );
   });
 });
 

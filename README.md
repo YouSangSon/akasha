@@ -77,6 +77,8 @@ Akasha is the place those agents save what's worth remembering and
 read it back next time. The same 7 tools are exposed over MCP stdio and
 JSON-HTTP — full request/response schemas live in
 [docs/api-reference.md](docs/api-reference.md).
+HTTP and MCP share the same seven-tool schema surface, so validation and
+payload shapes stay aligned across both transports.
 
 | Tool | What it does | HTTP route |
 |------|--------------|------------|

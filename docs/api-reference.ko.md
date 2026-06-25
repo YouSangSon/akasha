@@ -9,8 +9,14 @@ Akasha는 동일한 도구 surface를 두 가지 transport로 노출합니다:
 - **HTTP** (POST JSON) — 그 외 모든 클라이언트용.
   진입점: `src/app/server.ts`, 기본 바인드 `127.0.0.1:8787`.
 
-두 transport 모두 `src/mcp/server.ts` 의 같은 핸들러 함수를 호출합니다.
-도구 입출력은 동일하고 wire 포맷만 다릅니다.
+두 transport 모두 `src/mcp/tool-schemas.ts` 와 `src/mcp/tool-registry.ts`
+의 같은 descriptor/schema/registry 경로를 공유한 뒤
+`src/mcp/tool-handlers.ts` 의 tool 구현으로 dispatch합니다. 도구 입출력은
+동일하고 wire 포맷만 다릅니다.
+
+HTTP와 MCP tool call은 같은 zod 기반 공유 tool schema 정의를 공유합니다.
+HTTP 요청은 bearer token의 organization 해석 이후, registry dispatch 이전에
+검증됩니다. 잘못된 tool body는 400을 반환하며 tool handler를 호출하지 않습니다.
 
 ## 인증 (HTTP 전용)
 

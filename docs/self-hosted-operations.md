@@ -24,25 +24,25 @@ curl http://127.0.0.1:8787/healthz
 Expected response:
 
 ```json
-{"success":true,"data":{"ok":true,"host":"127.0.0.1","port":8787}}
+{"success":true,"data":{"ok":true,"host":"0.0.0.0","port":8787}}
 ```
 
 ## Nightly backups
 
-Set the required environment variables, then run the packaged backup job:
+Review the relevant environment variables, then run the packaged backup job:
 
 ```bash
 npm run backup:create
 ```
 
-Required variables:
+Relevant variables:
 
 - `BACKUP_DIR`
 - `DATABASE_URL`
-- `BACKUP_TARGET_HOST`
 - `QDRANT_URL`
 - `QDRANT_COLLECTION_NAME` (optional, defaults to `memory_chunks_v1`)
 - `QDRANT_API_KEY` (optional for unauthenticated local deployments)
+- `BACKUP_TARGET_HOST` (optional; when non-empty, backup scripts copy artifacts with `ssh`/`scp`)
 - `BACKUP_TARGET_DIR` (optional, defaults to `BACKUP_DIR` on the remote host)
 
 The backup scripts create and copy:
@@ -62,7 +62,10 @@ Run the verification helper against the newest local manifest and the copied fil
 npm run backup:verify
 ```
 
-`backup:verify` passes only when the newest manifest is less than 24 hours old, both artifacts exist locally, both artifacts exist on the off-box host, and the manifest checksums match both copies.
+`backup:verify` is for remote-copy deployments and requires `BACKUP_TARGET_HOST`.
+It passes only when the newest manifest is less than 24 hours old, both
+artifacts exist locally, both artifacts exist on the off-box host, and the
+manifest checksums match both copies.
 
 ## Restore smoke
 
@@ -75,6 +78,7 @@ export RESTORE_APP_PORT=18787
 export RESTORE_POSTGRES_URL="postgres://memory:memory@127.0.0.1:${RESTORE_POSTGRES_PORT}/memory_os"
 export RESTORE_QDRANT_URL="http://127.0.0.1:${RESTORE_QDRANT_PORT}"
 export RESTORE_SMOKE_PROJECT_KEY="project-alpha"
+export RESTORE_SMOKE_ORGANIZATION_ID="default"
 export RESTORE_SMOKE_SEARCH_QUERY="continue work"
 export RESTORE_SMOKE_PACK_TASK="continue work"
 export RESTORE_SMOKE_POSTGRES_RESTORE_CMD='cat "$RESTORE_SMOKE_POSTGRES_ARTIFACT_PATH" | gunzip | psql "$RESTORE_POSTGRES_URL"'
@@ -90,6 +94,7 @@ This helper always:
 - restores the newest Qdrant snapshot into the isolated vector store
 - starts the `app` service only after both restores succeed and waits for `/healthz`
 - runs one real `search_memory` query and one real `build_context_pack` call against the restored services
+  using `RESTORE_SMOKE_ORGANIZATION_ID` when set (or `LEGACY_ANONYMOUS_SEARCH=true` for intentional legacy org-blind checks)
 - tears the disposable environment down with `docker compose -f compose.yaml -f compose.restore-smoke.yaml -p restore-smoke down -v`
 
 Manual teardown is still safe if a shell command fails mid-run:
