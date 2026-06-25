@@ -47,6 +47,7 @@ describe("public documentation drift checks", () => {
     expect(apiReference).toContain("akasha_store_memory");
     expect(apiReference).toContain("akasha://memory/recent/{projectKey}");
     expect(apiReference).toContain("akasha://context-pack/{projectKey}/{task}");
+    expect(apiReference).toContain("mergedIds: string[];");
 
     expect(apiReferenceKo).toContain("MCP Streamable HTTP");
     expect(apiReferenceKo).toContain("POST /mcp");
@@ -60,6 +61,7 @@ describe("public documentation drift checks", () => {
     expect(apiReferenceKo).toContain("akasha_store_memory");
     expect(apiReferenceKo).toContain("akasha://memory/recent/{projectKey}");
     expect(apiReferenceKo).toContain("akasha://context-pack/{projectKey}/{task}");
+    expect(apiReferenceKo).toContain("mergedIds: string[];");
   });
 
   it("documents the current audit instrumentation module in architecture docs", () => {

@@ -237,6 +237,7 @@ type CompactMemoryResult = {
   projectKey: string;
   dryRun: boolean;
   archivedIds: string[];         // empty in dry-run
+  mergedIds: string[];           // record ids represented by duplicateGroups
   duplicateGroups: Array<{ keepId: string; archiveIds: string[] }>;
   decayCandidates: Array<{ id: string; score: number }>;
   promotionCandidates: string[];

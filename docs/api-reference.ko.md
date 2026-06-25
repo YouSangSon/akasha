@@ -233,6 +233,7 @@ type CompactMemoryResult = {
   projectKey: string;
   dryRun: boolean;
   archivedIds: string[];         // dry-run 시 비어있음
+  mergedIds: string[];           // duplicateGroups 로 표현된 record id
   duplicateGroups: Array<{ keepId: string; archiveIds: string[] }>;
   decayCandidates: Array<{ id: string; score: number }>;
   promotionCandidates: string[];
