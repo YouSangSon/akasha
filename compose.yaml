@@ -4,6 +4,8 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-memory}
+      # Local-dev default. Production deployments must set POSTGRES_PASSWORD
+      # in .env or through the orchestrator secret store.
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-memory}
       POSTGRES_DB: ${POSTGRES_DB:-memory_os}
     volumes:
@@ -24,6 +26,7 @@ services:
     image: qdrant/qdrant:v1.13.2
     restart: unless-stopped
     environment:
+      # Local-dev default. Production deployments must set QDRANT_API_KEY.
       QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY:-local-qdrant-key}
     volumes:
       - qdrant_storage:/qdrant/storage
