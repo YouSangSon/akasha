@@ -14,11 +14,43 @@ export type ToolDescriptor = {
   readonly name: ToolName;
   readonly description: string;
   readonly inputSchema: Record<string, z.ZodTypeAny>;
+  readonly outputSchema: Record<string, z.ZodTypeAny>;
 };
 
 export type ToolInputValidation =
   | { ok: true; data: Record<string, unknown> }
   | { ok: false; message: string };
+
+const memoryRecordOutputSchema = z
+  .object({
+    id: z.number(),
+    organizationId: z.string().optional(),
+    sourceId: z.number().optional(),
+    scopeType: z.string(),
+    scopeId: z.string(),
+    memoryType: z.string(),
+    content: z.string(),
+    summary: z.string().nullable().optional(),
+    durability: z.string().optional(),
+    importance: z.number().optional(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+    source: z.object({}).passthrough().optional(),
+  })
+  .passthrough();
+
+const contextPackSectionsOutputSchema = z.object({
+  project_summary: z.array(memoryRecordOutputSchema),
+  recent_decisions: z.array(memoryRecordOutputSchema),
+  constraints: z.array(memoryRecordOutputSchema),
+  open_questions: z.array(memoryRecordOutputSchema),
+  relevant_notes: z.array(memoryRecordOutputSchema),
+});
+
+const archiveOutcomeOutputSchema = z.object({
+  archiveId: z.number(),
+  status: z.string(),
+}).passthrough();
 
 export const TOOL_DESCRIPTORS = [
   {
@@ -32,6 +64,11 @@ export const TOOL_DESCRIPTORS = [
       kind: z.enum(SUPPORTED_MEMORY_KINDS),
       content: z.string().min(1),
     },
+    outputSchema: {
+      ok: z.literal(true),
+      memoryId: z.string(),
+      summary: z.string(),
+    },
   },
   {
     name: "search_memory",
@@ -43,6 +80,12 @@ export const TOOL_DESCRIPTORS = [
       userScopeId: z.string().min(1).optional(),
       includeUser: z.boolean().optional(),
       limit: z.number().int().positive().optional(),
+    },
+    outputSchema: {
+      ok: z.literal(true),
+      projectKey: z.string(),
+      query: z.string(),
+      results: z.array(memoryRecordOutputSchema),
     },
   },
   {
@@ -56,6 +99,13 @@ export const TOOL_DESCRIPTORS = [
       includeUser: z.boolean().optional(),
       limit: z.number().int().positive().optional(),
     },
+    outputSchema: {
+      ok: z.literal(true),
+      projectKey: z.string(),
+      packMarkdown: z.string(),
+      selectedMemoryIds: z.array(z.string()),
+      sections: contextPackSectionsOutputSchema,
+    },
   },
   {
     name: "reindex_memory",
@@ -64,6 +114,12 @@ export const TOOL_DESCRIPTORS = [
       organizationId: z.string().min(1),
       projectKey: z.string().min(1),
       userScopeId: z.string().min(1).optional(),
+    },
+    outputSchema: {
+      ok: z.literal(true),
+      projectKey: z.string(),
+      scopes: z.array(z.string()),
+      chunkCount: z.number(),
     },
   },
   {
@@ -80,6 +136,18 @@ export const TOOL_DESCRIPTORS = [
       halfLifeDays: z.number().positive().optional(),
       semanticDedupThreshold: z.number().positive().max(1).optional(),
     },
+    outputSchema: {
+      ok: z.literal(true),
+      projectKey: z.string(),
+      dryRun: z.boolean(),
+      archivedIds: z.array(z.string()),
+      duplicateGroups: z.array(z.object({}).passthrough()),
+      decayCandidates: z.array(z.object({}).passthrough()),
+      promotionCandidates: z.array(z.string()),
+      summary: z.string(),
+      compactionRunId: z.string().optional(),
+      applyStats: z.object({}).passthrough().optional(),
+    },
   },
   {
     name: "unarchive_memory",
@@ -88,6 +156,13 @@ export const TOOL_DESCRIPTORS = [
       organizationId: z.string().min(1).optional(),
       archiveIds: z.array(z.number().int()),
     },
+    outputSchema: {
+      ok: z.literal(true),
+      outcomes: z.array(archiveOutcomeOutputSchema),
+      restoredCount: z.number(),
+      skippedCount: z.number(),
+      failedCount: z.number(),
+    },
   },
   {
     name: "list_audit_log",
@@ -95,6 +170,11 @@ export const TOOL_DESCRIPTORS = [
     inputSchema: {
       organizationId: z.string().min(1).optional(),
       limit: z.number().int().positive().max(1000).optional(),
+    },
+    outputSchema: {
+      ok: z.literal(true),
+      organizationId: z.string(),
+      entries: z.array(z.object({}).passthrough()),
     },
   },
 ] as const satisfies readonly ToolDescriptor[];

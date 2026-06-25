@@ -61,6 +61,7 @@ export function createMcpServer(
       {
         description: descriptor.description,
         inputSchema: descriptor.inputSchema,
+        outputSchema: descriptor.outputSchema,
       },
       async (input: Record<string, unknown>) => {
         const handler = registry[descriptor.name] as (
@@ -89,6 +90,7 @@ function toToolResult(result: unknown) {
         text: JSON.stringify(result, null, 2),
       },
     ],
+    structuredContent: result as Record<string, unknown>,
   };
 }
 

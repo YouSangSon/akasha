@@ -1,3 +1,5 @@
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { describe, expect, it, vi } from "vitest";
 import * as z from "zod/v4";
@@ -8,6 +10,13 @@ import type { Logger } from "../../src/logger.js";
 import { TOOL_DESCRIPTORS } from "../../src/mcp/tool-schemas.js";
 import type { ToolRegistry } from "../../src/mcp/types.js";
 import type { MemoryRepository, SearchMemoryResult } from "../../src/types.js";
+
+async function createInMemoryClient(server: McpServer): Promise<Client> {
+  const client = new Client({ name: "akasha-test-client", version: "1.0.0" });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+  return client;
+}
 
 function createRepository(): MemoryRepository {
   const listedRecords = [
@@ -1085,6 +1094,12 @@ describe("createMcpServer", () => {
           ),
         },
       ],
+      structuredContent: {
+        ok: true,
+        projectKey: "p",
+        scopes: ["project:p"],
+        chunkCount: 3,
+      },
     });
   });
 
@@ -1139,6 +1154,13 @@ describe("createMcpServer", () => {
           ),
         },
       ],
+      structuredContent: {
+        ok: true,
+        outcomes: [{ archiveId: 7, status: "restored", restoredRecordId: 100, sourceRecordId: 5, chunkCount: 2 }],
+        restoredCount: 1,
+        skippedCount: 0,
+        failedCount: 0,
+      },
     });
   });
 
@@ -1205,6 +1227,126 @@ describe("createMcpServer", () => {
     });
   });
 });
+
+describe("createMcpServer structured outputs", () => {
+  it("advertises output schemas for all registered tools", async () => {
+    const server = createMcpServer({
+      registry: buildRegistryForMcpProtocol(),
+    });
+    const client = await createInMemoryClient(server);
+
+    const tools = await client.listTools();
+
+    expect(tools.tools.map((tool) => tool.name).sort()).toEqual(
+      TOOL_DESCRIPTORS.map((tool) => tool.name).sort(),
+    );
+    for (const tool of tools.tools) {
+      expect(tool.outputSchema).toEqual(expect.objectContaining({ type: "object" }));
+    }
+
+    await client.close();
+    await server.close();
+  });
+
+  it("returns structuredContent while retaining JSON text content", async () => {
+    const server = createMcpServer({
+      registry: buildRegistryForMcpProtocol(),
+    });
+    const client = await createInMemoryClient(server);
+
+    const result = await client.callTool({
+      name: "search_memory",
+      arguments: {
+        organizationId: "org-a",
+        projectKey: "project-alpha",
+        query: "Postgres",
+      },
+    });
+
+    expect(result.structuredContent).toEqual(
+      expect.objectContaining({
+        ok: true,
+        projectKey: "project-alpha",
+        query: "Postgres",
+      }),
+    );
+    expect(result.content).toEqual([
+      {
+        type: "text",
+        text: JSON.stringify(result.structuredContent, null, 2),
+      },
+    ]);
+
+    await client.close();
+    await server.close();
+  });
+});
+
+function buildRegistryForMcpProtocol(): ToolRegistry {
+  return {
+    add_memory: vi.fn().mockResolvedValue({
+      ok: true,
+      memoryId: "101",
+      summary: "stored",
+    }),
+    search_memory: vi.fn().mockResolvedValue({
+      ok: true,
+      projectKey: "project-alpha",
+      query: "Postgres",
+      results: [
+        createRecord({
+          id: 12,
+          organizationId: "org-a",
+          memoryType: "decision",
+          content: "Decision: use Postgres for canonical state.",
+          sourceType: "decision",
+          externalId: "adr-1",
+        }),
+      ],
+    }),
+    build_context_pack: vi.fn().mockResolvedValue({
+      ok: true,
+      projectKey: "project-alpha",
+      packMarkdown: "# Context Pack\n\n- Decision: use Postgres",
+      selectedMemoryIds: ["project:project-alpha:12"],
+      sections: {
+        project_summary: [],
+        recent_decisions: [],
+        constraints: [],
+        open_questions: [],
+        relevant_notes: [],
+      },
+    }),
+    reindex_memory: vi.fn().mockResolvedValue({
+      ok: true,
+      projectKey: "project-alpha",
+      scopes: ["project:project-alpha"],
+      chunkCount: 1,
+    }),
+    compact_memory: vi.fn().mockResolvedValue({
+      ok: true,
+      projectKey: "project-alpha",
+      dryRun: true,
+      archivedIds: [],
+      duplicateGroups: [],
+      decayCandidates: [],
+      promotionCandidates: [],
+      summary: "noop",
+    }),
+    unarchive_memory: vi.fn().mockResolvedValue({
+      ok: true,
+      outcomes: [],
+      restoredCount: 0,
+      skippedCount: 0,
+      failedCount: 0,
+    }),
+    list_audit_log: vi.fn().mockResolvedValue({
+      ok: true,
+      organizationId: "org-a",
+      entries: [],
+    }),
+  };
+}
 
 function createCanonicalServices() {
   const createdRecord = createRecord({
