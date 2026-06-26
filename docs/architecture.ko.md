@@ -102,6 +102,12 @@ Org 필터는 활성 vector backend 쿼리 레이어와 Postgres lexical/hydrati
 필터링) 양쪽 모두에 적용. Lexical 후보는 vector retrieval과 같은 org/scope
 입력을 사용.
 
+Lexical scorer는 code symbol, path, URL, date, proper noun 같은 deterministic
+entity mention도 추출합니다. 그래서 `QDRANT_SNAPSHOT_TIMEOUT` 또는
+`docs/operations.md` 같은 정확한 운영 식별자가 약한 semantic match를 보강할 수
+있습니다. 이는 이후 temporal/entity memory를 위한 첫 runtime foundation이며,
+아직 graph를 영속화하지는 않습니다.
+
 ## 데이터 흐름: compact apply (P17)
 
 ```

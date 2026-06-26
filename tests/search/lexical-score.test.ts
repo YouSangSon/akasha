@@ -35,6 +35,21 @@ describe("lexical scoring", () => {
 
     expect(match).toEqual({ score: 0, matchedTerms: [] });
   });
+
+  it("boosts exact entity overlap for code symbols and paths", () => {
+    const match = scoreLexicalMatch(
+      "QDRANT_SNAPSHOT_TIMEOUT docs/operations.md",
+      makeRecord({
+        content:
+          "Runbook docs/operations.md explains QDRANT_SNAPSHOT_TIMEOUT recovery.",
+      }),
+    );
+
+    expect(match.matchedTerms).toEqual(
+      expect.arrayContaining(["qdrant_snapshot_timeout", "docs/operations.md"]),
+    );
+    expect(match.score).toBeGreaterThan(0.5);
+  });
 });
 
 function makeRecord(

@@ -105,6 +105,12 @@ the Postgres lexical/hydration layers (defense-in-depth — if the vector backen
 returned a cross-org point id, the PG join filters it out). Lexical candidates
 use the same org and scope inputs as vector retrieval.
 
+The lexical scorer also extracts deterministic entity mentions (code symbols,
+paths, URLs, dates, and proper nouns) so exact operational identifiers such as
+`QDRANT_SNAPSHOT_TIMEOUT` or `docs/operations.md` can rescue otherwise weak
+semantic matches. This is the first runtime foundation for later temporal/entity
+memory; it does not yet persist a graph.
+
 ## Data flow: compact apply (P17)
 
 ```

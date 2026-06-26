@@ -1,4 +1,5 @@
 import type { SearchMemoryResult } from "../types.js";
+import { entityOverlapScore } from "../entities/entity-extraction.js";
 
 const MAX_FREQUENCY_BONUS_TERMS = 8;
 
@@ -25,9 +26,10 @@ export function scoreLexicalMatch(
   ].join(" ");
   const normalizedText = normalizeForLexical(weightedText);
   const normalizedQuery = normalizeForLexical(query);
+  const entityOverlap = entityOverlapScore(query, weightedText);
 
   const matchedTerms = terms.filter((term) => normalizedText.includes(term));
-  if (matchedTerms.length === 0) {
+  if (matchedTerms.length === 0 && entityOverlap.score === 0) {
     return { score: 0, matchedTerms: [] };
   }
 
@@ -50,10 +52,17 @@ export function scoreLexicalMatch(
     textContainsAny(`${record.title ?? ""} ${record.summary ?? ""}`, matchedTerms)
       ? 0.1
       : 0;
+  const entityBonus = entityOverlap.score * 0.2;
 
   return {
-    score: Math.min(1, coverage * 0.5 + phraseBonus + frequencyBonus + titleSummaryBonus),
-    matchedTerms,
+    score: Math.min(
+      1,
+      coverage * 0.5 + phraseBonus + frequencyBonus + titleSummaryBonus + entityBonus,
+    ),
+    matchedTerms: [
+      ...matchedTerms,
+      ...entityOverlap.matched.map((mention) => mention.normalized),
+    ],
   };
 }
 
