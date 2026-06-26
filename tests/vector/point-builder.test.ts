@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildVectorPoint } from "../../src/vector/point-builder.js";
 
 describe("buildVectorPoint", () => {
-  it("produces the expected id and 11-field payload", () => {
+  it("produces the expected id and metadata payload", () => {
     const point = buildVectorPoint({
       chunkId: 15,
       vector: [0.1, 0.2, 0.3],
@@ -13,6 +13,9 @@ describe("buildVectorPoint", () => {
       projectKey: "project-alpha",
       kind: "decision",
       durability: "durable",
+      title: "Decision title",
+      summary: "Short summary",
+      tags: ["ops", "security"],
       updatedAt: "2026-03-29T00:00:00.000Z",
       embeddingVersion: "v1",
     });
@@ -28,7 +31,9 @@ describe("buildVectorPoint", () => {
       project_key: "project-alpha",
       kind: "decision",
       durability: "durable",
-      tags: [],
+      title: "Decision title",
+      summary: "Short summary",
+      tags: ["ops", "security"],
       updated_at: "2026-03-29T00:00:00.000Z",
       embedding_version: "v1",
     });
@@ -50,6 +55,8 @@ describe("buildVectorPoint", () => {
     });
 
     expect(point.payload.project_key).toBeNull();
+    expect(point.payload.title).toBeNull();
+    expect(point.payload.summary).toBeNull();
     expect(point.payload.tags).toEqual([]);
   });
 });

@@ -191,6 +191,53 @@ ORDER BY updated_at DESC;
 `qdrant_next_retry_at=NOW()` 로 바꾸면 re-enqueue 됩니다. 기존 메시지가 더 이상
 유용하지 않으면 `qdrant_last_error` 도 비웁니다.
 
+## Memory governance
+
+정적 운영자 셸:
+
+```text
+http://localhost:8787/admin/memory
+```
+
+셸 자체는 인증이 없고 memory data나 token을 embed하지 않습니다. 페이지에서 API
+URL, bearer token, organization, scope를 입력하면 실제 list/edit/tag/archive
+동작은 인증이 필요한 `/v1/*` governance API 를 호출합니다. 토큰은 현재 브라우저
+런타임 메모리에만 유지됩니다.
+
+CLI 대응 명령:
+
+```bash
+# 레코드 검토. tag 또는 archived 상태로 필터 가능.
+curl -X POST http://localhost:8787/v1/memory/list \
+  -H "Authorization: Bearer $MEMORY_API_TOKENS" \
+  -H "Content-Type: application/json" \
+  -d '{"projectKey": "my-project", "tag": "ops", "limit": 50}' | jq
+
+# content 또는 metadata 수정. entity와 vector 상태를 갱신.
+curl -X POST http://localhost:8787/v1/memory/update \
+  -H "Authorization: Bearer $MEMORY_API_TOKENS" \
+  -H "Content-Type: application/json" \
+  -d '{"memoryId": 42, "summary": "Updated operational summary"}' | jq
+
+# governance tag 교체.
+curl -X POST http://localhost:8787/v1/memory/tag \
+  -H "Authorization: Bearer $MEMORY_API_TOKENS" \
+  -H "Content-Type: application/json" \
+  -d '{"memoryId": 42, "tags": ["ops", "reviewed"]}' | jq
+
+# 복구 가능한 archive 경로로 레코드 1개 보관.
+curl -X POST http://localhost:8787/v1/memory/delete \
+  -H "Authorization: Bearer $MEMORY_API_TOKENS" \
+  -H "Content-Type: application/json" \
+  -d '{"memoryId": 42}' | jq
+```
+
+OAuth 기준 `list_memory`, `inspect_memory_graph` 는 read scope,
+`update_memory`, `delete_memory`, `tag_memory` 는 admin scope가 필요합니다.
+`delete_memory` 응답의
+`qdrantPointsPending > 0` 이면 compaction sweeper를 활성화하고 compaction
+cleanup과 같은 "Stuck rows" 점검을 사용하세요.
+
 ## Unarchive
 
 Apply 가 실수였을 때 archive 된 레코드 복원:
@@ -257,10 +304,10 @@ docker compose logs --since 1h app | jq 'select(.level >= 40)'  # warn+
 - `akasha_dependency_check_duration_seconds{name="postgres"}`
 
 HTTP label은 low-cardinality와 privacy-safe를 기준으로 제한합니다. `route` 는
-`/v1/memory/search`, `/mcp`, `/healthz`, `/readyz`, `/metrics`, `unknown` 같은
-static route 이름이며 raw URL이나 query string이 아닙니다. Metrics에는 bearer
-token, organization ID, request body, search query, memory content를 넣지
-않습니다.
+`/v1/memory/search`, `/mcp`, `/admin/memory`, `/healthz`, `/readyz`, `/metrics`,
+`unknown` 같은 static route 이름이며 raw URL이나 query string이 아닙니다.
+Metrics에는 bearer token, organization ID, request body, search query, memory
+content를 넣지 않습니다.
 
 Dependency gauge는 가장 최근 `/readyz` report를 사용합니다. 아직 `/readyz` 가
 실행되지 않았다면 dependency metrics는 생략되며, `/metrics` 는 Postgres,
@@ -269,7 +316,7 @@ Qdrant, OpenAI를 직접 probe하지 않습니다.
 ## 스키마 마이그레이션
 
 모든 마이그레이션은 idempotent 이고 부트스트랩 시 적용. 현재 마이그레이션은
-`001-011` 범위이며, 새 마이그레이션은 그 뒤의 다음 미사용 번호를 붙입니다.
+`001-012` 범위이며, 새 마이그레이션은 그 뒤의 다음 미사용 번호를 붙입니다.
 새 마이그레이션 추가:
 
 1. `src/db/migrations/NNN_description.sql` 생성 (다음 일련 번호).

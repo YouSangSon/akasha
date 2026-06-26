@@ -130,6 +130,22 @@ describe("parseCliArgs", () => {
       command: "remember",
       content: "-- summary starts with a dash",
     });
+
+    expect(
+      parseCliArgs([
+        "remember",
+        "--project",
+        "project-alpha",
+        "--kind",
+        "summary",
+        "--content-file",
+        "/tmp/session-summary.txt",
+      ]),
+    ).toMatchObject({
+      command: "remember",
+      contentFile: "/tmp/session-summary.txt",
+      content: undefined,
+    });
   });
 
   it("parses reindex --organization-id flag", () => {
@@ -165,6 +181,11 @@ describe("parseCliArgs", () => {
       search_memory: vi.fn(),
       add_memory: vi.fn(),
       compact_memory: vi.fn(),
+      list_memory: vi.fn(),
+      inspect_memory_graph: vi.fn(),
+      update_memory: vi.fn(),
+      delete_memory: vi.fn(),
+      tag_memory: vi.fn(),
       list_audit_log: vi.fn(),
       unarchive_memory: vi.fn(),
       reindex_memory: vi.fn().mockResolvedValue({
@@ -201,6 +222,11 @@ describe("parseCliArgs", () => {
       search_memory: vi.fn(),
       add_memory: vi.fn(),
       compact_memory: vi.fn(),
+      list_memory: vi.fn(),
+      inspect_memory_graph: vi.fn(),
+      update_memory: vi.fn(),
+      delete_memory: vi.fn(),
+      tag_memory: vi.fn(),
       list_audit_log: vi.fn(),
       unarchive_memory: vi.fn(),
       reindex_memory: vi.fn().mockResolvedValue({
@@ -230,6 +256,7 @@ describe("parseCliArgs", () => {
         projectKey: "project-alpha",
         packMarkdown: "# Context Pack",
         selectedMemoryIds: [],
+        selectionRationale: [],
         sections: {
           project_summary: [],
           recent_decisions: [],
@@ -241,6 +268,11 @@ describe("parseCliArgs", () => {
       search_memory: vi.fn(),
       add_memory: vi.fn(),
       compact_memory: vi.fn(),
+      list_memory: vi.fn(),
+      inspect_memory_graph: vi.fn(),
+      update_memory: vi.fn(),
+      delete_memory: vi.fn(),
+      tag_memory: vi.fn(),
       list_audit_log: vi.fn(),
       unarchive_memory: vi.fn(),
       reindex_memory: vi.fn(),
@@ -278,6 +310,11 @@ describe("parseCliArgs", () => {
         summary: "Stored lifecycle summary",
       }),
       compact_memory: vi.fn(),
+      list_memory: vi.fn(),
+      inspect_memory_graph: vi.fn(),
+      update_memory: vi.fn(),
+      delete_memory: vi.fn(),
+      tag_memory: vi.fn(),
       list_audit_log: vi.fn(),
       unarchive_memory: vi.fn(),
       reindex_memory: vi.fn(),
@@ -309,6 +346,53 @@ describe("parseCliArgs", () => {
       ok: true,
       memoryId: "project:project-alpha:1",
       summary: "Stored lifecycle summary",
+    });
+  });
+
+  it("runs remember with --content-file without putting content in argv", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "akasha-cli-remember-"));
+    const contentPath = path.join(tmpDir, "summary.txt");
+    fs.writeFileSync(contentPath, "Summary: captured from file.\nNext: verify.");
+    const registry: ToolRegistry = {
+      build_context_pack: vi.fn(),
+      search_memory: vi.fn(),
+      add_memory: vi.fn().mockResolvedValue({
+        ok: true,
+        memoryId: "project:project-alpha:1",
+        summary: "Stored file summary",
+      }),
+      compact_memory: vi.fn(),
+      list_memory: vi.fn(),
+      inspect_memory_graph: vi.fn(),
+      update_memory: vi.fn(),
+      delete_memory: vi.fn(),
+      tag_memory: vi.fn(),
+      list_audit_log: vi.fn(),
+      unarchive_memory: vi.fn(),
+      reindex_memory: vi.fn(),
+    };
+
+    await runCli(
+      [
+        "remember",
+        "--project",
+        "project-alpha",
+        "--organization-id",
+        "acme",
+        "--kind",
+        "summary",
+        "--content-file",
+        "summary.txt",
+      ],
+      { registry, cwd: tmpDir },
+    );
+
+    expect(registry.add_memory).toHaveBeenCalledWith({
+      projectKey: "project-alpha",
+      userScopeId: undefined,
+      organizationId: "acme",
+      kind: "summary",
+      content: "Summary: captured from file.\nNext: verify.",
     });
   });
 
@@ -387,7 +471,11 @@ describe("parseCliArgs", () => {
       "--organization-id",
     );
     expect(fs.readFileSync(sessionEndPath, "utf8")).toContain(" remember ");
-    expect(fs.readFileSync(sessionEndPath, "utf8")).toContain("--content");
+    expect(fs.readFileSync(sessionEndPath, "utf8")).toContain("mktemp");
+    expect(fs.readFileSync(sessionEndPath, "utf8")).toContain("--content-file");
+    expect(fs.readFileSync(sessionEndPath, "utf8")).not.toContain(
+      "--content \"$CONTENT\"",
+    );
   });
 
   it("does not overwrite existing lifecycle files unless --force is provided", async () => {

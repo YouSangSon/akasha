@@ -1,3 +1,5 @@
+import type { EntityKind } from "./entities/entity-extraction.js";
+
 export type ScopeType = "user" | "project";
 
 export type ScopeRef = {
@@ -68,12 +70,48 @@ export type MemoryRecord = ScopeRef & {
   summary?: string | null;
   durability?: Durability;
   importance?: number;
+  tags?: string[];
   createdAt: string;
   updatedAt: string;
 };
 
 export type SearchMemoryResult = MemoryRecord & {
   source: MemorySource;
+};
+
+export type MemoryGraphEntityRef = {
+  id: number;
+  kind: EntityKind;
+  normalized: string;
+  displayText: string;
+};
+
+export type MemoryGraphEntity = MemoryGraphEntityRef & {
+  organizationId?: string;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  mentionCount: number;
+  memoryIds: number[];
+};
+
+export type MemoryGraphRelationship = {
+  id: number;
+  organizationId?: string;
+  fromEntityId: number;
+  toEntityId: number;
+  fromEntity: MemoryGraphEntityRef;
+  toEntity: MemoryGraphEntityRef;
+  relationType: "co_mentions" | "temporal_context" | string;
+  evidenceMemoryRecordId: number;
+  validFrom: string | null;
+  validTo: string | null;
+  confidence: number;
+  createdAt: string;
+};
+
+export type MemoryGraphView = {
+  entities: MemoryGraphEntity[];
+  relationships: MemoryGraphRelationship[];
 };
 
 export type ListMemoryOptions = {
@@ -117,6 +155,45 @@ export type CanonicalMemoryRepository = {
     organizationId?: string,
     allowLegacyAnonymous?: boolean,
   ): Promise<SearchMemoryResult[]>;
+  listMemoryForGovernance(
+    scope: ScopeRef,
+    options: {
+      organizationId: string;
+      includeArchived?: boolean;
+      tag?: string;
+      limit?: number;
+    },
+  ): Promise<SearchMemoryResult[]>;
+  inspectMemoryGraph(
+    scope: ScopeRef,
+    options: {
+      organizationId: string;
+      kind?: EntityKind;
+      query?: string;
+      includeArchived?: boolean;
+      limit?: number;
+      relationshipLimit?: number;
+    },
+  ): Promise<MemoryGraphView>;
+  updateMemoryRecord(input: {
+    id: number;
+    organizationId: string;
+    kind?: MemoryType;
+    title?: string | null;
+    content?: string;
+    summary?: string | null;
+    importance?: number;
+    durability?: Durability;
+    tags?: string[];
+  }): Promise<SearchMemoryResult | null>;
+  archiveMemoryRecord(input: {
+    id: number;
+    organizationId: string;
+  }): Promise<{ archived: boolean; qdrantPointIds: string[] }>;
+  getMemoryRecordById(
+    id: number,
+    organizationId: string,
+  ): Promise<SearchMemoryResult | null>;
   // Hard-deletes a memory_records row by id scoped to the given organization.
   // The organization_id guard prevents cross-tenant deletion in the event of
   // id collision. Schema-level ON DELETE CASCADE (memory_chunks, ingest_jobs,

@@ -31,10 +31,14 @@ describe("public documentation drift checks", () => {
     expect(readme).toContain("POST /mcp");
     expect(readme).toContain("Shared MCP server surface");
     expect(readme).toContain("Serves MCP Streamable HTTP at `/mcp` plus JSON HTTP under `/v1/*`");
+    expect(readme).toContain("inspect_memory_graph");
+    expect(readme).toContain("/v1/memory/graph");
     expect(readmeKo).toContain("MCP Streamable HTTP");
     expect(readmeKo).toContain("POST /mcp");
     expect(readmeKo).toContain("공유 MCP 서버 surface");
     expect(readmeKo).toContain("`/mcp` 의 MCP Streamable HTTP 와 `/v1/*` 아래 JSON HTTP");
+    expect(readmeKo).toContain("inspect_memory_graph");
+    expect(readmeKo).toContain("/v1/memory/graph");
 
     expect(apiReference).toContain("MCP Streamable HTTP");
     expect(apiReference).toContain("dist/src/mcp/server.js");
@@ -45,8 +49,12 @@ describe("public documentation drift checks", () => {
     expect(apiReference).toContain("When `MEMORY_API_TOKENS` or OAuth token validation is configured, every `/mcp`");
     expect(apiReference).toContain("and `/v1/*` route requires a bearer token. Static tokens are configured via");
     expect(apiReference).toContain("OAuth/OIDC JWT access tokens are accepted");
-    expect(apiReference).toContain("development only, an empty token list is allowed when the server binds to");
-    expect(apiReference).toContain("loopback (`127.0.0.1`, `localhost`, or `::1`); binding to a non-loopback host");
+    expect(apiReference).toContain("static `/admin/memory` shell");
+    expect(apiReference).toContain("JSON calls still target the authenticated `/v1/*` API");
+    expect(apiReference).toContain("For local development");
+    expect(apiReference).toContain("only, an empty token list is allowed when the server binds to");
+    expect(apiReference).toContain("(`127.0.0.1`, `localhost`, or `::1`); binding to a non-loopback host");
+    expect(apiReference).toContain("static tokens or OAuth token validation fails at startup");
     expect(apiReference).toContain("akasha_session_start");
     expect(apiReference).toContain("akasha_store_memory");
     expect(apiReference).toContain("akasha://memory/recent/{projectKey}");
@@ -55,6 +63,8 @@ describe("public documentation drift checks", () => {
     expect(apiReference).toContain("list_workspace_roots");
     expect(apiReference).toContain("add_memory_interactive");
     expect(apiReference).toContain("classify_memory_candidate");
+    expect(apiReference).toContain("inspect_memory_graph");
+    expect(apiReference).toContain("POST /v1/memory/graph");
 
     expect(apiReferenceKo).toContain("MCP Streamable HTTP");
     expect(apiReferenceKo).toContain("dist/src/mcp/server.js");
@@ -74,6 +84,8 @@ describe("public documentation drift checks", () => {
     expect(apiReferenceKo).toContain("list_workspace_roots");
     expect(apiReferenceKo).toContain("add_memory_interactive");
     expect(apiReferenceKo).toContain("classify_memory_candidate");
+    expect(apiReferenceKo).toContain("inspect_memory_graph");
+    expect(apiReferenceKo).toContain("POST /v1/memory/graph");
   });
 
   it("documents agent lifecycle integrations", () => {
@@ -95,6 +107,7 @@ describe("public documentation drift checks", () => {
       expect(text).toContain(".akasha/hooks/session-end.sh");
       expect(text).toContain("node dist/src/cli.js pack");
       expect(text).toContain("node dist/src/cli.js remember");
+      expect(text).toContain("--content-file");
       expect(text).toContain("--organization-id");
     }
   });
@@ -132,15 +145,16 @@ describe("public documentation drift checks", () => {
 
     for (const path of files) {
       const text = read(path);
-      expect(text).toContain("001-011");
+      expect(text).toContain("001-012");
       expect(text).not.toContain("001-010");
       expect(text).not.toContain("001-009");
+      expect(text).not.toContain("001-011");
       expect(text).not.toContain("001–008");
       expect(text).not.toContain("001-008");
     }
 
-    expect(read("CONTRIBUTING.md")).toContain("012_");
-    expect(read("CONTRIBUTING.ko.md")).toContain("012_");
+    expect(read("CONTRIBUTING.md")).toContain("013_");
+    expect(read("CONTRIBUTING.ko.md")).toContain("013_");
   });
 
   it("documents all three public transports in architecture and security docs", () => {
@@ -173,6 +187,10 @@ describe("public documentation drift checks", () => {
       expect(text).toContain("MCP_OAUTH_RESOURCE_NAME");
       expect(text).toContain("MCP_OAUTH_RESOURCE_DOCUMENTATION_URL");
       expect(text).toContain("/.well-known/oauth-protected-resource");
+    }
+
+    for (const path of ["docs/configuration.md", "docs/configuration.ko.md"]) {
+      expect(read(path)).toContain("inspect_memory_graph");
     }
 
     for (const path of ["docs/security.md", "docs/security.ko.md"]) {
@@ -216,6 +234,12 @@ describe("public documentation drift checks", () => {
       expect(text).not.toMatch(/type SearchMemoryResult = \{\n\s+ok: true;/);
       expect(text).toMatch(/type SearchMemoryResponse = \{\n\s+ok: true;/);
       expect(text).toContain("results: SearchMemoryResult[];");
+      expect(text).toContain("type ContextPackSelectionRationale = {");
+      expect(text).toContain("selectionRationale: ContextPackSelectionRationale[];");
+      expect(text).toContain("inputRank: number;");
+      expect(text).toContain("type InspectMemoryGraphInput = {");
+      expect(text).toContain("type MemoryGraphEntity = {");
+      expect(text).toContain("type MemoryGraphRelationship = {");
       for (const section of [
         "project_summary",
         "recent_decisions",

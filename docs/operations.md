@@ -195,6 +195,53 @@ After fixing the underlying cause, re-enqueue a row by setting
 `qdrant_status='pending'`, `qdrant_next_retry_at=NOW()`, and clearing
 `qdrant_last_error` if the old message is no longer useful.
 
+## Memory governance
+
+Open the static operator shell at:
+
+```text
+http://localhost:8787/admin/memory
+```
+
+The shell itself is unauthenticated and embeds no memory data or token. Enter
+the API URL, bearer token, organization, and scope in the page; the actual
+list/edit/tag/archive actions call the authenticated `/v1/*` governance API.
+The page keeps the token only in the current browser runtime.
+
+CLI equivalents:
+
+```bash
+# Review records, optionally filtering by tag or archived state.
+curl -X POST http://localhost:8787/v1/memory/list \
+  -H "Authorization: Bearer $MEMORY_API_TOKENS" \
+  -H "Content-Type: application/json" \
+  -d '{"projectKey": "my-project", "tag": "ops", "limit": 50}' | jq
+
+# Edit content or metadata. This refreshes entity and vector state.
+curl -X POST http://localhost:8787/v1/memory/update \
+  -H "Authorization: Bearer $MEMORY_API_TOKENS" \
+  -H "Content-Type: application/json" \
+  -d '{"memoryId": 42, "summary": "Updated operational summary"}' | jq
+
+# Replace governance tags.
+curl -X POST http://localhost:8787/v1/memory/tag \
+  -H "Authorization: Bearer $MEMORY_API_TOKENS" \
+  -H "Content-Type: application/json" \
+  -d '{"memoryId": 42, "tags": ["ops", "reviewed"]}' | jq
+
+# Archive one record through the recoverable archive path.
+curl -X POST http://localhost:8787/v1/memory/delete \
+  -H "Authorization: Bearer $MEMORY_API_TOKENS" \
+  -H "Content-Type: application/json" \
+  -d '{"memoryId": 42}' | jq
+```
+
+`list_memory` and `inspect_memory_graph` are read-scoped for OAuth.
+`update_memory`, `delete_memory`, and `tag_memory` require admin scope. If
+`delete_memory` reports
+`qdrantPointsPending > 0`, enable the compaction sweeper and use the same
+"Stuck rows" checks as compaction cleanup.
+
 ## Unarchive
 
 Restore archived records when an apply was a mistake:
@@ -263,9 +310,9 @@ Key series:
 
 HTTP labels are deliberately low-cardinality and privacy-safe. `route` is a
 static route name (`/v1/memory/search`, `/mcp`, `/healthz`, `/readyz`,
-`/metrics`, or `unknown`), never the raw URL or query string. Metrics do not
-include bearer tokens, organization IDs, request bodies, search queries, or
-memory content.
+`/admin/memory`, `/metrics`, or `unknown`), never the raw URL or query string.
+Metrics do not include bearer tokens, organization IDs, request bodies, search
+queries, or memory content.
 
 Dependency gauges use the most recent `/readyz` report. If `/readyz` has not
 run yet, dependency metrics are omitted, and `/metrics` does not probe
@@ -274,7 +321,7 @@ Postgres, Qdrant, or OpenAI itself.
 ## Schema migrations
 
 All migrations are idempotent and applied at bootstrap. Migrations currently
-span `001-011`; new migrations append the next unused number after that range.
+span `001-012`; new migrations append the next unused number after that range.
 To add a new migration:
 
 1. Create `src/db/migrations/NNN_description.sql` (next sequence number).

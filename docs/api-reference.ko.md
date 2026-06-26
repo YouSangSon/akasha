@@ -5,7 +5,7 @@
 Akasha는 동일한 core service tool surface를 세 가지 접근 경로로 노출합니다:
 
 - **MCP stdio** — Claude Code, Codex CLI 같은 AI 클라이언트용.
-  진입점: `dist/src/mcp/server.js`. 7개 service tool 모두와 MCP 전용
+  진입점: `dist/src/mcp/server.js`. 12개 service tool 모두와 MCP 전용
   client-context helper가 등록됩니다.
 - **MCP Streamable HTTP** — HTTP로 연결하는 MCP 클라이언트용.
   기본 문서화 대상 엔드포인트는 JSON-RPC 요청용 `POST /mcp` 입니다. SDK
@@ -36,7 +36,9 @@ candidate text의 memory `kind` 와 짧은 `summary` 를 제안하며 저장은 
 `MEMORY_API_TOKENS` 로 설정합니다. OAuth/OIDC JWT access token은
 `MCP_OAUTH_AUTHORIZATION_SERVERS` 와 `MCP_OAUTH_RESOURCE_URL` 이 설정되어 있고
 issuer JWKS, audience, expiry, scope 검증을 통과할 때 허용됩니다.
-`/healthz`, `/readyz`, `/metrics` 는 인증 없음. 로컬 개발에서만 토큰 목록이
+`/healthz`, `/readyz`, `/metrics`, 정적 `/admin/memory` 셸은 인증이 없습니다.
+`/admin/memory` 는 데이터나 토큰을 embed하지 않으며, 브라우저 쪽 JSON 호출은
+계속 인증이 필요한 `/v1/*` API 를 대상으로 합니다. 로컬 개발에서만 토큰 목록이
 비어 있어도 loopback (`127.0.0.1`, `localhost`, `::1`) 바인딩이면 허용됩니다.
 static token 또는 OAuth token validation 없이 non-loopback host에 바인딩하면
 startup에서 실패합니다.
@@ -245,11 +247,23 @@ type BuildContextPackInput = {
   limit?: number;
 };
 
+type ContextPackSelectionRationale = {
+  memoryId: string;
+  recordId: number;
+  section: "project_summary" | "recent_decisions" | "constraints" | "open_questions" | "relevant_notes";
+  reason: "project-summary" | "decision-memory-or-source" | "constraint-prefix" | "open-question-prefix" | "fallback-relevant-note";
+  inputRank: number;             // section cap 적용 전 1-based rank
+  scopeType: "project" | "user";
+  scopeId: string;
+  sourceType: "decision" | "document" | "conversation";
+  sourceTitle: string | null;
+};
+
 type BuildContextPackResult = {
   ok: true;
   projectKey: string;
   packMarkdown: string;          // 새 세션에 붙여넣을 준비된 텍스트
-  selectedMemoryIds: string[];
+  selectedMemoryIds: string[];   // section cap 이후 실제 포함된 memory
   sections: {
     project_summary: SearchMemoryResult[];
     recent_decisions: SearchMemoryResult[];
@@ -257,6 +271,7 @@ type BuildContextPackResult = {
     open_questions: SearchMemoryResult[];
     relevant_notes: SearchMemoryResult[];
   };
+  selectionRationale: ContextPackSelectionRationale[];
 };
 ```
 
@@ -265,7 +280,9 @@ HTTP: `POST /v1/memory/context-pack`
 `packMarkdown` 은 task 라인이 맨 아래 (구분자 뒤) 에 렌더링됩니다 — 안정적인
 body가 LLM 프롬프트의 cache-eligible prefix에 위치하도록. 본문은
 trust-boundary notice로 시작합니다. 검색된 memory는 untrusted context로 취급하며,
-prompt-injection 유사 excerpt에는 warning label이 붙습니다.
+prompt-injection 유사 excerpt에는 warning label이 붙습니다. `selectionRationale` 은
+포함된 각 memory가 어떤 이유로 해당 section에 들어갔는지 설명하며, section cap으로
+제외된 검색 결과는 포함하지 않습니다.
 
 ---
 
@@ -292,6 +309,186 @@ MCP stdio: `reindex_memory`
 기존 chunk의 임베딩을 재계산해서 설정된 vector backend (`qdrant` 또는
 `pgvector`) 에 upsert. `EMBEDDING_PROVIDER` 또는 `OPENAI_EMBEDDING_MODEL`
 변경 후 사용.
+
+---
+
+### list_memory — governance 목록 조회
+
+```ts
+type ListMemoryInput = {
+  organizationId?: string;
+  projectKey?: string;           // project scope 시 필수
+  scope?: "project" | "user";    // 기본 "project"
+  userScopeId?: string;          // user scope 시 필수
+  includeArchived?: boolean;
+  tag?: string;
+  limit?: number;                // 최대 5000
+};
+
+type MemoryRecord = SearchMemoryResult & {
+  tags: string[];
+};
+
+type ListMemoryResult = {
+  ok: true;
+  scopeType: "project" | "user";
+  scopeId: string;
+  memories: Array<MemoryRecord>;
+};
+```
+
+HTTP: `POST /v1/memory/list`
+MCP stdio: `list_memory`
+
+읽기 전용 governance 검토 도구입니다. Tag 필터는 `memory_tags` 를 사용하며,
+`includeArchived` 가 true일 때만 archived row를 포함합니다.
+
+---
+
+### inspect_memory_graph — scoped entity graph 조회
+
+```ts
+type EntityKind = "code_symbol" | "path" | "url" | "date" | "proper_noun";
+
+type InspectMemoryGraphInput = {
+  organizationId?: string;
+  projectKey?: string;           // project scope 시 필수
+  scope?: "project" | "user";    // 기본 "project"
+  userScopeId?: string;          // user scope 시 필수
+  kind?: EntityKind;
+  query?: string;                // normalized/display text 필터
+  includeArchived?: boolean;
+  limit?: number;                // 최대 5000
+  relationshipLimit?: number;    // 최대 5000
+};
+
+type MemoryGraphEntity = {
+  id: number;
+  kind: EntityKind;
+  normalized: string;
+  displayText: string;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  mentionCount: number;
+  memoryIds: number[];
+};
+
+type MemoryGraphEntityRef = {
+  id: number;
+  kind: EntityKind;
+  normalized: string;
+  displayText: string;
+};
+
+type MemoryGraphRelationship = {
+  id: number;
+  fromEntityId: number;
+  toEntityId: number;
+  fromEntity: MemoryGraphEntityRef;
+  toEntity: MemoryGraphEntityRef;
+  relationType: string;          // "co_mentions" 또는 "temporal_context"
+  evidenceMemoryRecordId: number;
+  validFrom: string | null;
+  validTo: string | null;
+  confidence: number;
+  createdAt: string;
+};
+
+type InspectMemoryGraphResult = {
+  ok: true;
+  scopeType: "project" | "user";
+  scopeId: string;
+  entities: MemoryGraphEntity[];
+  relationships: MemoryGraphRelationship[];
+};
+```
+
+HTTP: `POST /v1/memory/graph`
+MCP stdio: `inspect_memory_graph`
+
+쓰기 시점에 저장된 entity graph를 읽기 전용으로 조회합니다. Symbol, path, URL,
+date, named concept 중 어떤 항목이 entity-backed lexical rescue/boost 동작에
+영향을 주는지 감사할 때 사용합니다.
+
+---
+
+### update_memory — canonical 레코드 1개 수정
+
+```ts
+type UpdateMemoryInput = {
+  organizationId?: string;
+  memoryId: number;
+  kind?: "decision" | "summary" | "fact";
+  title?: string | null;
+  content?: string;
+  summary?: string | null;
+  importance?: number;
+  durability?: "ephemeral" | "durable" | "archived";
+  tags?: string[];
+};
+
+type UpdateMemoryResult = {
+  ok: true;
+  updated: boolean;
+  memory?: MemoryRecord;
+};
+```
+
+HTTP: `POST /v1/memory/update`
+MCP stdio: `update_memory`
+
+canonical Postgres row를 수정하고, 전달된 경우 tag를 교체하며, entity mention과
+vector 상태를 갱신합니다. 임베딩/vector 실패 시 인덱스 작업을 조용히 잃지 않고
+due ingest retry marker를 남깁니다.
+
+---
+
+### delete_memory — 레코드 1개 governance archive
+
+```ts
+type DeleteMemoryInput = {
+  organizationId?: string;
+  memoryId: number;
+};
+
+type DeleteMemoryResult = {
+  ok: true;
+  archived: boolean;
+  qdrantPointsDeleted: number;
+  qdrantPointsPending: number;
+};
+```
+
+HTTP: `POST /v1/memory/delete`
+MCP stdio: `delete_memory`
+
+Compaction과 같은 복구 가능한 archive 경로로 canonical 레코드 1개를 보관한 뒤
+활성 vector point를 제거합니다. Vector 삭제 실패 시 archive row가 cleanup
+sweeper 대상 pending 상태로 남습니다.
+
+---
+
+### tag_memory — governance tag 교체
+
+```ts
+type TagMemoryInput = {
+  organizationId?: string;
+  memoryId: number;
+  tags: string[];
+};
+
+type TagMemoryResult = {
+  ok: true;
+  updated: boolean;
+  memory?: MemoryRecord;
+};
+```
+
+HTTP: `POST /v1/memory/tag`
+MCP stdio: `tag_memory`
+
+레코드의 governance tag를 정규화해 교체한 뒤, tag-aware inspection이 최신 값을
+보도록 vector payload metadata를 갱신합니다.
 
 ---
 
@@ -456,10 +653,10 @@ Kubernetes readiness probe, Docker `HEALTHCHECK`, 외부 업타임 모니터에 
 - `akasha_http_request_duration_seconds_sum{method,route,status}` — 누적 request
   duration.
 
-Route label은 `/v1/memory/search`, `/mcp`, `/healthz`, `/readyz`, `/metrics`,
-`unknown` 같은 static route 이름만 사용합니다. raw URL과 query string은
-노출하지 않습니다. label과 값에는 bearer token, organization ID, request body,
-search query, memory content를 넣지 않습니다.
+Route label은 `/v1/memory/search`, `/mcp`, `/admin/memory`, `/healthz`,
+`/readyz`, `/metrics`, `unknown` 같은 static route 이름만 사용합니다. raw URL과
+query string은 노출하지 않습니다. label과 값에는 bearer token, organization ID,
+request body, search query, memory content를 넣지 않습니다.
 
 Readiness dependency metrics는 가장 최근 `/readyz` 결과에서만 생성됩니다:
 

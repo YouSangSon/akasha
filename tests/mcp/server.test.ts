@@ -268,6 +268,10 @@ describe("createToolRegistry", () => {
     expect(registry).toHaveProperty("search_memory");
     expect(registry).toHaveProperty("build_context_pack");
     expect(registry).toHaveProperty("compact_memory");
+    expect(registry).toHaveProperty("list_memory");
+    expect(registry).toHaveProperty("update_memory");
+    expect(registry).toHaveProperty("delete_memory");
+    expect(registry).toHaveProperty("tag_memory");
   });
 
   it("adds memory using the Task 6 public tool contract", async () => {
@@ -343,8 +347,62 @@ describe("createToolRegistry", () => {
     expect(taskIndex).toBeGreaterThan(headerIndex);
     expect(taskIndex).toBeGreaterThan(separatorIndex);
     expect(result.selectedMemoryIds).toEqual(["project:project-alpha:12"]);
+    expect(result.selectionRationale).toEqual([
+      expect.objectContaining({
+        memoryId: "project:project-alpha:12",
+        recordId: 12,
+        section: "recent_decisions",
+        reason: "decision-memory-or-source",
+        inputRank: 1,
+      }),
+    ]);
     expect(result.sections.recent_decisions).toEqual([
       expect.objectContaining({ id: 12 }),
+    ]);
+  });
+
+  it("reports selected memory ids only for records included after context pack caps", async () => {
+    const retrieveMemory = vi.fn().mockResolvedValue([
+      createRecord({
+        id: 101,
+        memoryType: "summary",
+        content: "First project summary.",
+        sourceType: "document",
+        externalId: "summary-1",
+      }),
+      createRecord({
+        id: 102,
+        memoryType: "summary",
+        content: "Second project summary.",
+        sourceType: "document",
+        externalId: "summary-2",
+      }),
+      createRecord({
+        id: 103,
+        memoryType: "summary",
+        content: "Overflow project summary.",
+        sourceType: "document",
+        externalId: "summary-3",
+      }),
+    ]);
+    const registry = createToolRegistry({
+      retrieveMemory,
+    });
+
+    const result = await registry.build_context_pack({
+      projectKey: "project-alpha",
+      task: "continue work",
+    });
+
+    expect(result.sections.project_summary.map((record) => record.id)).toEqual([
+      101, 102,
+    ]);
+    expect(result.selectedMemoryIds).toEqual([
+      "project:project-alpha:101",
+      "project:project-alpha:102",
+    ]);
+    expect(result.selectionRationale.map((entry) => entry.recordId)).toEqual([
+      101, 102,
     ]);
   });
 
@@ -569,6 +627,66 @@ describe("createToolRegistry", () => {
     });
   });
 
+  it("persists selected context pack ids after section caps in service-backed mode", async () => {
+    const services = createCanonicalServices();
+    services.vectorIndex.query.mockResolvedValue([
+      { id: "chunk:101", score: 0.99, payload: { memory_record_id: 101 } },
+      { id: "chunk:102", score: 0.98, payload: { memory_record_id: 102 } },
+      { id: "chunk:103", score: 0.97, payload: { memory_record_id: 103 } },
+    ]);
+    services.repository.getMemoryRecordsByIds.mockResolvedValue([
+      createRecord({
+        id: 101,
+        memoryType: "summary",
+        content: "First project summary.",
+        sourceType: "document",
+        externalId: "summary-1",
+      }),
+      createRecord({
+        id: 102,
+        memoryType: "summary",
+        content: "Second project summary.",
+        sourceType: "document",
+        externalId: "summary-2",
+      }),
+      createRecord({
+        id: 103,
+        memoryType: "summary",
+        content: "Overflow project summary.",
+        sourceType: "document",
+        externalId: "summary-3",
+      }),
+    ]);
+    services.repository.searchMemory.mockResolvedValue([]);
+    const registry = createToolRegistry({
+      resolveCanonicalServices: async () => services,
+    });
+
+    const result = await registry.build_context_pack({
+      organizationId: "org-a",
+      projectKey: "project-alpha",
+      task: "continue work",
+    });
+
+    expect(result.sections.project_summary.map((record) => record.id)).toEqual([
+      101, 102,
+    ]);
+    expect(result.selectedMemoryIds).toEqual([
+      "project:project-alpha:101",
+      "project:project-alpha:102",
+    ]);
+    expect(services.chunkRepository.createContextPackRun).toHaveBeenCalledWith({
+      organizationId: "org-a",
+      projectKey: "project-alpha",
+      task: "continue work",
+      selectedMemoryIds: [
+        "project:project-alpha:101",
+        "project:project-alpha:102",
+      ],
+      packMarkdown: result.packMarkdown,
+    });
+  });
+
   it("reindexes project and user chunks through canonical services", async () => {
     const services = createCanonicalServices();
     services.chunkRepository.listChunks.mockResolvedValue([
@@ -659,6 +777,426 @@ describe("createToolRegistry", () => {
         }),
       ]),
     );
+  });
+
+  it("lists memory through canonical governance repository primitives", async () => {
+    const services = createCanonicalServices();
+    const registry = createToolRegistry({
+      defaultUserScopeId: "alice",
+      resolveCanonicalServices: async () => services,
+    });
+
+    const result = await registry.list_memory({
+      organizationId: "org-a",
+      projectKey: "project-alpha",
+      includeArchived: true,
+      tag: "ops",
+      limit: 25,
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      scopeType: "project",
+      scopeId: "project-alpha",
+      memories: [expect.objectContaining({ id: 501 })],
+    });
+    expect(services.repository.listMemoryForGovernance).toHaveBeenCalledWith(
+      { scopeType: "project", scopeId: "project-alpha" },
+      {
+        organizationId: "org-a",
+        includeArchived: true,
+        tag: "ops",
+        limit: 25,
+      },
+    );
+  });
+
+  it("inspects scoped entity graph through canonical repository primitives", async () => {
+    const services = createCanonicalServices();
+    const registry = createToolRegistry({
+      defaultUserScopeId: "alice",
+      resolveCanonicalServices: async () => services,
+    });
+
+    const result = await registry.inspect_memory_graph({
+      organizationId: "org-a",
+      projectKey: "project-alpha",
+      kind: "code_symbol",
+      query: "QDRANT",
+      includeArchived: true,
+      limit: 25,
+      relationshipLimit: 10,
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      scopeType: "project",
+      scopeId: "project-alpha",
+      entities: [
+        expect.objectContaining({
+          id: 91,
+          kind: "code_symbol",
+          normalized: "qdrant_snapshot_timeout",
+        }),
+      ],
+      relationships: [],
+    });
+    expect(services.repository.inspectMemoryGraph).toHaveBeenCalledWith(
+      { scopeType: "project", scopeId: "project-alpha" },
+      {
+        organizationId: "org-a",
+        kind: "code_symbol",
+        query: "QDRANT",
+        includeArchived: true,
+        limit: 25,
+        relationshipLimit: 10,
+      },
+    );
+  });
+
+  it("rejects governance tools in legacy repository override mode", async () => {
+    const registry = createToolRegistry({ repository: createRepository() });
+
+    await expect(
+      registry.list_memory({
+        organizationId: "org-a",
+        projectKey: "project-alpha",
+      }),
+    ).rejects.toThrow(/canonical services/);
+    await expect(
+      registry.inspect_memory_graph({
+        organizationId: "org-a",
+        projectKey: "project-alpha",
+      }),
+    ).rejects.toThrow(/canonical services/);
+  });
+
+  it("updates memory through canonical services and refreshes vector state when searchable fields change", async () => {
+    const services = createCanonicalServices();
+    const updatedRecord = createRecord({
+      id: 501,
+      organizationId: "org-a",
+      memoryType: "decision",
+      content: "Decision: refresh vectors after governance edits.",
+      sourceType: "conversation",
+      externalId: "decision:manual",
+    });
+    services.repository.updateMemoryRecord.mockResolvedValueOnce(updatedRecord);
+    const registry = createToolRegistry({
+      resolveCanonicalServices: async () => services,
+    });
+
+    const result = await registry.update_memory({
+      organizationId: "org-a",
+      memoryId: 501,
+      content: "Decision: refresh vectors after governance edits.",
+      summary: "Refresh vectors after governance edits.",
+      tags: ["ops"],
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      updated: true,
+      memory: updatedRecord,
+    });
+    expect(services.repository.updateMemoryRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 501,
+        organizationId: "org-a",
+        content: "Decision: refresh vectors after governance edits.",
+        summary: "Refresh vectors after governance edits.",
+        tags: ["ops"],
+      }),
+    );
+    expect(services.vectorIndex.deleteByRecordIds).toHaveBeenCalledWith([501], {
+      organizationId: "org-a",
+    });
+    expect(
+      services.chunkRepository.replaceChunksForRecordWithPendingIngest,
+    ).toHaveBeenCalledOnce();
+    expect(services.chunkRepository.replaceChunksForRecord).not.toHaveBeenCalled();
+    expect(services.chunkRepository.deleteChunksForRecord).not.toHaveBeenCalled();
+    expect(services.chunkRepository.insertChunks).not.toHaveBeenCalled();
+    expect(services.vectorIndex.upsert).toHaveBeenCalledOnce();
+    expect(services.chunkRepository.updatePointIds).toHaveBeenCalledOnce();
+    expect(
+      services.chunkRepository.replaceChunksForRecordWithPendingIngest,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        record: updatedRecord,
+        nextRetryAt: expect.any(Date),
+      }),
+    );
+    expect(services.ingestJobs.create).not.toHaveBeenCalled();
+    expect(services.ingestJobs.markQdrantPending).not.toHaveBeenCalled();
+    expect(services.ingestJobs.markQdrantCompleted).toHaveBeenCalledWith(801);
+    expect(services.ingestJobs.markCompleted).toHaveBeenCalledWith(801);
+    const replaceOrder =
+      services.chunkRepository.replaceChunksForRecordWithPendingIngest.mock
+        .invocationCallOrder[0]!;
+    const vectorDeleteOrder =
+      services.vectorIndex.deleteByRecordIds.mock.invocationCallOrder[0]!;
+    expect(replaceOrder).toBeLessThan(vectorDeleteOrder);
+  });
+
+  it("does not delete existing index state when update_memory embedding refresh fails", async () => {
+    const services = createCanonicalServices();
+    services.repository.updateMemoryRecord.mockResolvedValueOnce(
+      createRecord({
+        id: 501,
+        organizationId: "org-a",
+        memoryType: "decision",
+        content: "Decision: this refresh will fail before mutations.",
+        sourceType: "conversation",
+        externalId: "decision:manual",
+      }),
+    );
+    services.embeddings.embedBatch.mockRejectedValueOnce(new Error("embed down"));
+    const registry = createToolRegistry({
+      resolveCanonicalServices: async () => services,
+    });
+
+    await expect(
+      registry.update_memory({
+        organizationId: "org-a",
+        memoryId: 501,
+        content: "Decision: this refresh will fail before mutations.",
+      }),
+    ).rejects.toThrow(/embed down/);
+
+    expect(
+      services.chunkRepository.replaceChunksForRecordWithPendingIngest,
+    ).not.toHaveBeenCalled();
+    expect(services.chunkRepository.replaceChunksForRecord).not.toHaveBeenCalled();
+    expect(services.chunkRepository.deleteChunksForRecord).not.toHaveBeenCalled();
+    expect(services.vectorIndex.deleteByRecordIds).not.toHaveBeenCalled();
+    expect(services.vectorIndex.upsert).not.toHaveBeenCalled();
+    expect(services.ingestJobs.create).not.toHaveBeenCalled();
+  });
+
+  it("leaves an ingest retry marker when update_memory vector upsert fails after chunk replacement", async () => {
+    const services = createCanonicalServices();
+    services.repository.updateMemoryRecord.mockResolvedValueOnce(
+      createRecord({
+        id: 501,
+        organizationId: "org-a",
+        memoryType: "decision",
+        content: "Decision: retry failed governance refresh.",
+        sourceType: "conversation",
+        externalId: "decision:manual",
+      }),
+    );
+    services.vectorIndex.upsert.mockRejectedValueOnce(new Error("vector down"));
+    const registry = createToolRegistry({
+      resolveCanonicalServices: async () => services,
+    });
+
+    await expect(
+      registry.update_memory({
+        organizationId: "org-a",
+        memoryId: 501,
+        content: "Decision: retry failed governance refresh.",
+      }),
+    ).rejects.toThrow(/vector down/);
+
+    expect(
+      services.chunkRepository.replaceChunksForRecordWithPendingIngest,
+    ).toHaveBeenCalledOnce();
+    expect(services.vectorIndex.deleteByRecordIds).toHaveBeenCalledWith([501], {
+      organizationId: "org-a",
+    });
+    expect(services.ingestJobs.create).not.toHaveBeenCalled();
+    expect(services.ingestJobs.markQdrantPending).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobId: 801,
+        error: expect.any(Error),
+      }),
+    );
+    expect(services.ingestJobs.markQdrantCompleted).not.toHaveBeenCalled();
+    expect(services.ingestJobs.markCompleted).not.toHaveBeenCalled();
+  });
+
+  it("deletes newly upserted points and keeps retry marker when updatePointIds fails", async () => {
+    const services = createCanonicalServices();
+    services.repository.updateMemoryRecord.mockResolvedValueOnce(
+      createRecord({
+        id: 501,
+        organizationId: "org-a",
+        memoryType: "decision",
+        content: "Decision: retry after point id failure.",
+        sourceType: "conversation",
+        externalId: "decision:manual",
+      }),
+    );
+    services.chunkRepository.updatePointIds.mockRejectedValueOnce(
+      new Error("point id update failed"),
+    );
+    const registry = createToolRegistry({
+      resolveCanonicalServices: async () => services,
+    });
+
+    await expect(
+      registry.update_memory({
+        organizationId: "org-a",
+        memoryId: 501,
+        content: "Decision: retry after point id failure.",
+      }),
+    ).rejects.toThrow(/point id update failed/);
+
+    expect(services.vectorIndex.delete).toHaveBeenCalledWith(["chunk:701"], {
+      organizationId: "org-a",
+    });
+    expect(services.ingestJobs.markQdrantPending).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobId: 801,
+        error: expect.any(Error),
+      }),
+    );
+    expect(services.ingestJobs.markQdrantCompleted).not.toHaveBeenCalled();
+    expect(services.ingestJobs.markCompleted).not.toHaveBeenCalled();
+  });
+
+  it("does not create a retry marker when update_memory chunk replacement rolls back", async () => {
+    const services = createCanonicalServices();
+    services.repository.updateMemoryRecord.mockResolvedValueOnce(
+      createRecord({
+        id: 501,
+        organizationId: "org-a",
+        memoryType: "decision",
+        content: "Decision: chunk replacement rolls back.",
+        sourceType: "conversation",
+        externalId: "decision:manual",
+      }),
+    );
+    services.chunkRepository.replaceChunksForRecordWithPendingIngest
+      .mockRejectedValueOnce(new Error("replace failed"));
+    const registry = createToolRegistry({
+      resolveCanonicalServices: async () => services,
+    });
+
+    await expect(
+      registry.update_memory({
+        organizationId: "org-a",
+        memoryId: 501,
+        content: "Decision: chunk replacement rolls back.",
+      }),
+    ).rejects.toThrow(/replace failed/);
+
+    expect(services.ingestJobs.create).not.toHaveBeenCalled();
+    expect(services.vectorIndex.deleteByRecordIds).not.toHaveBeenCalled();
+    expect(services.vectorIndex.upsert).not.toHaveBeenCalled();
+  });
+
+  it("updates memory without vector refresh for metadata-only edits", async () => {
+    const services = createCanonicalServices();
+    const registry = createToolRegistry({
+      resolveCanonicalServices: async () => services,
+    });
+
+    await registry.update_memory({
+      organizationId: "org-a",
+      memoryId: 501,
+      title: "Updated title",
+      importance: 4,
+    });
+
+    expect(services.repository.updateMemoryRecord).toHaveBeenCalledOnce();
+    expect(services.vectorIndex.deleteByRecordIds).not.toHaveBeenCalled();
+    expect(services.chunkRepository.deleteChunksForRecord).not.toHaveBeenCalled();
+  });
+
+  it("archives public deletes and removes returned vector point ids without hard deleting", async () => {
+    const services = createCanonicalServices();
+    services.repository.archiveMemoryRecord.mockResolvedValueOnce({
+      archived: true,
+      qdrantPointIds: ["chunk:1", "chunk:2"],
+    });
+    const registry = createToolRegistry({
+      resolveCanonicalServices: async () => services,
+    });
+
+    const result = await registry.delete_memory({
+      organizationId: "org-a",
+      memoryId: 501,
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      archived: true,
+      qdrantPointsDeleted: 2,
+      qdrantPointsPending: 0,
+    });
+    expect(services.repository.archiveMemoryRecord).toHaveBeenCalledWith({
+      id: 501,
+      organizationId: "org-a",
+    });
+    expect(services.vectorIndex.delete).toHaveBeenCalledWith(
+      ["chunk:1", "chunk:2"],
+      { organizationId: "org-a" },
+    );
+    expect(services.repository.deleteMemoryRecord).not.toHaveBeenCalled();
+  });
+
+  it("reports pending vector cleanup when delete_memory vector deletion fails", async () => {
+    const services = createCanonicalServices();
+    services.repository.archiveMemoryRecord.mockResolvedValueOnce({
+      archived: false,
+      qdrantPointIds: ["chunk:1"],
+    });
+    services.vectorIndex.delete.mockRejectedValueOnce(new Error("qdrant down"));
+    const registry = createToolRegistry({
+      resolveCanonicalServices: async () => services,
+    });
+
+    await expect(
+      registry.delete_memory({ organizationId: "org-a", memoryId: 501 }),
+    ).resolves.toEqual({
+      ok: true,
+      archived: false,
+      qdrantPointsDeleted: 0,
+      qdrantPointsPending: 1,
+    });
+  });
+
+  it("replaces tags through updateMemoryRecord and refreshes vector state", async () => {
+    const services = createCanonicalServices();
+    services.repository.updateMemoryRecord.mockResolvedValueOnce(
+      createRecord({
+        id: 501,
+        organizationId: "org-a",
+        memoryType: "decision",
+        content: "Decision: index canonical memory into qdrant on write.",
+        sourceType: "conversation",
+        externalId: "decision:manual",
+      }),
+    );
+    const registry = createToolRegistry({
+      resolveCanonicalServices: async () => services,
+    });
+
+    const result = await registry.tag_memory({
+      organizationId: "org-a",
+      memoryId: 501,
+      tags: ["security", "ops"],
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      updated: true,
+      memory: expect.objectContaining({ id: 501 }),
+    });
+    expect(services.repository.updateMemoryRecord).toHaveBeenCalledWith({
+      id: 501,
+      organizationId: "org-a",
+      tags: ["security", "ops"],
+    });
+    expect(services.vectorIndex.deleteByRecordIds).toHaveBeenCalledWith([501], {
+      organizationId: "org-a",
+    });
+    expect(
+      services.chunkRepository.replaceChunksForRecordWithPendingIngest,
+    ).toHaveBeenCalledOnce();
+    expect(services.repository.deleteMemoryRecord).not.toHaveBeenCalled();
   });
 
   it("compacts memory using the narrower Task 6 public tool contract", async () => {
@@ -982,11 +1520,16 @@ describe("createMcpServer", () => {
       "build_context_pack",
       "classify_memory_candidate",
       "compact_memory",
+      "delete_memory",
+      "inspect_memory_graph",
       "list_audit_log",
+      "list_memory",
       "list_workspace_roots",
       "reindex_memory",
       "search_memory",
+      "tag_memory",
       "unarchive_memory",
+      "update_memory",
     ]);
 
     for (const descriptor of TOOL_DESCRIPTORS) {
@@ -995,7 +1538,7 @@ describe("createMcpServer", () => {
     }
   });
 
-  it("registers all 9 tools on the MCP stdio transport", () => {
+  it("registers all service and context tools on the MCP stdio transport", () => {
     const registeredNames: string[] = [];
     const spy = vi
       .spyOn(McpServer.prototype, "registerTool")
@@ -1017,6 +1560,11 @@ describe("createMcpServer", () => {
         "build_context_pack",
         "reindex_memory",
         "compact_memory",
+        "inspect_memory_graph",
+        "list_memory",
+        "update_memory",
+        "delete_memory",
+        "tag_memory",
         "unarchive_memory",
         "list_audit_log",
         "list_workspace_roots",
@@ -1079,6 +1627,11 @@ describe("createMcpServer", () => {
         chunkCount: 3,
       }),
       compact_memory: vi.fn(),
+      list_memory: vi.fn(),
+      inspect_memory_graph: vi.fn(),
+      update_memory: vi.fn(),
+      delete_memory: vi.fn(),
+      tag_memory: vi.fn(),
       list_audit_log: vi.fn(),
       unarchive_memory: vi.fn(),
     } as unknown as ToolRegistry;
@@ -1130,6 +1683,11 @@ describe("createMcpServer", () => {
       build_context_pack: vi.fn(),
       reindex_memory: vi.fn(),
       compact_memory: vi.fn(),
+      list_memory: vi.fn(),
+      inspect_memory_graph: vi.fn(),
+      update_memory: vi.fn(),
+      delete_memory: vi.fn(),
+      tag_memory: vi.fn(),
       list_audit_log: vi.fn(),
       unarchive_memory: vi.fn().mockResolvedValue({
         ok: true,
@@ -1798,6 +2356,19 @@ function buildRegistryForMcpProtocol(): ToolRegistry {
       projectKey: "project-alpha",
       packMarkdown: "# Context Pack\n\n- Decision: use Postgres",
       selectedMemoryIds: ["project:project-alpha:12"],
+      selectionRationale: [
+        {
+          memoryId: "project:project-alpha:12",
+          recordId: 12,
+          section: "recent_decisions",
+          reason: "decision-memory-or-source",
+          inputRank: 1,
+          scopeType: "project",
+          scopeId: "project-alpha",
+          sourceType: "decision",
+          sourceTitle: "adr-1",
+        },
+      ],
       sections: {
         project_summary: [],
         recent_decisions: [],
@@ -1817,10 +2388,54 @@ function buildRegistryForMcpProtocol(): ToolRegistry {
       projectKey: "project-alpha",
       dryRun: true,
       archivedIds: [],
+      mergedIds: [],
       duplicateGroups: [],
       decayCandidates: [],
       promotionCandidates: [],
       summary: "noop",
+    }),
+    list_memory: vi.fn().mockResolvedValue({
+      ok: true,
+      scopeType: "project",
+      scopeId: "project-alpha",
+      memories: [],
+    }),
+    inspect_memory_graph: vi.fn().mockResolvedValue({
+      ok: true,
+      scopeType: "project",
+      scopeId: "project-alpha",
+      entities: [],
+      relationships: [],
+    }),
+    update_memory: vi.fn().mockResolvedValue({
+      ok: true,
+      updated: true,
+      memory: createRecord({
+        id: 12,
+        organizationId: "org-a",
+        memoryType: "decision",
+        content: "Decision: use Postgres for canonical state.",
+        sourceType: "decision",
+        externalId: "adr-1",
+      }),
+    }),
+    delete_memory: vi.fn().mockResolvedValue({
+      ok: true,
+      archived: true,
+      qdrantPointsDeleted: 1,
+      qdrantPointsPending: 0,
+    }),
+    tag_memory: vi.fn().mockResolvedValue({
+      ok: true,
+      updated: true,
+      memory: createRecord({
+        id: 12,
+        organizationId: "org-a",
+        memoryType: "decision",
+        content: "Decision: use Postgres for canonical state.",
+        sourceType: "decision",
+        externalId: "adr-1",
+      }),
     }),
     unarchive_memory: vi.fn().mockResolvedValue({
       ok: true,
@@ -1852,6 +2467,29 @@ function createCanonicalServices() {
       searchMemory: vi.fn().mockResolvedValue([createdRecord]),
       listMemory: vi.fn().mockResolvedValue([createdRecord]),
       getMemoryRecordsByIds: vi.fn().mockResolvedValue([createdRecord]),
+      listMemoryForGovernance: vi.fn().mockResolvedValue([createdRecord]),
+      inspectMemoryGraph: vi.fn().mockResolvedValue({
+        entities: [
+          {
+            id: 91,
+            organizationId: "org-a",
+            kind: "code_symbol",
+            normalized: "qdrant_snapshot_timeout",
+            displayText: "QDRANT_SNAPSHOT_TIMEOUT",
+            firstSeenAt: "2026-03-29T00:00:00.000Z",
+            lastSeenAt: "2026-03-29T00:00:00.000Z",
+            mentionCount: 1,
+            memoryIds: [createdRecord.id],
+          },
+        ],
+        relationships: [],
+      }),
+      updateMemoryRecord: vi.fn().mockResolvedValue(createdRecord),
+      archiveMemoryRecord: vi.fn().mockResolvedValue({
+        archived: true,
+        qdrantPointIds: [],
+      }),
+      getMemoryRecordById: vi.fn().mockResolvedValue(createdRecord),
       // Rollback path stub (resolves to undefined). The shared canonical-services
       // factory must satisfy the full CanonicalMemoryRepository interface so
       // the strongly-typed mock continues to typecheck across all suites.
@@ -1870,6 +2508,35 @@ function createCanonicalServices() {
         },
       ]),
       updatePointIds: vi.fn().mockResolvedValue(undefined),
+      deleteChunksForRecord: vi.fn().mockResolvedValue(undefined),
+      replaceChunksForRecord: vi.fn().mockResolvedValue([
+        {
+          id: 701,
+          memoryRecordId: createdRecord.id,
+          chunkIndex: 0,
+          content: createdRecord.content,
+          startOffset: 0,
+          endOffset: createdRecord.content.length,
+          embeddingVersion: "v1",
+        },
+      ]),
+      replaceChunksForRecordWithPendingIngest: vi.fn().mockResolvedValue({
+        chunks: [
+          {
+            id: 701,
+            memoryRecordId: createdRecord.id,
+            chunkIndex: 0,
+            content: createdRecord.content,
+            startOffset: 0,
+            endOffset: createdRecord.content.length,
+            embeddingVersion: "v1",
+          },
+        ],
+        job: {
+          id: 801,
+          qdrantAttempts: 0,
+        },
+      }),
       listChunks: vi.fn().mockResolvedValue([]),
       getChunksByRecordId: vi.fn().mockResolvedValue([]),
       createContextPackRun: vi.fn().mockResolvedValue(undefined),
@@ -1914,9 +2581,6 @@ function createCanonicalServices() {
         createdAt: "2026-03-29T00:00:00.000Z",
         updatedAt: "2026-03-29T00:00:01.000Z",
       }),
-      // Outbox sweeper hooks. Not called on the current canonical-indexing
-      // path (Part 4/5 will wire markQdrantPending into the catch block); the
-      // stubs exist to satisfy the IngestJobRepository contract.
       markQdrantCompleted: vi.fn(),
       markQdrantPending: vi.fn(),
       markQdrantFailed: vi.fn(),

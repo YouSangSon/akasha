@@ -56,8 +56,8 @@ import type {
   VectorPoint,
 } from "./vector-index.js";
 
-// Max rows per INSERT batch — 8 params/row × 8000 = 64000 < 65535 cap.
-const UPSERT_BATCH_ROWS = 8000;
+// Max rows per INSERT batch — 14 params/row × 4000 = 56000 < 65535 cap.
+const UPSERT_BATCH_ROWS = 4000;
 
 // ef_search value used for iterative HNSW scanning. Higher values improve
 // recall for small/selective tenants at the cost of more candidates scanned.
@@ -103,8 +103,24 @@ export function createPgVectorIndex(
           scope_id            TEXT,
           project_key         TEXT,
           kind                TEXT,
+          durability          TEXT,
+          title               TEXT,
+          summary             TEXT,
+          tags                JSONB       NOT NULL DEFAULT '[]'::jsonb,
+          updated_at          TEXT,
+          embedding_version   TEXT,
           embedding           vector(${dimensions})
         )
+      `);
+
+      await pool.query(`
+        ALTER TABLE ${tableName}
+          ADD COLUMN IF NOT EXISTS durability TEXT,
+          ADD COLUMN IF NOT EXISTS title TEXT,
+          ADD COLUMN IF NOT EXISTS summary TEXT,
+          ADD COLUMN IF NOT EXISTS tags JSONB NOT NULL DEFAULT '[]'::jsonb,
+          ADD COLUMN IF NOT EXISTS updated_at TEXT,
+          ADD COLUMN IF NOT EXISTS embedding_version TEXT
       `);
 
       // HNSW index for cosine similarity — preferred over IVFFlat for recall
@@ -185,7 +201,7 @@ export function createPgVectorIndex(
           for (const point of batch) {
             const base = params.length;
             valueClauses.push(
-              `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}::vector)`,
+              `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, $${base + 10}, $${base + 11}::jsonb, $${base + 12}, $${base + 13}, $${base + 14}::vector)`,
             );
             const payload = point.payload;
             params.push(
@@ -196,6 +212,12 @@ export function createPgVectorIndex(
               payload.scope_id ?? null,
               payload.project_key ?? null,
               payload.kind ?? null,
+              payload.durability ?? null,
+              payload.title ?? null,
+              payload.summary ?? null,
+              JSON.stringify(Array.isArray(payload.tags) ? payload.tags : []),
+              payload.updated_at ?? null,
+              payload.embedding_version ?? null,
               // pgvector requires a bracketed JSON-array string, not a PG array.
               `[${point.vector.join(",")}]`,
             );
@@ -203,7 +225,22 @@ export function createPgVectorIndex(
 
           const sql = `
             INSERT INTO ${tableName}
-              (point_id, memory_record_id, organization_id, scope_type, scope_id, project_key, kind, embedding)
+              (
+                point_id,
+                memory_record_id,
+                organization_id,
+                scope_type,
+                scope_id,
+                project_key,
+                kind,
+                durability,
+                title,
+                summary,
+                tags,
+                updated_at,
+                embedding_version,
+                embedding
+              )
             VALUES ${valueClauses.join(", ")}
             ON CONFLICT (point_id) DO UPDATE SET
               memory_record_id  = EXCLUDED.memory_record_id,
@@ -212,6 +249,12 @@ export function createPgVectorIndex(
               scope_id          = EXCLUDED.scope_id,
               project_key       = EXCLUDED.project_key,
               kind              = EXCLUDED.kind,
+              durability        = EXCLUDED.durability,
+              title             = EXCLUDED.title,
+              summary           = EXCLUDED.summary,
+              tags              = EXCLUDED.tags,
+              updated_at        = EXCLUDED.updated_at,
+              embedding_version = EXCLUDED.embedding_version,
               embedding         = EXCLUDED.embedding
           `;
 
@@ -297,6 +340,12 @@ export function createPgVectorIndex(
             scope_id,
             project_key,
             kind,
+            durability,
+            title,
+            summary,
+            tags,
+            updated_at,
+            embedding_version,
             1 - (embedding <=> ${vecPlaceholder}) AS score
           FROM ${tableName}
           ${whereSQL}
@@ -312,6 +361,12 @@ export function createPgVectorIndex(
           scope_id: string | null;
           project_key: string | null;
           kind: string | null;
+          durability: string | null;
+          title: string | null;
+          summary: string | null;
+          tags: string[] | null;
+          updated_at: string | null;
+          embedding_version: string | null;
           score: number;
         };
 
@@ -332,6 +387,12 @@ export function createPgVectorIndex(
             scope_id: row.scope_id,
             project_key: row.project_key,
             kind: row.kind,
+            durability: row.durability,
+            title: row.title,
+            summary: row.summary,
+            tags: row.tags ?? [],
+            updated_at: row.updated_at,
+            embedding_version: row.embedding_version,
           },
         }));
       } catch (err) {

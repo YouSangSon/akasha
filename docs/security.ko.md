@@ -10,7 +10,8 @@
 
 | Surface | 위험 |
 |---------|------|
-| HTTP API (`/mcp`, `/v1/*`) | 무단 메모리 read/write; cross-tenant 접근; destructive `compact_memory` apply |
+| HTTP API (`/mcp`, `/v1/*`) | 무단 메모리 read/write; cross-tenant 접근; destructive `compact_memory` apply 또는 governance archive |
+| 정적 admin shell (`/admin/memory`) | 브라우저 쪽 토큰 취급; memory governance 중 운영자 실수 |
 | MCP stdio | 로컬 전용 (parent process가 binary 실행); parent의 identity 상속 |
 | Postgres | 직접 DB 접근은 모든 앱 레이어 컨트롤 우회; 백업 + 제한 |
 | Qdrant | vector 접근은 scope/auth 필터 우회; 별도 백업, 네트워크 격리 |
@@ -38,9 +39,11 @@ token을 upstream API로 pass-through 하지 않습니다.
 
 OAuth scope는 tool 경계에서 강제됩니다:
 
-- `akasha:read` — 검색, context-pack, dry-run compaction.
+- `akasha:read` — 검색, context-pack, list-memory governance review, entity
+  graph inspection, dry-run compaction.
 - `akasha:write` — add-memory write.
-- `akasha:admin` — reindex, unarchive, audit-log 읽기, compaction apply.
+- `akasha:admin` — reindex, unarchive, audit-log 읽기, governance
+  update/delete/tag, compaction apply.
 - `akasha:memory` — 모든 tool check를 만족하는 호환성 umbrella scope.
 
 OAuth scope가 부족하면 HTTP 403과 함께 클라이언트가 요청해야 할 scope를 담은
@@ -58,6 +61,11 @@ browser-origin 요청을 MCP transport에 도달하기 전에 거부합니다.
 개발에서만 허용되며, non-loopback bind는 fail closed 됩니다.
 OAuth protected-resource metadata endpoint도 의도적으로 인증이 없으며,
 설정된 issuer/resource/scope metadata만 노출하고 secret은 노출하지 않습니다.
+
+`/admin/memory` 는 인증 없는 정적 HTML 셸입니다. memory data나 token을 embed하지
+않습니다. 운영자가 페이지에 bearer token을 붙여넣으면, 페이지는 현재 브라우저
+런타임에서만 이를 사용해 인증이 필요한 `/v1/*` governance route를 호출합니다.
+`localStorage` 또는 `sessionStorage` 는 사용하지 않습니다.
 
 ### 멀티-테넌트 격리
 

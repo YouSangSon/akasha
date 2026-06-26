@@ -87,6 +87,7 @@ function makeChunkRepo(
   return {
     insertChunks: vi.fn(),
     updatePointIds: vi.fn().mockResolvedValue(undefined),
+    deleteChunksForRecord: vi.fn().mockResolvedValue(undefined),
     listChunks: vi.fn(),
     getChunksByRecordId: vi.fn().mockResolvedValue(chunks),
     createContextPackRun: vi.fn(),
@@ -149,6 +150,10 @@ describe("runIngestSweep", () => {
 
     expect(result).toEqual({ scanned: 1, completed: 1, retried: 0, failed: 0 });
     expect(embeddings.embedBatch).toHaveBeenCalledWith([chunk.content]);
+    expect(vectorIndex.deleteByRecordIds).toHaveBeenCalledWith(
+      [job.memoryRecordId],
+      { organizationId: job.organizationId },
+    );
     expect(vectorIndex.upsert).toHaveBeenCalledWith(
       [expect.objectContaining({ id: `chunk:${chunk.id}` })],
     );

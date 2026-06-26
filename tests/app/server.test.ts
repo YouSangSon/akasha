@@ -40,6 +40,7 @@ function buildRegistry(): ToolRegistry {
       projectKey: "p",
       packMarkdown: "# Context Pack",
       selectedMemoryIds: [],
+      selectionRationale: [],
       sections: {
         project_summary: [],
         recent_decisions: [],
@@ -60,8 +61,39 @@ function buildRegistry(): ToolRegistry {
       dryRun: true,
       archivedIds: [],
       mergedIds: [],
+      duplicateGroups: [],
+      decayCandidates: [],
       promotionCandidates: [],
       summary: "noop",
+    }),
+    list_memory: vi.fn().mockResolvedValue({
+      ok: true,
+      scopeType: "project",
+      scopeId: "p",
+      memories: [],
+    }),
+    inspect_memory_graph: vi.fn().mockResolvedValue({
+      ok: true,
+      scopeType: "project",
+      scopeId: "p",
+      entities: [],
+      relationships: [],
+    }),
+    update_memory: vi.fn().mockResolvedValue({
+      ok: true,
+      updated: true,
+      memory: undefined,
+    }),
+    delete_memory: vi.fn().mockResolvedValue({
+      ok: true,
+      archived: true,
+      qdrantPointsDeleted: 0,
+      qdrantPointsPending: 0,
+    }),
+    tag_memory: vi.fn().mockResolvedValue({
+      ok: true,
+      updated: true,
+      memory: undefined,
     }),
     list_audit_log: vi.fn().mockResolvedValue({
       ok: true,
@@ -138,6 +170,26 @@ describe("createOperatorServer", () => {
     const body = (await res.json()) as { success: boolean; data: unknown };
     expect(body.success).toBe(true);
     expect(body.data).toMatchObject({ ok: true });
+  });
+
+  it("serves GET /admin/memory as a static shell without bearer", async () => {
+    const res = await fetch(`${handle.baseUrl}/admin/memory`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/html");
+    expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+
+    const html = await res.text();
+    expect(html).toContain("Akasha Memory Admin");
+    expect(html).toContain("/v1/memory/list");
+    expect(html).toContain("/v1/memory/update");
+    expect(html).toContain("/v1/memory/delete");
+    expect(html).toContain("/v1/memory/tag");
+    expect(html).not.toContain('<option value="archived">');
+    expect(html).toContain("if (!form.elements.durability.disabled)");
+    expect(html).not.toContain("localStorage");
+    expect(html).not.toContain("sessionStorage");
+    expect(html).not.toContain(tokens[0]);
   });
 
   it("rejects POST /v1/memory without Authorization header", async () => {
@@ -573,6 +625,149 @@ describe("createOperatorServer", () => {
     expect(registry.compact_memory).toHaveBeenCalledOnce();
   });
 
+  it("routes memory governance endpoints through descriptor-backed handlers", async () => {
+    const list = await fetch(`${handle.baseUrl}/v1/memory/list`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        organizationId: "org-a",
+        projectKey: "p",
+        includeArchived: true,
+        tag: "ops",
+      }),
+    });
+    expect(list.status).toBe(200);
+    expect(registry.list_memory).toHaveBeenCalledWith({
+      organizationId: "org-a",
+      projectKey: "p",
+      includeArchived: true,
+      tag: "ops",
+    });
+
+    const graph = await fetch(`${handle.baseUrl}/v1/memory/graph`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        organizationId: "org-a",
+        projectKey: "p",
+        kind: "code_symbol",
+        query: "QDRANT",
+        relationshipLimit: 10,
+      }),
+    });
+    expect(graph.status).toBe(200);
+    expect(registry.inspect_memory_graph).toHaveBeenCalledWith({
+      organizationId: "org-a",
+      projectKey: "p",
+      kind: "code_symbol",
+      query: "QDRANT",
+      relationshipLimit: 10,
+    });
+
+    const update = await fetch(`${handle.baseUrl}/v1/memory/update`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        organizationId: "org-a",
+        memoryId: 42,
+        content: "updated content",
+        tags: ["ops"],
+      }),
+    });
+    expect(update.status).toBe(200);
+    expect(registry.update_memory).toHaveBeenCalledWith({
+      organizationId: "org-a",
+      memoryId: 42,
+      content: "updated content",
+      tags: ["ops"],
+    });
+
+    const deleteResponse = await fetch(`${handle.baseUrl}/v1/memory/delete`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        organizationId: "org-a",
+        memoryId: 42,
+      }),
+    });
+    expect(deleteResponse.status).toBe(200);
+    expect(registry.delete_memory).toHaveBeenCalledWith({
+      organizationId: "org-a",
+      memoryId: 42,
+    });
+
+    const tag = await fetch(`${handle.baseUrl}/v1/memory/tag`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        organizationId: "org-a",
+        memoryId: 42,
+        tags: ["security", "ops"],
+      }),
+    });
+    expect(tag.status).toBe(200);
+    expect(registry.tag_memory).toHaveBeenCalledWith({
+      organizationId: "org-a",
+      memoryId: 42,
+      tags: ["security", "ops"],
+    });
+  });
+
+  it("rejects list_memory default/project-scope payloads without projectKey before dispatch", async () => {
+    const res = await fetch(`${handle.baseUrl}/v1/memory/list`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({ includeArchived: true }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as {
+      success: boolean;
+      error: { message: string };
+    };
+    expect(body.success).toBe(false);
+    expect(body.error.message).toContain("projectKey");
+    expect(registry.list_memory).not.toHaveBeenCalled();
+  });
+
+  it("rejects inspect_memory_graph default/project-scope payloads without projectKey before dispatch", async () => {
+    const res = await fetch(`${handle.baseUrl}/v1/memory/graph`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({ kind: "path" }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as {
+      success: boolean;
+      error: { message: string };
+    };
+    expect(body.success).toBe(false);
+    expect(body.error.message).toContain("projectKey");
+    expect(registry.inspect_memory_graph).not.toHaveBeenCalled();
+  });
+
   it("builds the default registry with lazy audit wiring when no registry is injected", async () => {
     vi.resetModules();
     const defaultRegistry = buildRegistry();
@@ -814,6 +1009,55 @@ describe("createOperatorServer (OAuth protected-resource discovery)", () => {
     expect(body.success).toBe(false);
     expect(body.error.message).toBe("insufficient_scope");
     expect(registry.add_memory).not.toHaveBeenCalled();
+  });
+
+  it("allows OAuth read scope for list_memory and rejects admin governance writes", async () => {
+    await handle.close();
+    registry = buildRegistry();
+    const oauthVerifier: OAuthTokenVerifier = {
+      verify: vi.fn().mockResolvedValue({
+        token: "oauth-read",
+        authType: "oauth",
+        scopes: ["akasha:read"],
+        organizationId: "org-oauth",
+      }),
+    };
+    handle = await startTestServer(
+      registry,
+      [],
+      oauthProtectedResource,
+      undefined,
+      oauthVerifier,
+    );
+
+    const list = await fetch(`${handle.baseUrl}/v1/memory/list`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer oauth-read",
+      },
+      body: JSON.stringify({ projectKey: "p" }),
+    });
+    expect(list.status).toBe(200);
+    expect(registry.list_memory).toHaveBeenCalledWith({
+      projectKey: "p",
+      organizationId: "org-oauth",
+    });
+
+    const update = await fetch(`${handle.baseUrl}/v1/memory/update`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer oauth-read",
+      },
+      body: JSON.stringify({ memoryId: 42, title: "New title" }),
+    });
+
+    expect(update.status).toBe(403);
+    expect(update.headers.get("www-authenticate")).toBe(
+      'Bearer error="insufficient_scope", resource_metadata="https://akasha.example.com/.well-known/oauth-protected-resource/mcp", scope="akasha:memory"',
+    );
+    expect(registry.update_memory).not.toHaveBeenCalled();
   });
 });
 

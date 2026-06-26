@@ -35,6 +35,7 @@ function buildRegistry(): ToolRegistry {
       projectKey: "p",
       packMarkdown: "# Context Pack",
       selectedMemoryIds: [],
+      selectionRationale: [],
       sections: {
         project_summary: [],
         recent_decisions: [],
@@ -59,6 +60,35 @@ function buildRegistry(): ToolRegistry {
       decayCandidates: [],
       promotionCandidates: [],
       summary: "noop",
+    }),
+    list_memory: vi.fn().mockResolvedValue({
+      ok: true,
+      scopeType: "project",
+      scopeId: "p",
+      memories: [],
+    }),
+    inspect_memory_graph: vi.fn().mockResolvedValue({
+      ok: true,
+      scopeType: "project",
+      scopeId: "p",
+      entities: [],
+      relationships: [],
+    }),
+    update_memory: vi.fn().mockResolvedValue({
+      ok: true,
+      updated: true,
+      memory: undefined,
+    }),
+    delete_memory: vi.fn().mockResolvedValue({
+      ok: true,
+      archived: true,
+      qdrantPointsDeleted: 0,
+      qdrantPointsPending: 0,
+    }),
+    tag_memory: vi.fn().mockResolvedValue({
+      ok: true,
+      updated: true,
+      memory: undefined,
     }),
     list_audit_log: vi.fn().mockResolvedValue({
       ok: true,
@@ -129,6 +159,8 @@ describe("GET /metrics", () => {
 
     const health = await fetch(`${handle.baseUrl}/healthz`);
     expect(health.status).toBe(200);
+    const admin = await fetch(`${handle.baseUrl}/admin/memory`);
+    expect(admin.status).toBe(200);
     const addMemory = await fetch(`${handle.baseUrl}/v1/memory`, {
       method: "POST",
       headers: {
@@ -146,6 +178,9 @@ describe("GET /metrics", () => {
     const text = await scrapeMetrics(handle);
     expect(text).toContain(
       'akasha_http_requests_total{method="GET",route="/healthz",status="200"} 1',
+    );
+    expect(text).toContain(
+      'akasha_http_requests_total{method="GET",route="/admin/memory",status="200"} 1',
     );
     expect(text).toContain(
       'akasha_http_requests_total{method="POST",route="/v1/memory",status="200"} 1',

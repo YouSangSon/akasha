@@ -237,8 +237,8 @@ last_seen_at                                   valid_from / valid_to
                                                confidence / created_at
 ```
 
-마이그레이션은 `src/db/migrations/` 에 위치. 현재 범위는 `001-011` 이며,
-런너는 부트스트랩 시 `001` 부터 `011` 까지 적용합니다 (모두 idempotent,
+마이그레이션은 `src/db/migrations/` 에 위치. 현재 범위는 `001-012` 이며,
+런너는 부트스트랩 시 `001` 부터 `012` 까지 적용합니다 (모두 idempotent,
 `CREATE … IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS`).
 `009_memory_archive_qdrant_retry.sql` 은 archive Qdrant retry metadata를
 제공하며, `qdrant_next_retry_at` 과 백그라운드 archive cleanup sweeper가
@@ -246,6 +246,8 @@ last_seen_at                                   valid_from / valid_to
 은 lexical retrieval이 사용하는 generated `search_vector` 컬럼과 GIN 인덱스를
 추가합니다. `011_entity_temporal_graph.sql` 은 graph-backed lexical rescue가
 사용하는 persistent entity mention 및 temporal relationship 테이블을 추가합니다.
+`012_memory_governance_tags.sql` 은 governance 필터링과 vector payload metadata
+갱신에 쓰이는 org-scoped `memory_tags` 를 추가합니다.
 
 ## 멀티-테넌트
 

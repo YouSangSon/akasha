@@ -11,7 +11,8 @@ reporting policy (where to send security reports), see
 
 | Surface | What's at risk |
 |---------|----------------|
-| HTTP API (`/mcp`, `/v1/*`) | Unauthorized read/write of memory; cross-tenant access; destructive `compact_memory` apply |
+| HTTP API (`/mcp`, `/v1/*`) | Unauthorized read/write of memory; cross-tenant access; destructive `compact_memory` apply or governance archive |
+| Static admin shell (`/admin/memory`) | Browser-side token handling; operator mistakes during memory governance |
 | MCP stdio | Local-only (parent process invokes the binary); inherits parent's identity |
 | Postgres | Direct DB access bypasses all app-layer controls; back up + restrict |
 | Qdrant | Vector access bypasses scope/auth filters; backup separately, network-isolate |
@@ -40,9 +41,11 @@ Akasha never passes inbound MCP bearer tokens through to upstream APIs.
 
 OAuth scopes are enforced at the tool boundary:
 
-- `akasha:read` — search, context-pack, and dry-run compaction.
+- `akasha:read` — search, context-pack, list-memory governance review, entity
+  graph inspection, and dry-run compaction.
 - `akasha:write` — add-memory writes.
-- `akasha:admin` — reindex, unarchive, audit-log reads, and compaction apply.
+- `akasha:admin` — reindex, unarchive, audit-log reads, governance
+  update/delete/tag, and compaction apply.
 - `akasha:memory` — compatibility umbrella scope that satisfies all tool
   checks.
 
@@ -62,6 +65,11 @@ browser-origin requests before they reach the MCP transport.
 acceptable for loopback local development; non-loopback binds fail closed.
 The OAuth protected-resource metadata endpoints are also unauthenticated by
 design and expose only configured issuer/resource/scope metadata, not secrets.
+
+`/admin/memory` is an unauthenticated static HTML shell. It embeds no memory
+data and no token; operators paste a bearer token into the page, and the page
+uses it only in the current browser runtime to call the authenticated `/v1/*`
+governance routes. It does not use `localStorage` or `sessionStorage`.
 
 ### Multi-tenant isolation
 

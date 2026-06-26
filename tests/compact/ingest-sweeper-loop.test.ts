@@ -33,6 +33,7 @@ function makeChunkRepo(): MemoryChunkRepository {
   return {
     insertChunks: vi.fn(),
     updatePointIds: vi.fn().mockResolvedValue(undefined),
+    deleteChunksForRecord: vi.fn().mockResolvedValue(undefined),
     listChunks: vi.fn().mockResolvedValue([]),
     getChunksByRecordId: vi.fn().mockResolvedValue([]),
     createContextPackRun: vi.fn(),

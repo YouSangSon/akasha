@@ -109,6 +109,10 @@ async function sweepOne(
       );
     }
 
+    await input.vectorIndex.deleteByRecordIds([job.memoryRecordId], {
+      organizationId: job.organizationId,
+    });
+
     const points = chunks.map((chunk, index) =>
       buildVectorPoint({
         chunkId: chunk.id,
@@ -120,6 +124,9 @@ async function sweepOne(
         projectKey: chunk.projectKey ?? null,
         kind: chunk.kind,
         durability: chunk.durability ?? "ephemeral",
+        title: chunk.title ?? null,
+        summary: chunk.summary ?? null,
+        tags: chunk.tags ?? [],
         updatedAt: chunk.updatedAt,
         embeddingVersion: chunk.embeddingVersion,
       }),
