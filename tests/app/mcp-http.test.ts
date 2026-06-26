@@ -5,10 +5,26 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { BearerToken } from "../../src/app/middleware/bearer-auth.js";
+import {
+  createTokenBucketLimiter,
+  type RateLimiter,
+} from "../../src/app/middleware/rate-limit.js";
+import type { OAuthProtectedResourceConfig } from "../../src/app/oauth-protected-resource.js";
 import { createOperatorServer } from "../../src/app/server.js";
 import type { ToolRegistry } from "../../src/mcp/types.js";
 
 type ServerHandle = { baseUrl: string; close: () => Promise<void> };
+
+const oauthProtectedResource: OAuthProtectedResourceConfig = {
+  metadataUrl:
+    "https://akasha.example.com/.well-known/oauth-protected-resource/mcp",
+  metadata: {
+    resource: "https://akasha.example.com/mcp",
+    authorization_servers: ["https://auth.example.com/"],
+    bearer_methods_supported: ["header"],
+    scopes_supported: ["akasha:memory"],
+  },
+};
 
 function buildRegistry(): ToolRegistry {
   return {
@@ -70,8 +86,15 @@ function buildRegistry(): ToolRegistry {
 async function startServer(
   tokens: ReadonlyArray<string | BearerToken>,
   registry = buildRegistry(),
+  oauthProtectedResource: OAuthProtectedResourceConfig | null = null,
+  rateLimiter?: RateLimiter,
 ): Promise<ServerHandle & { registry: ToolRegistry }> {
-  const server = createOperatorServer({ registry, bearerTokens: tokens });
+  const server = createOperatorServer({
+    registry,
+    bearerTokens: tokens,
+    oauthProtectedResource,
+    rateLimiter,
+  });
   await new Promise<void>((resolve) =>
     server.listen(0, "127.0.0.1", () => resolve()),
   );
@@ -120,6 +143,79 @@ describe("Streamable HTTP /mcp", () => {
       }),
     });
     expect(res.status).toBe(401);
+  });
+
+  it("adds OAuth protected-resource discovery to /mcp 401 JSON-RPC responses", async () => {
+    handle = await startServer(["token-a"], buildRegistry(), oauthProtectedResource);
+
+    const res = await fetch(`${handle.baseUrl}/mcp`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {},
+      }),
+    });
+
+    expect(res.status).toBe(401);
+    expect(res.headers.get("www-authenticate")).toBe(
+      'Bearer resource_metadata="https://akasha.example.com/.well-known/oauth-protected-resource/mcp", scope="akasha:memory"',
+    );
+    const body = (await res.json()) as {
+      jsonrpc: string;
+      error: { code: number; message: string };
+      id: null;
+    };
+    expect(body.error).toEqual({ code: -32001, message: "Unauthorized" });
+  });
+
+  it("keeps rate limiting active for /mcp requests when OAuth discovery is configured", async () => {
+    const rateLimiter = createTokenBucketLimiter({
+      capacity: 1,
+      windowMs: 60_000,
+      now: () => 0,
+    });
+    handle = await startServer(
+      ["token-a"],
+      buildRegistry(),
+      oauthProtectedResource,
+      rateLimiter,
+    );
+
+    const first = await fetch(`${handle.baseUrl}/mcp`, {
+      method: "POST",
+      headers: {
+        authorization: "Bearer token-a",
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      body: "{",
+    });
+    expect(first.status).toBe(400);
+
+    const second = await fetch(`${handle.baseUrl}/mcp`, {
+      method: "POST",
+      headers: {
+        authorization: "Bearer token-a",
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      body: "{",
+    });
+
+    expect(second.status).toBe(429);
+    expect(second.headers.get("retry-after")).toBe("60");
+    const body = (await second.json()) as {
+      jsonrpc: string;
+      error: { code: number; message: string };
+      id: null;
+    };
+    expect(body.error).toEqual({ code: -32002, message: "Rate limit exceeded" });
   });
 
   it("serves MCP tools over Streamable HTTP with structuredContent", async () => {

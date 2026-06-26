@@ -141,6 +141,30 @@ describe("public documentation drift checks", () => {
     }
   });
 
+  it("documents OAuth protected-resource discovery configuration and security limits", () => {
+    for (const path of [
+      ".env.example",
+      "docs/configuration.md",
+      "docs/configuration.ko.md",
+    ]) {
+      const text = read(path);
+      expect(text).toContain("MCP_OAUTH_AUTHORIZATION_SERVERS");
+      expect(text).toContain("MCP_OAUTH_RESOURCE_URL");
+      expect(text).toContain("MCP_OAUTH_SCOPES");
+      expect(text).toContain("MCP_OAUTH_RESOURCE_NAME");
+      expect(text).toContain("MCP_OAUTH_RESOURCE_DOCUMENTATION_URL");
+      expect(text).toContain("/.well-known/oauth-protected-resource");
+    }
+
+    for (const path of ["docs/security.md", "docs/security.ko.md"]) {
+      const text = read(path);
+      expect(text).toContain("MCP_OAUTH_AUTHORIZATION_SERVERS");
+      expect(text).toContain("WWW-Authenticate");
+      expect(text).toContain("MEMORY_API_TOKENS");
+      expect(text).toContain("discovery");
+    }
+  });
+
   it("keeps API reference examples aligned with tool schemas and context-pack output", () => {
     const api = read("docs/api-reference.md");
     const apiKo = read("docs/api-reference.ko.md");

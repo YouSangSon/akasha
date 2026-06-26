@@ -25,6 +25,13 @@ import {
   type RateLimiter,
 } from "./middleware/rate-limit.js";
 import { handleMcpHttpRequest } from "./mcp-http.js";
+import {
+  isOAuthProtectedResourceMetadataPath,
+  loadOAuthProtectedResourceConfig,
+  sendOAuthProtectedResourceMetadata,
+  setOAuthWwwAuthenticateHeader,
+  type OAuthProtectedResourceConfig,
+} from "./oauth-protected-resource.js";
 import { createMemoryRoutes, type Route } from "./routes/memory.js";
 import {
   bootstrapCanonicalServices,
@@ -58,6 +65,9 @@ export type CreateOperatorServerOptions = {
   // When provided, every non-health request is rate-limited per-token. Tests
   // inject a precomputed limiter; production reads RATE_LIMIT_PER_MINUTE.
   rateLimiter?: RateLimiter;
+  // Optional OAuth protected-resource discovery metadata for MCP HTTP.
+  // Undefined loads env config; null disables discovery explicitly.
+  oauthProtectedResource?: OAuthProtectedResourceConfig | null;
 };
 
 function normalizeTokens(
@@ -107,6 +117,10 @@ export function createOperatorServer(
   const tokens: BearerToken[] = options.bearerTokens
     ? normalizeTokens(options.bearerTokens)
     : loadBearerTokens(process.env);
+  const oauthProtectedResource =
+    options.oauthProtectedResource === undefined
+      ? loadOAuthProtectedResourceConfig(process.env)
+      : options.oauthProtectedResource;
   const registry = options.registry ?? createDefaultToolRegistry(log);
   const routes: Route[] = createMemoryRoutes({ registry, logger: log });
 
@@ -128,6 +142,15 @@ export function createOperatorServer(
   return http.createServer(
     async (req: IncomingMessage, res: ServerResponse) => {
       try {
+        if (
+          req.method === "GET" &&
+          oauthProtectedResource &&
+          isOAuthProtectedResourceMetadataPath(req.url)
+        ) {
+          sendOAuthProtectedResourceMetadata(res, oauthProtectedResource);
+          return;
+        }
+
         // Liveness: process is up. Unauthenticated, no dependency check.
         if (req.url === "/healthz" && req.method === "GET") {
           sendOk(res, 200, {
@@ -169,6 +192,7 @@ export function createOperatorServer(
             bearerTokens: tokens,
             rateLimiter,
             logger: log,
+            oauthProtectedResource,
           });
           return;
         }
@@ -179,6 +203,9 @@ export function createOperatorServer(
         if (tokens.length > 0) {
           matchedToken = matchBearerFromRequest(req, tokens);
           if (!matchedToken) {
+            if (isV1Request(req.url)) {
+              setOAuthWwwAuthenticateHeader(res, oauthProtectedResource);
+            }
             sendError(res, 401, "unauthorized");
             return;
           }
@@ -226,6 +253,17 @@ export function createOperatorServer(
       }
     },
   );
+}
+
+function isV1Request(url: string | undefined): boolean {
+  return parseRequestPath(url).startsWith("/v1/");
+}
+
+function parseRequestPath(url: string | undefined): string {
+  if (!url) {
+    return "";
+  }
+  return new URL(url, "http://localhost").pathname;
 }
 
 function createDefaultToolRegistry(log: Logger): ToolRegistry {

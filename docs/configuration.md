@@ -171,6 +171,30 @@ When a token has no binding (legacy form):
   (`listMemory`), and the vector-hydration step (`getMemoryRecordsByIds`).
   Without it, every read that omits an org throws an operational error.
 
+### OAuth/OIDC protected-resource discovery
+
+Akasha can advertise OAuth 2.0 Protected Resource Metadata for MCP Streamable
+HTTP clients. This is discovery only: it does **not** replace
+`MEMORY_API_TOKENS`, token-org binding, origin checks, or rate limiting.
+
+Leave `MCP_OAUTH_AUTHORIZATION_SERVERS` unset to disable discovery. When it is
+set, `MCP_OAUTH_RESOURCE_URL` is required and the app serves metadata
+unauthenticated at:
+
+- `/.well-known/oauth-protected-resource`
+- `/.well-known/oauth-protected-resource/mcp`
+
+Unauthorized `/mcp` and `/v1/*` requests also include a `WWW-Authenticate`
+challenge with `resource_metadata` and `scope` parameters.
+
+| Variable | Default | Notes |
+|---|---|---|
+| `MCP_OAUTH_AUTHORIZATION_SERVERS` | unset → disabled | Comma-separated HTTPS issuer URLs for authorization servers. |
+| `MCP_OAUTH_RESOURCE_URL` | required when enabled | Public protected resource URL. Use the externally reachable HTTPS URL, normally `https://.../mcp`. |
+| `MCP_OAUTH_SCOPES` | `akasha:memory` | Comma-separated scopes advertised in metadata and space-delimited in the challenge header. |
+| `MCP_OAUTH_RESOURCE_NAME` | unset | Optional human-readable `resource_name`. |
+| `MCP_OAUTH_RESOURCE_DOCUMENTATION_URL` | unset | Optional HTTPS URL emitted as `resource_documentation`. |
+
 ## Personal / single-tenant use
 
 `organization_id` is just a string label, not a "company" or "account" concept —

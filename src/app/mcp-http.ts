@@ -7,6 +7,10 @@ import {
   matchBearerFromRequest,
   type BearerToken,
 } from "./middleware/bearer-auth.js";
+import {
+  setOAuthWwwAuthenticateHeader,
+  type OAuthProtectedResourceConfig,
+} from "./oauth-protected-resource.js";
 import type { RateLimiter } from "./middleware/rate-limit.js";
 
 export type HandleMcpHttpRequestOptions = {
@@ -16,6 +20,7 @@ export type HandleMcpHttpRequestOptions = {
   bearerTokens: readonly BearerToken[];
   rateLimiter: RateLimiter | null;
   logger: Logger;
+  oauthProtectedResource?: OAuthProtectedResourceConfig | null;
 };
 
 const MAX_BODY_BYTES = 1_000_000; // 1 MB safety cap
@@ -25,7 +30,15 @@ const ORGANIZATION_MISMATCH_ERROR =
 export async function handleMcpHttpRequest(
   options: HandleMcpHttpRequestOptions,
 ): Promise<void> {
-  const { req, res, registry, bearerTokens, rateLimiter, logger } = options;
+  const {
+    req,
+    res,
+    registry,
+    bearerTokens,
+    rateLimiter,
+    logger,
+    oauthProtectedResource = null,
+  } = options;
 
   if (req.method !== "POST" && req.method !== "GET" && req.method !== "DELETE") {
     sendJsonRpcError(res, 405, -32000, "Method not allowed");
@@ -41,6 +54,7 @@ export async function handleMcpHttpRequest(
   if (bearerTokens.length > 0) {
     matchedToken = matchBearerFromRequest(req, bearerTokens);
     if (!matchedToken) {
+      setOAuthWwwAuthenticateHeader(res, oauthProtectedResource);
       sendJsonRpcError(res, 401, -32001, "Unauthorized");
       return;
     }
