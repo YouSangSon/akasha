@@ -130,6 +130,19 @@ describe("public documentation drift checks", () => {
     expect(apiKo).toContain("sections: {");
     expect(api).toContain("project_summary");
     expect(apiKo).toContain("project_summary");
+    for (const path of ["docs/api-reference.md", "docs/api-reference.ko.md"]) {
+      const text = read(path);
+      for (const section of [
+        "project_summary",
+        "recent_decisions",
+        "constraints",
+        "open_questions",
+        "relevant_notes",
+      ]) {
+        expect(text).toContain(`${section}: SearchMemoryResult[];`);
+      }
+      expect(text).not.toContain("MemoryRecord[]");
+    }
     expect(api).toContain("structuredContent");
     expect(apiKo).toContain("structuredContent");
     expect(api).toContain("text content item");
@@ -148,6 +161,8 @@ describe("public documentation drift checks", () => {
   });
 
   it("documents backup differences for Qdrant and pgvector backends", () => {
+    expect(read("package.json")).toContain("./scripts/snapshot-qdrant.sh");
+
     for (const path of [
       "docs/operations.md",
       "docs/operations.ko.md",
@@ -159,6 +174,9 @@ describe("public documentation drift checks", () => {
       expect(text).toContain("VECTOR_BACKEND=pgvector");
       expect(text).toContain("Postgres");
       expect(text).toContain("Qdrant");
+      expect(text).toContain("scripts/snapshot-qdrant.sh");
+      expect(text).toContain("QDRANT_URL");
+      expect(text).toContain("logical data path");
     }
   });
 });

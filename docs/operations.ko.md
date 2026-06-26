@@ -19,8 +19,12 @@ npm run backup:create
 `manifest-YYYYMMDD-HHMM.json`.
 
 `VECTOR_BACKEND=pgvector` 에서는 벡터가 Postgres 안에 있으므로 Qdrant snapshot
-data는 logical data path의 일부가 아닙니다. 기존 restore smoke helper는 아직
-Qdrant-oriented 이며 추후 script split 전까지 `RESTORE_QDRANT_URL` 이 필요합니다.
+data는 logical data path의 일부가 아닙니다. 현재 packaged command caveat:
+`npm run backup:create` 는 Postgres backup 후에도 `scripts/snapshot-qdrant.sh` 를
+계속 호출하므로 오늘 기준 `QDRANT_URL` 과 접근 가능한 Qdrant endpoint가 여전히
+필요합니다. 이는 pgvector data dependency가 아니라 packaging/script 한계입니다.
+기존 restore smoke helper는 아직 Qdrant-oriented 이며 추후 script split 전까지
+`RESTORE_QDRANT_URL` 이 필요합니다.
 
 ### 스케줄
 

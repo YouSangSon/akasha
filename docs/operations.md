@@ -19,8 +19,12 @@ then writes a manifest with checksums. Files are named
 `manifest-YYYYMMDD-HHMM.json`.
 
 With `VECTOR_BACKEND=pgvector`, vectors live in Postgres; Qdrant snapshot data
-is not part of the logical data path. Existing restore smoke helpers are still
-Qdrant-oriented and require `RESTORE_QDRANT_URL` until a later script split.
+is not part of the logical data path. Current packaged-command caveat:
+`npm run backup:create` still invokes `scripts/snapshot-qdrant.sh` after the
+Postgres backup, so it still requires `QDRANT_URL` and a reachable Qdrant
+endpoint today. This is a packaging/script limitation, not a pgvector data
+dependency. Existing restore smoke helpers are still Qdrant-oriented and
+require `RESTORE_QDRANT_URL` until a later script split.
 
 ### Schedule
 

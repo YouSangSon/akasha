@@ -181,3 +181,39 @@ Results:
 ### Controller correction
 
 - The fix subagent returned final commit `f6d4289`; the `3658373` value above is a stale intermediate hash from before the final commit landed.
+
+---
+
+## Task 4 Review Fix — 2026-06-26
+
+### Reviewer Findings Addressed
+
+- Backup docs now warn that the current packaged `npm run backup:create`
+  command still invokes `scripts/snapshot-qdrant.sh` and therefore requires
+  `QDRANT_URL`, even for pgvector operators whose logical vector data lives in
+  Postgres.
+- API docs now document `build_context_pack.sections` arrays as
+  `SearchMemoryResult[]`, matching `ContextPackSections` in source.
+- Drift tests now assert the `SearchMemoryResult[]` element type and the
+  packaged Qdrant snapshot caveat.
+
+### Tests Run
+
+```bash
+npm test -- tests/scripts/public-docs-drift.test.ts
+```
+
+Result: PASS. 1 test file passed, 10 tests passed.
+
+Typecheck was not re-run because the test changes were string assertions only.
+
+### Files Changed
+
+- `docs/api-reference.md`
+- `docs/api-reference.ko.md`
+- `docs/operations.md`
+- `docs/operations.ko.md`
+- `docs/self-hosted-operations.md`
+- `docs/self-hosted-operations.ko.md`
+- `tests/scripts/public-docs-drift.test.ts`
+- `.superpowers/sdd/task-4-report.md`

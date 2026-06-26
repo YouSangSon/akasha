@@ -172,11 +172,11 @@ type BuildContextPackResult = {
   packMarkdown: string;          // 새 세션에 붙여넣을 준비된 텍스트
   selectedMemoryIds: string[];
   sections: {
-    project_summary: MemoryRecord[];
-    recent_decisions: MemoryRecord[];
-    constraints: MemoryRecord[];
-    open_questions: MemoryRecord[];
-    relevant_notes: MemoryRecord[];
+    project_summary: SearchMemoryResult[];
+    recent_decisions: SearchMemoryResult[];
+    constraints: SearchMemoryResult[];
+    open_questions: SearchMemoryResult[];
+    relevant_notes: SearchMemoryResult[];
   };
 };
 ```

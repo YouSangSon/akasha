@@ -175,11 +175,11 @@ type BuildContextPackResult = {
   packMarkdown: string;          // ready to paste into a new session
   selectedMemoryIds: string[];
   sections: {
-    project_summary: MemoryRecord[];
-    recent_decisions: MemoryRecord[];
-    constraints: MemoryRecord[];
-    open_questions: MemoryRecord[];
-    relevant_notes: MemoryRecord[];
+    project_summary: SearchMemoryResult[];
+    recent_decisions: SearchMemoryResult[];
+    constraints: SearchMemoryResult[];
+    open_questions: SearchMemoryResult[];
+    relevant_notes: SearchMemoryResult[];
   };
 };
 ```

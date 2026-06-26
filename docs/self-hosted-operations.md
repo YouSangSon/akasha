@@ -59,7 +59,11 @@ Qdrant snapshot data. The backup scripts create and copy:
 The Qdrant metadata sidecar name includes the collection name.
 
 With `VECTOR_BACKEND=pgvector`, vectors live in Postgres; Qdrant snapshot data
-is not part of the logical data path.
+is not part of the logical data path. However, today's packaged
+`npm run backup:create` command still invokes `scripts/snapshot-qdrant.sh`
+unconditionally after the Postgres dump. Pgvector operators using the packaged
+command still need `QDRANT_URL` and a reachable Qdrant endpoint, or the backup
+job fails at the snapshot step until the script split lands.
 
 ## Backup verification
 
