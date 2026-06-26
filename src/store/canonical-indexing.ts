@@ -370,22 +370,9 @@ export async function refreshCanonicalMemoryIndex(input: {
     );
   }
 
-  const job = input.ingestJobs
-    ? await input.ingestJobs.create({
-        memoryRecordId: input.record.id,
-        organizationId,
-      })
-    : null;
+  let job: Awaited<ReturnType<IngestJobRepository["create"]>> | null = null;
 
   try {
-    if (job && chunks.length > 0) {
-      await input.ingestJobs!.markQdrantPending({
-        jobId: job.id,
-        attempts: 0,
-        nextRetryAt: new Date(Date.now() + nextRetryDelayMs(0)),
-      });
-    }
-
     const storedChunks =
       input.chunkRepository.replaceChunksForRecord !== undefined
         ? await input.chunkRepository.replaceChunksForRecord({
@@ -399,6 +386,20 @@ export async function refreshCanonicalMemoryIndex(input: {
             chunks,
             embedding: input.embedding,
           });
+
+    job = input.ingestJobs
+      ? await input.ingestJobs.create({
+          memoryRecordId: input.record.id,
+          organizationId,
+        })
+      : null;
+    if (job && storedChunks.length > 0) {
+      await input.ingestJobs!.markQdrantPending({
+        jobId: job.id,
+        attempts: 0,
+        nextRetryAt: new Date(Date.now() + nextRetryDelayMs(0)),
+      });
+    }
 
     await input.vectorIndex.deleteByRecordIds([input.record.id], {
       organizationId,

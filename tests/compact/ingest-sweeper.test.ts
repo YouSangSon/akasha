@@ -150,6 +150,10 @@ describe("runIngestSweep", () => {
 
     expect(result).toEqual({ scanned: 1, completed: 1, retried: 0, failed: 0 });
     expect(embeddings.embedBatch).toHaveBeenCalledWith([chunk.content]);
+    expect(vectorIndex.deleteByRecordIds).toHaveBeenCalledWith(
+      [job.memoryRecordId],
+      { organizationId: job.organizationId },
+    );
     expect(vectorIndex.upsert).toHaveBeenCalledWith(
       [expect.objectContaining({ id: `chunk:${chunk.id}` })],
     );

@@ -847,6 +847,38 @@ describe("createToolRegistry", () => {
     expect(services.ingestJobs.markCompleted).not.toHaveBeenCalled();
   });
 
+  it("does not create a retry marker when update_memory chunk replacement rolls back", async () => {
+    const services = createCanonicalServices();
+    services.repository.updateMemoryRecord.mockResolvedValueOnce(
+      createRecord({
+        id: 501,
+        organizationId: "org-a",
+        memoryType: "decision",
+        content: "Decision: chunk replacement rolls back.",
+        sourceType: "conversation",
+        externalId: "decision:manual",
+      }),
+    );
+    services.chunkRepository.replaceChunksForRecord.mockRejectedValueOnce(
+      new Error("replace failed"),
+    );
+    const registry = createToolRegistry({
+      resolveCanonicalServices: async () => services,
+    });
+
+    await expect(
+      registry.update_memory({
+        organizationId: "org-a",
+        memoryId: 501,
+        content: "Decision: chunk replacement rolls back.",
+      }),
+    ).rejects.toThrow(/replace failed/);
+
+    expect(services.ingestJobs.create).not.toHaveBeenCalled();
+    expect(services.vectorIndex.deleteByRecordIds).not.toHaveBeenCalled();
+    expect(services.vectorIndex.upsert).not.toHaveBeenCalled();
+  });
+
   it("updates memory without vector refresh for metadata-only edits", async () => {
     const services = createCanonicalServices();
     const registry = createToolRegistry({
