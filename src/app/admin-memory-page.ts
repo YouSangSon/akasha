@@ -403,7 +403,6 @@ export function renderMemoryAdminPage(): string {
         '<select name="durability">',
         '<option value="ephemeral">ephemeral</option>',
         '<option value="durable">durable</option>',
-        '<option value="archived">archived</option>',
         '</select>',
         '</label>',
         '</div>',
@@ -419,7 +418,7 @@ export function renderMemoryAdminPage(): string {
         '</div>',
       ].join("");
       form.elements.kind.value = memory.memoryType || "fact";
-      form.elements.durability.value = memory.durability || "ephemeral";
+      form.elements.durability.value = memory.durability === "durable" ? "durable" : "ephemeral";
       form.elements.title.value = memory.title || "";
       form.elements.summary.value = memory.summary || "";
       form.elements.content.value = memory.content || "";

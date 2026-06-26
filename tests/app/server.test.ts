@@ -177,6 +177,7 @@ describe("createOperatorServer", () => {
     expect(html).toContain("/v1/memory/update");
     expect(html).toContain("/v1/memory/delete");
     expect(html).toContain("/v1/memory/tag");
+    expect(html).not.toContain('<option value="archived">');
     expect(html).not.toContain("localStorage");
     expect(html).not.toContain("sessionStorage");
     expect(html).not.toContain(tokens[0]);
