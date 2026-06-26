@@ -10,7 +10,7 @@
 
 | Surface | 위험 |
 |---------|------|
-| HTTP API (`/v1/*`) | 무단 메모리 read/write; cross-tenant 접근; destructive `compact_memory` apply |
+| HTTP API (`/mcp`, `/v1/*`) | 무단 메모리 read/write; cross-tenant 접근; destructive `compact_memory` apply |
 | MCP stdio | 로컬 전용 (parent process가 binary 실행); parent의 identity 상속 |
 | Postgres | 직접 DB 접근은 모든 앱 레이어 컨트롤 우회; 백업 + 제한 |
 | Qdrant | vector 접근은 scope/auth 필터 우회; 별도 백업, 네트워크 격리 |
@@ -26,6 +26,17 @@
 
 `/healthz`, `/readyz` 는 의도적으로 인증 없음 — 오케스트레이터가 자격 없이
 프로빙 가능해야 함.
+
+### HTTP attack surface
+
+`/mcp` 는 MCP Streamable HTTP 엔드포인트이며 로컬 MCP stdio가 아니라 `/v1/*`
+처럼 취급해야 합니다. `MEMORY_API_TOKENS` 가 설정되어 있으면 `/mcp` 에 bearer
+auth가 필요합니다. `/mcp` 는 JSON HTTP 와 같은 rate limiter를 공유하고,
+`src/app/mcp-http.ts` 의 origin validation은 신뢰하지 않는 browser-origin
+요청을 MCP transport에 도달하기 전에 거부합니다.
+
+`/healthz`, `/readyz` 는 계속 인증이 없습니다. 빈 토큰 목록은 loopback 로컬
+개발에서만 허용되며, non-loopback bind는 fail closed 됩니다.
 
 ### 멀티-테넌트 격리
 

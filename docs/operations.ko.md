@@ -11,11 +11,16 @@ Akasha production 운영을 위한 day-2 절차. 초기 배포는
 npm run backup:create
 ```
 
-Postgres (`pg_dump` 를 gzip으로 압축) 와 Qdrant (snapshot API) 를
-`BACKUP_DIR` 로 스냅샷하고 checksum manifest를 씁니다. 파일명:
+`VECTOR_BACKEND=qdrant` 에서는 `npm run backup:create` 가 Postgres
+(`pg_dump` 를 gzip으로 압축) 와 Qdrant snapshot data를 `BACKUP_DIR` 로
+캡처하고 checksum manifest를 씁니다. 파일명:
 `postgres-YYYYMMDD-HHMM.sql.gz`, `qdrant-YYYYMMDD-HHMM.snapshot`,
 `qdrant-memory_chunks_v1-YYYYMMDD-HHMM.json` (metadata sidecar),
 `manifest-YYYYMMDD-HHMM.json`.
+
+`VECTOR_BACKEND=pgvector` 에서는 벡터가 Postgres 안에 있으므로 Qdrant snapshot
+data는 logical data path의 일부가 아닙니다. 기존 restore smoke helper는 아직
+Qdrant-oriented 이며 추후 script split 전까지 `RESTORE_QDRANT_URL` 이 필요합니다.
 
 ### 스케줄
 
@@ -62,7 +67,9 @@ npm run restore:smoke
 
 격리된 compose 스택 (`compose.restore-smoke.yaml`) 을 띄워 최신 백업을
 복원하고 데이터 검증 실행. **Production을 건드리지 않음.** 실패는 critical
-경고로 처리 — 백업이 신뢰 불가.
+경고로 처리 — 백업이 신뢰 불가. 현재 helper는 아직 Qdrant-oriented 이며
+`RESTORE_QDRANT_URL` 을 요구합니다. pgvector 배포는 helper split 전까지
+Postgres를 logical data path로 복원하세요.
 
 ### Production 복원
 
@@ -238,7 +245,9 @@ Vector 등) 으로 구조화 로그에서 scrape.
 
 ## 스키마 마이그레이션
 
-모든 마이그레이션은 idempotent 이고 부트스트랩 시 적용. 새 마이그레이션 추가:
+모든 마이그레이션은 idempotent 이고 부트스트랩 시 적용. 현재 마이그레이션은
+`001-009` 범위이며, 새 마이그레이션은 그 뒤의 다음 미사용 번호를 붙입니다.
+새 마이그레이션 추가:
 
 1. `src/db/migrations/NNN_description.sql` 생성 (다음 일련 번호).
 2. `src/db/migrate.ts` 의 `MIGRATION_FILES` 에 파일명 추가.

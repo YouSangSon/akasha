@@ -70,11 +70,13 @@ factory. Tool handlers and orchestrators consume the interface, not the impl.
 
 ### Migrations
 
-SQL files live in `src/db/migrations/NNN_*.sql`. Append new migrations as
-`009_…sql` and add the filename to `MIGRATION_FILES` in `src/db/migrate.ts`,
-plus the embedded snapshot string for production fallbacks. All migrations
-must be idempotent (`CREATE … IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`)
-and safe to run on populated databases.
+SQL files live in `src/db/migrations/NNN_*.sql`. Current migration files span
+`001-009`; the next migration should be `010_*.sql`. Future schema changes
+append the next unused number after the current range, add the filename to
+`MIGRATION_FILES` in `src/db/migrate.ts`, and add the embedded snapshot string
+for production fallbacks. All migrations must be idempotent
+(`CREATE … IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`) and safe to run on
+populated databases.
 
 ## Pull-request workflow
 

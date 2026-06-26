@@ -1,6 +1,8 @@
 # Self-Hosted Operations
 
-This runbook covers the active Postgres + Qdrant operator stack. SQLite remains only in historical planning/design documents and is not part of the deployed runtime path.
+This runbook covers the active Postgres operator stack with Qdrant by default
+or pgvector for Postgres-only deployments. SQLite remains only in historical
+planning/design documents and is not part of the deployed runtime path.
 
 ## Deployment operations
 
@@ -39,13 +41,15 @@ Relevant variables:
 
 - `BACKUP_DIR`
 - `DATABASE_URL`
+- `VECTOR_BACKEND`
 - `QDRANT_URL`
 - `QDRANT_COLLECTION_NAME` (optional, defaults to `memory_chunks_v1`)
 - `QDRANT_API_KEY` (optional for unauthenticated local deployments)
 - `BACKUP_TARGET_HOST` (optional; when non-empty, backup scripts copy artifacts with `ssh`/`scp`)
 - `BACKUP_TARGET_DIR` (optional, defaults to `BACKUP_DIR` on the remote host)
 
-The backup scripts create and copy:
+With `VECTOR_BACKEND=qdrant`, `npm run backup:create` captures Postgres and
+Qdrant snapshot data. The backup scripts create and copy:
 
 - `postgres-YYYYMMDD-HHMM.sql.gz`
 - `qdrant-YYYYMMDD-HHMM.snapshot`
@@ -53,6 +57,9 @@ The backup scripts create and copy:
 - `manifest-YYYYMMDD-HHMM.json`
 
 The Qdrant metadata sidecar name includes the collection name.
+
+With `VECTOR_BACKEND=pgvector`, vectors live in Postgres; Qdrant snapshot data
+is not part of the logical data path.
 
 ## Backup verification
 
@@ -70,6 +77,9 @@ manifest checksums match both copies.
 ## Restore smoke
 
 Run a disposable restore check against the newest manifest in `BACKUP_DIR`:
+
+The existing restore smoke helpers are still Qdrant-oriented and require
+`RESTORE_QDRANT_URL` until a later script split.
 
 ```bash
 export RESTORE_POSTGRES_PORT=15432

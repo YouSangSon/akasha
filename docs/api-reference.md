@@ -60,7 +60,8 @@ MCP responses use the SDK's native shape — no envelope.
 Tool results are also exposed to MCP clients as both:
 
 - `structuredContent` — the JSON object form of the tool result.
-- `content` — JSON text content for clients that read tool output as text.
+- `content` — one serialized JSON text content item for clients that read tool
+  output as text.
 
 The payload is the same information in both fields.
 
@@ -88,7 +89,7 @@ type AddMemoryInput = {
   projectKey?: string;           // required for project scope
   scope?: "project" | "user";    // default "project"
   userScopeId?: string;          // required for user scope
-  kind: string;                  // "decision" | "fact" | "constraint" | …
+  kind: "decision" | "summary" | "fact"; // decision | summary | fact
   content: string;               // free-form text; secret-scrubbed at write
 };
 
@@ -174,11 +175,11 @@ type BuildContextPackResult = {
   packMarkdown: string;          // ready to paste into a new session
   selectedMemoryIds: string[];
   sections: {
-    project_summary: SearchMemoryResult[];
-    recent_decisions: SearchMemoryResult[];
-    constraints: SearchMemoryResult[];
-    open_questions: SearchMemoryResult[];
-    relevant_notes: SearchMemoryResult[];
+    project_summary: MemoryRecord[];
+    recent_decisions: MemoryRecord[];
+    constraints: MemoryRecord[];
+    open_questions: MemoryRecord[];
+    relevant_notes: MemoryRecord[];
   };
 };
 ```

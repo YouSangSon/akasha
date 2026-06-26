@@ -58,7 +58,8 @@ MCP 응답은 SDK 네이티브 shape을 사용 — envelope 없음.
 도구 결과는 MCP 클라이언트에 다음 두 형태로도 노출됩니다:
 
 - `structuredContent` — 도구 결과의 JSON 객체 형태.
-- `content` — 텍스트로 도구 출력을 읽는 클라이언트를 위한 JSON 문자열.
+- `content` — 도구 출력을 텍스트로 읽는 클라이언트를 위한 one serialized JSON
+  text content item.
 
 두 필드는 동일한 정보를 담고 있습니다.
 
@@ -86,7 +87,7 @@ type AddMemoryInput = {
   projectKey?: string;           // project scope 시 필수
   scope?: "project" | "user";    // 기본 "project"
   userScopeId?: string;          // user scope 시 필수
-  kind: string;                  // "decision" | "fact" | "constraint" | …
+  kind: "decision" | "summary" | "fact"; // decision | summary | fact
   content: string;               // 자유 텍스트; 쓰기 시 secret-scrub 적용
 };
 
@@ -171,11 +172,11 @@ type BuildContextPackResult = {
   packMarkdown: string;          // 새 세션에 붙여넣을 준비된 텍스트
   selectedMemoryIds: string[];
   sections: {
-    project_summary: SearchMemoryResult[];
-    recent_decisions: SearchMemoryResult[];
-    constraints: SearchMemoryResult[];
-    open_questions: SearchMemoryResult[];
-    relevant_notes: SearchMemoryResult[];
+    project_summary: MemoryRecord[];
+    recent_decisions: MemoryRecord[];
+    constraints: MemoryRecord[];
+    open_questions: MemoryRecord[];
+    relevant_notes: MemoryRecord[];
   };
 };
 ```

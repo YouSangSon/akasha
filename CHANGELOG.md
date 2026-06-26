@@ -11,6 +11,8 @@ changes; CHANGELOG entries call those out explicitly.
 
 ## [Unreleased]
 
+- PR #19 added MCP Streamable HTTP at `/mcp`, MCP resources, MCP prompts, and
+  structured MCP tool output for clients that consume typed results.
 - Docs: public docs now describe descriptor-shared validation, non-root
   container runtime defaults, production credential replacement, and atomic
   archive-cleanup claim semantics; stale pgvector reindex follow-up comments
@@ -177,7 +179,7 @@ small actual impact surface.
   sweeper registration and retry loop are in-flight on the #12 branch.
 - **Migration 008: FK index on `memory_chunks`** — `008_chunks_fk_index.sql` adds
   `idx_memory_chunks_record` on `memory_chunks(memory_record_id)`, eliminating sequential scans
-  on the FK join path. Migrations are now 001–008.
+  on the FK join path. Migrations are now 001-009.
 - **`listMemory` is now bounded** — enforces a `LIMIT` (default 1000, max 5000) on browse
   queries. Previously unbounded queries could return the full table for large tenants.
 - **Batched N+1 DB writes** — chunk inserts and upserts are now issued in a single round-trip
@@ -188,7 +190,7 @@ small actual impact surface.
 - **Documentation accuracy pass** — fixed pre-existing drift across `docs/architecture.md`,
   `docs/configuration.md`, `docs/api-reference.md`, `CONTRIBUTING.md`, and `README.md`:
   `OPENAI_API_KEY` marked optional (only needed when `EMBEDDING_PROVIDER=openai`); embedding
-  default corrected to `transformers`; migration range updated to 001–008; `ingest_jobs` outbox
+  default corrected to `transformers`; migration range updated to 001-009; `ingest_jobs` outbox
   columns added to schema diagram; `/readyz` probe list corrected against actual
   `check-dependencies.ts` behavior; MCP tool list updated to 7 tools.
 - **`AGENTS.md` dangling references removed** — replaced broken `.vibe/context-index.md` and

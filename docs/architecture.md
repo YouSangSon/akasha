@@ -12,15 +12,15 @@ for env-var setup see [configuration.md](configuration.md).
 ┌────────────────────────────────────────────────────────────────┐
 │ Clients                                                         │
 │   • Claude Code / Codex CLI  (MCP stdio)                        │
-│   • curl / app code          (HTTP JSON)                        │
+│   • MCP HTTP clients         (MCP Streamable HTTP)               │
+│   • curl / app code          (JSON HTTP)                         │
 └────────────────┬────────────────────────────────────────────────┘
                  │
 ┌────────────────▼────────────────────────────────────────────────┐
 │ Transports                                                      │
 │   src/mcp/server.ts          → MCP SDK stdio                    │
-│   src/app/server.ts          → http.createServer                │
-│   src/app/middleware/*       → bearer auth, rate limit, envelope│
-│   src/app/routes/memory.ts   → POST /v1/* dispatch              │
+│   src/app/mcp-http.ts        → MCP Streamable HTTP at /mcp       │
+│   src/app/routes/memory.ts   → JSON HTTP under /v1/*             │
 └────────────────┬────────────────────────────────────────────────┘
                  │
 ┌────────────────▼────────────────────────────────────────────────┐
@@ -38,13 +38,13 @@ for env-var setup see [configuration.md](configuration.md).
 │   src/compact/outbox-sweeper.ts        Qdrant cleanup retry     │
 │   src/compact/sweeper-loop.ts          background scheduler     │
 │   src/context-pack/build-context-pack.ts  pack assembler        │
-│   src/search/retrieve-memory.ts        Qdrant + PG join         │
+│   src/search/retrieve-memory.ts        vector + PG hydrate       │
 └────────────────┬────────────────────────────────────────────────┘
                  │
 ┌────────────────▼────────────────────────────────────────────────┐
 │ Repositories                                                    │
 │   src/store/memory-repository.ts          memory_records, sources│
-│   src/store/canonical-indexing.ts         memory_chunks + Qdrant│
+│   src/store/canonical-indexing.ts         memory_chunks + vector │
 │   src/store/memory-archive-repository.ts  compaction_runs +     │
 │                                           memory_archive        │
 │   src/jobs/ingest-job-repository.ts       ingest_jobs           │
@@ -54,7 +54,7 @@ for env-var setup see [configuration.md](configuration.md).
 ┌────────────────▼────────────────────────────────────────────────┐
 │ Persistence                                                     │
 │   Postgres 16  (compose container or external)                  │
-│   Qdrant       (compose container or external)                  │
+│   Qdrant or pgvector  (active vector backend)                   │
 │   Embeddings   (transformers local ONNX [default] / openai /   │
 │                 local deterministic)                            │
 └─────────────────────────────────────────────────────────────────┘
@@ -94,15 +94,15 @@ side effects.
 
 ```
 search_memory  →  search tool  →  retrieveMemory  →  embeddings.embed  →  transformers / openai / local
-                                  (Qdrant + PG)     qdrantClient.query →  Qdrant (cosine, scope-filtered)
-                                                    repository         →  Postgres (hydrate by id)
+                                  (active vector)   vectorIndex.query → Qdrant or pgvector (scope-filtered similarity)
+                                                    repository        →  Postgres (hydrate by id)
                                                     .getMemoryRecordsByIds
-                                                    rankResults        →  in-memory ranking
+                                                    rankResults       →  in-memory ranking
 ```
 
-Org filter is applied at both the Qdrant query layer (payload filter) and
-the Postgres hydration layer (defense-in-depth — if Qdrant returned a
-cross-org point id, the PG join filters it out).
+Org filter is applied at both the active vector backend query layer and
+the Postgres hydration layer (defense-in-depth — if the vector backend
+returned a cross-org point id, the PG join filters it out).
 
 ## Data flow: compact apply (P17)
 
@@ -209,11 +209,12 @@ completed_at           archived_at / unarchived_at
 idempotency_key UUID   UNIQUE (compaction_run_id, source_record_id)
 ```
 
-Migrations live in `src/db/migrations/`. The runner applies `001` through
-`008` on bootstrap (each is idempotent, `CREATE … IF NOT EXISTS` /
-`ADD COLUMN IF NOT EXISTS`). `007_ingest_jobs_qdrant_outbox.sql` is now
-registered in `MIGRATION_FILES` and supplies the `qdrant_*` ingest-outbox
-columns used by the background ingest sweeper.
+Migrations live in `src/db/migrations/`. The current range is `001-009`;
+the runner applies `001` through `009` on bootstrap (each is idempotent,
+`CREATE … IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS`).
+`009_memory_archive_qdrant_retry.sql` supplies archive Qdrant retry metadata,
+including `qdrant_next_retry_at` and the pending-retry index used by the
+background archive cleanup sweeper.
 
 ## Multi-tenancy
 

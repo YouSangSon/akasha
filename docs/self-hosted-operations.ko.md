@@ -2,7 +2,9 @@
 
 # 자체 호스팅 운영
 
-이 runbook은 활성 Postgres + Qdrant 운영자 스택을 다룹니다. SQLite는 역사적 계획/설계 문서에만 남아 있으며 배포된 런타임 경로의 일부가 아닙니다.
+이 runbook은 기본 Qdrant 또는 Postgres 단독 배포용 pgvector를 쓰는 활성
+Postgres 운영자 스택을 다룹니다. SQLite는 역사적 계획/설계 문서에만 남아
+있으며 배포된 런타임 경로의 일부가 아닙니다.
 
 ## 배포 운영
 
@@ -41,13 +43,15 @@ npm run backup:create
 
 - `BACKUP_DIR`
 - `DATABASE_URL`
+- `VECTOR_BACKEND`
 - `QDRANT_URL`
 - `QDRANT_COLLECTION_NAME` (선택 사항, 기본값 `memory_chunks_v1`)
 - `QDRANT_API_KEY` (인증 없는 로컬 배포에서는 선택 사항)
 - `BACKUP_TARGET_HOST` (선택 사항; 비어 있지 않으면 백업 스크립트가 `ssh`/`scp` 로 artifact 복사)
 - `BACKUP_TARGET_DIR` (선택 사항, 원격 호스트의 `BACKUP_DIR`가 기본값)
 
-백업 스크립트가 생성하고 복사하는 파일:
+`VECTOR_BACKEND=qdrant` 에서는 `npm run backup:create` 가 Postgres와 Qdrant
+snapshot data를 캡처합니다. 백업 스크립트가 생성하고 복사하는 파일:
 
 - `postgres-YYYYMMDD-HHMM.sql.gz`
 - `qdrant-YYYYMMDD-HHMM.snapshot`
@@ -55,6 +59,9 @@ npm run backup:create
 - `manifest-YYYYMMDD-HHMM.json`
 
 Qdrant metadata sidecar 파일명에는 collection 이름이 포함됩니다.
+
+`VECTOR_BACKEND=pgvector` 에서는 벡터가 Postgres 안에 있으므로 Qdrant snapshot
+data는 logical data path의 일부가 아닙니다.
 
 ## 백업 검증
 
@@ -71,6 +78,9 @@ npm run backup:verify
 ## 복원 스모크 테스트
 
 `BACKUP_DIR`의 최신 매니페스트에 대해 일회성 복원 확인을 실행합니다:
+
+기존 restore smoke helper는 아직 Qdrant-oriented 이며 추후 script split 전까지
+`RESTORE_QDRANT_URL` 이 필요합니다.
 
 ```bash
 export RESTORE_POSTGRES_PORT=15432

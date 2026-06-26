@@ -83,4 +83,82 @@ describe("public documentation drift checks", () => {
     expect(read("docs/security.md")).toContain("non-root");
     expect(read("docs/security.ko.md")).toContain("non-root");
   });
+
+  it("documents the current migration range and next migration number", () => {
+    const files = [
+      "AGENTS.md",
+      "CONTRIBUTING.md",
+      "CONTRIBUTING.ko.md",
+      "docs/architecture.md",
+      "docs/architecture.ko.md",
+      "docs/operations.md",
+      "docs/operations.ko.md",
+    ];
+
+    for (const path of files) {
+      const text = read(path);
+      expect(text).toContain("001-009");
+      expect(text).not.toContain("001–008");
+      expect(text).not.toContain("001-008");
+    }
+
+    expect(read("CONTRIBUTING.md")).toContain("010_");
+    expect(read("CONTRIBUTING.ko.md")).toContain("010_");
+  });
+
+  it("documents all three public transports in architecture and security docs", () => {
+    for (const path of [
+      "docs/architecture.md",
+      "docs/architecture.ko.md",
+      "docs/security.md",
+      "docs/security.ko.md",
+    ]) {
+      const text = read(path);
+      expect(text).toContain("/mcp");
+      expect(text).toContain("/v1/*");
+      expect(text).toContain("MCP Streamable HTTP");
+    }
+  });
+
+  it("keeps API reference examples aligned with tool schemas and context-pack output", () => {
+    const api = read("docs/api-reference.md");
+    const apiKo = read("docs/api-reference.ko.md");
+
+    expect(api).toContain("decision | summary | fact");
+    expect(apiKo).toContain("decision | summary | fact");
+    expect(api).toContain("sections: {");
+    expect(apiKo).toContain("sections: {");
+    expect(api).toContain("project_summary");
+    expect(apiKo).toContain("project_summary");
+    expect(api).toContain("structuredContent");
+    expect(apiKo).toContain("structuredContent");
+    expect(api).toContain("text content item");
+    expect(apiKo).toContain("text content item");
+  });
+
+  it("records PR 19 MCP changes in both changelogs", () => {
+    for (const path of ["CHANGELOG.md", "CHANGELOG.ko.md"]) {
+      const text = read(path);
+      expect(text).toContain("#19");
+      expect(text).toContain("/mcp");
+      expect(text).toContain("resources");
+      expect(text).toContain("prompts");
+      expect(text).toContain("structured");
+    }
+  });
+
+  it("documents backup differences for Qdrant and pgvector backends", () => {
+    for (const path of [
+      "docs/operations.md",
+      "docs/operations.ko.md",
+      "docs/self-hosted-operations.md",
+      "docs/self-hosted-operations.ko.md",
+    ]) {
+      const text = read(path);
+      expect(text).toContain("VECTOR_BACKEND=qdrant");
+      expect(text).toContain("VECTOR_BACKEND=pgvector");
+      expect(text).toContain("Postgres");
+      expect(text).toContain("Qdrant");
+    }
+  });
 });
