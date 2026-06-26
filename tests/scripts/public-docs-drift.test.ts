@@ -157,17 +157,7 @@ describe("public documentation drift checks", () => {
   it("keeps public README search examples free of internal scores", () => {
     for (const path of ["README.md", "README.ko.md"]) {
       const text = read(path);
-      const searchExampleStart = text.indexOf("/v1/memory/search");
-      const contextPackExampleStart = text.indexOf(
-        "/v1/memory/context-pack",
-        searchExampleStart,
-      );
-
-      expect(searchExampleStart).toBeGreaterThanOrEqual(0);
-      expect(contextPackExampleStart).toBeGreaterThan(searchExampleStart);
-      expect(text.slice(searchExampleStart, contextPackExampleStart)).not.toContain(
-        '"score"',
-      );
+      expect(text).not.toMatch(/"score"\s*:/);
     }
   });
 
