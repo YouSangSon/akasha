@@ -13,6 +13,7 @@ import type {
   SearchMemoryResult,
 } from "../types.js";
 import { assertOrganizationId } from "./assert-organization-id.js";
+import { scanForSecrets, SecretDetectedError } from "./secret-scrub.js";
 
 const DEFAULT_ORG_ID = "default";
 const MAX_STORED_ENTITY_MENTIONS = 64;
@@ -290,6 +291,7 @@ export function createMemoryRepository(
           CROSS JOIN lexical
           WHERE (${searchClauses.join(" OR ")})
             AND (${scopeClauses.join(" OR ")})${orgClause}
+            AND mr.durability <> 'archived'
           ORDER BY (${scoreExpressions.join(" + ")}) DESC, mr.id DESC
           LIMIT $${limitIndex}
         `,
@@ -318,6 +320,7 @@ export function createMemoryRepository(
           ${TAG_LATERAL_JOIN}
           WHERE mr.scope_type = $1
             AND mr.scope_id = $2${orgClause}
+            AND mr.durability <> 'archived'
           ORDER BY mr.id DESC
           LIMIT $${limitIndex}
         `,
@@ -347,6 +350,7 @@ export function createMemoryRepository(
           JOIN sources s ON s.id = mr.source_id
           ${TAG_LATERAL_JOIN}
           WHERE mr.id = ANY($1::int[])${orgClause}
+            AND mr.durability <> 'archived'
         `,
         params,
       );
@@ -417,6 +421,11 @@ export function createMemoryRepository(
         const nextContent = input.content ?? currentRow.content;
         const nextSummary =
           input.summary === undefined ? currentRow.summary : input.summary;
+        assertNoSecretsInMemoryFields({
+          title: nextTitle,
+          content: nextContent,
+          summary: nextSummary,
+        });
         const updateResult = await client.query<PostgresMemoryRow>(
           `
             UPDATE memory_records
@@ -512,11 +521,18 @@ export function createMemoryRepository(
 
     async archiveMemoryRecord(input) {
       const result = await pool.query<{
-        archived_count: number | string;
+        archived: boolean;
+        found: boolean;
         qdrant_point_ids: string[] | null;
       }>(
         `
-          WITH archived AS (
+          WITH target AS (
+            SELECT id
+            FROM memory_records
+            WHERE id = $1
+              AND organization_id = $2
+          ),
+          archived AS (
             UPDATE memory_records
             SET durability = 'archived',
                 updated_at = NOW()
@@ -525,23 +541,27 @@ export function createMemoryRepository(
               AND durability <> 'archived'
             RETURNING id
           )
-          SELECT COALESCE(
-            array_agg(mc.qdrant_point_id) FILTER (WHERE mc.qdrant_point_id IS NOT NULL),
-            '{}'
-          ) AS qdrant_point_ids,
-          COUNT(archived.id) AS archived_count
-          FROM archived
-          LEFT JOIN memory_chunks mc ON mc.memory_record_id = archived.id
+          SELECT
+            EXISTS (SELECT 1 FROM archived) AS archived,
+            EXISTS (SELECT 1 FROM target) AS found,
+            COALESCE(
+              array_agg(mc.qdrant_point_id) FILTER (WHERE mc.qdrant_point_id IS NOT NULL),
+              '{}'
+            ) AS qdrant_point_ids
+          FROM target
+          LEFT JOIN memory_chunks mc
+            ON mc.memory_record_id = target.id
+           AND mc.organization_id = $2
         `,
         [input.id, input.organizationId],
       );
 
-      if (toNumber(result.rows[0]?.archived_count ?? 0) === 0) {
+      if (!result.rows[0]?.found) {
         return { archived: false, qdrantPointIds: [] };
       }
 
       return {
-        archived: true,
+        archived: result.rows[0].archived,
         qdrantPointIds: result.rows[0]?.qdrant_point_ids ?? [],
       };
     },
@@ -654,6 +674,24 @@ function requireSingleRow<TRow>(row: TRow | undefined, label: string): TRow {
   }
 
   return row;
+}
+
+function assertNoSecretsInMemoryFields(input: {
+  title: string | null;
+  content: string;
+  summary: string | null;
+}): void {
+  const detections = [
+    ...(input.title ? scanForSecrets(input.title) : []),
+    ...scanForSecrets(input.content),
+    ...(input.summary ? scanForSecrets(input.summary) : []),
+  ];
+
+  if (detections.length > 0) {
+    throw new SecretDetectedError(
+      detections.map((detection) => detection.category),
+    );
+  }
 }
 
 function orderRecordsByIds(

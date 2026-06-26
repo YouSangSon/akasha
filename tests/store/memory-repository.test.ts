@@ -2,6 +2,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { createPgPool } from "../../src/db/connection.js";
 import { runMigrations } from "../../src/db/migrate.js";
 import { createMemoryRepository } from "../../src/store/memory-repository.js";
+import { SecretDetectedError } from "../../src/store/secret-scrub.js";
+
+type SqlQueryCall = { sql: string; params: unknown[] };
 
 type EntityMentionRow = {
   kind: string;
@@ -58,6 +61,84 @@ async function recreateTestDatabase() {
   } finally {
     await adminPool.end();
   }
+}
+
+function hydratedMemoryRow() {
+  return {
+    id: 42,
+    organization_id: "org-a",
+    scope_type: "project",
+    scope_id: "proj-x",
+    project_key: "proj-x",
+    kind: "fact",
+    title: "Before",
+    content: "plain text only",
+    summary: "before",
+    durability: "durable",
+    importance: 1,
+    source_id: 9,
+    created_at: "2026-06-26T00:00:00.000Z",
+    updated_at: "2026-06-26T00:00:00.000Z",
+    source_id_joined: 9,
+    source_organization_id: "org-a",
+    source_scope_type: "project",
+    source_scope_id: "proj-x",
+    source_type: "document",
+    source_ref: "{\"sourceRef\":\"docs/a.md\",\"uri\":null}",
+    source_title: "Doc A",
+    source_created_at: "2026-06-26T00:00:00.000Z",
+    tags: ["old"],
+  };
+}
+
+async function expectUpdateSecretRejection(
+  patch: { title?: string | null; content?: string; summary?: string | null },
+  expectedCategories: string[],
+): Promise<SqlQueryCall[]> {
+  const clientQueryCalls: SqlQueryCall[] = [];
+  const currentRow = hydratedMemoryRow();
+  const mockClient = {
+    query: vi.fn().mockImplementation((sql: string, params?: unknown[]) => {
+      clientQueryCalls.push({ sql, params: params ?? [] });
+      if (sql === "BEGIN" || sql === "COMMIT" || sql === "ROLLBACK") {
+        return Promise.resolve({ rows: [] });
+      }
+      if (sql.includes("SELECT") && sql.includes("FROM memory_records mr")) {
+        return Promise.resolve({ rows: [currentRow] });
+      }
+      if (sql.includes("UPDATE memory_records")) {
+        return Promise.reject(new Error("UPDATE should not run"));
+      }
+      return Promise.resolve({ rows: [] });
+    }),
+    release: vi.fn(),
+  };
+  const mockPool = {
+    connect: vi.fn().mockResolvedValue(mockClient),
+  };
+  const repo = createMemoryRepository(mockPool as never);
+
+  let caught: unknown;
+  try {
+    await repo.updateMemoryRecord({
+      id: 42,
+      organizationId: "org-a",
+      ...patch,
+    });
+  } catch (error: unknown) {
+    caught = error;
+  }
+
+  expect(caught).toBeInstanceOf(SecretDetectedError);
+  expect((caught as SecretDetectedError).categories).toEqual(
+    expect.arrayContaining(expectedCategories),
+  );
+  expect(
+    clientQueryCalls.some(({ sql }) => sql.includes("UPDATE memory_records")),
+  ).toBe(false);
+  expect(clientQueryCalls.some(({ sql }) => sql === "ROLLBACK")).toBe(true);
+
+  return clientQueryCalls;
 }
 
 describe("createMemoryRepository (unit — no PG required)", () => {
@@ -251,6 +332,42 @@ describe("createMemoryRepository (unit — no PG required)", () => {
       });
   });
 
+  it("listMemory excludes archived rows by default", async () => {
+    const queryCalls: SqlQueryCall[] = [];
+    const mockPool = {
+      query: vi.fn().mockImplementation((sql: string, params: unknown[]) => {
+        queryCalls.push({ sql, params });
+        return Promise.resolve({ rows: [] });
+      }),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    await repo.listMemory(
+      { scopeType: "project", scopeId: "proj-x" },
+      { organizationId: "org-a" },
+    );
+
+    expect(queryCalls).toHaveLength(1);
+    expect(queryCalls[0]?.sql).toContain("mr.durability <> 'archived'");
+  });
+
+  it("getMemoryRecordsByIds excludes archived rows during public hydration", async () => {
+    const queryCalls: SqlQueryCall[] = [];
+    const mockPool = {
+      query: vi.fn().mockImplementation((sql: string, params: unknown[]) => {
+        queryCalls.push({ sql, params });
+        return Promise.resolve({ rows: [] });
+      }),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    await repo.getMemoryRecordsByIds([41, 42], "org-a");
+
+    expect(queryCalls).toHaveLength(1);
+    expect(queryCalls[0]?.sql).toContain("mr.durability <> 'archived'");
+    expect(queryCalls[0]?.sql).toMatch(/mr\.organization_id = \$2/);
+  });
+
   it("listMemoryForGovernance scopes by organization, joins tags for filtering, and excludes archived rows by default", async () => {
     const queryCalls: { sql: string; params: unknown[] }[] = [];
     const mockPool = {
@@ -278,6 +395,28 @@ describe("createMemoryRepository (unit — no PG required)", () => {
     expect(sql).toContain("mr.durability <> 'archived'");
     expect(sql).toMatch(/LIMIT\s+\$5/i);
     expect(params).toEqual(["project", "proj-x", "org-a", "priority", 25]);
+  });
+
+  it("listMemoryForGovernance includes archived rows only when includeArchived is true", async () => {
+    const queryCalls: SqlQueryCall[] = [];
+    const mockPool = {
+      query: vi.fn().mockImplementation((sql: string, params: unknown[]) => {
+        queryCalls.push({ sql, params });
+        return Promise.resolve({ rows: [] });
+      }),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    await repo.listMemoryForGovernance(
+      { scopeType: "project", scopeId: "proj-x" },
+      {
+        organizationId: "org-a",
+        includeArchived: true,
+      },
+    );
+
+    expect(queryCalls).toHaveLength(1);
+    expect(queryCalls[0]?.sql).not.toContain("mr.durability <> 'archived'");
   });
 
   it("updateMemoryRecord scopes the update by org and replaces tags in the same transaction", async () => {
@@ -396,6 +535,37 @@ describe("createMemoryRepository (unit — no PG required)", () => {
     });
   });
 
+  it("updateMemoryRecord rejects secret-shaped content before persistence", async () => {
+    await expectUpdateSecretRejection(
+      { content: "Rotate AWS key AKIAIOSFODNN7EXAMPLE immediately." },
+      ["aws-access-key"],
+    );
+  });
+
+  it("updateMemoryRecord rejects secret-shaped titles before persistence", async () => {
+    await expectUpdateSecretRejection(
+      { title: "Leaked token ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+      ["github-token"],
+    );
+  });
+
+  it("updateMemoryRecord rejects secret-shaped summaries before persistence", async () => {
+    await expectUpdateSecretRejection(
+      { summary: "Stripe key " + ["sk", "live", "aaaaaaaaaaaaaaaaaaaaaaaa"].join("_") },
+      ["stripe-key"],
+    );
+  });
+
+  it("updateMemoryRecord reports categories across multiple updated fields", async () => {
+    await expectUpdateSecretRejection(
+      {
+        title: "Rotate AKIAIOSFODNN7EXAMPLE today",
+        summary: "GitHub token ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      },
+      ["aws-access-key", "github-token"],
+    );
+  });
+
   it("archiveMemoryRecord scopes by org and returns qdrant point ids to delete", async () => {
     const queryCalls: { sql: string; params: unknown[] }[] = [];
     const mockPool = {
@@ -403,7 +573,8 @@ describe("createMemoryRepository (unit — no PG required)", () => {
         queryCalls.push({ sql, params });
         return Promise.resolve({
           rows: [{
-            archived_count: 1,
+            archived: true,
+            found: true,
             qdrant_point_ids: ["chunk:1", "chunk:2"],
           }],
         });
@@ -420,11 +591,53 @@ describe("createMemoryRepository (unit — no PG required)", () => {
     const { sql, params } = queryCalls[0]!;
     expect(sql).toContain("SET durability = 'archived'");
     expect(sql).toMatch(/organization_id = \$2/);
+    expect(sql).toContain("WITH target AS");
     expect(sql).toContain("array_agg(mc.qdrant_point_id)");
+    expect(sql).toContain("FROM target");
     expect(params).toEqual([55, "org-a"]);
     expect(archived).toEqual({
       archived: true,
       qdrantPointIds: ["chunk:1", "chunk:2"],
+    });
+  });
+
+  it("archiveMemoryRecord returns point ids with archived false when the row is already archived", async () => {
+    const mockPool = {
+      query: vi.fn().mockResolvedValue({
+        rows: [{
+          archived: false,
+          found: true,
+          qdrant_point_ids: ["chunk:1", "chunk:2"],
+        }],
+      }),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    await expect(
+      repo.archiveMemoryRecord({ id: 55, organizationId: "org-a" }),
+    ).resolves.toEqual({
+      archived: false,
+      qdrantPointIds: ["chunk:1", "chunk:2"],
+    });
+  });
+
+  it("archiveMemoryRecord returns an empty not-archived result when no row matches", async () => {
+    const mockPool = {
+      query: vi.fn().mockResolvedValue({
+        rows: [{
+          archived: false,
+          found: false,
+          qdrant_point_ids: [],
+        }],
+      }),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    await expect(
+      repo.archiveMemoryRecord({ id: 55, organizationId: "org-a" }),
+    ).resolves.toEqual({
+      archived: false,
+      qdrantPointIds: [],
     });
   });
 
@@ -467,6 +680,27 @@ describe("createMemoryRepository (unit — no PG required)", () => {
         5,
       ]),
     );
+  });
+
+  it("searchMemory excludes archived rows by default", async () => {
+    const queryCalls: SqlQueryCall[] = [];
+    const mockPool = {
+      query: vi.fn().mockImplementation((sql: string, params: unknown[]) => {
+        queryCalls.push({ sql, params });
+        return Promise.resolve({ rows: [] });
+      }),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    await repo.searchMemory({
+      query: "timeout retry",
+      scopes: [{ scopeType: "project", scopeId: "proj-x" }],
+      organizationId: "org-a",
+      limit: 5,
+    });
+
+    expect(queryCalls).toHaveLength(1);
+    expect(queryCalls[0]?.sql).toContain("mr.durability <> 'archived'");
   });
 
   it("searchMemory adds entity graph rescue clauses for deterministic mentions", async () => {
