@@ -33,6 +33,9 @@ CHANGELOG에서 명시적으로 표기합니다.
 - **Entity graph inspection surface** — MCP와 JSON HTTP가 graph-backed lexical
   rescue/boost 뒤의 scoped entity mention 및 relationship을 조회하는
   `inspect_memory_graph` (`POST /v1/memory/graph`) 를 노출합니다.
+- **Lifecycle capture via content files** — `remember` 가 이제 `--content-file`
+  을 받고, 생성된 `session-end.sh` hook은 multiline session summary를 argv에
+  직접 올리지 않고 임시 파일로 전달합니다.
 - **Memory governance CRUD 및 admin shell** — MCP와 JSON HTTP가 운영자
   review/edit/tag/archive workflow용 `list_memory`, `update_memory`,
   `delete_memory`, `tag_memory` 를 노출합니다. `delete_memory` 는 복구 가능한

@@ -39,8 +39,8 @@ token을 upstream API로 pass-through 하지 않습니다.
 
 OAuth scope는 tool 경계에서 강제됩니다:
 
-- `akasha:read` — 검색, context-pack, list-memory governance review,
-  dry-run compaction.
+- `akasha:read` — 검색, context-pack, list-memory governance review, entity
+  graph inspection, dry-run compaction.
 - `akasha:write` — add-memory write.
 - `akasha:admin` — reindex, unarchive, audit-log 읽기, governance
   update/delete/tag, compaction apply.

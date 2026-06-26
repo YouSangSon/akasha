@@ -247,14 +247,18 @@ if [ -z "\${DATABASE_URL:-}" ]; then
   export DATABASE_URL="postgres://\${POSTGRES_USER:-memory}:\${POSTGRES_PASSWORD:-memory}@127.0.0.1:\${POSTGRES_PORT:-5432}/\${POSTGRES_DB:-memory_os}"
 fi
 
-CONTENT="\${AKASHA_MEMORY_CONTENT:-}"
+CONTENT_FILE="$(mktemp "\${TMPDIR:-/tmp}/akasha-session-end.XXXXXX")"
+trap 'rm -f "$CONTENT_FILE"' EXIT HUP INT TERM
+
 if [ "$#" -gt 0 ]; then
-  CONTENT="$*"
+  printf '%s\\n' "$*" > "$CONTENT_FILE"
+elif [ -n "\${AKASHA_MEMORY_CONTENT:-}" ]; then
+  printf '%s\\n' "$AKASHA_MEMORY_CONTENT" > "$CONTENT_FILE"
 elif [ ! -t 0 ]; then
-  CONTENT="$(cat)"
+  cat > "$CONTENT_FILE"
 fi
 
-if [ -z "$CONTENT" ]; then
+if [ ! -s "$CONTENT_FILE" ]; then
   echo "Provide session summary text as arguments, stdin, or AKASHA_MEMORY_CONTENT." >&2
   exit 64
 fi
@@ -264,7 +268,7 @@ ORG_ID="\${AKASHA_ORGANIZATION_ID:-$DEFAULT_ORGANIZATION_ID}"
 USER_SCOPE_ID="\${AKASHA_USER_SCOPE_ID:-$DEFAULT_USER_SCOPE_ID}"
 KIND="\${AKASHA_MEMORY_KIND:-summary}"
 
-set -- remember --project "$PROJECT_KEY" --kind "$KIND" --content "$CONTENT"
+set -- remember --project "$PROJECT_KEY" --kind "$KIND" --content-file "$CONTENT_FILE"
 if [ -n "$ORG_ID" ]; then
   set -- "$@" --organization-id "$ORG_ID"
 fi

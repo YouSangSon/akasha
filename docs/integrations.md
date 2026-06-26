@@ -43,6 +43,9 @@ printf '%s\n' "Summary: durable outcome ..." | .akasha/hooks/session-end.sh
 
 `./install.sh` runs the same init step after build and migrations. Re-running
 init skips existing files by default; pass `--force` to refresh generated files.
+The generated session-end hook writes the summary to a temporary file and calls
+`remember --content-file`, so multiline summaries do not have to travel through
+the process argument list.
 
 ## MCP stdio
 
@@ -109,6 +112,17 @@ node dist/src/cli.js remember \
   --organization-id default \
   --kind summary \
   --content "Summary: durable outcome ..."
+```
+
+For longer multiline summaries, write a file and avoid putting the content in
+argv:
+
+```bash
+node dist/src/cli.js remember \
+  --project my-project \
+  --organization-id default \
+  --kind summary \
+  --content-file /tmp/akasha-session-summary.txt
 ```
 
 For personal loopback deployments that intentionally use legacy anonymous

@@ -1,3 +1,5 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { writeLifecycleInit } from "./lifecycle/init.js";
 import { createToolRegistry, type ToolRegistry } from "./mcp/server.js";
@@ -22,7 +24,8 @@ export type ParsedCliArgs =
       userScopeId?: string;
       organizationId?: string;
       kind: string;
-      content: string;
+      content?: string;
+      contentFile?: string;
     }
   | {
       command: "init";
@@ -164,12 +167,14 @@ export async function runCli(
     }
     case "remember": {
       const registry = getRegistry();
+      const content =
+        parsed.content ?? (await readContentFile(parsed.contentFile!, cwd));
       const result = await registry.add_memory({
         projectKey: parsed.projectKey,
         userScopeId: parsed.userScopeId,
         organizationId: parsed.organizationId ?? "default",
         kind: parsed.kind,
-        content: parsed.content,
+        content,
       });
 
       return JSON.stringify(result, null, 2);
@@ -199,6 +204,7 @@ function parseRememberArgs(rest: string[]): ParsedCliArgs {
   let organizationId: string | undefined;
   let kind: string | undefined;
   let content: string | undefined;
+  let contentFile: string | undefined;
 
   for (let index = 0; index < rest.length; index += 1) {
     const token = rest[index];
@@ -234,6 +240,12 @@ function parseRememberArgs(rest: string[]): ParsedCliArgs {
       continue;
     }
 
+    if (token === "--content-file") {
+      contentFile = requireFlagValue(token, value);
+      index += 1;
+      continue;
+    }
+
     throw new Error(`Unsupported argument: ${token}`);
   }
 
@@ -243,8 +255,11 @@ function parseRememberArgs(rest: string[]): ParsedCliArgs {
   if (!kind) {
     throw new Error("Missing required --kind argument");
   }
-  if (!content) {
-    throw new Error("Missing required --content argument");
+  if (!content && !contentFile) {
+    throw new Error("Missing required --content or --content-file argument");
+  }
+  if (content && contentFile) {
+    throw new Error("Use either --content or --content-file, not both");
   }
 
   return {
@@ -254,6 +269,7 @@ function parseRememberArgs(rest: string[]): ParsedCliArgs {
     organizationId,
     kind,
     content,
+    contentFile,
   };
 }
 
@@ -332,6 +348,17 @@ function requireFlagValue(
   }
 
   return value;
+}
+
+async function readContentFile(filePath: string, cwd: string): Promise<string> {
+  const resolved = path.isAbsolute(filePath)
+    ? filePath
+    : path.resolve(cwd, filePath);
+  const content = await fs.readFile(resolved, "utf8");
+  if (content.length === 0) {
+    throw new Error(`Content file is empty: ${filePath}`);
+  }
+  return content;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

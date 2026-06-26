@@ -43,6 +43,8 @@ printf '%s\n' "Summary: durable outcome ..." | .akasha/hooks/session-end.sh
 
 `./install.sh`도 build와 migration 후 같은 init 단계를 실행합니다. 기존 파일은
 기본적으로 덮어쓰지 않으며, 갱신이 필요하면 `--force`를 전달합니다.
+생성된 session-end hook은 summary를 임시 파일에 쓰고 `remember --content-file`을
+호출하므로, multiline summary를 process argument list에 직접 싣지 않아도 됩니다.
 
 ## MCP stdio
 
@@ -109,6 +111,16 @@ node dist/src/cli.js remember \
   --organization-id default \
   --kind summary \
   --content "Summary: durable outcome ..."
+```
+
+긴 multiline summary는 파일로 전달해 argv에 본문을 올리지 않을 수 있습니다:
+
+```bash
+node dist/src/cli.js remember \
+  --project my-project \
+  --organization-id default \
+  --kind summary \
+  --content-file /tmp/akasha-session-summary.txt
 ```
 
 개인 loopback 배포에서 의도적으로 legacy anonymous read를 쓰는 경우

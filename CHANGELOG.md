@@ -36,6 +36,9 @@ small actual impact surface.
 - **Entity graph inspection surface** — MCP and JSON HTTP now expose
   `inspect_memory_graph` (`POST /v1/memory/graph`) to inspect scoped persisted
   entity mentions and relationships behind graph-backed lexical rescue/boosts.
+- **Lifecycle capture via content files** — `remember` now accepts
+  `--content-file`, and generated `session-end.sh` hooks pass summaries through a
+  temporary file instead of placing multiline session summaries directly in argv.
 - **Memory governance CRUD and admin shell** — MCP and JSON HTTP now expose
   `list_memory`, `update_memory`, `delete_memory`, and `tag_memory` for
   operator review/edit/tag/archive workflows. `delete_memory` archives through

@@ -107,6 +107,7 @@ describe("public documentation drift checks", () => {
       expect(text).toContain(".akasha/hooks/session-end.sh");
       expect(text).toContain("node dist/src/cli.js pack");
       expect(text).toContain("node dist/src/cli.js remember");
+      expect(text).toContain("--content-file");
       expect(text).toContain("--organization-id");
     }
   });

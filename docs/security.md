@@ -41,8 +41,8 @@ Akasha never passes inbound MCP bearer tokens through to upstream APIs.
 
 OAuth scopes are enforced at the tool boundary:
 
-- `akasha:read` — search, context-pack, list-memory governance review, and
-  dry-run compaction.
+- `akasha:read` — search, context-pack, list-memory governance review, entity
+  graph inspection, and dry-run compaction.
 - `akasha:write` — add-memory writes.
 - `akasha:admin` — reindex, unarchive, audit-log reads, governance
   update/delete/tag, and compaction apply.
