@@ -217,8 +217,14 @@ npm run dev:cli       # CLI (watch 모드)
 npm run typecheck     # tsc --noEmit
 npm run test          # vitest run
 npm run db:migrate    # 미적용 마이그레이션 실행
-npm run backup:create # VECTOR_BACKEND=qdrant: Postgres + Qdrant snapshot; pgvector vectors live in Postgres
+npm run backup:create # 현재 packaged command: Postgres + Qdrant snapshot
 ```
+
+참고: 현재 `npm run backup:create` 는 여전히 `scripts/snapshot-qdrant.sh` 를
+호출하므로 `QDRANT_URL` 이 필요하며, later script split 전까지는
+Qdrant-oriented 명령입니다. `VECTOR_BACKEND=pgvector` 에서는 논리 벡터
+데이터가 Postgres에 있습니다 (logical vector data lives in Postgres). 다만
+이 packaged command는 아직 Qdrant snapshot 단계를 건너뛰지 않습니다.
 
 ## 기여 & 보안
 

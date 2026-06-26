@@ -2,50 +2,54 @@
 
 ## Summary
 
-- Task: Documentation and drift coverage for MCP Streamable HTTP, MCP resources/prompts, and structured tool outputs
-- Branch: `feat/mcp-streamable-http-roadmap`
-- Base before task: `f968c58`
-- Commit: `ae89b91` (`docs: document MCP HTTP resources and prompts`)
+- Task: Public Documentation Drift Fixes
+- Branch: `feat/akasha-growth-foundation-wave`
+- Commit: `ecfd957` (`docs: close growth foundation drift`)
+- Scope: public docs and drift tests only, plus this required report file
 
-## RED
+## TDD Red
 
-1. Added a new public-docs drift assertion in `tests/scripts/public-docs-drift.test.ts` covering:
-   - `MCP Streamable HTTP`
-   - `POST /mcp`
-   - MCP prompt names
-   - MCP resource template URIs
-2. Ran:
+Added the exact public docs drift tests from `task-4-brief.md` to
+`tests/scripts/public-docs-drift.test.ts`, covering:
+
+- migration range `001-009` and next migration `010_`
+- the three public transports, including MCP Streamable HTTP at `/mcp`
+- API schema details for `add_memory.kind`, context-pack sections, and MCP response output
+- changelog PR `#19` coverage
+- Qdrant vs pgvector backup distinctions
+
+Ran:
 
 ```bash
 npm test -- tests/scripts/public-docs-drift.test.ts
 ```
 
-3. Result: FAIL, as expected.
-   - Failure reason: `README.md` did not contain `MCP Streamable HTTP`.
+Result: FAIL as expected.
 
-## GREEN
+Observed failures:
 
-Updated these public docs minimally and consistently:
+- stale migration range in `AGENTS.md`
+- missing `MCP Streamable HTTP` wording in architecture/security docs
+- stale `add_memory.kind` API docs
+- missing PR `#19` changelog entry
+- missing `VECTOR_BACKEND=qdrant` / `VECTOR_BACKEND=pgvector` backup distinctions
 
-- `README.md`
-- `README.ko.md`
-- `docs/api-reference.md`
-- `docs/api-reference.ko.md`
+## Green Changes
 
-Documented behavior:
+Updated the owned docs to match current source behavior:
 
-- MCP stdio remains available
-- MCP Streamable HTTP endpoint is `/mcp`
-- Primary documented MCP HTTP entrypoint is `POST /mcp`
-- SDK transport also supports `GET` and `DELETE` on `/mcp`
-- JSON HTTP remains under `/v1/*`
-- MCP tool outputs expose both `structuredContent` and JSON text `content`
-- MCP resource templates:
-  - `akasha://memory/recent/{projectKey}`
-  - `akasha://context-pack/{projectKey}/{task}`
-- MCP prompts:
-  - `akasha_session_start`
-  - `akasha_store_memory`
+- migration range is now documented as `001-009`
+- next migration guidance now points to `010_*.sql`
+- architecture transport layer names:
+  - `src/mcp/server.ts` -> MCP SDK stdio
+  - `src/app/mcp-http.ts` -> MCP Streamable HTTP at `/mcp`
+  - `src/app/routes/memory.ts` -> JSON HTTP under `/v1/*`
+- read data flow now uses `vectorIndex.query` and the active vector backend
+- security docs now treat `/mcp` as an HTTP attack surface alongside `/v1/*`
+- API docs now document `decision | summary | fact`, context-pack section arrays, `structuredContent`, and one serialized JSON text content item
+- changelogs now mention PR `#19`, `/mcp`, MCP resources, MCP prompts, and structured MCP tool output
+- backup/restore docs now distinguish Qdrant snapshots from pgvector-in-Postgres data
+- Korean mirrors were updated with the same literal drift-guard tokens
 
 Re-ran:
 
@@ -53,134 +57,74 @@ Re-ran:
 npm test -- tests/scripts/public-docs-drift.test.ts
 ```
 
-Result: PASS.
+Result: PASS, 10 tests passed.
 
-## Full verification
+## Verification
 
-Ran:
+Focused test:
+
+```bash
+npm test -- tests/scripts/public-docs-drift.test.ts
+```
+
+PASS: 1 test file, 10 tests.
+
+Typecheck:
 
 ```bash
 npm run typecheck
+```
+
+PASS.
+
+Full test suite:
+
+```bash
 npm test
 ```
 
-Results:
+PASS: 45 test files passed, 2 skipped; 450 tests passed, 27 skipped.
 
-- `npm run typecheck`: PASS
-- `npm test`: PASS (`44` test files passed, `2` skipped; `428` tests passed, `27` skipped)
+Docker:
 
-## Changed files
+```bash
+docker build -f docker/app.Dockerfile .
+```
 
-- `README.md`
-- `README.ko.md`
-- `docs/api-reference.md`
-- `docs/api-reference.ko.md`
-- `tests/scripts/public-docs-drift.test.ts`
+PASS. Docker server was available (`5.7.1`). Build completed; Docker printed the expected cache-only warning because no output target was specified.
 
-## Self-review notes
+Diff checks:
 
-- Kept the README changes narrow: transport wording only, no unrelated restructuring.
-- Added the MCP resources/prompts section in API docs where readers already look for protocol surface details.
-- Included `structuredContent` plus JSON text `content` in API docs because that behavior changed in Tasks 1-3 even though the brief's sample assertions did not cover it.
-- Mirrored the same transport split and MCP endpoint details in Korean docs.
+```bash
+git diff --check main...HEAD
+```
+
+PASS: no whitespace errors.
+
+`git diff --stat main...HEAD` completed. It includes prior Tasks 1-3 branch changes as expected; the Task 4 commit itself changes 17 files with 260 insertions and 91 deletions.
+
+Self-review command:
+
+```bash
+rg -n "001[–-]008|my-token:|src/mcp/server.ts\\s+→ http|Qdrant \\(cosine|Both transports share" AGENTS.md CONTRIBUTING.md CONTRIBUTING.ko.md README.ko.md CHANGELOG.md CHANGELOG.ko.md docs src tests compose.yaml docker/app.Dockerfile
+```
+
+Matches inspected:
+
+- `tests/scripts/public-docs-drift.test.ts`: intentional negative assertions guarding stale docs.
+- `tests/app/bearer-auth.test.ts:208`: legitimate existing test fixture asserting `MEMORY_API_TOKENS="my-token:"` is rejected for empty org binding.
+
+No stale public-docs matches remain.
+
+## Commit
+
+- `ecfd957` `docs: close growth foundation drift`
+
+Note: `AGENTS.md` is ignored by `.git/info/exclude`, but the task explicitly owns and requires it, so it was staged with `git add -f AGENTS.md`.
 
 ## Concerns
 
-- None at implementation time.
-
----
-
-## Task 4 Review Fix — 2026-06-25
-
-### Summary
-
-- Task: Fix Task 4 review findings for Akasha public docs
-- Branch: `feat/mcp-streamable-http-roadmap`
-- Base before fix: `ae89b91`
-- Commit: `3658373` (`docs: align MCP HTTP auth documentation`)
-
-### RED
-
-1. Expanded `tests/scripts/public-docs-drift.test.ts` first to cover the review findings:
-   - README architecture table distinguishes `src/mcp/` as the shared MCP server surface.
-   - README architecture table distinguishes `src/app/` as serving MCP Streamable HTTP `/mcp` plus JSON HTTP `/v1/*`.
-   - API reference auth wording states `/mcp` is auth-gated when `MEMORY_API_TOKENS` is configured.
-   - API reference removes the stale “Both transports” wording now that three access paths are documented.
-   - Korean docs mirror the same behavior claims.
-2. Ran:
-
-```bash
-npm test -- tests/scripts/public-docs-drift.test.ts
-```
-
-3. Result: FAIL, as expected.
-   - Failure reason: `README.md` did not contain `Shared MCP server surface`.
-
-### GREEN
-
-Updated these files:
-
-- `README.md`
-- `README.ko.md`
-- `docs/api-reference.md`
-- `docs/api-reference.ko.md`
-- `tests/scripts/public-docs-drift.test.ts`
-
-Documentation changes:
-
-- Clarified that `src/mcp/` owns the shared MCP server surface.
-- Clarified that `src/app/` serves MCP Streamable HTTP on `/mcp` and JSON HTTP under `/v1/*`.
-- Updated HTTP auth wording so bearer-token requirements explicitly cover both `/mcp` and `/v1/*` when tokens are configured.
-- Preserved the loopback-only local-development exception wording.
-- Replaced “Both transports” with wording that matches the three documented access paths.
-- Kept Korean wording aligned with the English behavior claims.
-
-Re-ran:
-
-```bash
-npm test -- tests/scripts/public-docs-drift.test.ts
-```
-
-Result: PASS.
-
-### Full verification
-
-Ran:
-
-```bash
-npm run typecheck
-npm test
-```
-
-Results:
-
-- `npm test -- tests/scripts/public-docs-drift.test.ts`: PASS (`5` tests passed)
-- `npm run typecheck`: PASS
-- `npm test`: PASS (`44` test files passed, `2` skipped; `428` tests passed, `27` skipped)
-
-### Changed files
-
-- `README.md`
-- `README.ko.md`
-- `docs/api-reference.md`
-- `docs/api-reference.ko.md`
-- `tests/scripts/public-docs-drift.test.ts`
-- `.superpowers/sdd/task-4-report.md`
-
-### Self-review
-
-- The new drift assertions cover the specific review regressions instead of broader doc text.
-- The docs continue to distinguish MCP Streamable HTTP `/mcp` from JSON HTTP `/v1/*`; nothing suggests `/v1/*` is an MCP transport.
-- The auth wording remains token-based only and does not imply OAuth support.
-- Korean docs mirror the same transport and auth guarantees as English.
-
-### Concerns
-
 - None.
-
-### Controller correction
-
-- The fix subagent returned final commit `f6d4289`; the `3658373` value above is a stale intermediate hash from before the final commit landed.
 
 ---
 
@@ -215,5 +159,41 @@ Typecheck was not re-run because the test changes were string assertions only.
 - `docs/operations.ko.md`
 - `docs/self-hosted-operations.md`
 - `docs/self-hosted-operations.ko.md`
+- `tests/scripts/public-docs-drift.test.ts`
+- `.superpowers/sdd/task-4-report.md`
+
+---
+
+## Task 4 Second Review Fix — 2026-06-26
+
+### Reviewer Findings Addressed
+
+- API reference docs now reserve `SearchMemoryResult` for the individual memory
+  record shape from `src/types.ts`.
+- API reference docs now name the `search_memory` response envelope
+  `SearchMemoryResponse`, with `results: SearchMemoryResult[]`.
+- README common-command backup guidance now states that the packaged
+  `npm run backup:create` command still invokes `scripts/snapshot-qdrant.sh`,
+  requires `QDRANT_URL`, and remains Qdrant-oriented until a later script split.
+- README common-command backup guidance now states that with
+  `VECTOR_BACKEND=pgvector`, logical vector data lives in Postgres even though
+  the packaged backup command still runs the Qdrant snapshot step.
+- Drift tests now fail if API docs define `SearchMemoryResult` as the wrapper
+  instead of a record, and now assert the README EN/KO backup caveat.
+
+### Tests Run
+
+```bash
+npm test -- tests/scripts/public-docs-drift.test.ts
+```
+
+Result: PASS. 1 test file passed, 10 tests passed.
+
+### Files Changed
+
+- `README.md`
+- `README.ko.md`
+- `docs/api-reference.md`
+- `docs/api-reference.ko.md`
 - `tests/scripts/public-docs-drift.test.ts`
 - `.superpowers/sdd/task-4-report.md`

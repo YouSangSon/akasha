@@ -131,20 +131,39 @@ type SearchMemoryInput = {
 };
 
 type SearchMemoryResult = {
+  id: number;
+  organizationId?: string;
+  sourceId: number;
+  projectKey?: string | null;
+  scopeType: "project" | "user";
+  scopeId: string;
+  memoryType: "decision" | "summary" | "fact";
+  title?: string | null;
+  content: string;
+  summary?: string | null;
+  durability?: "ephemeral" | "durable" | "archived";
+  importance?: number;
+  createdAt: string;
+  updatedAt: string;
+  source: {
+    id: number;
+    organizationId?: string;
+    scopeType: "project" | "user";
+    scopeId: string;
+    sourceType: "decision" | "document" | "conversation";
+    externalId?: string;
+    sourceRef?: string;
+    title: string | null;
+    uri: string | null;
+    createdAt: string;
+  };
+};
+
+type SearchMemoryResponse = {
   ok: true;
   projectKey: string;
   query: string;
-  results: Array<{
-    id: number;
-    scopeType: "project" | "user";
-    scopeId: string;
-    memoryType: string;
-    content: string;
-    importance: number;
-    createdAt: string;
-    score: number;
-    // ... full record shape
-  }>;
+  results: SearchMemoryResult[];
 };
 ```
 

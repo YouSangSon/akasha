@@ -215,8 +215,14 @@ npm run dev:cli       # CLI in watch mode
 npm run typecheck     # tsc --noEmit
 npm run test          # vitest run
 npm run db:migrate    # apply pending migrations
-npm run backup:create # snapshot Postgres + Qdrant to BACKUP_DIR
+npm run backup:create # current packaged command snapshots Postgres + Qdrant
 ```
+
+Note: current `npm run backup:create` still invokes
+`scripts/snapshot-qdrant.sh`, so it requires `QDRANT_URL` and remains
+Qdrant-oriented until a later script split. With `VECTOR_BACKEND=pgvector`,
+logical vector data lives in Postgres; the packaged command does not yet skip
+the Qdrant snapshot step.
 
 ## Contributing & security
 
