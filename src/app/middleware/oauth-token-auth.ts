@@ -164,6 +164,7 @@ export function requiredScopeKindForTool(
       return "admin";
     case "search_memory":
     case "list_memory":
+    case "inspect_memory_graph":
     case "build_context_pack":
     case "list_workspace_roots":
     case "classify_memory_candidate":

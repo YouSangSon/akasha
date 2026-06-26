@@ -236,8 +236,9 @@ curl -X POST http://localhost:8787/v1/memory/delete \
   -d '{"memoryId": 42}' | jq
 ```
 
-`list_memory` is read-scoped for OAuth. `update_memory`, `delete_memory`, and
-`tag_memory` require admin scope. If `delete_memory` reports
+`list_memory` and `inspect_memory_graph` are read-scoped for OAuth.
+`update_memory`, `delete_memory`, and `tag_memory` require admin scope. If
+`delete_memory` reports
 `qdrantPointsPending > 0`, enable the compaction sweeper and use the same
 "Stuck rows" checks as compaction cleanup.
 

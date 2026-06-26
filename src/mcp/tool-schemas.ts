@@ -95,6 +95,44 @@ const compactionApplyStatsOutputSchema = z.object({
   durationMs: z.number(),
 });
 
+const entityKindInputSchema = z.enum([
+  "code_symbol",
+  "path",
+  "url",
+  "date",
+  "proper_noun",
+]);
+
+const memoryGraphEntityRefOutputSchema = z.object({
+  id: z.number(),
+  kind: entityKindInputSchema,
+  normalized: z.string(),
+  displayText: z.string(),
+});
+
+const memoryGraphEntityOutputSchema = memoryGraphEntityRefOutputSchema.extend({
+  organizationId: z.string().optional(),
+  firstSeenAt: z.string(),
+  lastSeenAt: z.string(),
+  mentionCount: z.number(),
+  memoryIds: z.array(z.number()),
+});
+
+const memoryGraphRelationshipOutputSchema = z.object({
+  id: z.number(),
+  organizationId: z.string().optional(),
+  fromEntityId: z.number(),
+  toEntityId: z.number(),
+  fromEntity: memoryGraphEntityRefOutputSchema,
+  toEntity: memoryGraphEntityRefOutputSchema,
+  relationType: z.string(),
+  evidenceMemoryRecordId: z.number(),
+  validFrom: z.string().nullable(),
+  validTo: z.string().nullable(),
+  confidence: z.number(),
+  createdAt: z.string(),
+});
+
 const archiveOutcomeOutputSchema = z.union([
   z.object({
     archiveId: z.number(),
@@ -260,6 +298,29 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     },
   },
   {
+    name: "inspect_memory_graph",
+    description:
+      "Inspect persisted entity mentions and relationships for one scoped memory graph.",
+    inputSchema: {
+      organizationId: z.string().min(1).optional(),
+      projectKey: z.string().min(1).optional(),
+      scope: z.enum(["project", "user"]).optional(),
+      userScopeId: z.string().min(1).optional(),
+      kind: entityKindInputSchema.optional(),
+      query: z.string().min(1).optional(),
+      includeArchived: z.boolean().optional(),
+      limit: z.number().int().positive().max(5000).optional(),
+      relationshipLimit: z.number().int().positive().max(5000).optional(),
+    },
+    outputSchema: {
+      ok: z.literal(true),
+      scopeType: z.enum(["project", "user"]),
+      scopeId: z.string(),
+      entities: z.array(memoryGraphEntityOutputSchema),
+      relationships: z.array(memoryGraphRelationshipOutputSchema),
+    },
+  },
+  {
     name: "update_memory",
     description:
       "Update one memory record through governance controls and refresh its vector index state.",
@@ -410,6 +471,7 @@ export const TOOL_ROUTES = [
   { name: "reindex_memory", method: "POST", path: "/v1/memory/reindex" },
   { name: "compact_memory", method: "POST", path: "/v1/memory/compact" },
   { name: "list_memory", method: "POST", path: "/v1/memory/list" },
+  { name: "inspect_memory_graph", method: "POST", path: "/v1/memory/graph" },
   { name: "update_memory", method: "POST", path: "/v1/memory/update" },
   { name: "delete_memory", method: "POST", path: "/v1/memory/delete" },
   { name: "tag_memory", method: "POST", path: "/v1/memory/tag" },
@@ -446,7 +508,8 @@ function validationSchemaForTool(toolName: ToolName): z.ZodType<Record<string, u
   if (
     toolName === "add_memory" ||
     toolName === "compact_memory" ||
-    toolName === "list_memory"
+    toolName === "list_memory" ||
+    toolName === "inspect_memory_graph"
   ) {
     return schema.superRefine((input, ctx) => {
       if (scopeRequiresProjectKey(input)) {

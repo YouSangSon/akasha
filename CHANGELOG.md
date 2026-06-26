@@ -33,6 +33,9 @@ small actual impact surface.
   a section. `selectedMemoryIds` now reflects the final included memories after
   context-pack section caps, and service-backed context-pack run persistence uses
   the same selected-only ID list.
+- **Entity graph inspection surface** — MCP and JSON HTTP now expose
+  `inspect_memory_graph` (`POST /v1/memory/graph`) to inspect scoped persisted
+  entity mentions and relationships behind graph-backed lexical rescue/boosts.
 - **Memory governance CRUD and admin shell** — MCP and JSON HTTP now expose
   `list_memory`, `update_memory`, `delete_memory`, and `tag_memory` for
   operator review/edit/tag/archive workflows. `delete_memory` archives through

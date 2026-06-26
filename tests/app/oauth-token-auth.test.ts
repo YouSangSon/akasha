@@ -139,6 +139,7 @@ describe("OAuth scope enforcement", () => {
   it("maps tools to read/write/admin scope kinds", () => {
     expect(requiredScopeKindForTool("search_memory", {})).toBe("read");
     expect(requiredScopeKindForTool("list_memory", {})).toBe("read");
+    expect(requiredScopeKindForTool("inspect_memory_graph", {})).toBe("read");
     expect(requiredScopeKindForTool("build_context_pack", {})).toBe("read");
     expect(requiredScopeKindForTool("add_memory", {})).toBe("write");
     expect(requiredScopeKindForTool("compact_memory", { dryRun: true })).toBe(

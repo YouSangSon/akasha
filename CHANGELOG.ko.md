@@ -30,6 +30,9 @@ CHANGELOG에서 명시적으로 표기합니다.
   `selectionRationale` 를 반환합니다. `selectedMemoryIds` 는 context-pack
   section cap 이후 실제 포함된 memory만 나타내며, service-backed context-pack
   run persistence도 동일한 selected-only ID 목록을 사용합니다.
+- **Entity graph inspection surface** — MCP와 JSON HTTP가 graph-backed lexical
+  rescue/boost 뒤의 scoped entity mention 및 relationship을 조회하는
+  `inspect_memory_graph` (`POST /v1/memory/graph`) 를 노출합니다.
 - **Memory governance CRUD 및 admin shell** — MCP와 JSON HTTP가 운영자
   review/edit/tag/archive workflow용 `list_memory`, `update_memory`,
   `delete_memory`, `tag_memory` 를 노출합니다. `delete_memory` 는 복구 가능한

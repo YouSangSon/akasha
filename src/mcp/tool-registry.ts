@@ -131,6 +131,10 @@ function instrumentToolRegistry(input: {
       instrument("list_memory", toolInput, () =>
         handlers.list_memory(toolInput),
       ),
+    inspect_memory_graph: (toolInput) =>
+      instrument("inspect_memory_graph", toolInput, () =>
+        handlers.inspect_memory_graph(toolInput),
+      ),
     update_memory: (toolInput) =>
       instrument("update_memory", toolInput, () =>
         handlers.update_memory(toolInput),

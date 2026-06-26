@@ -232,8 +232,9 @@ curl -X POST http://localhost:8787/v1/memory/delete \
   -d '{"memoryId": 42}' | jq
 ```
 
-OAuth 기준 `list_memory` 는 read scope, `update_memory`, `delete_memory`,
-`tag_memory` 는 admin scope가 필요합니다. `delete_memory` 응답의
+OAuth 기준 `list_memory`, `inspect_memory_graph` 는 read scope,
+`update_memory`, `delete_memory`, `tag_memory` 는 admin scope가 필요합니다.
+`delete_memory` 응답의
 `qdrantPointsPending > 0` 이면 compaction sweeper를 활성화하고 compaction
 cleanup과 같은 "Stuck rows" 점검을 사용하세요.
 

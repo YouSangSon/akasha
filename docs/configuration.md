@@ -201,8 +201,8 @@ OAuth access tokens are accepted only when:
 
 Scopes:
 - `akasha:read` — `search_memory`, `build_context_pack`,
-  `list_memory`, `list_workspace_roots`, `classify_memory_candidate`, and dry-run
-  `compact_memory`.
+  `list_memory`, `inspect_memory_graph`, `list_workspace_roots`,
+  `classify_memory_candidate`, and dry-run `compact_memory`.
 - `akasha:write` — `add_memory`, `add_memory_interactive`.
 - `akasha:admin` — `reindex_memory`, `unarchive_memory`, `list_audit_log`,
   `update_memory`, `delete_memory`, `tag_memory`, and `compact_memory` with

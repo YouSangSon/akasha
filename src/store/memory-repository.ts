@@ -9,7 +9,11 @@ import { tokenizeLexicalQuery } from "../search/lexical-score.js";
 import type {
   AddMemoryInput,
   CanonicalMemoryRepository,
+  MemoryGraphEntity,
+  MemoryGraphRelationship,
+  MemoryGraphView,
   MemorySource,
+  ScopeRef,
   SearchMemoryResult,
 } from "../types.js";
 import { assertOrganizationId } from "./assert-organization-id.js";
@@ -60,6 +64,37 @@ type PostgresEntityRow = {
   id: number | string;
   kind: EntityMention["kind"];
   normalized: string;
+};
+
+type PostgresGraphEntityRow = {
+  id: number | string;
+  organization_id: string;
+  kind: EntityMention["kind"];
+  normalized: string;
+  display_text: string;
+  first_seen_at: string | Date;
+  last_seen_at: string | Date;
+  mention_count: number | string;
+  memory_ids: (number | string)[] | null;
+};
+
+type PostgresGraphRelationshipRow = {
+  id: number | string;
+  organization_id: string;
+  from_entity_id: number | string;
+  to_entity_id: number | string;
+  relation_type: string;
+  evidence_memory_record_id: number | string;
+  valid_from: string | null;
+  valid_to: string | null;
+  confidence: number | string;
+  created_at: string | Date;
+  from_kind: EntityMention["kind"];
+  from_normalized: string;
+  from_display_text: string;
+  to_kind: EntityMention["kind"];
+  to_normalized: string;
+  to_display_text: string;
 };
 
 type PersistedEntityMention = EntityMention & {
@@ -401,6 +436,10 @@ export function createMemoryRepository(
       return result.rows.map(mapPostgresSearchResult);
     },
 
+    async inspectMemoryGraph(scope, options) {
+      return inspectPostgresMemoryGraph(pool, scope, options);
+    },
+
     async updateMemoryRecord(input) {
       const client = await pool.connect();
 
@@ -640,6 +679,192 @@ async function getPostgresMemoryRecordById(
   return result.rows[0] ?? null;
 }
 
+async function inspectPostgresMemoryGraph(
+  queryable: PgQueryable,
+  scope: ScopeRef,
+  options: {
+    organizationId: string;
+    kind?: EntityMention["kind"];
+    query?: string;
+    includeArchived?: boolean;
+    limit?: number;
+    relationshipLimit?: number;
+  },
+): Promise<MemoryGraphView> {
+  const limit = clampListLimit(options.limit);
+  const params: unknown[] = [
+    options.organizationId,
+    scope.scopeType,
+    scope.scopeId,
+  ];
+  const archivedClause = options.includeArchived
+    ? ""
+    : " AND mr.durability <> 'archived'";
+  let kindClause = "";
+  if (options.kind !== undefined) {
+    const kindIndex = params.push(options.kind);
+    kindClause = ` AND e.kind = $${kindIndex}`;
+  }
+  let queryClause = "";
+  const trimmedQuery = options.query?.trim();
+  if (trimmedQuery) {
+    const queryIndex = params.push(likeContainsPattern(trimmedQuery));
+    queryClause =
+      ` AND (e.normalized ILIKE $${queryIndex} ESCAPE '\\' ` +
+      `OR e.display_text ILIKE $${queryIndex} ESCAPE '\\')`;
+  }
+  const limitIndex = params.push(limit);
+
+  const entityResult = await queryable.query<PostgresGraphEntityRow>(
+    `
+      SELECT
+        e.id,
+        e.organization_id,
+        e.kind,
+        e.normalized,
+        e.display_text,
+        e.first_seen_at,
+        e.last_seen_at,
+        COUNT(DISTINCT mem.memory_record_id)::int AS mention_count,
+        COALESCE(
+          array_agg(DISTINCT mem.memory_record_id ORDER BY mem.memory_record_id DESC),
+          '{}'
+        ) AS memory_ids
+      FROM entities e
+      JOIN memory_entity_mentions mem
+        ON mem.entity_id = e.id
+       AND mem.organization_id = e.organization_id
+      JOIN memory_records mr
+        ON mr.id = mem.memory_record_id
+       AND mr.organization_id = e.organization_id
+      WHERE e.organization_id = $1
+        AND mr.scope_type = $2
+        AND mr.scope_id = $3${archivedClause}${kindClause}${queryClause}
+      GROUP BY
+        e.id,
+        e.organization_id,
+        e.kind,
+        e.normalized,
+        e.display_text,
+        e.first_seen_at,
+        e.last_seen_at
+      ORDER BY mention_count DESC, e.last_seen_at DESC, e.id DESC
+      LIMIT $${limitIndex}
+    `,
+    params,
+  );
+
+  const entities = entityResult.rows.map(mapPostgresGraphEntity);
+  const entityIds = entities.map((entity) => entity.id);
+  if (entityIds.length === 0) {
+    return { entities, relationships: [] };
+  }
+
+  const relationshipLimit = clampListLimit(
+    options.relationshipLimit ?? options.limit,
+  );
+  const relationshipParams: unknown[] = [
+    options.organizationId,
+    scope.scopeType,
+    scope.scopeId,
+    entityIds,
+  ];
+  const relationshipLimitIndex = relationshipParams.push(relationshipLimit);
+  const relationshipResult =
+    await queryable.query<PostgresGraphRelationshipRow>(
+      `
+        SELECT
+          er.id,
+          er.organization_id,
+          er.from_entity_id,
+          er.to_entity_id,
+          er.relation_type,
+          er.evidence_memory_record_id,
+          er.valid_from::text AS valid_from,
+          er.valid_to::text AS valid_to,
+          er.confidence::float8 AS confidence,
+          er.created_at,
+          from_e.kind AS from_kind,
+          from_e.normalized AS from_normalized,
+          from_e.display_text AS from_display_text,
+          to_e.kind AS to_kind,
+          to_e.normalized AS to_normalized,
+          to_e.display_text AS to_display_text
+        FROM entity_relationships er
+        JOIN memory_records mr
+          ON mr.id = er.evidence_memory_record_id
+         AND mr.organization_id = er.organization_id
+        JOIN entities from_e
+          ON from_e.id = er.from_entity_id
+         AND from_e.organization_id = er.organization_id
+        JOIN entities to_e
+          ON to_e.id = er.to_entity_id
+         AND to_e.organization_id = er.organization_id
+        WHERE er.organization_id = $1
+          AND mr.scope_type = $2
+          AND mr.scope_id = $3${archivedClause}
+          AND (
+            er.from_entity_id = ANY($4::bigint[])
+            OR er.to_entity_id = ANY($4::bigint[])
+          )
+        ORDER BY er.created_at DESC, er.id DESC
+        LIMIT $${relationshipLimitIndex}
+      `,
+      relationshipParams,
+    );
+
+  return {
+    entities,
+    relationships: relationshipResult.rows.map(mapPostgresGraphRelationship),
+  };
+}
+
+function mapPostgresGraphEntity(row: PostgresGraphEntityRow): MemoryGraphEntity {
+  return {
+    id: toNumber(row.id),
+    organizationId: row.organization_id,
+    kind: row.kind,
+    normalized: row.normalized,
+    displayText: row.display_text,
+    firstSeenAt: toIsoString(row.first_seen_at),
+    lastSeenAt: toIsoString(row.last_seen_at),
+    mentionCount: toNumber(row.mention_count),
+    memoryIds: toNumberArray(row.memory_ids),
+  };
+}
+
+function mapPostgresGraphRelationship(
+  row: PostgresGraphRelationshipRow,
+): MemoryGraphRelationship {
+  const fromEntityId = toNumber(row.from_entity_id);
+  const toEntityId = toNumber(row.to_entity_id);
+
+  return {
+    id: toNumber(row.id),
+    organizationId: row.organization_id,
+    fromEntityId,
+    toEntityId,
+    fromEntity: {
+      id: fromEntityId,
+      kind: row.from_kind,
+      normalized: row.from_normalized,
+      displayText: row.from_display_text,
+    },
+    toEntity: {
+      id: toEntityId,
+      kind: row.to_kind,
+      normalized: row.to_normalized,
+      displayText: row.to_display_text,
+    },
+    relationType: row.relation_type,
+    evidenceMemoryRecordId: toNumber(row.evidence_memory_record_id),
+    validFrom: row.valid_from,
+    validTo: row.valid_to,
+    confidence: toNumber(row.confidence),
+    createdAt: toIsoString(row.created_at),
+  };
+}
+
 function requireSourceKey(input: AddMemoryInput["source"]): string {
   const sourceKey = input.sourceRef ?? input.externalId;
 
@@ -662,6 +887,10 @@ function toIsoString(value: string | Date): string {
 
 function toNumber(value: number | string): number {
   return typeof value === "number" ? value : Number(value);
+}
+
+function toNumberArray(values: readonly (number | string)[] | null): number[] {
+  return (values ?? []).map((value) => toNumber(value));
 }
 
 function likeContainsPattern(value: string): string {

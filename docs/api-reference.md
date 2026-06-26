@@ -5,7 +5,7 @@
 Akasha exposes the same core service tool surface through three access paths:
 
 - **MCP stdio** — for AI clients like Claude Code and Codex CLI.
-  Entry point: `dist/src/mcp/server.js`. All 11 service tools are registered,
+  Entry point: `dist/src/mcp/server.js`. All 12 service tools are registered,
   plus MCP-only client-context helpers.
 - **MCP Streamable HTTP** — for MCP clients that connect over HTTP.
   Primary documented endpoint: `POST /mcp` for JSON-RPC requests. The SDK
@@ -344,6 +344,73 @@ MCP stdio: `list_memory`
 
 Read-only governance review. Tag filters use `memory_tags`; archived rows are
 excluded unless `includeArchived` is true.
+
+---
+
+### inspect_memory_graph — inspect scoped entity graph
+
+```ts
+type EntityKind = "code_symbol" | "path" | "url" | "date" | "proper_noun";
+
+type InspectMemoryGraphInput = {
+  organizationId?: string;
+  projectKey?: string;           // required for project scope
+  scope?: "project" | "user";    // default "project"
+  userScopeId?: string;          // required for user scope
+  kind?: EntityKind;
+  query?: string;                // filters normalized/display text
+  includeArchived?: boolean;
+  limit?: number;                // max 5000
+  relationshipLimit?: number;    // max 5000
+};
+
+type MemoryGraphEntity = {
+  id: number;
+  kind: EntityKind;
+  normalized: string;
+  displayText: string;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  mentionCount: number;
+  memoryIds: number[];
+};
+
+type MemoryGraphEntityRef = {
+  id: number;
+  kind: EntityKind;
+  normalized: string;
+  displayText: string;
+};
+
+type MemoryGraphRelationship = {
+  id: number;
+  fromEntityId: number;
+  toEntityId: number;
+  fromEntity: MemoryGraphEntityRef;
+  toEntity: MemoryGraphEntityRef;
+  relationType: string;          // "co_mentions" or "temporal_context"
+  evidenceMemoryRecordId: number;
+  validFrom: string | null;
+  validTo: string | null;
+  confidence: number;
+  createdAt: string;
+};
+
+type InspectMemoryGraphResult = {
+  ok: true;
+  scopeType: "project" | "user";
+  scopeId: string;
+  entities: MemoryGraphEntity[];
+  relationships: MemoryGraphRelationship[];
+};
+```
+
+HTTP: `POST /v1/memory/graph`
+MCP stdio: `inspect_memory_graph`
+
+Read-only graph inspection for the write-time entity graph. Use this to audit
+which symbols, paths, URLs, dates, and named concepts are driving entity-backed
+lexical rescue/boost behavior.
 
 ---
 

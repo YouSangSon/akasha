@@ -77,6 +77,13 @@ function buildRegistry(): ToolRegistry {
       scopeId: "p",
       memories: [],
     }),
+    inspect_memory_graph: vi.fn().mockResolvedValue({
+      ok: true,
+      scopeType: "project",
+      scopeId: "p",
+      entities: [],
+      relationships: [],
+    }),
     update_memory: vi.fn().mockResolvedValue({
       ok: true,
       updated: true,
@@ -417,6 +424,17 @@ describe("Streamable HTTP /mcp", () => {
     expect(handle.registry.list_memory).toHaveBeenCalledWith({
       organizationId: "org-oauth",
       projectKey: "p",
+    });
+
+    const graph = await client.callTool({
+      name: "inspect_memory_graph",
+      arguments: { projectKey: "p", kind: "code_symbol" },
+    });
+    expect(graph.isError).not.toBe(true);
+    expect(handle.registry.inspect_memory_graph).toHaveBeenCalledWith({
+      organizationId: "org-oauth",
+      projectKey: "p",
+      kind: "code_symbol",
     });
 
     const add = await client.callTool({

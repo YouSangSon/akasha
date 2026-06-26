@@ -1,3 +1,5 @@
+import type { EntityKind } from "./entities/entity-extraction.js";
+
 export type ScopeType = "user" | "project";
 
 export type ScopeRef = {
@@ -77,6 +79,41 @@ export type SearchMemoryResult = MemoryRecord & {
   source: MemorySource;
 };
 
+export type MemoryGraphEntityRef = {
+  id: number;
+  kind: EntityKind;
+  normalized: string;
+  displayText: string;
+};
+
+export type MemoryGraphEntity = MemoryGraphEntityRef & {
+  organizationId?: string;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  mentionCount: number;
+  memoryIds: number[];
+};
+
+export type MemoryGraphRelationship = {
+  id: number;
+  organizationId?: string;
+  fromEntityId: number;
+  toEntityId: number;
+  fromEntity: MemoryGraphEntityRef;
+  toEntity: MemoryGraphEntityRef;
+  relationType: "co_mentions" | "temporal_context" | string;
+  evidenceMemoryRecordId: number;
+  validFrom: string | null;
+  validTo: string | null;
+  confidence: number;
+  createdAt: string;
+};
+
+export type MemoryGraphView = {
+  entities: MemoryGraphEntity[];
+  relationships: MemoryGraphRelationship[];
+};
+
 export type ListMemoryOptions = {
   limit?: number;
   // When set, restrict listing to a single organization. Repositories that
@@ -127,6 +164,17 @@ export type CanonicalMemoryRepository = {
       limit?: number;
     },
   ): Promise<SearchMemoryResult[]>;
+  inspectMemoryGraph(
+    scope: ScopeRef,
+    options: {
+      organizationId: string;
+      kind?: EntityKind;
+      query?: string;
+      includeArchived?: boolean;
+      limit?: number;
+      relationshipLimit?: number;
+    },
+  ): Promise<MemoryGraphView>;
   updateMemoryRecord(input: {
     id: number;
     organizationId: string;

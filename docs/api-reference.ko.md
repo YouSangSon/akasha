@@ -5,7 +5,7 @@
 Akasha는 동일한 core service tool surface를 세 가지 접근 경로로 노출합니다:
 
 - **MCP stdio** — Claude Code, Codex CLI 같은 AI 클라이언트용.
-  진입점: `dist/src/mcp/server.js`. 11개 service tool 모두와 MCP 전용
+  진입점: `dist/src/mcp/server.js`. 12개 service tool 모두와 MCP 전용
   client-context helper가 등록됩니다.
 - **MCP Streamable HTTP** — HTTP로 연결하는 MCP 클라이언트용.
   기본 문서화 대상 엔드포인트는 JSON-RPC 요청용 `POST /mcp` 입니다. SDK
@@ -342,6 +342,73 @@ MCP stdio: `list_memory`
 
 읽기 전용 governance 검토 도구입니다. Tag 필터는 `memory_tags` 를 사용하며,
 `includeArchived` 가 true일 때만 archived row를 포함합니다.
+
+---
+
+### inspect_memory_graph — scoped entity graph 조회
+
+```ts
+type EntityKind = "code_symbol" | "path" | "url" | "date" | "proper_noun";
+
+type InspectMemoryGraphInput = {
+  organizationId?: string;
+  projectKey?: string;           // project scope 시 필수
+  scope?: "project" | "user";    // 기본 "project"
+  userScopeId?: string;          // user scope 시 필수
+  kind?: EntityKind;
+  query?: string;                // normalized/display text 필터
+  includeArchived?: boolean;
+  limit?: number;                // 최대 5000
+  relationshipLimit?: number;    // 최대 5000
+};
+
+type MemoryGraphEntity = {
+  id: number;
+  kind: EntityKind;
+  normalized: string;
+  displayText: string;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  mentionCount: number;
+  memoryIds: number[];
+};
+
+type MemoryGraphEntityRef = {
+  id: number;
+  kind: EntityKind;
+  normalized: string;
+  displayText: string;
+};
+
+type MemoryGraphRelationship = {
+  id: number;
+  fromEntityId: number;
+  toEntityId: number;
+  fromEntity: MemoryGraphEntityRef;
+  toEntity: MemoryGraphEntityRef;
+  relationType: string;          // "co_mentions" 또는 "temporal_context"
+  evidenceMemoryRecordId: number;
+  validFrom: string | null;
+  validTo: string | null;
+  confidence: number;
+  createdAt: string;
+};
+
+type InspectMemoryGraphResult = {
+  ok: true;
+  scopeType: "project" | "user";
+  scopeId: string;
+  entities: MemoryGraphEntity[];
+  relationships: MemoryGraphRelationship[];
+};
+```
+
+HTTP: `POST /v1/memory/graph`
+MCP stdio: `inspect_memory_graph`
+
+쓰기 시점에 저장된 entity graph를 읽기 전용으로 조회합니다. Symbol, path, URL,
+date, named concept 중 어떤 항목이 entity-backed lexical rescue/boost 동작에
+영향을 주는지 감사할 때 사용합니다.
 
 ---
 

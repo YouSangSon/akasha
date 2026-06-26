@@ -242,6 +242,10 @@ function withAuthenticatedRegistry(
     reindex_memory: wrap("reindex_memory", registry.reindex_memory),
     compact_memory: wrap("compact_memory", registry.compact_memory),
     list_memory: wrap("list_memory", registry.list_memory),
+    inspect_memory_graph: wrap(
+      "inspect_memory_graph",
+      registry.inspect_memory_graph,
+    ),
     update_memory: wrap("update_memory", registry.update_memory),
     delete_memory: wrap("delete_memory", registry.delete_memory),
     tag_memory: wrap("tag_memory", registry.tag_memory),

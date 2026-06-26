@@ -12,11 +12,14 @@ import type {
   ContextPackSelectionRationale,
   ContextPackSections,
 } from "../context-pack/build-context-pack.js";
+import type { EntityKind } from "../entities/entity-extraction.js";
 import type { Logger } from "../logger.js";
 import type {
   CanonicalMemoryRepository,
   Durability,
   IngestJobRepository,
+  MemoryGraphEntity,
+  MemoryGraphRelationship,
   MemoryType,
   MemoryRepository,
   ScopeType,
@@ -167,6 +170,26 @@ export type ListMemoryToolResult = {
   scopeType: ScopeType;
   scopeId: string;
   memories: SearchMemoryResult[];
+};
+
+export type InspectMemoryGraphToolInput = {
+  organizationId?: string;
+  projectKey?: string;
+  scope?: ScopeType;
+  userScopeId?: string;
+  kind?: EntityKind;
+  query?: string;
+  includeArchived?: boolean;
+  limit?: number;
+  relationshipLimit?: number;
+};
+
+export type InspectMemoryGraphToolResult = {
+  ok: true;
+  scopeType: ScopeType;
+  scopeId: string;
+  entities: MemoryGraphEntity[];
+  relationships: MemoryGraphRelationship[];
 };
 
 export type UpdateMemoryToolInput = {
@@ -345,6 +368,9 @@ export type ToolRegistry = {
   ): Promise<ReindexMemoryToolResult>;
   compact_memory(input: CompactMemoryToolInput): Promise<CompactMemoryToolResult>;
   list_memory(input: ListMemoryToolInput): Promise<ListMemoryToolResult>;
+  inspect_memory_graph(
+    input: InspectMemoryGraphToolInput,
+  ): Promise<InspectMemoryGraphToolResult>;
   update_memory(input: UpdateMemoryToolInput): Promise<UpdateMemoryToolResult>;
   delete_memory(input: DeleteMemoryToolInput): Promise<DeleteMemoryToolResult>;
   tag_memory(input: TagMemoryToolInput): Promise<TagMemoryToolResult>;

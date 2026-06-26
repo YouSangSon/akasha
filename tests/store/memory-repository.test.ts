@@ -419,6 +419,111 @@ describe("createMemoryRepository (unit — no PG required)", () => {
     expect(queryCalls[0]?.sql).not.toContain("mr.durability <> 'archived'");
   });
 
+  it("inspectMemoryGraph scopes entity and relationship reads by org and memory scope", async () => {
+    const queryCalls: SqlQueryCall[] = [];
+    const mockPool = {
+      query: vi.fn().mockImplementation((sql: string, params: unknown[]) => {
+        queryCalls.push({ sql, params });
+        if (sql.includes("FROM entities e")) {
+          return Promise.resolve({
+            rows: [
+              {
+                id: "91",
+                organization_id: "org-a",
+                kind: "code_symbol",
+                normalized: "qdrant_snapshot_timeout",
+                display_text: "QDRANT_SNAPSHOT_TIMEOUT",
+                first_seen_at: "2026-06-26T00:00:00.000Z",
+                last_seen_at: "2026-06-27T00:00:00.000Z",
+                mention_count: "2",
+                memory_ids: ["42", "41"],
+              },
+            ],
+          });
+        }
+
+        return Promise.resolve({
+          rows: [
+            {
+              id: "701",
+              organization_id: "org-a",
+              from_entity_id: "91",
+              to_entity_id: "92",
+              relation_type: "temporal_context",
+              evidence_memory_record_id: "42",
+              valid_from: "2026-06-26",
+              valid_to: null,
+              confidence: "0.8",
+              created_at: "2026-06-27T00:00:00.000Z",
+              from_kind: "code_symbol",
+              from_normalized: "qdrant_snapshot_timeout",
+              from_display_text: "QDRANT_SNAPSHOT_TIMEOUT",
+              to_kind: "date",
+              to_normalized: "2026-06-26",
+              to_display_text: "2026-06-26",
+            },
+          ],
+        });
+      }),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    const graph = await repo.inspectMemoryGraph(
+      { scopeType: "project", scopeId: "proj-x" },
+      {
+        organizationId: "org-a",
+        kind: "code_symbol",
+        query: "QDRANT",
+        limit: 25,
+        relationshipLimit: 10,
+      },
+    );
+
+    expect(graph.entities).toEqual([
+      expect.objectContaining({
+        id: 91,
+        kind: "code_symbol",
+        normalized: "qdrant_snapshot_timeout",
+        mentionCount: 2,
+        memoryIds: [42, 41],
+      }),
+    ]);
+    expect(graph.relationships).toEqual([
+      expect.objectContaining({
+        id: 701,
+        relationType: "temporal_context",
+        evidenceMemoryRecordId: 42,
+        validFrom: "2026-06-26",
+        confidence: 0.8,
+      }),
+    ]);
+    expect(queryCalls).toHaveLength(2);
+    expect(queryCalls[0]?.sql).toContain("FROM entities e");
+    expect(queryCalls[0]?.sql).toContain("JOIN memory_entity_mentions mem");
+    expect(queryCalls[0]?.sql).toContain("mr.scope_type = $2");
+    expect(queryCalls[0]?.sql).toContain("mr.scope_id = $3");
+    expect(queryCalls[0]?.sql).toContain("e.kind = $4");
+    expect(queryCalls[0]?.sql).toContain("e.normalized ILIKE $5");
+    expect(queryCalls[0]?.sql).toContain("mr.durability <> 'archived'");
+    expect(queryCalls[0]?.params).toEqual([
+      "org-a",
+      "project",
+      "proj-x",
+      "code_symbol",
+      "%QDRANT%",
+      25,
+    ]);
+    expect(queryCalls[1]?.sql).toContain("FROM entity_relationships er");
+    expect(queryCalls[1]?.sql).toContain("er.organization_id = $1");
+    expect(queryCalls[1]?.params).toEqual([
+      "org-a",
+      "project",
+      "proj-x",
+      [91],
+      10,
+    ]);
+  });
+
   it("updateMemoryRecord scopes the update by org and replaces tags in the same transaction", async () => {
     const clientQueryCalls: { sql: string; params: unknown[] }[] = [];
     let hydrationReads = 0;
@@ -880,6 +985,16 @@ describe.skipIf(!process.env.POSTGRES_HOST)("createMemoryRepository", () => {
         scopes: [{ scopeType: "project", scopeId: "project-alpha" }],
         limit: 10,
       });
+      const graph = await repository.inspectMemoryGraph(
+        { scopeType: "project", scopeId: "project-alpha" },
+        {
+          organizationId: "org-graph",
+          kind: "code_symbol",
+          query: "QDRANT",
+          limit: 10,
+          relationshipLimit: 10,
+        },
+      );
 
       expect(mentions.rows).toEqual(
         expect.arrayContaining([
@@ -910,6 +1025,25 @@ describe.skipIf(!process.env.POSTGRES_HOST)("createMemoryRepository", () => {
         ]),
       );
       expect(searched.map((record) => record.id)).toContain(created.id);
+      expect(graph.entities).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "code_symbol",
+            normalized: "qdrant_snapshot_timeout",
+            mentionCount: 1,
+            memoryIds: [created.id],
+          }),
+        ]),
+      );
+      expect(graph.relationships).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            relationType: "temporal_context",
+            evidenceMemoryRecordId: created.id,
+            validFrom: "2026-06-26",
+          }),
+        ]),
+      );
     } finally {
       await pool.end();
     }

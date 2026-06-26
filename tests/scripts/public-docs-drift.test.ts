@@ -31,10 +31,14 @@ describe("public documentation drift checks", () => {
     expect(readme).toContain("POST /mcp");
     expect(readme).toContain("Shared MCP server surface");
     expect(readme).toContain("Serves MCP Streamable HTTP at `/mcp` plus JSON HTTP under `/v1/*`");
+    expect(readme).toContain("inspect_memory_graph");
+    expect(readme).toContain("/v1/memory/graph");
     expect(readmeKo).toContain("MCP Streamable HTTP");
     expect(readmeKo).toContain("POST /mcp");
     expect(readmeKo).toContain("공유 MCP 서버 surface");
     expect(readmeKo).toContain("`/mcp` 의 MCP Streamable HTTP 와 `/v1/*` 아래 JSON HTTP");
+    expect(readmeKo).toContain("inspect_memory_graph");
+    expect(readmeKo).toContain("/v1/memory/graph");
 
     expect(apiReference).toContain("MCP Streamable HTTP");
     expect(apiReference).toContain("dist/src/mcp/server.js");
@@ -59,6 +63,8 @@ describe("public documentation drift checks", () => {
     expect(apiReference).toContain("list_workspace_roots");
     expect(apiReference).toContain("add_memory_interactive");
     expect(apiReference).toContain("classify_memory_candidate");
+    expect(apiReference).toContain("inspect_memory_graph");
+    expect(apiReference).toContain("POST /v1/memory/graph");
 
     expect(apiReferenceKo).toContain("MCP Streamable HTTP");
     expect(apiReferenceKo).toContain("dist/src/mcp/server.js");
@@ -78,6 +84,8 @@ describe("public documentation drift checks", () => {
     expect(apiReferenceKo).toContain("list_workspace_roots");
     expect(apiReferenceKo).toContain("add_memory_interactive");
     expect(apiReferenceKo).toContain("classify_memory_candidate");
+    expect(apiReferenceKo).toContain("inspect_memory_graph");
+    expect(apiReferenceKo).toContain("POST /v1/memory/graph");
   });
 
   it("documents agent lifecycle integrations", () => {
@@ -180,6 +188,10 @@ describe("public documentation drift checks", () => {
       expect(text).toContain("/.well-known/oauth-protected-resource");
     }
 
+    for (const path of ["docs/configuration.md", "docs/configuration.ko.md"]) {
+      expect(read(path)).toContain("inspect_memory_graph");
+    }
+
     for (const path of ["docs/security.md", "docs/security.ko.md"]) {
       const text = read(path);
       expect(text).toContain("MCP_OAUTH_AUTHORIZATION_SERVERS");
@@ -224,6 +236,9 @@ describe("public documentation drift checks", () => {
       expect(text).toContain("type ContextPackSelectionRationale = {");
       expect(text).toContain("selectionRationale: ContextPackSelectionRationale[];");
       expect(text).toContain("inputRank: number;");
+      expect(text).toContain("type InspectMemoryGraphInput = {");
+      expect(text).toContain("type MemoryGraphEntity = {");
+      expect(text).toContain("type MemoryGraphRelationship = {");
       for (const section of [
         "project_summary",
         "recent_decisions",

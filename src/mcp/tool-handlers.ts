@@ -531,6 +531,46 @@ export function createToolHandlers(input: {
       };
     },
 
+    async inspect_memory_graph(toolInput) {
+      ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      const scope = toolInput.scope ?? "project";
+      const userScopeId = resolveUserScopeId({
+        cwd,
+        explicitUserScopeId: toolInput.userScopeId,
+        defaultUserScopeId: options.defaultUserScopeId,
+      });
+      const scopeRef =
+        scope === "user"
+          ? {
+              scopeType: "user" as const,
+              scopeId: requireUserScopeId(userScopeId),
+            }
+          : {
+              scopeType: "project" as const,
+              scopeId: requireProjectKey(toolInput.projectKey, scope),
+            };
+      const organizationId = toolInput.organizationId ?? "default";
+
+      const graph = await withCanonicalRepository((repository) =>
+        repository.inspectMemoryGraph(scopeRef, {
+          organizationId,
+          kind: toolInput.kind,
+          query: toolInput.query,
+          includeArchived: toolInput.includeArchived,
+          limit: toolInput.limit,
+          relationshipLimit: toolInput.relationshipLimit,
+        }),
+      );
+
+      return {
+        ok: true,
+        scopeType: scopeRef.scopeType,
+        scopeId: scopeRef.scopeId,
+        entities: graph.entities,
+        relationships: graph.relationships,
+      };
+    },
+
     async update_memory(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
       return await withCanonicalServices(async (services) => {

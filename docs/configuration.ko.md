@@ -193,8 +193,8 @@ OAuth access token은 다음 조건을 모두 만족할 때만 허용됩니다:
 
 Scope:
 - `akasha:read` — `search_memory`, `build_context_pack`,
-  `list_memory`, `list_workspace_roots`, `classify_memory_candidate`, dry-run
-  `compact_memory`.
+  `list_memory`, `inspect_memory_graph`, `list_workspace_roots`,
+  `classify_memory_candidate`, dry-run `compact_memory`.
 - `akasha:write` — `add_memory`, `add_memory_interactive`.
 - `akasha:admin` — `reindex_memory`, `unarchive_memory`, `list_audit_log`,
   `update_memory`, `delete_memory`, `tag_memory`, `dryRun: false` 인

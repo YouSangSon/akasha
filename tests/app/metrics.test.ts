@@ -67,6 +67,13 @@ function buildRegistry(): ToolRegistry {
       scopeId: "p",
       memories: [],
     }),
+    inspect_memory_graph: vi.fn().mockResolvedValue({
+      ok: true,
+      scopeType: "project",
+      scopeId: "p",
+      entities: [],
+      relationships: [],
+    }),
     update_memory: vi.fn().mockResolvedValue({
       ok: true,
       updated: true,

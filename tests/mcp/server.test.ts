@@ -811,11 +811,60 @@ describe("createToolRegistry", () => {
     );
   });
 
+  it("inspects scoped entity graph through canonical repository primitives", async () => {
+    const services = createCanonicalServices();
+    const registry = createToolRegistry({
+      defaultUserScopeId: "alice",
+      resolveCanonicalServices: async () => services,
+    });
+
+    const result = await registry.inspect_memory_graph({
+      organizationId: "org-a",
+      projectKey: "project-alpha",
+      kind: "code_symbol",
+      query: "QDRANT",
+      includeArchived: true,
+      limit: 25,
+      relationshipLimit: 10,
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      scopeType: "project",
+      scopeId: "project-alpha",
+      entities: [
+        expect.objectContaining({
+          id: 91,
+          kind: "code_symbol",
+          normalized: "qdrant_snapshot_timeout",
+        }),
+      ],
+      relationships: [],
+    });
+    expect(services.repository.inspectMemoryGraph).toHaveBeenCalledWith(
+      { scopeType: "project", scopeId: "project-alpha" },
+      {
+        organizationId: "org-a",
+        kind: "code_symbol",
+        query: "QDRANT",
+        includeArchived: true,
+        limit: 25,
+        relationshipLimit: 10,
+      },
+    );
+  });
+
   it("rejects governance tools in legacy repository override mode", async () => {
     const registry = createToolRegistry({ repository: createRepository() });
 
     await expect(
       registry.list_memory({
+        organizationId: "org-a",
+        projectKey: "project-alpha",
+      }),
+    ).rejects.toThrow(/canonical services/);
+    await expect(
+      registry.inspect_memory_graph({
         organizationId: "org-a",
         projectKey: "project-alpha",
       }),
@@ -1472,6 +1521,7 @@ describe("createMcpServer", () => {
       "classify_memory_candidate",
       "compact_memory",
       "delete_memory",
+      "inspect_memory_graph",
       "list_audit_log",
       "list_memory",
       "list_workspace_roots",
@@ -1510,6 +1560,7 @@ describe("createMcpServer", () => {
         "build_context_pack",
         "reindex_memory",
         "compact_memory",
+        "inspect_memory_graph",
         "list_memory",
         "update_memory",
         "delete_memory",
@@ -1577,6 +1628,7 @@ describe("createMcpServer", () => {
       }),
       compact_memory: vi.fn(),
       list_memory: vi.fn(),
+      inspect_memory_graph: vi.fn(),
       update_memory: vi.fn(),
       delete_memory: vi.fn(),
       tag_memory: vi.fn(),
@@ -1632,6 +1684,7 @@ describe("createMcpServer", () => {
       reindex_memory: vi.fn(),
       compact_memory: vi.fn(),
       list_memory: vi.fn(),
+      inspect_memory_graph: vi.fn(),
       update_memory: vi.fn(),
       delete_memory: vi.fn(),
       tag_memory: vi.fn(),
@@ -2347,6 +2400,13 @@ function buildRegistryForMcpProtocol(): ToolRegistry {
       scopeId: "project-alpha",
       memories: [],
     }),
+    inspect_memory_graph: vi.fn().mockResolvedValue({
+      ok: true,
+      scopeType: "project",
+      scopeId: "project-alpha",
+      entities: [],
+      relationships: [],
+    }),
     update_memory: vi.fn().mockResolvedValue({
       ok: true,
       updated: true,
@@ -2408,6 +2468,22 @@ function createCanonicalServices() {
       listMemory: vi.fn().mockResolvedValue([createdRecord]),
       getMemoryRecordsByIds: vi.fn().mockResolvedValue([createdRecord]),
       listMemoryForGovernance: vi.fn().mockResolvedValue([createdRecord]),
+      inspectMemoryGraph: vi.fn().mockResolvedValue({
+        entities: [
+          {
+            id: 91,
+            organizationId: "org-a",
+            kind: "code_symbol",
+            normalized: "qdrant_snapshot_timeout",
+            displayText: "QDRANT_SNAPSHOT_TIMEOUT",
+            firstSeenAt: "2026-03-29T00:00:00.000Z",
+            lastSeenAt: "2026-03-29T00:00:00.000Z",
+            mentionCount: 1,
+            memoryIds: [createdRecord.id],
+          },
+        ],
+        relationships: [],
+      }),
       updateMemoryRecord: vi.fn().mockResolvedValue(createdRecord),
       archiveMemoryRecord: vi.fn().mockResolvedValue({
         archived: true,

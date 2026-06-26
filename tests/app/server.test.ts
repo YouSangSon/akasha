@@ -72,6 +72,13 @@ function buildRegistry(): ToolRegistry {
       scopeId: "p",
       memories: [],
     }),
+    inspect_memory_graph: vi.fn().mockResolvedValue({
+      ok: true,
+      scopeType: "project",
+      scopeId: "p",
+      entities: [],
+      relationships: [],
+    }),
     update_memory: vi.fn().mockResolvedValue({
       ok: true,
       updated: true,
@@ -640,6 +647,29 @@ describe("createOperatorServer", () => {
       tag: "ops",
     });
 
+    const graph = await fetch(`${handle.baseUrl}/v1/memory/graph`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        organizationId: "org-a",
+        projectKey: "p",
+        kind: "code_symbol",
+        query: "QDRANT",
+        relationshipLimit: 10,
+      }),
+    });
+    expect(graph.status).toBe(200);
+    expect(registry.inspect_memory_graph).toHaveBeenCalledWith({
+      organizationId: "org-a",
+      projectKey: "p",
+      kind: "code_symbol",
+      query: "QDRANT",
+      relationshipLimit: 10,
+    });
+
     const update = await fetch(`${handle.baseUrl}/v1/memory/update`, {
       method: "POST",
       headers: {
@@ -716,6 +746,26 @@ describe("createOperatorServer", () => {
     expect(body.success).toBe(false);
     expect(body.error.message).toContain("projectKey");
     expect(registry.list_memory).not.toHaveBeenCalled();
+  });
+
+  it("rejects inspect_memory_graph default/project-scope payloads without projectKey before dispatch", async () => {
+    const res = await fetch(`${handle.baseUrl}/v1/memory/graph`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({ kind: "path" }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as {
+      success: boolean;
+      error: { message: string };
+    };
+    expect(body.success).toBe(false);
+    expect(body.error.message).toContain("projectKey");
+    expect(registry.inspect_memory_graph).not.toHaveBeenCalled();
   });
 
   it("builds the default registry with lazy audit wiring when no registry is injected", async () => {
