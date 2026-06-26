@@ -11,7 +11,7 @@ reporting policy (where to send security reports), see
 
 | Surface | What's at risk |
 |---------|----------------|
-| HTTP API (`/v1/*`) | Unauthorized read/write of memory; cross-tenant access; destructive `compact_memory` apply |
+| HTTP API (`/mcp`, `/v1/*`) | Unauthorized read/write of memory; cross-tenant access; destructive `compact_memory` apply |
 | MCP stdio | Local-only (parent process invokes the binary); inherits parent's identity |
 | Postgres | Direct DB access bypasses all app-layer controls; back up + restrict |
 | Qdrant | Vector access bypasses scope/auth filters; backup separately, network-isolate |
@@ -28,6 +28,17 @@ drop old).
 
 `/healthz` and `/readyz` are unauthenticated by design — orchestrators
 need to probe without holding credentials.
+
+### HTTP attack surface
+
+`/mcp` is the MCP Streamable HTTP endpoint and must be treated like `/v1/*`,
+not like local MCP stdio. When `MEMORY_API_TOKENS` is configured, `/mcp`
+requires bearer auth. It shares the same rate limiter as JSON HTTP, and
+origin validation in `src/app/mcp-http.ts` rejects untrusted browser-origin
+requests before they reach the MCP transport.
+
+`/healthz` and `/readyz` remain unauthenticated. Empty token lists are only
+acceptable for loopback local development; non-loopback binds fail closed.
 
 ### Multi-tenant isolation
 

@@ -324,4 +324,54 @@ describe("retrieveMemory", () => {
       true,
     );
   });
+
+  it("preserves vector scores when ranking hydrated records", async () => {
+    const vectorIndex = {
+      query: vi.fn().mockResolvedValue([
+        { id: "chunk:12", score: 0.95, payload: { memory_record_id: 12 } },
+        { id: "chunk:13", score: 0.2, payload: { memory_record_id: 13 } },
+      ]),
+      upsert: vi.fn(),
+      delete: vi.fn(),
+      deleteByRecordIds: vi.fn().mockResolvedValue(undefined),
+      ensureCollection: vi.fn(),
+    };
+
+    const baseRecord = {
+      sourceId: 202,
+      scopeType: "project" as const,
+      scopeId: "project-alpha",
+      memoryType: "summary" as const,
+      content: "Project retrieval summary.",
+      createdAt: "2026-04-25T00:00:00.000Z",
+      updatedAt: "2026-04-25T00:00:00.000Z",
+      source: {
+        id: 302,
+        scopeType: "project" as const,
+        scopeId: "project-alpha",
+        sourceType: "document" as const,
+        externalId: "doc",
+        title: "Doc",
+        uri: "file:///tmp/doc.md",
+        createdAt: "2026-04-25T00:00:00.000Z",
+      },
+    };
+    const repository = {
+      getMemoryRecordsByIds: vi.fn().mockResolvedValue([
+        { ...baseRecord, id: 12 },
+        { ...baseRecord, id: 13 },
+      ]),
+    };
+
+    const results = await retrieveMemory({
+      vectorIndex: vectorIndex as never,
+      repository: repository as never,
+      vector: [0.1, 0.2, 0.3],
+      organizationId: "dev-team",
+      projectKey: "project-alpha",
+      limit: 5,
+    });
+
+    expect(results.map((result) => result.id)).toEqual([12, 13]);
+  });
 });

@@ -33,6 +33,7 @@ function makeRepoWithPending(
     countRecentApplyRuns: vi.fn().mockResolvedValue(0),
     findArchiveByIds: vi.fn().mockResolvedValue([]),
     restoreToCanonical: vi.fn(),
+    deleteRestoredCanonicalRecord: vi.fn().mockResolvedValue(undefined),
     markUnarchived: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };

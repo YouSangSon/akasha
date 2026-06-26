@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { rankResults } from "../../src/search/rank-results.js";
+import {
+  buildRetrievedMemoryCandidate,
+  rankCandidates,
+  rankResults,
+  scoreSearchResult,
+} from "../../src/search/rank-results.js";
 import type { SearchMemoryResult } from "../../src/types.js";
 
 type ResultOverrides = Partial<Omit<SearchMemoryResult, "source">> & {
@@ -114,5 +119,62 @@ describe("rankResults", () => {
     ]);
 
     expect(ranked.map((record) => record.id)).toEqual([22, 21]);
+  });
+
+  it("exposes deterministic internal score components", () => {
+    const record = createResult({
+      id: 31,
+      memoryType: "decision",
+      content: "Decision: keep deterministic ranking helpers.",
+      updatedAt: "2026-03-28T10:00:00.000Z",
+      source: { sourceType: "decision" },
+    });
+
+    const candidate = scoreSearchResult(record, {
+      newestUpdatedAt: Date.parse("2026-03-28T10:00:00.000Z"),
+      vectorScore: 0.4,
+      source: "vector",
+    });
+
+    expect(candidate.source).toBe("vector");
+    expect(candidate.scores.vector).toBeCloseTo(20);
+    expect(candidate.scores.scope).toBe(1000);
+    expect(candidate.scores.metadata).toBe(150);
+    expect(candidate.scores.recency).toBe(25);
+    expect(candidate.scores.total).toBeCloseTo(1195);
+    expect(candidate.reasons).toEqual(
+      expect.arrayContaining([
+        "scope:project",
+        "memoryType:decision",
+        "sourceType:decision",
+        "recency:25",
+        "vector:20",
+      ]),
+    );
+  });
+
+  it("uses vector score to order records when metadata ties", () => {
+    const lowerVector = buildRetrievedMemoryCandidate(
+      createResult({
+        id: 42,
+        memoryType: "summary",
+        content: "Project retrieval summary A.",
+        updatedAt: "2026-03-28T10:00:00.000Z",
+      }),
+      { source: "vector", vectorScore: 0.2 },
+    );
+    const higherVector = buildRetrievedMemoryCandidate(
+      createResult({
+        id: 41,
+        memoryType: "summary",
+        content: "Project retrieval summary B.",
+        updatedAt: "2026-03-28T10:00:00.000Z",
+      }),
+      { source: "vector", vectorScore: 0.9 },
+    );
+
+    const ranked = rankCandidates([lowerVector, higherVector]);
+
+    expect(ranked.map((candidate) => candidate.record.id)).toEqual([41, 42]);
   });
 });

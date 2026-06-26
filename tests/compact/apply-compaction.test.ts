@@ -77,6 +77,7 @@ function makeRepoMocks(overrides: Partial<MemoryArchiveRepository> = {}) {
     countRecentApplyRuns,
     findArchiveByIds: vi.fn().mockResolvedValue([]),
     restoreToCanonical: vi.fn(),
+    deleteRestoredCanonicalRecord: vi.fn().mockResolvedValue(undefined),
     markUnarchived: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };

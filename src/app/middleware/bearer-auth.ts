@@ -27,15 +27,34 @@ export function loadBearerTokens(env: NodeJS.ProcessEnv): BearerToken[] {
 }
 
 function parseBearerEntry(entry: string): BearerToken {
+  const colonMatches = entry.match(/:/g) ?? [];
+  if (colonMatches.length > 1) {
+    throw new Error(
+      "Invalid MEMORY_API_TOKENS entry: tokens may contain at most one colon",
+    );
+  }
+
   const colonIndex = entry.indexOf(":");
   if (colonIndex === -1) {
-    return { token: entry };
-  }
-  const token = entry.slice(0, colonIndex).trim();
-  const organizationId = entry.slice(colonIndex + 1).trim();
-  if (organizationId.length === 0) {
+    const token = entry.trim();
+    if (token.length === 0) {
+      throw new Error("Invalid MEMORY_API_TOKENS entry: token is empty");
+    }
     return { token };
   }
+
+  const token = entry.slice(0, colonIndex).trim();
+  const organizationId = entry.slice(colonIndex + 1).trim();
+
+  if (token.length === 0) {
+    throw new Error("Invalid MEMORY_API_TOKENS entry: token is empty");
+  }
+  if (organizationId.length === 0) {
+    throw new Error(
+      "Invalid MEMORY_API_TOKENS entry: organization id is empty",
+    );
+  }
+
   return { token, organizationId };
 }
 

@@ -166,95 +166,156 @@ async function restoreOne(
   organizationId: string,
   deps: UnarchiveCompactionDeps,
 ): Promise<UnarchiveOutcome> {
-  const { restoredRecordId } = await deps.archiveRepository.restoreToCanonical(
-    archive,
-    organizationId,
-  );
+  let restoredRecordId: number | null = null;
+  let upsertedPointIds: string[] = [];
 
-  // Synthesize a SearchMemoryResult-shaped value for chunkRepository.insertChunks.
-  // insertChunks only reads .id and .organizationId; the source field is
-  // synthesized so the type checks out (real source row is unchanged at
-  // archive.sourceId — we don't touch it).
-  const restoredRecord: SearchMemoryResult = {
-    id: restoredRecordId,
-    organizationId,
-    sourceId: archive.sourceId!,
-    scopeType: archive.scopeType as ScopeType,
-    scopeId: archive.scopeId,
-    projectKey: archive.projectKey,
-    memoryType: archive.kind as MemoryType,
-    title: archive.title,
-    content: archive.content,
-    summary: archive.summary,
-    durability: archive.durability as Durability,
-    importance: archive.importance,
-    createdAt: archive.originalCreatedAt,
-    updatedAt: archive.originalUpdatedAt,
-    source: {
-      id: archive.sourceId!,
+  try {
+    const restored = await deps.archiveRepository.restoreToCanonical(
+      archive,
+      organizationId,
+    );
+    restoredRecordId = restored.restoredRecordId;
+
+    // Synthesize a SearchMemoryResult-shaped value for chunkRepository.insertChunks.
+    // insertChunks only reads .id and .organizationId; the source field is
+    // synthesized so the type checks out (real source row is unchanged at
+    // archive.sourceId — we don't touch it).
+    const restoredRecord: SearchMemoryResult = {
+      id: restoredRecordId,
+      organizationId,
+      sourceId: archive.sourceId!,
       scopeType: archive.scopeType as ScopeType,
       scopeId: archive.scopeId,
-      sourceType: "document" as SourceType,
-      externalId: `restored-from-archive-${archive.id}`,
+      projectKey: archive.projectKey,
+      memoryType: archive.kind as MemoryType,
       title: archive.title,
-      uri: null,
+      content: archive.content,
+      summary: archive.summary,
+      durability: archive.durability as Durability,
+      importance: archive.importance,
       createdAt: archive.originalCreatedAt,
-    },
-  };
+      updatedAt: archive.originalUpdatedAt,
+      source: {
+        id: archive.sourceId!,
+        scopeType: archive.scopeType as ScopeType,
+        scopeId: archive.scopeId,
+        sourceType: "document" as SourceType,
+        externalId: `restored-from-archive-${archive.id}`,
+        title: archive.title,
+        uri: null,
+        createdAt: archive.originalCreatedAt,
+      },
+    };
 
-  const chunks = chunkText({
-    text: archive.content,
-    targetTokens: deps.embedding.targetTokens,
-    overlapTokens: deps.embedding.overlapTokens,
-  });
-  const storedChunks = await deps.chunkRepository.insertChunks({
-    record: restoredRecord,
-    chunks,
-    embedding: deps.embedding,
-  });
+    const chunks = chunkText({
+      text: archive.content,
+      targetTokens: deps.embedding.targetTokens,
+      overlapTokens: deps.embedding.overlapTokens,
+    });
+    const storedChunks = await deps.chunkRepository.insertChunks({
+      record: restoredRecord,
+      chunks,
+      embedding: deps.embedding,
+    });
 
-  const embeddings = await deps.embeddings.embedBatch(
-    storedChunks.map((chunk) => chunk.content),
-  );
-  if (embeddings.length !== storedChunks.length) {
-    throw new Error(
-      `unarchive embedBatch returned ${embeddings.length} vectors for ${storedChunks.length} chunks`,
+    const embeddings = await deps.embeddings.embedBatch(
+      storedChunks.map((chunk) => chunk.content),
     );
-  }
+    if (embeddings.length !== storedChunks.length) {
+      throw new Error(
+        `unarchive embedBatch returned ${embeddings.length} vectors for ${storedChunks.length} chunks`,
+      );
+    }
 
-  const points: VectorPoint[] = storedChunks.map((chunk, index) =>
-    buildVectorPoint({
-      chunkId: chunk.id,
-      vector: embeddings[index] ?? [],
-      memoryRecordId: restoredRecord.id,
+    const points: VectorPoint[] = storedChunks.map((chunk, index) => ({
+      ...buildVectorPoint({
+        chunkId: chunk.id,
+        vector: embeddings[index] ?? [],
+        memoryRecordId: restoredRecord.id,
+        organizationId,
+        scopeType: restoredRecord.scopeType,
+        scopeId: restoredRecord.scopeId,
+        projectKey: restoredRecord.projectKey ?? null,
+        kind: restoredRecord.memoryType,
+        durability: restoredRecord.durability ?? "ephemeral",
+        updatedAt: restoredRecord.updatedAt,
+        embeddingVersion: chunk.embeddingVersion,
+      }),
+      id: `memory:${restoredRecord.id}:chunk:${chunk.id}`,
+    }));
+
+    if (points.length > 0) {
+      await deps.vectorIndex.upsert(points);
+      upsertedPointIds = points.map((point) => point.id);
+      await deps.chunkRepository.updatePointIds(
+        points.map((point, index) => ({
+          chunkId: storedChunks[index]!.id,
+          qdrantPointId: point.id,
+        })),
+      );
+    }
+
+    await deps.archiveRepository.markUnarchived(archive.id);
+
+    return {
+      archiveId: archive.id,
+      status: "restored",
+      restoredRecordId,
+      sourceRecordId: archive.sourceRecordId,
+      chunkCount: storedChunks.length,
+    };
+  } catch (err: unknown) {
+    await compensateFailedRestore({
+      archiveId: archive.id,
       organizationId,
-      scopeType: restoredRecord.scopeType,
-      scopeId: restoredRecord.scopeId,
-      projectKey: restoredRecord.projectKey ?? null,
-      kind: restoredRecord.memoryType,
-      durability: restoredRecord.durability ?? "ephemeral",
-      updatedAt: restoredRecord.updatedAt,
-      embeddingVersion: chunk.embeddingVersion,
-    }),
-  );
+      restoredRecordId,
+      upsertedPointIds,
+      deps,
+    });
+    throw err;
+  }
+}
 
-  if (points.length > 0) {
-    await deps.vectorIndex.upsert(points);
-    await deps.chunkRepository.updatePointIds(
-      points.map((point, index) => ({
-        chunkId: storedChunks[index]!.id,
-        qdrantPointId: point.id,
-      })),
-    );
+async function compensateFailedRestore(args: {
+  archiveId: number;
+  organizationId: string;
+  restoredRecordId: number | null;
+  upsertedPointIds: string[];
+  deps: UnarchiveCompactionDeps;
+}): Promise<void> {
+  if (args.upsertedPointIds.length > 0) {
+    try {
+      await args.deps.vectorIndex.delete(args.upsertedPointIds, {
+        organizationId: args.organizationId,
+      });
+    } catch (err: unknown) {
+      args.deps.logger.error(
+        {
+          event: "compact.unarchive_vector_compensation_failed",
+          archiveId: args.archiveId,
+          err,
+        },
+        "failed to delete vector points after unarchive failure",
+      );
+    }
   }
 
-  await deps.archiveRepository.markUnarchived(archive.id);
-
-  return {
-    archiveId: archive.id,
-    status: "restored",
-    restoredRecordId,
-    sourceRecordId: archive.sourceRecordId,
-    chunkCount: storedChunks.length,
-  };
+  if (args.restoredRecordId !== null) {
+    try {
+      await args.deps.archiveRepository.deleteRestoredCanonicalRecord(
+        args.restoredRecordId,
+        args.organizationId,
+      );
+    } catch (err: unknown) {
+      args.deps.logger.error(
+        {
+          event: "compact.unarchive_sql_compensation_failed",
+          archiveId: args.archiveId,
+          restoredRecordId: args.restoredRecordId,
+          err,
+        },
+        "failed to delete restored canonical record after unarchive failure",
+      );
+    }
+  }
 }

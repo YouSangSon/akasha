@@ -69,11 +69,12 @@ PG 의존 테스트 3개 (`tests/store/memory-repository.test.ts`,
 
 ### 마이그레이션
 
-SQL 파일은 `src/db/migrations/NNN_*.sql` 에 있습니다. 새 마이그레이션은
-`009_…sql` 으로 추가하고, `src/db/migrate.ts` 의 `MIGRATION_FILES` 배열과
-production fallback용 임베디드 SQL 문자열에도 추가하세요. 모든 마이그레이션
-은 idempotent (`CREATE … IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`) 이고,
-이미 데이터가 있는 DB에서도 안전해야 합니다.
+SQL 파일은 `src/db/migrations/NNN_*.sql` 에 있습니다. 현재 마이그레이션 파일은
+`001-009` 범위이며, 다음 마이그레이션은 `010_*.sql` 이어야 합니다. 이후 schema
+변경은 현재 범위 뒤의 다음 미사용 번호를 붙이고, `src/db/migrate.ts` 의
+`MIGRATION_FILES` 배열과 production fallback용 임베디드 SQL 문자열에도 추가하세요.
+모든 마이그레이션은 idempotent (`CREATE … IF NOT EXISTS`,
+`ADD COLUMN IF NOT EXISTS`) 이고, 이미 데이터가 있는 DB에서도 안전해야 합니다.
 
 ## Pull Request 워크플로
 

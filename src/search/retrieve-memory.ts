@@ -1,4 +1,8 @@
-import { rankResults } from "./rank-results.js";
+import {
+  newestUpdatedAtFor,
+  rankCandidates,
+  scoreSearchResult,
+} from "./rank-results.js";
 import type { SearchMemoryResult } from "../types.js";
 import { assertOrganizationId } from "../store/assert-organization-id.js";
 import type { VectorFilter, VectorHit, VectorIndex } from "../vector/vector-index.js";
@@ -42,7 +46,8 @@ export async function retrieveMemory(
       : []),
   ]);
 
-  const ids = uniqueMemoryRecordIds(responses.flat());
+  const hits = responses.flat();
+  const ids = uniqueMemoryRecordIds(hits);
 
   if (ids.length === 0) {
     return [];
@@ -60,7 +65,19 @@ export async function retrieveMemory(
     input.allowLegacyAnonymous,
   );
 
-  return rankResults(hydratedRecords).slice(0, input.limit);
+  const vectorScores = maxVectorScoresByRecordId(hits);
+  const newestUpdatedAt = newestUpdatedAtFor(hydratedRecords);
+  return rankCandidates(
+    hydratedRecords.map((record) =>
+      scoreSearchResult(record, {
+        newestUpdatedAt,
+        source: "vector",
+        vectorScore: vectorScores.get(record.id),
+      }),
+    ),
+  )
+    .map((candidate) => candidate.record)
+    .slice(0, input.limit);
 }
 
 function queryScope(
@@ -93,4 +110,22 @@ function uniqueMemoryRecordIds(hits: VectorHit[]): number[] {
   }
 
   return ids;
+}
+
+function maxVectorScoresByRecordId(hits: VectorHit[]): Map<number, number> {
+  const scores = new Map<number, number>();
+
+  for (const hit of hits) {
+    const id = hit.payload?.memory_record_id;
+    if (typeof id !== "number") {
+      continue;
+    }
+
+    const existing = scores.get(id);
+    if (existing === undefined || hit.score > existing) {
+      scores.set(id, hit.score);
+    }
+  }
+
+  return scores;
 }

@@ -11,11 +11,20 @@ deployment see [deployment.md](deployment.md).
 npm run backup:create
 ```
 
-Snapshots Postgres (`pg_dump` piped through gzip) and Qdrant (snapshot API)
-into `BACKUP_DIR`, then writes a manifest with checksums. Files are named
+With `VECTOR_BACKEND=qdrant`, `npm run backup:create` captures Postgres
+(`pg_dump` piped through gzip) plus Qdrant snapshot data into `BACKUP_DIR`,
+then writes a manifest with checksums. Files are named
 `postgres-YYYYMMDD-HHMM.sql.gz`, `qdrant-YYYYMMDD-HHMM.snapshot`,
 `qdrant-memory_chunks_v1-YYYYMMDD-HHMM.json` (metadata sidecar), and
 `manifest-YYYYMMDD-HHMM.json`.
+
+With `VECTOR_BACKEND=pgvector`, vectors live in Postgres; Qdrant snapshot data
+is not part of the logical data path. Current packaged-command caveat:
+`npm run backup:create` still invokes `scripts/snapshot-qdrant.sh` after the
+Postgres backup, so it still requires `QDRANT_URL` and a reachable Qdrant
+endpoint today. This is a packaging/script limitation, not a pgvector data
+dependency. Existing restore smoke helpers are still Qdrant-oriented and
+require `RESTORE_QDRANT_URL` until a later script split.
 
 ### Schedule
 
@@ -65,7 +74,9 @@ npm run restore:smoke
 Spins up an isolated compose stack (`compose.restore-smoke.yaml`),
 restores the latest backup, and runs assertions against the restored
 data. **Doesn't touch production.** Treat any failure as a critical
-alert — your backups are unreliable.
+alert — your backups are unreliable. The current helper is still
+Qdrant-oriented and requires `RESTORE_QDRANT_URL`; pgvector deployments should
+restore Postgres as the logical data path until the helper is split.
 
 ### Production restore
 
@@ -244,8 +255,9 @@ Vector, etc.).
 
 ## Schema migrations
 
-All migrations are idempotent and applied at bootstrap. To add a new
-migration:
+All migrations are idempotent and applied at bootstrap. Migrations currently
+span `001-009`; new migrations append the next unused number after that range.
+To add a new migration:
 
 1. Create `src/db/migrations/NNN_description.sql` (next sequence number).
 2. Append the filename to `MIGRATION_FILES` in `src/db/migrate.ts`.

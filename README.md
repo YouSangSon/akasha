@@ -149,7 +149,7 @@ curl -sX POST http://localhost:8787/v1/memory/search \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"projectKey":"checkout","query":"how do we avoid double-charging?"}'
 # → {"success":true,"data":{"ok":true,"results":[
-#      {"id":42,"memoryType":"decision","score":0.83,
+#      {"id":42,"memoryType":"decision",
 #       "content":"Use idempotency keys on POST /charge…"}]}}
 
 # 3. Build a context pack to paste into a new agent session.
@@ -215,8 +215,14 @@ npm run dev:cli       # CLI in watch mode
 npm run typecheck     # tsc --noEmit
 npm run test          # vitest run
 npm run db:migrate    # apply pending migrations
-npm run backup:create # snapshot Postgres + Qdrant to BACKUP_DIR
+npm run backup:create # current packaged command snapshots Postgres + Qdrant
 ```
+
+Note: current `npm run backup:create` still invokes
+`scripts/snapshot-qdrant.sh`, so it requires `QDRANT_URL` and remains
+Qdrant-oriented until a later script split. With `VECTOR_BACKEND=pgvector`,
+logical vector data lives in Postgres; the packaged command does not yet skip
+the Qdrant snapshot step.
 
 ## Contributing & security
 

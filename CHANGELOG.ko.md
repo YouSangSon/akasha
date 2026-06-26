@@ -11,6 +11,8 @@ CHANGELOG에서 명시적으로 표기합니다.
 
 ## [Unreleased]
 
+- PR #19: `/mcp` 의 MCP Streamable HTTP, MCP resources, MCP prompts, typed
+  result를 쓰는 클라이언트용 structured MCP tool output 추가.
 - 문서: 공개 문서가 descriptor 공유 검증, non-root 컨테이너 런타임 기본값,
   production 자격증명 교체, atomic archive-cleanup claim semantics를 반영하도록
   정렬되었고, 현재 동작과 맞지 않던 pgvector reindex follow-up 주석을 제거함.
@@ -163,7 +165,7 @@ CHANGELOG에서 명시적으로 표기합니다.
   #12 브랜치에서 진행 중.
 - **Migration 008: `memory_chunks` FK 인덱스** — `008_chunks_fk_index.sql` 이
   `memory_chunks(memory_record_id)` 에 `idx_memory_chunks_record` 인덱스 추가, FK join 경로의
-  sequential scan 제거. 마이그레이션은 이제 001–008.
+  sequential scan 제거. 마이그레이션은 이제 001-009.
 - **`listMemory` 에 상한 추가** — browse 쿼리에 `LIMIT` 강제 (기본값 1000, 최대 5000). 이전엔
   무제한 쿼리로 대형 테넌트의 전체 테이블을 반환할 수 있었음.
 - **N+1 DB 쓰기 배치 처리** — chunk insert 와 upsert 가 이제 항목별이 아닌 단일 round-trip 으로
@@ -174,7 +176,7 @@ CHANGELOG에서 명시적으로 표기합니다.
 - **문서 정확성 교정** — `docs/architecture.md`, `docs/configuration.md`, `docs/api-reference.md`,
   `CONTRIBUTING.md`, `README.md` 의 pre-existing 오류 수정: `OPENAI_API_KEY` 를 선택 사항으로
   표시 (`EMBEDDING_PROVIDER=openai` 시만 필요); embedding 기본값을 `transformers` 로 수정;
-  마이그레이션 범위를 001–008 로 업데이트; 스키마 다이어그램에 `ingest_jobs` outbox 컬럼 추가;
+  마이그레이션 범위를 001-009 로 업데이트; 스키마 다이어그램에 `ingest_jobs` outbox 컬럼 추가;
   실제 `check-dependencies.ts` 동작에 맞게 `/readyz` probe 목록 수정; MCP 도구 목록을 7개로
   업데이트.
 - **`AGENTS.md` 끊어진 참조 제거** — 존재하지 않는 `.vibe/context-index.md` 및
