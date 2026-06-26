@@ -1,51 +1,47 @@
-# Task 3 Report: MCP Resources and Prompts
+# Task 3 Report: Retrieval Scoring Foundation
 
 ## Summary
 
-- Task: Implement MCP resources and prompts in `createMcpServer`
-- Branch: `feat/mcp-streamable-http-roadmap`
-- Base before task: `23b3787`
+- Task: Add internal retrieval scoring candidates for future hybrid search.
+- Base context: Task 1 `4c7364a`, Task 2 `f817fa3`.
+- Scope followed:
+  - `src/search/scored-candidate.ts`
+  - `src/search/rank-results.ts`
+  - `src/search/retrieve-memory.ts`
+  - `tests/search/rank-results.test.ts`
+  - `tests/search/retrieve-memory.test.ts`
+- Public shape preserved: `rankResults` and `retrieveMemory` still return `SearchMemoryResult[]`.
 
 ## RED
 
 Command:
 
 ```bash
-npm test -- tests/mcp/server.test.ts
+npm test -- tests/search/rank-results.test.ts tests/search/retrieve-memory.test.ts
 ```
 
 Result:
 
-- FAIL as expected
-- `createMcpServer resources and prompts > lists and reads Akasha memory resources`
-- `createMcpServer resources and prompts > lists and returns Akasha prompts`
-- Failure reason: `MCP error -32601: Method not found`
+- FAIL as expected.
+- `tests/search/rank-results.test.ts`: 2 failures.
+- Failure reasons:
+  - `scoreSearchResult` was not exported.
+  - `buildRetrievedMemoryCandidate` was not exported.
+- Note: the new retrieve-memory fixture did not independently fail during RED because its higher vector score also used the higher id, matching the existing tie-break order. The focused suite still failed before implementation due to the missing internal scoring API.
 
 ## GREEN
 
 Command:
 
 ```bash
-npm test -- tests/mcp/server.test.ts
+npm test -- tests/search/rank-results.test.ts tests/search/retrieve-memory.test.ts
 ```
 
 Result:
 
-- PASS
-- `35` tests passed in `tests/mcp/server.test.ts`
-
-## Regression
-
-Command:
-
-```bash
-npm test -- tests/app/mcp-http.test.ts
-```
-
-Result:
-
-- PASS
-- `7` tests passed in `tests/app/mcp-http.test.ts`
+- PASS.
+- 2 test files passed.
+- 11 tests passed.
 
 ## Typecheck
 
@@ -57,104 +53,63 @@ npm run typecheck
 
 Result:
 
-- PASS
-- One intermediate failure occurred in the new test due to a `readResource` content union type; fixed by narrowing the `text` payload before parsing JSON, then reran typecheck successfully.
+- PASS.
+- `tsc --noEmit` completed without errors.
 
 ## Changed Files
 
-- `src/mcp/server.ts`
-- `tests/mcp/server.test.ts`
+- Added `src/search/scored-candidate.ts` with `CandidateSource` and `RetrievedMemoryCandidate`.
+- Replaced `src/search/rank-results.ts` with scored candidate helpers:
+  - `rankCandidates`
+  - `buildRetrievedMemoryCandidate`
+  - `scoreSearchResult`
+  - `newestUpdatedAtFor`
+  - preserved `rankResults`.
+- Updated `src/search/retrieve-memory.ts` to preserve vector hit scores and rank hydrated records via candidates.
+- Added brief-specified tests in `tests/search/rank-results.test.ts`.
+- Added brief-specified vector propagation test in `tests/search/retrieve-memory.test.ts`.
 
-## Commit
+## Self-Review
 
-- Commit message: `feat: add Akasha MCP resources and prompts`
-- Commit hash: `294abe2`
-
-## Self-Review Notes
-
-- Followed TDD: added the two brief-specified tests first, captured the expected RED failure, then implemented minimal registrations.
-- Reused `createMcpServer` registry bindings directly so stdio and `/mcp` share the same resources/prompts surface automatically.
-- Kept scope limited to the owned files.
+- Verified the implementation keeps scoring internal and does not add score fields to public `search_memory` results.
+- Verified `rankResults` keeps the legacy public response shape while delegating to candidate ranking.
+- Verified `retrieveMemory` carries max vector score per memory record id across duplicated chunk hits.
+- Checked the diff with `git diff --check`; no whitespace errors.
+- No unrelated files were staged for the implementation commit.
 
 ## Concerns
 
-- None at implementation time.
+- None for implementation.
 
 ---
 
-## Task 3 Review Fixes
+## Task 3 Review Fix: Vector Score Tie-Break Proof
 
-### Summary
+### Reviewer Finding Addressed
 
-- Task: Fix Task 3 review findings for MCP resource validation and resource/prompt coverage
-- Branch: `feat/mcp-streamable-http-roadmap`
-- Base before fix: `294abe2`
+- Fixed the vector-ordering coverage so the higher vector score belongs to the lower record id in both direct `rankCandidates` coverage and `retrieveMemory` hydrated-record coverage.
+- This proves vector scores affect ordering because the fallback tie-break sorts by descending id.
 
-### RED
-
-Command:
-
-```bash
-npm test -- tests/mcp/server.test.ts
-```
-
-Result:
-
-- FAIL as expected
-- `13` new tests failed in `tests/mcp/server.test.ts`
-- Failure reasons:
-  - resource template variables were capturing the query string in the last path segment for recent memory and context-pack reads
-  - invalid resource `query`/`limit` values were accepted instead of rejected
-
-### GREEN
+### Tests
 
 Command:
 
 ```bash
-npm test -- tests/mcp/server.test.ts
+npm test -- tests/search/rank-results.test.ts tests/search/retrieve-memory.test.ts
 ```
 
 Result:
 
-- PASS
-- `48` tests passed in `tests/mcp/server.test.ts`
+- PASS.
+- 2 test files passed.
+- 11 tests passed.
 
-### Regression
+### Typecheck
 
-Commands:
+- Not run; no TypeScript types changed.
 
-```bash
-npm test -- tests/app/mcp-http.test.ts
-npm run typecheck
-```
+### Files Changed
 
-Result:
-
-- PASS
-- `8` tests passed in `tests/app/mcp-http.test.ts`
-- typecheck passed
-
-### Changed Files
-
-- `src/mcp/server.ts`
-- `tests/mcp/server.test.ts`
-- `tests/app/mcp-http.test.ts`
-
-### Commit
-
-- Commit message: `fix: validate MCP resource inputs`
-- Commit hash: `08cf986`
-
-### Self-Review
-
-- Added the review-requested red cases first, captured the expected failures, then implemented the smallest server-side parsing/validation fix.
-- Resource reads stay read-only; `akasha_store_memory` remains prompt-only and does not invoke `add_memory`.
-- `/mcp` regression stays narrow and only proves the shared resource/prompt surface exposed by `createMcpServer`.
-
-### Concerns
-
-- None.
-
-### Controller correction
-
-- The fix subagent returned final commit `f968c58`; the `08cf986` value above is a stale intermediate hash from before the final commit landed.
+- `tests/search/rank-results.test.ts`
+- `tests/search/retrieve-memory.test.ts`
+- `.superpowers/sdd/task-3-report.md`

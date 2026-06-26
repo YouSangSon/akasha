@@ -156,7 +156,7 @@ describe("rankResults", () => {
   it("uses vector score to order records when metadata ties", () => {
     const lowerVector = buildRetrievedMemoryCandidate(
       createResult({
-        id: 41,
+        id: 42,
         memoryType: "summary",
         content: "Project retrieval summary A.",
         updatedAt: "2026-03-28T10:00:00.000Z",
@@ -165,7 +165,7 @@ describe("rankResults", () => {
     );
     const higherVector = buildRetrievedMemoryCandidate(
       createResult({
-        id: 42,
+        id: 41,
         memoryType: "summary",
         content: "Project retrieval summary B.",
         updatedAt: "2026-03-28T10:00:00.000Z",
@@ -175,6 +175,6 @@ describe("rankResults", () => {
 
     const ranked = rankCandidates([lowerVector, higherVector]);
 
-    expect(ranked.map((candidate) => candidate.record.id)).toEqual([42, 41]);
+    expect(ranked.map((candidate) => candidate.record.id)).toEqual([41, 42]);
   });
 });

@@ -328,8 +328,8 @@ describe("retrieveMemory", () => {
   it("preserves vector scores when ranking hydrated records", async () => {
     const vectorIndex = {
       query: vi.fn().mockResolvedValue([
-        { id: "chunk:12", score: 0.2, payload: { memory_record_id: 12 } },
-        { id: "chunk:13", score: 0.95, payload: { memory_record_id: 13 } },
+        { id: "chunk:12", score: 0.95, payload: { memory_record_id: 12 } },
+        { id: "chunk:13", score: 0.2, payload: { memory_record_id: 13 } },
       ]),
       upsert: vi.fn(),
       delete: vi.fn(),
@@ -372,6 +372,6 @@ describe("retrieveMemory", () => {
       limit: 5,
     });
 
-    expect(results.map((result) => result.id)).toEqual([13, 12]);
+    expect(results.map((result) => result.id)).toEqual([12, 13]);
   });
 });
