@@ -112,6 +112,10 @@ export type MemoryArchiveRepository = {
     archive: ArchiveRow,
     organizationId: string,
   ): Promise<{ restoredRecordId: number }>;
+  deleteRestoredCanonicalRecord(
+    recordId: number,
+    organizationId: string,
+  ): Promise<void>;
   markUnarchived(archiveId: number): Promise<void>;
 };
 
@@ -545,6 +549,17 @@ export function createMemoryArchiveRepository(
         );
       }
       return { restoredRecordId: newId };
+    },
+
+    async deleteRestoredCanonicalRecord(recordId, organizationId) {
+      await pool.query(
+        `
+          DELETE FROM memory_records
+          WHERE id = $1
+            AND organization_id = $2
+        `,
+        [recordId, organizationId],
+      );
     },
 
     async markUnarchived(archiveId) {

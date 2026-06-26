@@ -46,6 +46,7 @@ function makeRepo(
 ): MemoryArchiveRepository & {
   findArchiveByIds: ReturnType<typeof vi.fn>;
   restoreToCanonical: ReturnType<typeof vi.fn>;
+  deleteRestoredCanonicalRecord: ReturnType<typeof vi.fn>;
   markUnarchived: ReturnType<typeof vi.fn>;
 } {
   return {
@@ -62,11 +63,13 @@ function makeRepo(
     restoreToCanonical: vi
       .fn()
       .mockResolvedValue({ restoredRecordId: 999 }),
+    deleteRestoredCanonicalRecord: vi.fn().mockResolvedValue(undefined),
     markUnarchived: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   } as MemoryArchiveRepository & {
     findArchiveByIds: ReturnType<typeof vi.fn>;
     restoreToCanonical: ReturnType<typeof vi.fn>;
+    deleteRestoredCanonicalRecord: ReturnType<typeof vi.fn>;
     markUnarchived: ReturnType<typeof vi.fn>;
   };
 }
@@ -289,6 +292,80 @@ describe("unarchiveCompaction (skip cases)", () => {
 });
 
 describe("unarchiveCompaction (failure isolation)", () => {
+  it("deletes the restored canonical row when embedding fails after restore", async () => {
+    const repo = makeRepo([makeArchive({ id: 50 })]);
+    const deps = makeDeps(repo);
+    (deps.embeddings.embedBatch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error("embedding provider unavailable"),
+    );
+
+    const result = await unarchiveCompaction(
+      { archiveIds: [50], organizationId: "org-a", actor: "ops" },
+      deps,
+    );
+
+    expect(result.outcomes[0]).toEqual({
+      archiveId: 50,
+      status: "failed",
+      error: "embedding provider unavailable",
+    });
+    expect(repo.deleteRestoredCanonicalRecord).toHaveBeenCalledWith(999, "org-a");
+    expect(deps.vectorIndex.delete).not.toHaveBeenCalled();
+    expect(repo.markUnarchived).not.toHaveBeenCalled();
+  });
+
+  it("deletes vector points and the restored row when chunk point updates fail", async () => {
+    const repo = makeRepo([makeArchive({ id: 50 })]);
+    const deps = makeDeps(repo);
+    (deps.chunkRepository.updatePointIds as ReturnType<typeof vi.fn>)
+      .mockRejectedValueOnce(new Error("chunk update failed"));
+
+    const result = await unarchiveCompaction(
+      { archiveIds: [50], organizationId: "org-a", actor: "ops" },
+      deps,
+    );
+
+    expect(result.outcomes[0]).toEqual({
+      archiveId: 50,
+      status: "failed",
+      error: "chunk update failed",
+    });
+    expect(deps.vectorIndex.delete).toHaveBeenCalledWith(
+      ["memory:999:chunk:7000"],
+      { organizationId: "org-a" },
+    );
+    expect(repo.deleteRestoredCanonicalRecord).toHaveBeenCalledWith(999, "org-a");
+    expect(repo.markUnarchived).not.toHaveBeenCalled();
+  });
+
+  it("preserves the original failure when vector cleanup also fails", async () => {
+    const repo = makeRepo([makeArchive({ id: 50 })]);
+    const deps = makeDeps(repo);
+    (deps.chunkRepository.updatePointIds as ReturnType<typeof vi.fn>)
+      .mockRejectedValueOnce(new Error("chunk update failed"));
+    (deps.vectorIndex.delete as ReturnType<typeof vi.fn>)
+      .mockRejectedValueOnce(new Error("vector cleanup failed"));
+
+    const result = await unarchiveCompaction(
+      { archiveIds: [50], organizationId: "org-a", actor: "ops" },
+      deps,
+    );
+
+    expect(result.outcomes[0]).toEqual({
+      archiveId: 50,
+      status: "failed",
+      error: "chunk update failed",
+    });
+    expect(repo.deleteRestoredCanonicalRecord).toHaveBeenCalledWith(999, "org-a");
+    expect(deps.logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "compact.unarchive_vector_compensation_failed",
+        archiveId: 50,
+      }),
+      "failed to delete vector points after unarchive failure",
+    );
+  });
+
   it("isolates per-archive failures; one bad restore doesn't kill the batch", async () => {
     const repo = makeRepo([makeArchive({ id: 50 }), makeArchive({ id: 51 })]);
     (repo.restoreToCanonical as ReturnType<typeof vi.fn>)
