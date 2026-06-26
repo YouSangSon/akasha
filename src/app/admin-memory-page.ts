@@ -424,6 +424,10 @@ export function renderMemoryAdminPage(): string {
       form.elements.content.value = memory.content || "";
       form.elements.tags.value = (memory.tags || []).join(", ");
       form.elements.importance.value = memory.importance ?? "";
+      if (memory.durability === "archived") {
+        form.elements.durability.disabled = true;
+        form.querySelector("[data-action='archive']").disabled = true;
+      }
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
         await saveMemory(memory.id, form);
@@ -456,11 +460,13 @@ export function renderMemoryAdminPage(): string {
         organizationId: inputValue("organizationId") || undefined,
         memoryId,
         kind: form.elements.kind.value,
-        durability: form.elements.durability.value,
         title: form.elements.title.value || null,
         summary: form.elements.summary.value || null,
         content: form.elements.content.value
       };
+      if (!form.elements.durability.disabled) {
+        payload.durability = form.elements.durability.value;
+      }
       const importance = form.elements.importance.value;
       if (importance) payload.importance = Number(importance);
       await post("/v1/memory/update", payload);
