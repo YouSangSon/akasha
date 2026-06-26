@@ -557,6 +557,7 @@ export function createToolHandlers(input: {
         if (shouldRefreshMemoryIndex(toolInput)) {
           await refreshCanonicalMemoryIndex({
             chunkRepository: services.chunkRepository,
+            ingestJobs: services.ingestJobs,
             embeddings: services.embeddings,
             vectorIndex: services.vectorIndex,
             embedding: canonicalEmbeddingConfig(services),
@@ -640,6 +641,7 @@ export function createToolHandlers(input: {
 
         await refreshCanonicalMemoryIndex({
           chunkRepository: services.chunkRepository,
+          ingestJobs: services.ingestJobs,
           embeddings: services.embeddings,
           vectorIndex: services.vectorIndex,
           embedding: canonicalEmbeddingConfig(services),

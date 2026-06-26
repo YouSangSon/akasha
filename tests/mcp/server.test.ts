@@ -753,6 +753,18 @@ describe("createToolRegistry", () => {
     expect(services.chunkRepository.insertChunks).not.toHaveBeenCalled();
     expect(services.vectorIndex.upsert).toHaveBeenCalledOnce();
     expect(services.chunkRepository.updatePointIds).toHaveBeenCalledOnce();
+    expect(services.ingestJobs.create).toHaveBeenCalledWith({
+      memoryRecordId: 501,
+      organizationId: "org-a",
+    });
+    expect(services.ingestJobs.markQdrantPending).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobId: 801,
+        attempts: 0,
+      }),
+    );
+    expect(services.ingestJobs.markQdrantCompleted).toHaveBeenCalledWith(801);
+    expect(services.ingestJobs.markCompleted).toHaveBeenCalledWith(801);
     const replaceOrder =
       services.chunkRepository.replaceChunksForRecord.mock.invocationCallOrder[0]!;
     const vectorDeleteOrder =
@@ -789,6 +801,50 @@ describe("createToolRegistry", () => {
     expect(services.chunkRepository.deleteChunksForRecord).not.toHaveBeenCalled();
     expect(services.vectorIndex.deleteByRecordIds).not.toHaveBeenCalled();
     expect(services.vectorIndex.upsert).not.toHaveBeenCalled();
+    expect(services.ingestJobs.create).not.toHaveBeenCalled();
+  });
+
+  it("leaves an ingest retry marker when update_memory vector upsert fails after chunk replacement", async () => {
+    const services = createCanonicalServices();
+    services.repository.updateMemoryRecord.mockResolvedValueOnce(
+      createRecord({
+        id: 501,
+        organizationId: "org-a",
+        memoryType: "decision",
+        content: "Decision: retry failed governance refresh.",
+        sourceType: "conversation",
+        externalId: "decision:manual",
+      }),
+    );
+    services.vectorIndex.upsert.mockRejectedValueOnce(new Error("vector down"));
+    const registry = createToolRegistry({
+      resolveCanonicalServices: async () => services,
+    });
+
+    await expect(
+      registry.update_memory({
+        organizationId: "org-a",
+        memoryId: 501,
+        content: "Decision: retry failed governance refresh.",
+      }),
+    ).rejects.toThrow(/vector down/);
+
+    expect(services.chunkRepository.replaceChunksForRecord).toHaveBeenCalledOnce();
+    expect(services.vectorIndex.deleteByRecordIds).toHaveBeenCalledWith([501], {
+      organizationId: "org-a",
+    });
+    expect(services.ingestJobs.create).toHaveBeenCalledWith({
+      memoryRecordId: 501,
+      organizationId: "org-a",
+    });
+    expect(services.ingestJobs.markQdrantPending).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobId: 801,
+        error: expect.any(Error),
+      }),
+    );
+    expect(services.ingestJobs.markQdrantCompleted).not.toHaveBeenCalled();
+    expect(services.ingestJobs.markCompleted).not.toHaveBeenCalled();
   });
 
   it("updates memory without vector refresh for metadata-only edits", async () => {
@@ -2226,9 +2282,6 @@ function createCanonicalServices() {
         createdAt: "2026-03-29T00:00:00.000Z",
         updatedAt: "2026-03-29T00:00:01.000Z",
       }),
-      // Outbox sweeper hooks. Not called on the current canonical-indexing
-      // path (Part 4/5 will wire markQdrantPending into the catch block); the
-      // stubs exist to satisfy the IngestJobRepository contract.
       markQdrantCompleted: vi.fn(),
       markQdrantPending: vi.fn(),
       markQdrantFailed: vi.fn(),

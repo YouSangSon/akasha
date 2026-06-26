@@ -348,6 +348,7 @@ export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository
 
 export async function refreshCanonicalMemoryIndex(input: {
   chunkRepository: MemoryChunkRepository;
+  ingestJobs?: IngestJobRepository;
   embeddings: EmbeddingClient;
   vectorIndex: VectorIndex;
   embedding: ChunkEmbeddingConfig;
@@ -369,62 +370,101 @@ export async function refreshCanonicalMemoryIndex(input: {
     );
   }
 
-  const storedChunks =
-    input.chunkRepository.replaceChunksForRecord !== undefined
-      ? await input.chunkRepository.replaceChunksForRecord({
-          record: input.record,
-          chunks,
-          embedding: input.embedding,
-        })
-      : await replaceChunksForRecordFallback(input.chunkRepository, {
-          organizationId,
-          record: input.record,
-          chunks,
-          embedding: input.embedding,
-        });
+  const job = input.ingestJobs
+    ? await input.ingestJobs.create({
+        memoryRecordId: input.record.id,
+        organizationId,
+      })
+    : null;
 
-  await input.vectorIndex.deleteByRecordIds([input.record.id], {
-    organizationId,
-  });
-
-  const points: VectorPoint[] = storedChunks.map((chunk, index) =>
-    buildVectorPoint({
-      chunkId: chunk.id,
-      vector: embeddings[index] ?? [],
-      memoryRecordId: input.record.id,
-      organizationId,
-      scopeType: input.record.scopeType,
-      scopeId: input.record.scopeId,
-      projectKey: input.record.projectKey ?? null,
-      kind: input.record.memoryType,
-      durability: input.record.durability ?? "ephemeral",
-      title: input.record.title ?? null,
-      summary: input.record.summary ?? null,
-      tags: input.record.tags ?? [],
-      updatedAt: input.record.updatedAt,
-      embeddingVersion: chunk.embeddingVersion,
-    }),
-  );
-
-  if (points.length > 0) {
-    let upsertedPointIds: string[] = [];
-    await input.vectorIndex.upsert(points);
-    upsertedPointIds = points.map((point) => point.id);
-    try {
-      await input.chunkRepository.updatePointIds(
-        points.map((point, index) => ({
-          chunkId: storedChunks[index]!.id,
-          qdrantPointId: point.id,
-        })),
-      );
-    } catch (error: unknown) {
-      await input.vectorIndex.delete(upsertedPointIds, { organizationId })
-        .catch(() => undefined);
-      throw error;
+  try {
+    if (job && chunks.length > 0) {
+      await input.ingestJobs!.markQdrantPending({
+        jobId: job.id,
+        attempts: 0,
+        nextRetryAt: new Date(Date.now() + nextRetryDelayMs(0)),
+      });
     }
-  }
 
-  return { chunkCount: storedChunks.length };
+    const storedChunks =
+      input.chunkRepository.replaceChunksForRecord !== undefined
+        ? await input.chunkRepository.replaceChunksForRecord({
+            record: input.record,
+            chunks,
+            embedding: input.embedding,
+          })
+        : await replaceChunksForRecordFallback(input.chunkRepository, {
+            organizationId,
+            record: input.record,
+            chunks,
+            embedding: input.embedding,
+          });
+
+    await input.vectorIndex.deleteByRecordIds([input.record.id], {
+      organizationId,
+    });
+
+    const points: VectorPoint[] = storedChunks.map((chunk, index) =>
+      buildVectorPoint({
+        chunkId: chunk.id,
+        vector: embeddings[index] ?? [],
+        memoryRecordId: input.record.id,
+        organizationId,
+        scopeType: input.record.scopeType,
+        scopeId: input.record.scopeId,
+        projectKey: input.record.projectKey ?? null,
+        kind: input.record.memoryType,
+        durability: input.record.durability ?? "ephemeral",
+        title: input.record.title ?? null,
+        summary: input.record.summary ?? null,
+        tags: input.record.tags ?? [],
+        updatedAt: input.record.updatedAt,
+        embeddingVersion: chunk.embeddingVersion,
+      }),
+    );
+
+    if (points.length > 0) {
+      let upsertedPointIds: string[] = [];
+      await input.vectorIndex.upsert(points);
+      upsertedPointIds = points.map((point) => point.id);
+      try {
+        await input.chunkRepository.updatePointIds(
+          points.map((point, index) => ({
+            chunkId: storedChunks[index]!.id,
+            qdrantPointId: point.id,
+          })),
+        );
+      } catch (error: unknown) {
+        await input.vectorIndex.delete(upsertedPointIds, { organizationId })
+          .catch(() => undefined);
+        throw error;
+      }
+      if (job) {
+        await input.ingestJobs!.markQdrantCompleted(job.id);
+      }
+    }
+
+    if (job) {
+      await input.ingestJobs!.markCompleted(job.id);
+    }
+
+    return { chunkCount: storedChunks.length };
+  } catch (error: unknown) {
+    if (job && chunks.length > 0) {
+      try {
+        await input.ingestJobs!.markQdrantPending({
+          jobId: job.id,
+          attempts: job.qdrantAttempts,
+          nextRetryAt: new Date(Date.now() + nextRetryDelayMs(job.qdrantAttempts)),
+          error,
+        });
+      } catch {
+        // Preserve the original refresh failure; losing the retry marker is a
+        // secondary outage and should not mask the vector/chunk error.
+      }
+    }
+    throw error;
+  }
 }
 
 export async function writeCanonicalMemory(input: {
