@@ -6,6 +6,7 @@ export type ParsedCliArgs =
       command: "pack";
       projectKey: string;
       userScopeId?: string;
+      organizationId?: string;
       task: string;
     }
   | {
@@ -93,6 +94,7 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
     command: "pack",
     projectKey,
     userScopeId,
+    organizationId,
     task: task!,
   };
 }
@@ -113,6 +115,7 @@ export async function runCli(
       const pack = await registry.build_context_pack({
         projectKey: parsed.projectKey,
         userScopeId: parsed.userScopeId,
+        organizationId: parsed.organizationId,
         task: parsed.task,
       });
 

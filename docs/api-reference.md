@@ -5,7 +5,7 @@
 Akasha exposes the same tool surface through three access paths:
 
 - **MCP stdio** — for AI clients like Claude Code and Codex CLI.
-  Entry point: `dist/src/cli.js`. All 7 tools are registered.
+  Entry point: `dist/src/mcp/server.js`. All 7 tools are registered.
 - **MCP Streamable HTTP** — for MCP clients that connect over HTTP.
   Primary documented endpoint: `POST /mcp` for JSON-RPC requests. The SDK
   transport also supports GET and DELETE on the same `/mcp` endpoint.

@@ -24,6 +24,27 @@ describe("parseCliArgs", () => {
       command: "pack",
       projectKey: "project-alpha",
       userScopeId: "alice",
+      organizationId: undefined,
+      task: "continue work",
+    });
+  });
+
+  it("parses pack --organization-id flag", () => {
+    expect(
+      parseCliArgs([
+        "pack",
+        "--project",
+        "project-alpha",
+        "--organization-id",
+        "acme",
+        "--task",
+        "continue work",
+      ]),
+    ).toEqual({
+      command: "pack",
+      projectKey: "project-alpha",
+      userScopeId: undefined,
+      organizationId: "acme",
       task: "continue work",
     });
   });
@@ -136,5 +157,50 @@ describe("parseCliArgs", () => {
       userScopeId: undefined,
       organizationId: "acme",
     });
+  });
+
+  it("passes --organization-id to build_context_pack for session-start recipes", async () => {
+    const registry: ToolRegistry = {
+      build_context_pack: vi.fn().mockResolvedValue({
+        ok: true,
+        projectKey: "project-alpha",
+        packMarkdown: "# Context Pack",
+        selectedMemoryIds: [],
+        sections: {
+          project_summary: [],
+          recent_decisions: [],
+          constraints: [],
+          open_questions: [],
+          relevant_notes: [],
+        },
+      }),
+      search_memory: vi.fn(),
+      add_memory: vi.fn(),
+      compact_memory: vi.fn(),
+      list_audit_log: vi.fn(),
+      unarchive_memory: vi.fn(),
+      reindex_memory: vi.fn(),
+    };
+
+    const output = await runCli(
+      [
+        "pack",
+        "--project",
+        "project-alpha",
+        "--organization-id",
+        "acme",
+        "--task",
+        "continue work",
+      ],
+      { registry },
+    );
+
+    expect(registry.build_context_pack).toHaveBeenCalledWith({
+      projectKey: "project-alpha",
+      userScopeId: undefined,
+      organizationId: "acme",
+      task: "continue work",
+    });
+    expect(output).toBe("# Context Pack");
   });
 });

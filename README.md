@@ -120,7 +120,7 @@ cat <<EOF
   "mcpServers": {
     "akasha": {
       "command": "node",
-      "args": ["$(pwd)/dist/src/cli.js"]
+      "args": ["$(pwd)/dist/src/mcp/server.js"]
     }
   }
 }

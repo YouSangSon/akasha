@@ -5,7 +5,7 @@
 Akasha는 동일한 도구 surface를 세 가지 접근 경로로 노출합니다:
 
 - **MCP stdio** — Claude Code, Codex CLI 같은 AI 클라이언트용.
-  진입점: `dist/src/cli.js`. 7개 도구 모두 등록됨.
+  진입점: `dist/src/mcp/server.js`. 7개 도구 모두 등록됨.
 - **MCP Streamable HTTP** — HTTP로 연결하는 MCP 클라이언트용.
   기본 문서화 대상 엔드포인트는 JSON-RPC 요청용 `POST /mcp` 입니다. SDK
   transport는 같은 `/mcp` 엔드포인트에서 GET, DELETE 도 지원합니다.

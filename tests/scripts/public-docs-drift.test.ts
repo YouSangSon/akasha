@@ -37,6 +37,8 @@ describe("public documentation drift checks", () => {
     expect(readmeKo).toContain("`/mcp` 의 MCP Streamable HTTP 와 `/v1/*` 아래 JSON HTTP");
 
     expect(apiReference).toContain("MCP Streamable HTTP");
+    expect(apiReference).toContain("dist/src/mcp/server.js");
+    expect(apiReference).not.toContain("Entry point: `dist/src/cli.js`");
     expect(apiReference).toContain("POST /mcp");
     expect(apiReference).toContain("three access paths");
     expect(apiReference).not.toContain("Both transports share");
@@ -50,6 +52,8 @@ describe("public documentation drift checks", () => {
     expect(apiReference).toContain("mergedIds: string[];");
 
     expect(apiReferenceKo).toContain("MCP Streamable HTTP");
+    expect(apiReferenceKo).toContain("dist/src/mcp/server.js");
+    expect(apiReferenceKo).not.toContain("진입점: `dist/src/cli.js`");
     expect(apiReferenceKo).toContain("POST /mcp");
     expect(apiReferenceKo).toContain("세 가지 접근 경로");
     expect(apiReferenceKo).not.toContain("두 transport 모두");
@@ -62,6 +66,23 @@ describe("public documentation drift checks", () => {
     expect(apiReferenceKo).toContain("akasha://memory/recent/{projectKey}");
     expect(apiReferenceKo).toContain("akasha://context-pack/{projectKey}/{task}");
     expect(apiReferenceKo).toContain("mergedIds: string[];");
+  });
+
+  it("documents agent lifecycle integrations", () => {
+    const index = read("docs/README.md");
+    const indexKo = read("docs/README.ko.md");
+    const integrations = read("docs/integrations.md");
+    const integrationsKo = read("docs/integrations.ko.md");
+
+    expect(index).toContain("integrations.md");
+    expect(indexKo).toContain("integrations.ko.md");
+    for (const text of [integrations, integrationsKo]) {
+      expect(text).toContain("dist/src/mcp/server.js");
+      expect(text).toContain("akasha_session_start");
+      expect(text).toContain("akasha_store_memory");
+      expect(text).toContain("node dist/src/cli.js pack");
+      expect(text).toContain("--organization-id");
+    }
   });
 
   it("documents the current audit instrumentation module in architecture docs", () => {

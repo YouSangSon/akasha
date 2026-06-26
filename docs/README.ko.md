@@ -10,6 +10,7 @@ Akasha 운영자와 기여자를 위한 레퍼런스 문서입니다.
 | [configuration.ko.md](configuration.ko.md) | [configuration.md](configuration.md) | 모든 환경 변수의 타입, 기본값, 예시 |
 | [api-reference.ko.md](api-reference.ko.md) | [api-reference.md](api-reference.md) | HTTP endpoint와 MCP tool schema |
 | [deployment.ko.md](deployment.ko.md) | [deployment.md](deployment.md) | Docker Compose 설정, production checklist, 환경 설정 |
+| [integrations.ko.md](integrations.ko.md) | [integrations.md](integrations.md) | Claude/Codex MCP 설정과 session lifecycle recipe |
 | [operations.ko.md](operations.ko.md) | [operations.md](operations.md) | 일상 운영 절차: health check, compaction, audit log |
 | [security.ko.md](security.ko.md) | [security.md](security.md) | 인증 모델, secret scrubber, org 격리, threat model |
 | [troubleshooting.ko.md](troubleshooting.ko.md) | [troubleshooting.md](troubleshooting.md) | 흔한 장애 모드와 해결 절차 |
