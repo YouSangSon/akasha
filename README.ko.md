@@ -151,7 +151,7 @@ curl -sX POST http://localhost:8787/v1/memory/search \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"projectKey":"checkout","query":"이중 청구는 어떻게 막지?"}'
 # → {"success":true,"data":{"ok":true,"results":[
-#      {"id":42,"memoryType":"decision","score":0.83,
+#      {"id":42,"memoryType":"decision",
 #       "content":"재시도를 안전하게 만들려고…"}]}}
 
 # 3. 새 에이전트 세션에 붙여넣을 컨텍스트 팩 생성.

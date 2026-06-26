@@ -149,7 +149,7 @@ curl -sX POST http://localhost:8787/v1/memory/search \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"projectKey":"checkout","query":"how do we avoid double-charging?"}'
 # → {"success":true,"data":{"ok":true,"results":[
-#      {"id":42,"memoryType":"decision","score":0.83,
+#      {"id":42,"memoryType":"decision",
 #       "content":"Use idempotency keys on POST /charge…"}]}}
 
 # 3. Build a context pack to paste into a new agent session.
