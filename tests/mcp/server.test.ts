@@ -1852,6 +1852,13 @@ function createCanonicalServices() {
       searchMemory: vi.fn().mockResolvedValue([createdRecord]),
       listMemory: vi.fn().mockResolvedValue([createdRecord]),
       getMemoryRecordsByIds: vi.fn().mockResolvedValue([createdRecord]),
+      listMemoryForGovernance: vi.fn().mockResolvedValue([createdRecord]),
+      updateMemoryRecord: vi.fn().mockResolvedValue(createdRecord),
+      archiveMemoryRecord: vi.fn().mockResolvedValue({
+        archived: true,
+        qdrantPointIds: [],
+      }),
+      getMemoryRecordById: vi.fn().mockResolvedValue(createdRecord),
       // Rollback path stub (resolves to undefined). The shared canonical-services
       // factory must satisfy the full CanonicalMemoryRepository interface so
       // the strongly-typed mock continues to typecheck across all suites.

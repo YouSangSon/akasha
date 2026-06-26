@@ -22,6 +22,7 @@ const MIGRATION_FILES = [
   "009_memory_archive_qdrant_retry.sql",
   "010_postgres_full_text_search.sql",
   "011_entity_temporal_graph.sql",
+  "012_memory_governance_tags.sql",
 ] as const;
 
 const embeddedPostgresMigrationSql = `CREATE TABLE IF NOT EXISTS sources (
@@ -355,6 +356,23 @@ CREATE INDEX IF NOT EXISTS idx_entity_relationships_to
 CREATE INDEX IF NOT EXISTS idx_entity_relationships_temporal
   ON entity_relationships (organization_id, valid_from)
   WHERE valid_from IS NOT NULL;
+
+-- Governance tags for canonical memory records.
+-- Mirrors src/db/migrations/012_memory_governance_tags.sql.
+CREATE TABLE IF NOT EXISTS memory_tags (
+  memory_record_id BIGINT       NOT NULL REFERENCES memory_records(id) ON DELETE CASCADE,
+  organization_id  TEXT         NOT NULL,
+  tag              TEXT         NOT NULL,
+  created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (memory_record_id, tag)
+);
+
+CREATE INDEX IF NOT EXISTS idx_memory_tags_org_tag_record
+  ON memory_tags (organization_id, tag, memory_record_id);
+
+CREATE INDEX IF NOT EXISTS idx_memory_tags_org_record
+  ON memory_tags (organization_id, memory_record_id);
 `;
 
 export type ReadPostgresMigrationSqlOptions = {

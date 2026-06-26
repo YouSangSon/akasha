@@ -49,6 +49,12 @@ type PostgresSourceRow = {
 
 type PostgresSearchRow = PostgresMemoryRow & PostgresSourceRow;
 
+type PostgresTaggedRow = {
+  tags: string[] | null;
+};
+
+type PostgresHydratedRow = PostgresSearchRow & PostgresTaggedRow;
+
 type PostgresEntityRow = {
   id: number | string;
   kind: EntityMention["kind"];
@@ -105,7 +111,17 @@ const SEARCH_RETURN_COLUMNS = `
   s.source_type,
   s.source_ref,
   s.title AS source_title,
-  s.captured_at AS source_created_at
+  s.captured_at AS source_created_at,
+  COALESCE(mt.tags, '{}') AS tags
+`;
+
+const TAG_LATERAL_JOIN = `
+  LEFT JOIN LATERAL (
+    SELECT array_agg(memory_tags.tag ORDER BY memory_tags.tag) AS tags
+    FROM memory_tags
+    WHERE memory_tags.memory_record_id = mr.id
+      AND memory_tags.organization_id = mr.organization_id
+  ) mt ON TRUE
 `;
 
 export function createMemoryRepository(
@@ -181,9 +197,10 @@ export function createMemoryRepository(
 
         await client.query("COMMIT");
 
-        return mapPostgresSearchResult({
+      return mapPostgresSearchResult({
           ...memoryRow,
           ...sourceRow,
+          tags: [],
         });
       } catch (error: unknown) {
         await client.query("ROLLBACK").catch(() => undefined);
@@ -261,7 +278,7 @@ export function createMemoryRepository(
       }
 
       const limitIndex = params.push(limit);
-      const result = await pool.query<PostgresSearchRow>(
+      const result = await pool.query<PostgresHydratedRow>(
         `
           WITH lexical AS (
             SELECT websearch_to_tsquery('simple', $${tsQueryIndex}) AS query
@@ -269,6 +286,7 @@ export function createMemoryRepository(
           SELECT ${SEARCH_RETURN_COLUMNS}
           FROM memory_records mr
           JOIN sources s ON s.id = mr.source_id
+          ${TAG_LATERAL_JOIN}
           CROSS JOIN lexical
           WHERE (${searchClauses.join(" OR ")})
             AND (${scopeClauses.join(" OR ")})${orgClause}
@@ -292,11 +310,12 @@ export function createMemoryRepository(
       }
       const limitIndex = params.push(limit);
 
-      const result = await pool.query<PostgresSearchRow>(
+      const result = await pool.query<PostgresHydratedRow>(
         `
           SELECT ${SEARCH_RETURN_COLUMNS}
           FROM memory_records mr
           JOIN sources s ON s.id = mr.source_id
+          ${TAG_LATERAL_JOIN}
           WHERE mr.scope_type = $1
             AND mr.scope_id = $2${orgClause}
           ORDER BY mr.id DESC
@@ -321,17 +340,215 @@ export function createMemoryRepository(
         orgClause = ` AND mr.organization_id = $${orgIndex}`;
       }
 
-      const result = await pool.query<PostgresSearchRow>(
+      const result = await pool.query<PostgresHydratedRow>(
         `
           SELECT ${SEARCH_RETURN_COLUMNS}
           FROM memory_records mr
           JOIN sources s ON s.id = mr.source_id
+          ${TAG_LATERAL_JOIN}
           WHERE mr.id = ANY($1::int[])${orgClause}
         `,
         params,
       );
 
       return orderRecordsByIds(result.rows.map(mapPostgresSearchResult), ids);
+    },
+
+    async listMemoryForGovernance(scope, options) {
+      const limit = clampListLimit(options.limit);
+      const params: unknown[] = [
+        scope.scopeType,
+        scope.scopeId,
+        options.organizationId,
+      ];
+      let tagJoin = "";
+      let tagClause = "";
+      if (options.tag !== undefined) {
+        const tagIndex = params.push(options.tag);
+        tagJoin = `
+          JOIN memory_tags filter_tags
+            ON filter_tags.memory_record_id = mr.id
+           AND filter_tags.organization_id = mr.organization_id
+        `;
+        tagClause = ` AND filter_tags.tag = $${tagIndex}`;
+      }
+      let archivedClause = "";
+      if (!options.includeArchived) {
+        archivedClause = ` AND mr.durability <> 'archived'`;
+      }
+      const limitIndex = params.push(limit);
+
+      const result = await pool.query<PostgresHydratedRow>(
+        `
+          SELECT ${SEARCH_RETURN_COLUMNS}
+          FROM memory_records mr
+          JOIN sources s ON s.id = mr.source_id
+          ${tagJoin}
+          ${TAG_LATERAL_JOIN}
+          WHERE mr.scope_type = $1
+            AND mr.scope_id = $2
+            AND mr.organization_id = $3${archivedClause}${tagClause}
+          ORDER BY mr.updated_at DESC, mr.id DESC
+          LIMIT $${limitIndex}
+        `,
+        params,
+      );
+
+      return result.rows.map(mapPostgresSearchResult);
+    },
+
+    async updateMemoryRecord(input) {
+      const client = await pool.connect();
+
+      try {
+        await client.query("BEGIN");
+
+        const currentRow = await getPostgresMemoryRecordById(
+          client,
+          input.id,
+          input.organizationId,
+        );
+        if (!currentRow) {
+          await client.query("ROLLBACK");
+          return null;
+        }
+
+        const nextTitle = input.title === undefined ? currentRow.title : input.title;
+        const nextContent = input.content ?? currentRow.content;
+        const nextSummary =
+          input.summary === undefined ? currentRow.summary : input.summary;
+        const updateResult = await client.query<PostgresMemoryRow>(
+          `
+            UPDATE memory_records
+            SET kind = $3,
+                title = $4,
+                content = $5,
+                summary = $6,
+                importance = $7,
+                durability = $8,
+                updated_at = NOW()
+            WHERE id = $1
+              AND organization_id = $2
+            RETURNING
+              id,
+              organization_id,
+              scope_type,
+              scope_id,
+              project_key,
+              kind,
+              title,
+              content,
+              summary,
+              durability,
+              importance,
+              source_id,
+              created_at,
+              updated_at
+          `,
+          [
+            input.id,
+            input.organizationId,
+            input.kind ?? currentRow.kind,
+            nextTitle,
+            nextContent,
+            nextSummary,
+            input.importance ?? currentRow.importance,
+            input.durability ?? currentRow.durability,
+          ],
+        );
+        const updatedRow = requireSingleRow(updateResult.rows[0], "memory");
+
+        if (input.tags !== undefined) {
+          await replacePostgresMemoryTags(client, {
+            memoryRecordId: input.id,
+            organizationId: input.organizationId,
+            tags: input.tags,
+          });
+        }
+
+        await deletePostgresEntityGraphForMemory(client, input.id, input.organizationId);
+        await persistPostgresEntityGraph(client, {
+          input: {
+            organizationId: input.organizationId,
+            scopeType: updatedRow.scope_type,
+            scopeId: updatedRow.scope_id,
+            projectKey: updatedRow.project_key ?? undefined,
+            memoryType: updatedRow.kind,
+            title: updatedRow.title ?? undefined,
+            content: updatedRow.content,
+            summary: updatedRow.summary ?? undefined,
+            durability: updatedRow.durability,
+            importance: updatedRow.importance,
+            source: {
+              scopeType: currentRow.source_scope_type,
+              scopeId: currentRow.source_scope_id,
+              sourceType: currentRow.source_type,
+              sourceRef:
+                parseStoredPostgresSourceRef(currentRow.source_ref).sourceRef,
+              title: currentRow.source_title ?? undefined,
+              uri: parseStoredPostgresSourceRef(currentRow.source_ref).uri ?? undefined,
+            },
+          },
+          organizationId: input.organizationId,
+          memoryRecordId: input.id,
+          sourceRow: currentRow,
+        });
+
+        const hydrated = await getPostgresMemoryRecordById(
+          client,
+          input.id,
+          input.organizationId,
+        );
+
+        await client.query("COMMIT");
+        return hydrated ? mapPostgresSearchResult(hydrated) : null;
+      } catch (error: unknown) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+
+    async archiveMemoryRecord(input) {
+      const result = await pool.query<{
+        archived_count: number | string;
+        qdrant_point_ids: string[] | null;
+      }>(
+        `
+          WITH archived AS (
+            UPDATE memory_records
+            SET durability = 'archived',
+                updated_at = NOW()
+            WHERE id = $1
+              AND organization_id = $2
+              AND durability <> 'archived'
+            RETURNING id
+          )
+          SELECT COALESCE(
+            array_agg(mc.qdrant_point_id) FILTER (WHERE mc.qdrant_point_id IS NOT NULL),
+            '{}'
+          ) AS qdrant_point_ids,
+          COUNT(archived.id) AS archived_count
+          FROM archived
+          LEFT JOIN memory_chunks mc ON mc.memory_record_id = archived.id
+        `,
+        [input.id, input.organizationId],
+      );
+
+      if (toNumber(result.rows[0]?.archived_count ?? 0) === 0) {
+        return { archived: false, qdrantPointIds: [] };
+      }
+
+      return {
+        archived: true,
+        qdrantPointIds: result.rows[0]?.qdrant_point_ids ?? [],
+      };
+    },
+
+    async getMemoryRecordById(id, organizationId) {
+      const result = await getPostgresMemoryRecordById(pool, id, organizationId);
+      return result ? mapPostgresSearchResult(result) : null;
     },
 
     async deleteMemoryRecord(id, organizationId) {
@@ -348,7 +565,7 @@ export function createMemoryRepository(
   };
 }
 
-function mapPostgresSearchResult(row: PostgresSearchRow): SearchMemoryResult {
+function mapPostgresSearchResult(row: PostgresHydratedRow): SearchMemoryResult {
   const sourceMetadata = parseStoredPostgresSourceRef(row.source_ref);
 
   return {
@@ -364,6 +581,7 @@ function mapPostgresSearchResult(row: PostgresSearchRow): SearchMemoryResult {
     summary: row.summary,
     durability: row.durability,
     importance: row.importance,
+    tags: row.tags ?? [],
     createdAt: toIsoString(row.created_at),
     updatedAt: toIsoString(row.updated_at),
     source: {
@@ -379,6 +597,27 @@ function mapPostgresSearchResult(row: PostgresSearchRow): SearchMemoryResult {
       createdAt: toIsoString(row.source_created_at),
     },
   };
+}
+
+async function getPostgresMemoryRecordById(
+  queryable: PgQueryable,
+  id: number,
+  organizationId: string,
+): Promise<PostgresHydratedRow | null> {
+  const result = await queryable.query<PostgresHydratedRow>(
+    `
+      SELECT ${SEARCH_RETURN_COLUMNS}
+      FROM memory_records mr
+      JOIN sources s ON s.id = mr.source_id
+      ${TAG_LATERAL_JOIN}
+      WHERE mr.id = $1
+        AND mr.organization_id = $2
+      LIMIT 1
+    `,
+    [id, organizationId],
+  );
+
+  return result.rows[0] ?? null;
 }
 
 function requireSourceKey(input: AddMemoryInput["source"]): string {
@@ -631,6 +870,71 @@ async function insertPostgresMemoryEntityMentions(
   );
 }
 
+async function deletePostgresEntityGraphForMemory(
+  queryable: PgQueryable,
+  memoryRecordId: number,
+  organizationId: string,
+): Promise<void> {
+  await queryable.query(
+    `
+      DELETE FROM entity_relationships
+      WHERE evidence_memory_record_id = $1
+        AND organization_id = $2
+    `,
+    [memoryRecordId, organizationId],
+  );
+  await queryable.query(
+    `
+      DELETE FROM memory_entity_mentions
+      WHERE memory_record_id = $1
+        AND organization_id = $2
+    `,
+    [memoryRecordId, organizationId],
+  );
+}
+
+async function replacePostgresMemoryTags(
+  queryable: PgQueryable,
+  input: {
+    memoryRecordId: number;
+    organizationId: string;
+    tags: string[];
+  },
+): Promise<void> {
+  await queryable.query(
+    `
+      DELETE FROM memory_tags
+      WHERE memory_record_id = $1
+        AND organization_id = $2
+    `,
+    [input.memoryRecordId, input.organizationId],
+  );
+
+  const tags = normalizeTags(input.tags);
+  if (tags.length === 0) {
+    return;
+  }
+
+  const params: unknown[] = [];
+  const values = tags.map((tag) => {
+    const memoryRecordIndex = params.push(input.memoryRecordId);
+    const organizationIndex = params.push(input.organizationId);
+    const tagIndex = params.push(tag);
+    return `($${memoryRecordIndex}, $${organizationIndex}, $${tagIndex})`;
+  });
+
+  await queryable.query(
+    `
+      INSERT INTO memory_tags (
+        memory_record_id,
+        organization_id,
+        tag
+      ) VALUES ${values.join(", ")}
+    `,
+    params,
+  );
+}
+
 async function insertPostgresEntityRelationships(
   queryable: PgQueryable,
   input: {
@@ -789,6 +1093,11 @@ function buildEntityRelationships(
   }
 
   return relationships;
+}
+
+function normalizeTags(tags: readonly string[]): string[] {
+  return [...new Set(tags.map((tag) => tag.trim()).filter((tag) => tag.length > 0))]
+    .sort((left, right) => left.localeCompare(right));
 }
 
 function pushUniqueRelationship(

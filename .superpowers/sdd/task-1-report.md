@@ -1,106 +1,150 @@
-# Task 1 Report: Structured MCP Tool Outputs
+# Task 1 Report
 
-## RED command/output summary
+## Scope
 
-- Command: `npm test -- tests/mcp/server.test.ts`
-- Result: FAIL
-- Summary:
-  - `createMcpServer structured outputs > advertises output schemas for all registered tools`
-    - failure: `expected undefined to deeply equal ObjectContaining {"type": "object"}`
-  - `createMcpServer structured outputs > returns structuredContent while retaining JSON text content`
-    - failure: `expected undefined to deeply equal ObjectContaining{...}`
-- Interpretation:
-  - `outputSchema` was not being registered on MCP tools.
-  - tool call results were not returning `structuredContent`.
+Implemented Task 1 from `.superpowers/sdd/task-1-brief.md` only:
 
-## GREEN command/output summary
+- Added schema migration `012_memory_governance_tags.sql`
+- Embedded migration snapshot update in `src/db/migrate.ts`
+- Extended canonical repository primitives for governance list/update/archive/get
+- Extended memory result typing to carry `tags`
+- Added focused migration and repository tests
 
-- Command: `npm test -- tests/mcp/server.test.ts`
-- Result: PASS
-- Summary:
-  - `tests/mcp/server.test.ts (33 tests)`
-  - `33 passed`
+No MCP schemas, handlers, routes, docs, or UI were edited.
 
-## Typecheck result
+## Files Changed
 
-- Command: `npm run typecheck`
-- Result: PASS
-
-## Commit hash
-
-- `c1f4b9d`
-
-## Changed files
-
-- `src/mcp/tool-schemas.ts`
-- `src/mcp/server.ts`
+- `src/db/migrations/012_memory_governance_tags.sql`
+- `src/db/migrate.ts`
+- `src/types.ts`
+- `src/store/memory-repository.ts`
+- `tests/db/migrate.test.ts`
+- `tests/store/memory-repository.test.ts`
 - `tests/mcp/server.test.ts`
 
-## Self-review notes
+## Implementation Details
 
-- Followed TDD in order:
-  - added the structured-output tests first
-  - ran the focused suite to capture RED
-  - implemented the minimal MCP registration/result changes
-  - reran tests and typecheck
-- Registered `outputSchema` for every tool descriptor.
-- Returned `{ content, structuredContent }` from MCP tool handlers.
-- Preserved existing JSON text content behavior while adding structured output.
-- Updated existing handler-level assertions so they validate the new result shape instead of the pre-structured-output shape.
+### 1. Migration 012
 
-## Concerns
+Added `memory_tags`:
 
-- During the first green pass, the MCP SDK's schema bridge rejected some richer nested output schema shapes in this repo's current dependency mix. I simplified a few nested output schema fields to permissive passthrough objects where the focused protocol tests only require object-shaped structured output. The externally visible behavior required by the brief is satisfied, but this is the main area to watch if later tasks require stricter output-schema validation across all nested fields.
+- `memory_record_id BIGINT NOT NULL REFERENCES memory_records(id) ON DELETE CASCADE`
+- `organization_id TEXT NOT NULL`
+- `tag TEXT NOT NULL`
+- `created_at`, `updated_at`
+- `PRIMARY KEY (memory_record_id, tag)`
 
----
+Indexes added:
 
-## Fix follow-up: tighten structured output schemas
+- `idx_memory_tags_org_tag_record`
+- `idx_memory_tags_org_record`
 
-### RED command/output summary
+Also registered `012_memory_governance_tags.sql` in `MIGRATION_FILES` and mirrored it in the embedded migration SQL to prevent file/snapshot drift.
 
-- Command: `npm test -- tests/mcp/server.test.ts`
-- Result: FAIL
-- Summary:
-  - `createMcpServer structured outputs > advertises output schemas for all registered tools`
-    - failure: `compact_memory` still advertised empty nested object schemas for `duplicateGroups`, `decayCandidates`, and `applyStats`
-- Interpretation:
-  - The protocol-level schema for `compact_memory` remained weaker than the task brief.
-  - `unarchive_memory` also needed explicit schema-fidelity coverage so discriminated outcomes cannot silently regress.
+### 2. Public Types
 
-### GREEN command/output summary
+Extended `MemoryRecord` / `SearchMemoryResult` compatibility by allowing:
 
-- Command: `npm test -- tests/mcp/server.test.ts`
-- Result: PASS
-- Summary:
-  - `tests/mcp/server.test.ts (33 tests)`
-  - `33 passed`
+- `tags?: string[]`
 
-### Typecheck result
+Extended `CanonicalMemoryRepository` with governance primitives:
 
-- Command: `npm run typecheck`
-- Result: PASS
+- `listMemoryForGovernance(scope, options)`
+- `updateMemoryRecord(input)`
+- `archiveMemoryRecord(input)`
+- `getMemoryRecordById(id, organizationId)`
 
-### Commit hash
+The rollback-only hard delete path `deleteMemoryRecord` was left intact.
 
-- `fc9113d`
+### 3. Repository Behavior
 
-### Changed files
+#### Hydration / Reads
 
-- `src/mcp/tool-schemas.ts`
-- `tests/mcp/server.test.ts`
+Added tag hydration through a lateral join that aggregates tags per memory row:
 
-### Self-review notes
+- `COALESCE(mt.tags, '{}') AS tags`
 
-- Added protocol assertions that the advertised `compact_memory` schema includes typed `duplicateGroups`, `decayCandidates`, and `applyStats` fields.
-- Added protocol assertions that the advertised `unarchive_memory` schema includes discriminated archive outcomes for `restored`, `skipped`, and `failed`.
-- Replaced permissive passthrough nested schemas in `compact_memory` with typed object schemas aligned to the task brief.
-- Replaced `unarchive_memory` outcome `status: string` with a typed union that advertises the expected per-status fields.
-- Kept the previously implemented `{ content, structuredContent }` behavior unchanged.
+Applied to:
 
-### Concerns
+- `searchMemory`
+- `listMemory`
+- `getMemoryRecordsByIds`
+- new governance list/get methods
 
-- None.
+#### Governance List
 
-### Controller correction
+Added `listMemoryForGovernance` with:
 
-- The fix subagent returned final commit `743f014`; the `fc9113d` value above is a stale intermediate hash from before the final commit landed.
+- required `organizationId`
+- optional `includeArchived`
+- optional single-tag filter
+- bounded `limit`
+- default exclusion of `durability = 'archived'`
+
+#### Update
+
+Added `updateMemoryRecord` transaction:
+
+1. Hydrate current memory row by `id + organization_id`
+2. Update mutable fields and always refresh `updated_at = NOW()`
+3. Replace tags when provided
+4. Delete stale `entity_relationships` and `memory_entity_mentions` for that memory
+5. Re-run entity extraction and persistence from the updated record/source state
+6. Re-hydrate and return the updated record
+
+Tag replacement normalizes by trimming, dropping empties, deduping, and sorting for deterministic storage/returns.
+
+#### Archive
+
+Added `archiveMemoryRecord`:
+
+- scopes by `id + organization_id`
+- sets `durability = 'archived'`
+- updates `updated_at = NOW()`
+- returns collected `memory_chunks.qdrant_point_id` values for vector cleanup
+
+This is a separate governance path and does not change `deleteMemoryRecord`.
+
+## Tests Added
+
+### Migration
+
+- Added drift coverage for migration `012` table/index presence
+- Added embedded migration snapshot assertions for `memory_tags`
+
+### Repository
+
+Unit/SQL-shape coverage for:
+
+- governance list org predicate + tag join + archived exclusion
+- update org predicate + tag replacement SQL path + stale entity cleanup deletes
+- archive org predicate + qdrant point id aggregation
+
+PG-backed coverage added for:
+
+- update refreshes `updated_at`
+- tag persistence/hydration after update
+- regenerated entity mentions replace old ones without stale rows remaining
+
+## Validation
+
+Passed:
+
+- `npm test -- tests/store/memory-repository.test.ts tests/db/migrate.test.ts`
+- `npm run typecheck`
+
+Attempted but environment-blocked:
+
+- `POSTGRES_HOST=127.0.0.1 npm test -- tests/store/memory-repository.test.ts tests/db/migrate.test.ts`
+
+The PG-gated suites are present and compile, but this workspace currently has no reachable Postgres at `127.0.0.1:5432` (`ECONNREFUSED`), so the integration path could not execute locally.
+
+## Concurrent Work Safety
+
+- Did not revert unrelated changes
+- Kept edits scoped to schema, repository primitives, migration wiring, and tests
+- Only updated `tests/mcp/server.test.ts` to keep an existing strongly-typed canonical repository mock aligned with the expanded interface
+
+## Commit
+
+Commit created after validation in the current worktree.

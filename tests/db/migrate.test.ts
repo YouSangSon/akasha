@@ -265,6 +265,46 @@ describe.skipIf(!process.env.POSTGRES_HOST)("runMigrations", () => {
       await pool.end();
     }
   });
+
+  it("applies migration 012 memory governance tags table and indexes", async () => {
+    const pool = createPgPool({
+      connectionString: testConnectionString,
+    });
+
+    try {
+      await runMigrations(pool);
+
+      const tables = await pool.query<InformationSchemaTableRow>(`
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name = 'memory_tags'
+      `);
+      const indexes = await pool.query<{ indexname: string }>(`
+        SELECT indexname
+        FROM pg_indexes
+        WHERE schemaname = 'public'
+          AND tablename = 'memory_tags'
+          AND indexname IN (
+            'idx_memory_tags_org_record',
+            'idx_memory_tags_org_tag_record',
+            'memory_tags_pkey'
+          )
+        ORDER BY indexname
+      `);
+
+      expect(tables.rows.map((row) => row.table_name)).toEqual([
+        "memory_tags",
+      ]);
+      expect(indexes.rows.map((row) => row.indexname)).toEqual([
+        "idx_memory_tags_org_record",
+        "idx_memory_tags_org_tag_record",
+        "memory_tags_pkey",
+      ]);
+    } finally {
+      await pool.end();
+    }
+  });
 });
 
 describe("readPostgresMigrationSql", () => {
@@ -291,5 +331,8 @@ describe("readPostgresMigrationSql", () => {
     expect(sql).toContain("CREATE TABLE IF NOT EXISTS memory_entity_mentions");
     expect(sql).toContain("CREATE TABLE IF NOT EXISTS entity_relationships");
     expect(sql).toContain("idx_memory_entity_mentions_entity");
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS memory_tags");
+    expect(sql).toContain("idx_memory_tags_org_tag_record");
+    expect(sql).toContain("idx_memory_tags_org_record");
   });
 });
