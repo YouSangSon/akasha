@@ -28,14 +28,15 @@ Variables marked **required** throw at startup if missing or invalid. This is
 intentional — fail-closed beats running with an undefined value silently.
 
 The fail-closed gate also refuses to bind to a non-loopback host
-(`HOST=0.0.0.0`, `HOST=10.x.x.x`, etc.) when `MEMORY_API_TOKENS` is empty —
-preventing accidental zero-auth public exposure.
+(`HOST=0.0.0.0`, `HOST=10.x.x.x`, etc.) when both `MEMORY_API_TOKENS` and
+OAuth token validation are absent — preventing accidental zero-auth public
+exposure.
 
 ## Required
 
 | Variable | Default | Notes |
 |---|---|---|
-| `MEMORY_API_TOKENS` | — | Comma-separated bearer tokens. See [Auth](#auth) below. |
+| `MEMORY_API_TOKENS` | — | Comma-separated static bearer tokens. Required for non-loopback binds unless OAuth token validation is configured. See [Auth](#auth) below. |
 
 `OPENAI_API_KEY` is **not** required for default operation. The default
 embedding provider is `transformers` (free local ONNX). Set `OPENAI_API_KEY`
@@ -98,7 +99,7 @@ should replace `POSTGRES_PASSWORD`, `QDRANT_API_KEY`, and every
 
 | Variable | Default | Notes |
 |---|---|---|
-| `HOST` | `127.0.0.1` | Bind interface. `0.0.0.0` exposes off-box; pair with `MEMORY_API_TOKENS`. |
+| `HOST` | `127.0.0.1` | Bind interface. `0.0.0.0` exposes off-box; pair with `MEMORY_API_TOKENS` or OAuth token validation. |
 | `PORT` | `8787` | |
 | `NODE_ENV` | unset | `production` enables connection pooling defaults. |
 
@@ -171,11 +172,14 @@ When a token has no binding (legacy form):
   (`listMemory`), and the vector-hydration step (`getMemoryRecordsByIds`).
   Without it, every read that omits an org throws an operational error.
 
-### OAuth/OIDC protected-resource discovery
+### OAuth/OIDC protected-resource discovery and JWT validation
 
 Akasha can advertise OAuth 2.0 Protected Resource Metadata for MCP Streamable
-HTTP clients. This is discovery only: it does **not** replace
-`MEMORY_API_TOKENS`, token-org binding, origin checks, or rate limiting.
+HTTP clients and validate JWT access tokens issued by the configured
+authorization servers. Static `MEMORY_API_TOKENS` continue to work; HTTP
+clients may authenticate with either a configured static token or a JWT whose
+issuer, audience, signature, expiry, and scope pass validation. Origin checks
+and rate limiting still apply.
 
 Leave `MCP_OAUTH_AUTHORIZATION_SERVERS` unset to disable discovery. When it is
 set, `MCP_OAUTH_RESOURCE_URL` is required and the app serves metadata
@@ -187,11 +191,40 @@ unauthenticated at:
 Unauthorized `/mcp` and `/v1/*` requests also include a `WWW-Authenticate`
 challenge with `resource_metadata` and `scope` parameters.
 
+OAuth access tokens are accepted only when:
+- `iss` matches one of `MCP_OAUTH_AUTHORIZATION_SERVERS`.
+- `aud` contains `MCP_OAUTH_RESOURCE_URL`.
+- The signature verifies against the issuer's JWKS.
+- The token is not expired or not-yet-valid, allowing
+  `MCP_OAUTH_JWT_CLOCK_TOLERANCE_SECONDS`.
+- The token carries the scope required by the requested tool.
+
+Scopes:
+- `akasha:read` — `search_memory`, `build_context_pack`,
+  `list_workspace_roots`, `classify_memory_candidate`, and dry-run
+  `compact_memory`.
+- `akasha:write` — `add_memory`, `add_memory_interactive`.
+- `akasha:admin` — `reindex_memory`, `unarchive_memory`, `list_audit_log`,
+  and `compact_memory` with `dryRun: false`.
+- `akasha:memory` — compatibility umbrella scope that satisfies all of the
+  above.
+
+If the JWT contains `MCP_OAUTH_ORGANIZATION_CLAIM` (default:
+`organization_id`) as a non-empty string, Akasha treats it like a token-org
+binding: requests inherit that `organizationId`, and conflicting body/header
+org values return 403.
+
 | Variable | Default | Notes |
 |---|---|---|
 | `MCP_OAUTH_AUTHORIZATION_SERVERS` | unset → disabled | Comma-separated HTTPS issuer URLs for authorization servers. |
 | `MCP_OAUTH_RESOURCE_URL` | required when enabled | Public protected resource URL. Use the externally reachable HTTPS URL, normally `https://.../mcp`. |
 | `MCP_OAUTH_SCOPES` | `akasha:memory` | Comma-separated scopes advertised in metadata and space-delimited in the challenge header. |
+| `MCP_OAUTH_JWKS_URLS` | discovered from issuer metadata | Optional comma-separated HTTPS JWKS URLs. When set, provide one URL per authorization server. |
+| `MCP_OAUTH_JWT_ALGORITHMS` | `RS256,RS384,RS512,PS256,PS384,PS512,ES256,ES384,ES512,EdDSA` | Accepted JWS `alg` values. |
+| `MCP_OAUTH_JWT_CLOCK_TOLERANCE_SECONDS` | `60` | Clock skew tolerance for `exp` / `nbf`. |
+| `MCP_OAUTH_JWT_TYPE` | unset | Optional required JWT `typ` header, e.g. `at+jwt`. Leave unset for provider compatibility. |
+| `MCP_OAUTH_ORGANIZATION_CLAIM` | `organization_id` | JWT claim used as the org binding when present. |
+| `MCP_OAUTH_JWKS_TIMEOUT_MS` | `5000` | Timeout for remote JWKS fetches. |
 | `MCP_OAUTH_RESOURCE_NAME` | unset | Optional human-readable `resource_name`. |
 | `MCP_OAUTH_RESOURCE_DOCUMENTATION_URL` | unset | Optional HTTPS URL emitted as `resource_documentation`. |
 

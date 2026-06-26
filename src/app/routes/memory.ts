@@ -3,17 +3,23 @@ import type { Logger } from "../../logger.js";
 import { CompactionRateLimitError } from "../../compact/apply-compaction.js";
 import {
   TOOL_ROUTES,
-  type ToolName,
+  type ServiceToolName,
   validateToolInput,
 } from "../../mcp/tool-schemas.js";
 import type { ToolRegistry } from "../../mcp/types.js";
 import { SecretDetectedError } from "../../store/secret-scrub.js";
 import type { BearerToken } from "../middleware/bearer-auth.js";
+import { checkOAuthScopes } from "../middleware/oauth-token-auth.js";
 import { sendError, sendOk } from "../middleware/envelope.js";
+import {
+  setOAuthInsufficientScopeHeader,
+  type OAuthProtectedResourceConfig,
+} from "../oauth-protected-resource.js";
 
 export type RouteContext = {
   registry: ToolRegistry;
   logger: Logger;
+  oauthProtectedResource?: OAuthProtectedResourceConfig | null;
 };
 
 export type Route = {
@@ -85,7 +91,7 @@ export function resolveOrganizationId(
   return { organizationId: callerOrg, conflict: false };
 }
 
-function buildHandler<K extends ToolName>(toolName: K, ctx: RouteContext) {
+function buildHandler<K extends ServiceToolName>(toolName: K, ctx: RouteContext) {
   return async (
     req: IncomingMessage,
     res: ServerResponse,
@@ -119,6 +125,22 @@ function buildHandler<K extends ToolName>(toolName: K, ctx: RouteContext) {
         resolved.organizationId !== undefined
           ? { ...bodyRecord, organizationId: resolved.organizationId }
           : bodyRecord;
+
+      const scopeCheck = checkOAuthScopes(
+        auth,
+        toolName,
+        enrichedInput,
+        ctx.oauthProtectedResource ?? null,
+      );
+      if (!scopeCheck.ok) {
+        setOAuthInsufficientScopeHeader(
+          res,
+          ctx.oauthProtectedResource ?? null,
+          scopeCheck.challengeScope,
+        );
+        sendError(res, 403, "insufficient_scope");
+        return;
+      }
 
       const validation = validateToolInput(toolName, enrichedInput);
       if (!validation.ok) {

@@ -36,9 +36,46 @@ CHANGELOG에서 명시적으로 표기합니다.
   (`docker compose -f compose.yaml -f compose.pgvector.yaml up -d`) 로
   로컬 개발 시 `pgvector/pgvector:pg16` 으로 전환 가능. 백엔드 전환 시
   `reindex_memory` 필수.
+- **Persistent entity 및 temporal graph foundation** — `add_memory` 가 이제
+  code symbol, path, URL, date, named concept 같은 deterministic mention을
+  `entities`, `memory_entity_mentions` 에 추출하고, 같은 row의 co-mention 및
+  date context를 `entity_relationships` 에 기록합니다. `search_memory` 는 이
+  graph를 Postgres FTS, substring fallback, vector retrieval 옆의 exact
+  rescue/boost 경로로 사용합니다. 마이그레이션 범위는 `001-011` 입니다.
+- **MCP roots, elicitation, sampling helper** — MCP transport가 이제 클라이언트가
+  광고한 `roots/list` 용 `list_workspace_roots` 와, form elicitation 후 수락된
+  memory를 일반 `add_memory` 경로로 저장하는 `add_memory_interactive` 를
+  등록합니다. `classify_memory_candidate` 는 client sampling으로 저장 없이 memory
+  kind와 짧은 summary를 제안합니다. 미지원 클라이언트에는 실패 대신 명시적인
+  structured result를 반환합니다. TypeScript MCP SDK 최소 버전은 이
+  server-to-client API들을 검증한 locked version 기준 `^1.28.0` 으로 올렸습니다.
+- **암호화된 백업 artifact** — `backup:create` 가 이제
+  `BACKUP_ENCRYPTION_KEY_FILE` 을 인식하고 off-host copy 전에 Postgres dump와
+  Qdrant snapshot을 AES-256-GCM으로 암호화합니다. Manifest는 `.enc` artifact와
+  ciphertext checksum을 가리키도록 갱신되고, plaintext artifact는 기본 제거되며,
+  `backup:decrypt` 로 operator restore command 전에 artifact 하나를 복호화할 수
+  있습니다. KMS는 외부 연동입니다. scheduler/secret manager가 32-byte data key를
+  key file로 제공해야 합니다.
+- **Context-pack prompt-injection hardening** — 생성된 context pack이 이제
+  검색된 memory는 instruction이 아니라 untrusted note라는 trust-boundary notice로
+  시작합니다. "ignore previous instructions" 같은 prompt-injection 유사 문구가
+  포함된 excerpt에는 warning label을 붙입니다.
+- **Lifecycle init 자동화** — CLI에 `init` 을 추가해 `.akasha/` MCP client
+  snippet, `.env` 를 source하는 MCP stdio wrapper, session-start/session-end
+  hook script를 생성합니다. 새 `remember` 명령은 HTTP 서버 없이도 hook이 기존
+  `add_memory` 경로로 짧은 durable summary를 저장하게 합니다. `install.sh` 는
+  build와 migration 후 init을 실행합니다.
 
 ### Security
 
+- **HTTP transport용 OAuth/OIDC JWT 검증** — `/mcp`, `/v1/*` 는 이제 정적
+  `MEMORY_API_TOKENS` 외에도 OAuth/OIDC JWT access token을 허용합니다.
+  토큰은 설정된 authorization server, JWKS, `MCP_OAUTH_RESOURCE_URL`
+  audience, expiry / not-before, algorithm allowlist, tool별 scope
+  (`akasha:read`, `akasha:write`, `akasha:admin`, 호환용 `akasha:memory`) 로
+  검증됩니다. JWT org claim은 기본 `organization_id` 를 사용하며, 존재 시
+  token-org 바인딩처럼 동작합니다. OAuth scope가 부족하면 403과 Bearer
+  `insufficient_scope` challenge를 반환합니다.
 - **Secret scrubber가 이제 `title`, `summary` 까지 검사** —
   `writeCanonicalMemory` 가 이전엔 `content` 만 credential 패턴 (AWS key,
   GitHub PAT, OpenAI key, PEM, JWT 등)을 스캔. 호출자가 `title` 또는
@@ -98,6 +135,11 @@ CHANGELOG에서 명시적으로 표기합니다.
 
 ### Performance
 
+- **Postgres full-text lexical retrieval** — `search_memory` 의 lexical 후보는
+  이제 generated `memory_records.search_vector` 컬럼, GIN 인덱스,
+  `ts_rank_cd` scoring을 사용한 뒤 vector 후보와 merge됩니다. 기존 substring
+  matching은 정확한 file path, env var, 짧은 code identifier를 위한 fallback으로
+  유지됩니다.
 - **`embedBatch` API 로 N HTTP RTTs → 1로 압축** —
   `writeCanonicalMemory` + `reindexCanonicalMemory` 가 `Promise.all(map(embed))`
   로 chunk 별 개별 embed. OpenAI 의 경우 ingest/reindex 마다 N round-trips —

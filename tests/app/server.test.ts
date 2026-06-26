@@ -11,6 +11,7 @@ import {
   type RateLimiter,
 } from "../../src/app/middleware/rate-limit.js";
 import type { OAuthProtectedResourceConfig } from "../../src/app/oauth-protected-resource.js";
+import type { OAuthTokenVerifier } from "../../src/app/middleware/bearer-auth.js";
 import type { ToolRegistry } from "../../src/mcp/types.js";
 import type { Logger } from "../../src/logger.js";
 import type { PgPool } from "../../src/db/connection.js";
@@ -97,12 +98,14 @@ async function startTestServer(
   bearerTokens: ReadonlyArray<string | { token: string; organizationId?: string }>,
   oauthProtectedResource: OAuthProtectedResourceConfig | null = null,
   rateLimiter?: RateLimiter,
+  oauthTokenVerifier?: OAuthTokenVerifier | null,
 ): Promise<ServerHandle> {
   const server = createOperatorServer({
     registry,
     bearerTokens,
     oauthProtectedResource,
     rateLimiter,
+    ...(oauthTokenVerifier !== undefined ? { oauthTokenVerifier } : {}),
   });
   await new Promise<void>((resolve) =>
     server.listen(0, "127.0.0.1", () => resolve()),
@@ -726,6 +729,91 @@ describe("createOperatorServer (OAuth protected-resource discovery)", () => {
     expect(body.success).toBe(false);
     expect(body.error.message).toBe("rate limit exceeded");
     expect(registry.add_memory).toHaveBeenCalledOnce();
+  });
+
+  it("accepts a verified OAuth token and injects its organization claim", async () => {
+    await handle.close();
+    registry = buildRegistry();
+    const oauthVerifier: OAuthTokenVerifier = {
+      verify: vi.fn().mockResolvedValue({
+        token: "oauth-read",
+        authType: "oauth",
+        scopes: ["akasha:read"],
+        organizationId: "org-oauth",
+        subject: "user-1",
+        issuer: "https://auth.example.com",
+        audience: "https://akasha.example.com/mcp",
+      }),
+    };
+    handle = await startTestServer(
+      registry,
+      [],
+      oauthProtectedResource,
+      undefined,
+      oauthVerifier,
+    );
+
+    const res = await fetch(`${handle.baseUrl}/v1/memory/search`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer oauth-read",
+      },
+      body: JSON.stringify({ projectKey: "p", query: "q" }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(oauthVerifier.verify).toHaveBeenCalledWith("oauth-read");
+    expect(registry.search_memory).toHaveBeenCalledWith({
+      projectKey: "p",
+      query: "q",
+      organizationId: "org-oauth",
+    });
+  });
+
+  it("returns insufficient_scope when an OAuth token lacks the route scope", async () => {
+    await handle.close();
+    registry = buildRegistry();
+    const oauthVerifier: OAuthTokenVerifier = {
+      verify: vi.fn().mockResolvedValue({
+        token: "oauth-read",
+        authType: "oauth",
+        scopes: ["akasha:read"],
+        organizationId: "org-oauth",
+      }),
+    };
+    handle = await startTestServer(
+      registry,
+      [],
+      oauthProtectedResource,
+      undefined,
+      oauthVerifier,
+    );
+
+    const res = await fetch(`${handle.baseUrl}/v1/memory`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer oauth-read",
+      },
+      body: JSON.stringify({
+        projectKey: "p",
+        kind: "decision",
+        content: "write attempt",
+      }),
+    });
+
+    expect(res.status).toBe(403);
+    expect(res.headers.get("www-authenticate")).toBe(
+      'Bearer error="insufficient_scope", resource_metadata="https://akasha.example.com/.well-known/oauth-protected-resource/mcp", scope="akasha:write"',
+    );
+    const body = (await res.json()) as {
+      success: boolean;
+      error: { message: string };
+    };
+    expect(body.success).toBe(false);
+    expect(body.error.message).toBe("insufficient_scope");
+    expect(registry.add_memory).not.toHaveBeenCalled();
   });
 });
 

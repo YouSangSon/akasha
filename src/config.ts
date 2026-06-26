@@ -28,6 +28,7 @@ export type ServiceConfig = {
   backups: {
     directory: string;
     targetHost?: string;
+    encryptionKeyFile?: string;
   };
 };
 
@@ -122,6 +123,7 @@ export function resolveServiceConfig(
         env.BACKUP_DIR ??
         path.join(process.cwd(), ".developer-memory-os", "backups"),
       targetHost: env.BACKUP_TARGET_HOST,
+      encryptionKeyFile: env.BACKUP_ENCRYPTION_KEY_FILE,
     },
   };
 }

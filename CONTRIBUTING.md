@@ -71,7 +71,7 @@ factory. Tool handlers and orchestrators consume the interface, not the impl.
 ### Migrations
 
 SQL files live in `src/db/migrations/NNN_*.sql`. Current migration files span
-`001-009`; the next migration should be `010_*.sql`. Future schema changes
+`001-011`; the next migration should be `012_*.sql`. Future schema changes
 append the next unused number after the current range, add the filename to
 `MIGRATION_FILES` in `src/db/migrate.ts`, and add the embedded snapshot string
 for production fallbacks. All migrations must be idempotent

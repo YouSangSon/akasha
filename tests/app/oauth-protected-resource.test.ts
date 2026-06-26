@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildOAuthInsufficientScopeHeader,
   buildOAuthWwwAuthenticateHeader,
   buildProtectedResourceMetadataUrl,
   loadOAuthProtectedResourceConfig,
@@ -128,6 +129,18 @@ describe("OAuth protected resource challenge helpers", () => {
 
     expect(buildOAuthWwwAuthenticateHeader(config!)).toBe(
       'Bearer resource_metadata="https://akasha.example.com/.well-known/oauth-protected-resource/mcp", scope="akasha:memory akasha:write"',
+    );
+  });
+
+  it("builds an insufficient_scope Bearer challenge", () => {
+    const config = loadOAuthProtectedResourceConfig({
+      MCP_OAUTH_AUTHORIZATION_SERVERS: "https://auth.example.com",
+      MCP_OAUTH_RESOURCE_URL: "https://akasha.example.com/mcp",
+      MCP_OAUTH_SCOPES: "akasha:read,akasha:write",
+    });
+
+    expect(buildOAuthInsufficientScopeHeader(config!, "akasha:write")).toBe(
+      'Bearer error="insufficient_scope", resource_metadata="https://akasha.example.com/.well-known/oauth-protected-resource/mcp", scope="akasha:write"',
     );
   });
 });

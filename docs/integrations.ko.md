@@ -11,6 +11,39 @@ Akasha는 MCP stdio, MCP Streamable HTTP, JSON HTTP에서 같은 메모리 surfa
    저장. raw transcript는 기본 저장하지 않음.
 3. **Session end** — 유용할 때 에이전트에게 짧은 durable summary를 저장하게 함.
 
+## One-command init
+
+`npm run build` 후 MCP config snippet과 lifecycle hook script를 생성합니다:
+
+```bash
+node dist/src/cli.js init \
+  --project my-project \
+  --organization-id default \
+  --task "continue implementation"
+```
+
+생성 파일:
+
+- `.akasha/mcp/claude-desktop.json`
+- `.akasha/mcp/codex.toml`
+- `.akasha/bin/mcp-server.sh`
+- `.akasha/hooks/session-start.sh`
+- `.akasha/hooks/session-end.sh`
+
+MCP config snippet은 wrapper script를 가리킵니다. 이 wrapper는 실행 시점에
+`.env`를 source하고 `dist/src/mcp/server.js`를 시작합니다. Secret은 client
+config JSON/TOML에 복사되지 않고 `.env`에 남습니다.
+
+에이전트 host가 lifecycle command를 지원하면 hook을 직접 연결하세요:
+
+```bash
+.akasha/hooks/session-start.sh "continue implementation"
+printf '%s\n' "Summary: durable outcome ..." | .akasha/hooks/session-end.sh
+```
+
+`./install.sh`도 build와 migration 후 같은 init 단계를 실행합니다. 기존 파일은
+기본적으로 덮어쓰지 않으며, 갱신이 필요하면 `--force`를 전달합니다.
+
 ## MCP stdio
 
 먼저 빌드:
@@ -66,6 +99,16 @@ node dist/src/cli.js pack \
   --project my-project \
   --organization-id default \
   --task "continue implementation"
+```
+
+HTTP 서버 없이 짧은 session-end summary를 저장하려면:
+
+```bash
+node dist/src/cli.js remember \
+  --project my-project \
+  --organization-id default \
+  --kind summary \
+  --content "Summary: durable outcome ..."
 ```
 
 개인 loopback 배포에서 의도적으로 legacy anonymous read를 쓰는 경우

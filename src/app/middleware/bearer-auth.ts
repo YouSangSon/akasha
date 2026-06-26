@@ -12,6 +12,15 @@ import type { IncomingMessage } from "node:http";
 export type BearerToken = {
   token: string;
   organizationId?: string;
+  authType?: "static" | "oauth";
+  scopes?: readonly string[];
+  subject?: string;
+  issuer?: string;
+  audience?: string | readonly string[];
+};
+
+export type OAuthTokenVerifier = {
+  verify(token: string): Promise<BearerToken | null>;
 };
 
 export function loadBearerTokens(env: NodeJS.ProcessEnv): BearerToken[] {
@@ -66,15 +75,11 @@ export function matchBearer(
   authHeader: string | undefined,
   tokens: readonly BearerToken[],
 ): BearerToken | null {
-  if (!authHeader || tokens.length === 0) {
+  if (tokens.length === 0) {
     return null;
   }
-  if (!authHeader.startsWith("Bearer ")) {
-    return null;
-  }
-
-  const provided = authHeader.slice("Bearer ".length).trim();
-  if (provided.length === 0) {
+  const provided = extractBearerValue(authHeader);
+  if (!provided) {
     return null;
   }
 
@@ -91,6 +96,25 @@ export function matchBearer(
   }
 
   return null;
+}
+
+export async function authenticateBearer(
+  authHeader: string | undefined,
+  tokens: readonly BearerToken[],
+  oauthVerifier: OAuthTokenVerifier | null,
+): Promise<BearerToken | null> {
+  const staticMatch = matchBearer(authHeader, tokens);
+  if (staticMatch) {
+    return { ...staticMatch, authType: "static" };
+  }
+
+  const provided = extractBearerValue(authHeader);
+  if (!provided || !oauthVerifier) {
+    return null;
+  }
+
+  const oauthMatch = await oauthVerifier.verify(provided);
+  return oauthMatch ? { ...oauthMatch, token: provided, authType: "oauth" } : null;
 }
 
 export function matchBearerFromRequest(
@@ -114,4 +138,16 @@ export function checkBearerFromRequest(
   tokens: readonly BearerToken[],
 ): boolean {
   return matchBearerFromRequest(req, tokens) !== null;
+}
+
+function extractBearerValue(authHeader: string | undefined): string | null {
+  if (!authHeader) {
+    return null;
+  }
+  if (!authHeader.startsWith("Bearer ")) {
+    return null;
+  }
+
+  const provided = authHeader.slice("Bearer ".length).trim();
+  return provided.length > 0 ? provided : null;
 }

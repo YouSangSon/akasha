@@ -1,6 +1,11 @@
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { Client, type ClientOptions } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import {
+  CreateMessageRequestSchema,
+  ElicitRequestSchema,
+  ListRootsRequestSchema,
+} from "@modelcontextprotocol/sdk/types.js";
 import { describe, expect, it, vi } from "vitest";
 import * as z from "zod/v4";
 import { createMcpServer, createToolRegistry } from "../../src/mcp/server.js";
@@ -11,8 +16,16 @@ import { TOOL_DESCRIPTORS } from "../../src/mcp/tool-schemas.js";
 import type { ToolRegistry } from "../../src/mcp/types.js";
 import type { MemoryRepository, SearchMemoryResult } from "../../src/types.js";
 
-async function createInMemoryClient(server: McpServer): Promise<Client> {
-  const client = new Client({ name: "akasha-test-client", version: "1.0.0" });
+async function createInMemoryClient(
+  server: McpServer,
+  options?: ClientOptions,
+  configureClient?: (client: Client) => void,
+): Promise<Client> {
+  const client = new Client(
+    { name: "akasha-test-client", version: "1.0.0" },
+    options,
+  );
+  configureClient?.(client);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
   return client;
@@ -961,13 +974,16 @@ describe("createToolRegistry", () => {
 });
 
 describe("createMcpServer", () => {
-  it("declares one descriptor for every ToolRegistry method", () => {
+  it("declares descriptors for service tools and MCP context tools", () => {
     const descriptorNames = TOOL_DESCRIPTORS.map((descriptor) => descriptor.name).sort();
     expect(descriptorNames).toEqual([
       "add_memory",
+      "add_memory_interactive",
       "build_context_pack",
+      "classify_memory_candidate",
       "compact_memory",
       "list_audit_log",
+      "list_workspace_roots",
       "reindex_memory",
       "search_memory",
       "unarchive_memory",
@@ -979,7 +995,7 @@ describe("createMcpServer", () => {
     }
   });
 
-  it("registers all 7 tools on the MCP stdio transport", () => {
+  it("registers all 9 tools on the MCP stdio transport", () => {
     const registeredNames: string[] = [];
     const spy = vi
       .spyOn(McpServer.prototype, "registerTool")
@@ -995,12 +1011,15 @@ describe("createMcpServer", () => {
     expect(registeredNames.sort()).toEqual(
       [
         "add_memory",
+        "add_memory_interactive",
+        "classify_memory_candidate",
         "search_memory",
         "build_context_pack",
         "reindex_memory",
         "compact_memory",
         "unarchive_memory",
         "list_audit_log",
+        "list_workspace_roots",
       ].sort(),
     );
   });
@@ -1330,6 +1349,229 @@ describe("createMcpServer structured outputs", () => {
         }),
       }),
     );
+
+    await client.close();
+    await server.close();
+  });
+
+  it("returns client workspace roots when the MCP client supports roots", async () => {
+    const server = createMcpServer({
+      registry: buildRegistryForMcpProtocol(),
+    });
+    const client = await createInMemoryClient(
+      server,
+      { capabilities: { roots: { listChanged: true } } },
+      (candidate) => {
+        candidate.setRequestHandler(ListRootsRequestSchema, async () => ({
+          roots: [
+            {
+              uri: "file:///workspace/akasha",
+              name: "akasha",
+            },
+          ],
+        }));
+      },
+    );
+
+    const result = await client.callTool({
+      name: "list_workspace_roots",
+      arguments: {},
+    });
+
+    expect(result.structuredContent).toEqual({
+      ok: true,
+      supported: true,
+      roots: [
+        {
+          uri: "file:///workspace/akasha",
+          name: "akasha",
+        },
+      ],
+    });
+
+    await client.close();
+    await server.close();
+  });
+
+  it("returns an explicit unsupported result when roots are not advertised", async () => {
+    const server = createMcpServer({
+      registry: buildRegistryForMcpProtocol(),
+    });
+    const client = await createInMemoryClient(server);
+
+    const result = await client.callTool({
+      name: "list_workspace_roots",
+      arguments: {},
+    });
+
+    expect(result.structuredContent).toEqual({
+      ok: true,
+      supported: false,
+      roots: [],
+      message: "Connected MCP client did not advertise roots support.",
+    });
+
+    await client.close();
+    await server.close();
+  });
+
+  it("stores accepted elicited memory through add_memory_interactive", async () => {
+    const registry = buildRegistryForMcpProtocol();
+    const server = createMcpServer({ registry });
+    const client = await createInMemoryClient(
+      server,
+      { capabilities: { elicitation: { form: {} } } },
+      (candidate) => {
+        candidate.setRequestHandler(ElicitRequestSchema, async (request) => {
+          expect(request.params.mode ?? "form").toBe("form");
+          if (request.params.mode === "url") {
+            throw new Error("Expected form elicitation request.");
+          }
+          expect(request.params.message).toContain("Akasha");
+          expect(request.params.requestedSchema.required).toEqual(
+            expect.arrayContaining(["projectKey", "kind", "content"]),
+          );
+          return {
+            action: "accept",
+            content: {
+              projectKey: "project-alpha",
+              kind: "decision",
+              content: "Decision: use MCP elicitation for user-confirmed memory.",
+            },
+          };
+        });
+      },
+    );
+
+    const result = await client.callTool({
+      name: "add_memory_interactive",
+      arguments: {},
+    });
+
+    expect(registry.add_memory).toHaveBeenCalledWith({
+      projectKey: "project-alpha",
+      kind: "decision",
+      content: "Decision: use MCP elicitation for user-confirmed memory.",
+    });
+    expect(result.structuredContent).toEqual({
+      ok: true,
+      action: "accept",
+      stored: true,
+      memoryId: "101",
+      summary: "stored",
+      collected: {
+        projectKey: "project-alpha",
+        kind: "decision",
+        content: "Decision: use MCP elicitation for user-confirmed memory.",
+      },
+    });
+
+    await client.close();
+    await server.close();
+  });
+
+  it("does not store interactive memory when elicitation is unsupported", async () => {
+    const registry = buildRegistryForMcpProtocol();
+    const server = createMcpServer({ registry });
+    const client = await createInMemoryClient(server);
+
+    const result = await client.callTool({
+      name: "add_memory_interactive",
+      arguments: { projectKey: "project-alpha", kind: "fact" },
+    });
+
+    expect(registry.add_memory).not.toHaveBeenCalled();
+    expect(result.structuredContent).toEqual({
+      ok: true,
+      action: "unsupported",
+      stored: false,
+      message: "Connected MCP client did not advertise elicitation support.",
+    });
+
+    await client.close();
+    await server.close();
+  });
+
+  it("classifies candidate memory through client sampling", async () => {
+    const server = createMcpServer({
+      registry: buildRegistryForMcpProtocol(),
+    });
+    const client = await createInMemoryClient(
+      server,
+      { capabilities: { sampling: {} } },
+      (candidate) => {
+        candidate.setRequestHandler(CreateMessageRequestSchema, async (request) => {
+          const prompt = request.params.messages[0]?.content;
+          expect(request.params.includeContext).toBe("none");
+          expect(request.params.maxTokens).toBe(300);
+          expect(prompt).toEqual(
+            expect.objectContaining({
+              type: "text",
+              text: expect.stringContaining("QDRANT_SNAPSHOT_TIMEOUT"),
+            }),
+          );
+          return {
+            model: "test-sampler",
+            role: "assistant",
+            content: {
+              type: "text",
+              text: JSON.stringify({
+                kind: "fact",
+                summary:
+                  "QDRANT_SNAPSHOT_TIMEOUT controls snapshot timeout behavior.",
+                confidence: 0.91,
+              }),
+            },
+          };
+        });
+      },
+    );
+
+    const result = await client.callTool({
+      name: "classify_memory_candidate",
+      arguments: {
+        content: "QDRANT_SNAPSHOT_TIMEOUT controls snapshot timeout behavior.",
+      },
+    });
+
+    expect(result.structuredContent).toEqual({
+      ok: true,
+      supported: true,
+      classification: {
+        kind: "fact",
+        summary: "QDRANT_SNAPSHOT_TIMEOUT controls snapshot timeout behavior.",
+        confidence: 0.91,
+      },
+      model: "test-sampler",
+      rawText: JSON.stringify({
+        kind: "fact",
+        summary: "QDRANT_SNAPSHOT_TIMEOUT controls snapshot timeout behavior.",
+        confidence: 0.91,
+      }),
+    });
+
+    await client.close();
+    await server.close();
+  });
+
+  it("returns an explicit unsupported result when sampling is not advertised", async () => {
+    const server = createMcpServer({
+      registry: buildRegistryForMcpProtocol(),
+    });
+    const client = await createInMemoryClient(server);
+
+    const result = await client.callTool({
+      name: "classify_memory_candidate",
+      arguments: {
+        content: "Decision: avoid sampling when the client does not support it.",
+      },
+    });
+
+    expect(result.structuredContent).toEqual({
+      ok: true,
+      supported: false,
+      message: "Connected MCP client did not advertise sampling support.",
+    });
 
     await client.close();
     await server.close();

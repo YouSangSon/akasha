@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { parseCliArgs, runCli } from "../src/cli.js";
 import type { ToolRegistry } from "../src/mcp/server.js";
@@ -65,6 +68,67 @@ describe("parseCliArgs", () => {
 
     expect(parseCliArgs(["restore-smoke"])).toEqual({
       command: "restore-smoke",
+    });
+  });
+
+  it("parses lifecycle init and remember commands", () => {
+    expect(
+      parseCliArgs([
+        "init",
+        "--project",
+        "project-alpha",
+        "--organization-id",
+        "acme",
+        "--task",
+        "continue work",
+        "--out-dir",
+        ".akasha",
+        "--force",
+      ]),
+    ).toEqual({
+      command: "init",
+      projectKey: "project-alpha",
+      userScopeId: undefined,
+      organizationId: "acme",
+      task: "continue work",
+      outDir: ".akasha",
+      force: true,
+    });
+
+    expect(
+      parseCliArgs([
+        "remember",
+        "--project",
+        "project-alpha",
+        "--organization-id",
+        "acme",
+        "--kind",
+        "summary",
+        "--content",
+        "Decision: keep generated lifecycle files out of secrets.",
+      ]),
+    ).toEqual({
+      command: "remember",
+      projectKey: "project-alpha",
+      userScopeId: undefined,
+      organizationId: "acme",
+      kind: "summary",
+      content: "Decision: keep generated lifecycle files out of secrets.",
+    });
+
+    expect(
+      parseCliArgs([
+        "remember",
+        "--project",
+        "project-alpha",
+        "--kind",
+        "summary",
+        "--content",
+        "-- summary starts with a dash",
+      ]),
+    ).toMatchObject({
+      command: "remember",
+      content: "-- summary starts with a dash",
     });
   });
 
@@ -202,5 +266,152 @@ describe("parseCliArgs", () => {
       task: "continue work",
     });
     expect(output).toBe("# Context Pack");
+  });
+
+  it("runs remember through the add_memory registry path", async () => {
+    const registry: ToolRegistry = {
+      build_context_pack: vi.fn(),
+      search_memory: vi.fn(),
+      add_memory: vi.fn().mockResolvedValue({
+        ok: true,
+        memoryId: "project:project-alpha:1",
+        summary: "Stored lifecycle summary",
+      }),
+      compact_memory: vi.fn(),
+      list_audit_log: vi.fn(),
+      unarchive_memory: vi.fn(),
+      reindex_memory: vi.fn(),
+    };
+
+    const output = await runCli(
+      [
+        "remember",
+        "--project",
+        "project-alpha",
+        "--organization-id",
+        "acme",
+        "--kind",
+        "summary",
+        "--content",
+        "Finished lifecycle init wiring.",
+      ],
+      { registry },
+    );
+
+    expect(registry.add_memory).toHaveBeenCalledWith({
+      projectKey: "project-alpha",
+      userScopeId: undefined,
+      organizationId: "acme",
+      kind: "summary",
+      content: "Finished lifecycle init wiring.",
+    });
+    expect(JSON.parse(output)).toEqual({
+      ok: true,
+      memoryId: "project:project-alpha:1",
+      summary: "Stored lifecycle summary",
+    });
+  });
+
+  it("writes MCP config snippets and lifecycle hook scripts without copying secrets", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "akasha-cli-init-"));
+    fs.writeFileSync(
+      path.join(tmpDir, ".env"),
+      [
+        "MEMORY_API_TOKENS=secret-token",
+        "QDRANT_API_KEY=secret-qdrant",
+      ].join("\n"),
+    );
+
+    const output = await runCli(
+      [
+        "init",
+        "--project",
+        "project-alpha",
+        "--organization-id",
+        "acme",
+        "--task",
+        "continue work",
+        "--out-dir",
+        ".akasha",
+      ],
+      { cwd: tmpDir },
+    );
+
+    const result = JSON.parse(output);
+    expect(result.ok).toBe(true);
+    expect(result.files).toHaveLength(6);
+    expect(
+      result.files.every(
+        (file: { action: string }) => file.action === "created",
+      ),
+    ).toBe(true);
+
+    const claudeConfigPath = path.join(
+      tmpDir,
+      ".akasha",
+      "mcp",
+      "claude-desktop.json",
+    );
+    const codexConfigPath = path.join(tmpDir, ".akasha", "mcp", "codex.toml");
+    const sessionStartPath = path.join(
+      tmpDir,
+      ".akasha",
+      "hooks",
+      "session-start.sh",
+    );
+    const sessionEndPath = path.join(
+      tmpDir,
+      ".akasha",
+      "hooks",
+      "session-end.sh",
+    );
+
+    const claudeConfig = JSON.parse(fs.readFileSync(claudeConfigPath, "utf8"));
+    expect(claudeConfig.mcpServers.akasha.command).toBe(
+      path.join(tmpDir, ".akasha", "bin", "mcp-server.sh"),
+    );
+    expect(claudeConfig.mcpServers.akasha.args).toEqual([]);
+
+    for (const generated of [
+      fs.readFileSync(claudeConfigPath, "utf8"),
+      fs.readFileSync(codexConfigPath, "utf8"),
+    ]) {
+      expect(generated).not.toContain("secret-token");
+      expect(generated).not.toContain("secret-qdrant");
+      expect(generated).not.toContain("MEMORY_API_TOKENS");
+      expect(generated).not.toContain("QDRANT_API_KEY");
+    }
+
+    expect(fs.readFileSync(sessionStartPath, "utf8")).toContain(" pack ");
+    expect(fs.readFileSync(sessionStartPath, "utf8")).toContain(
+      "--organization-id",
+    );
+    expect(fs.readFileSync(sessionEndPath, "utf8")).toContain(" remember ");
+    expect(fs.readFileSync(sessionEndPath, "utf8")).toContain("--content");
+  });
+
+  it("does not overwrite existing lifecycle files unless --force is provided", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "akasha-cli-init-"));
+    await runCli(["init", "--project", "project-alpha"], { cwd: tmpDir });
+    const readmePath = path.join(tmpDir, ".akasha", "README.md");
+    fs.writeFileSync(readmePath, "custom local notes\n");
+
+    const skippedOutput = await runCli(["init", "--project", "project-alpha"], {
+      cwd: tmpDir,
+    });
+    expect(fs.readFileSync(readmePath, "utf8")).toBe("custom local notes\n");
+    expect(
+      JSON.parse(skippedOutput).files.some(
+        (file: { path: string; action: string }) =>
+          file.path === readmePath && file.action === "skipped",
+      ),
+    ).toBe(true);
+
+    await runCli(["init", "--project", "project-alpha", "--force"], {
+      cwd: tmpDir,
+    });
+    expect(fs.readFileSync(readmePath, "utf8")).toContain(
+      "Akasha lifecycle init",
+    );
   });
 });

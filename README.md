@@ -75,12 +75,14 @@ operated in production:
 
 Conversations with coding agents lose context the moment the session ends.
 Akasha is the place those agents save what's worth remembering and
-read it back next time. The same 7 tools are exposed over MCP stdio,
-MCP Streamable HTTP at `POST /mcp`, and JSON-HTTP under `/v1/*` — full
+read it back next time. The same 7 core service tools are exposed over MCP
+stdio, MCP Streamable HTTP at `POST /mcp`, and JSON-HTTP under `/v1/*` — full
 request/response schemas live in
 [docs/api-reference.md](docs/api-reference.md).
-HTTP and MCP share the same seven-tool schema surface, so validation and
-payload shapes stay aligned across both transports.
+HTTP and MCP share that seven-tool service schema surface, so validation and
+payload shapes stay aligned across both transports. MCP additionally exposes
+client-context helpers for workspace roots, user elicitation, and sampling when
+the connected client advertises those capabilities.
 
 | Tool | What it does | HTTP route |
 |------|--------------|------------|
@@ -91,6 +93,11 @@ payload shapes stay aligned across both transports.
 | `reindex_memory` | Rebuild the vector index from Postgres (0 data loss) | `POST /v1/memory/reindex` |
 | `unarchive_memory` | Restore archived records for forensic recovery | `POST /v1/memory/unarchive` |
 | `list_audit_log` | Read the audit trail for compliance / debugging | `POST /v1/audit/list` |
+
+MCP-only context tools: `list_workspace_roots` reads client-advertised roots,
+`add_memory_interactive` uses MCP elicitation to collect and store
+user-confirmed memory, and `classify_memory_candidate` uses MCP sampling to
+suggest a memory kind and summary.
 
 Multi-tenant (`organization_id` per record), bearer-token authenticated,
 audit-logged, and rate-limited. Designed to run as a single-user MCP server
@@ -114,17 +121,13 @@ ${EDITOR:-nano} .env
 # 2. Bring up Postgres + Qdrant + run migrations + build.
 ./install.sh
 
-# 3. Point your MCP client at it. Claude Desktop config:
-cat <<EOF
-{
-  "mcpServers": {
-    "akasha": {
-      "command": "node",
-      "args": ["$(pwd)/dist/src/mcp/server.js"]
-    }
-  }
-}
-EOF
+# 3. Point your MCP client at the generated config snippets:
+cat .akasha/mcp/claude-desktop.json
+cat .akasha/mcp/codex.toml
+
+# Optional lifecycle helpers for hosts that support session hooks:
+.akasha/hooks/session-start.sh "continue implementation"
+printf '%s\n' "Summary: durable outcome ..." | .akasha/hooks/session-end.sh
 ```
 
 ## Worked example
@@ -165,14 +168,15 @@ curl -sX POST http://localhost:8787/v1/memory/context-pack \
 |-------|----------------|
 | MCP server (`src/mcp/`) | Shared MCP server surface: tool descriptors, schemas, registry, and handlers |
 | HTTP server (`src/app/`) | Serves MCP Streamable HTTP at `/mcp` plus JSON HTTP under `/v1/*` |
-| Canonical store (`src/store/memory-repository.ts`) | Postgres — records, sources, ingest jobs, audit |
+| Canonical store (`src/store/memory-repository.ts`) | Postgres — records, sources, ingest jobs, entity graph, audit |
 | Vector index (`src/vector/`) | Qdrant (default) or pgvector — chunked embeddings + similarity search. Set `VECTOR_BACKEND=pgvector` for Postgres-only deploy. |
 | Compaction (`src/compact/`) | Dedup (exact + semantic), decay, archive, unarchive, sweeper |
 | Embeddings (`src/embedding/`) | `transformers` (free local ONNX, default), `openai` (`text-embedding-3-small`), or `local` (deterministic stub for CI) |
 
-Data flow: caller writes `add_memory` → record persisted to Postgres + chunked
-+ embedded + upserted to the active vector backend. `search_memory` → embed
-query → vector similarity search → hydrate from Postgres → rank → return. See
+Data flow: caller writes `add_memory` → record persisted to Postgres, entity
+mentions linked, content chunked + embedded + upserted to the active vector
+backend. `search_memory` → embed query → vector similarity + Postgres
+FTS/entity lexical search → hydrate → rank → return. See
 [docs/architecture.md](docs/architecture.md) for design details.
 
 ## Configuration
@@ -181,7 +185,7 @@ All knobs are env vars. The three a first-timer usually touches:
 
 | Var | Default | Purpose |
 |-----|---------|---------|
-| `MEMORY_API_TOKENS` | _(required)_ | Bearer tokens for the HTTP API; `token:org` binds a token to an org |
+| `MEMORY_API_TOKENS` | _(required unless OAuth JWT validation is configured)_ | Static bearer tokens for the HTTP API; `token:org` binds a token to an org |
 | `EMBEDDING_PROVIDER` | `transformers` | `transformers` (free local ONNX), `openai`, or `local` (CI stub) |
 | `VECTOR_BACKEND` | `qdrant` | `qdrant`, or `pgvector` for a Postgres-only deploy |
 
@@ -212,6 +216,7 @@ page has a Korean (`*.ko.md`) mirror.
 npm run dev:server    # HTTP API in watch mode
 npm run dev:mcp       # MCP stdio server in watch mode
 npm run dev:cli       # CLI in watch mode
+npm run lifecycle:init -- --project my-project --organization-id default
 npm run typecheck     # tsc --noEmit
 npm run test          # vitest run
 npm run db:migrate    # apply pending migrations
@@ -222,7 +227,8 @@ npm run backup:create:pgvector # explicit Postgres-only pgvector backup
 With `VECTOR_BACKEND=qdrant`, `backup:create` captures Postgres plus a Qdrant
 snapshot. With `VECTOR_BACKEND=pgvector`, logical vector data lives in Postgres,
 so `backup:create` skips `scripts/snapshot-qdrant.sh` and does not require
-`QDRANT_URL`.
+`QDRANT_URL`. Set `BACKUP_ENCRYPTION_KEY_FILE` to encrypt backup artifacts with
+AES-256-GCM before any off-host copy.
 
 ## Contributing & security
 

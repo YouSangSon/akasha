@@ -5,6 +5,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { BearerToken } from "../../src/app/middleware/bearer-auth.js";
+import type { OAuthTokenVerifier } from "../../src/app/middleware/bearer-auth.js";
 import {
   createTokenBucketLimiter,
   type RateLimiter,
@@ -88,12 +89,14 @@ async function startServer(
   registry = buildRegistry(),
   oauthProtectedResource: OAuthProtectedResourceConfig | null = null,
   rateLimiter?: RateLimiter,
+  oauthTokenVerifier?: OAuthTokenVerifier | null,
 ): Promise<ServerHandle & { registry: ToolRegistry }> {
   const server = createOperatorServer({
     registry,
     bearerTokens: tokens,
     oauthProtectedResource,
     rateLimiter,
+    ...(oauthTokenVerifier !== undefined ? { oauthTokenVerifier } : {}),
   });
   await new Promise<void>((resolve) =>
     server.listen(0, "127.0.0.1", () => resolve()),
@@ -349,6 +352,89 @@ describe("Streamable HTTP /mcp", () => {
       projectKey: "p",
       query: "q",
     });
+
+    await client.close();
+  });
+
+  it("accepts OAuth tokens for MCP tool calls and enforces scopes", async () => {
+    const oauthVerifier: OAuthTokenVerifier = {
+      verify: vi.fn().mockResolvedValue({
+        token: "oauth-read",
+        authType: "oauth",
+        scopes: ["akasha:read"],
+        organizationId: "org-oauth",
+      }),
+    };
+    handle = await startServer(
+      [],
+      buildRegistry(),
+      oauthProtectedResource,
+      undefined,
+      oauthVerifier,
+    );
+    const client = await connectMcp(handle.baseUrl, "oauth-read");
+
+    const search = await client.callTool({
+      name: "search_memory",
+      arguments: { projectKey: "p", query: "q" },
+    });
+    expect(search.isError).not.toBe(true);
+    expect(handle.registry.search_memory).toHaveBeenCalledWith({
+      organizationId: "org-oauth",
+      projectKey: "p",
+      query: "q",
+    });
+
+    const add = await client.callTool({
+      name: "add_memory",
+      arguments: {
+        projectKey: "p",
+        kind: "decision",
+        content: "write attempt",
+      },
+    });
+    expect(add.isError).toBe(true);
+    expect(add.content).toEqual([
+      { type: "text", text: "insufficient_scope" },
+    ]);
+    expect(handle.registry.add_memory).not.toHaveBeenCalled();
+
+    await client.close();
+  });
+
+  it("enforces OAuth scopes for MCP-only context tools", async () => {
+    const oauthVerifier: OAuthTokenVerifier = {
+      verify: vi.fn().mockResolvedValue({
+        token: "oauth-read",
+        authType: "oauth",
+        scopes: ["akasha:read"],
+        organizationId: "org-oauth",
+      }),
+    };
+    handle = await startServer(
+      [],
+      buildRegistry(),
+      oauthProtectedResource,
+      undefined,
+      oauthVerifier,
+    );
+    const client = await connectMcp(handle.baseUrl, "oauth-read");
+
+    const roots = await client.callTool({
+      name: "list_workspace_roots",
+      arguments: {},
+    });
+    expect(roots.isError).not.toBe(true);
+
+    const interactive = await client.callTool({
+      name: "add_memory_interactive",
+      arguments: { projectKey: "p", kind: "fact" },
+    });
+    expect(interactive.isError).toBe(true);
+    expect(interactive.content).toEqual([
+      { type: "text", text: "insufficient_scope" },
+    ]);
+    expect(handle.registry.add_memory).not.toHaveBeenCalled();
 
     await client.close();
   });

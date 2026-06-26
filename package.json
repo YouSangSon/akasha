@@ -46,17 +46,20 @@
     "dev:server": "tsx src/app/server.ts",
     "dev:mcp": "tsx src/mcp/server.ts",
     "dev:cli": "tsx src/cli.ts",
+    "lifecycle:init": "node dist/src/cli.js init",
     "db:migrate": "node dist/src/db/migrate.js",
     "backup:create": "./scripts/create-backup.sh",
     "backup:create:qdrant": "VECTOR_BACKEND=qdrant ./scripts/create-backup.sh",
     "backup:create:pgvector": "VECTOR_BACKEND=pgvector ./scripts/create-backup.sh",
+    "backup:decrypt": "node dist/scripts/backup-encryption.js decrypt-file",
     "backup:verify": "node dist/scripts/backup-verify.js",
     "restore:smoke": "node dist/scripts/restore-smoke.js"
   },
   "dependencies": {
     "@huggingface/transformers": "^3.0.0",
-    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@modelcontextprotocol/sdk": "^1.28.0",
     "@qdrant/js-client-rest": "^1.13.0",
+    "jose": "^6.2.3",
     "openai": "^4.0.0",
     "pg": "^8.0.0",
     "pino": "^10.3.1",
@@ -64,8 +67,11 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
-    "tsx": "^4.19.0",
+    "tsx": "^4.22.4",
     "typescript": "^5.8.0",
     "vitest": "^3.2.0"
+  },
+  "overrides": {
+    "esbuild": "^0.28.1"
   }
 }

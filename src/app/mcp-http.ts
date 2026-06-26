@@ -2,22 +2,27 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { Logger } from "../logger.js";
 import { createMcpServer } from "../mcp/server.js";
-import type { ToolRegistry } from "../mcp/types.js";
+import type { ToolName } from "../mcp/tool-schemas.js";
+import type { McpToolAuthorizer, ToolRegistry } from "../mcp/types.js";
 import {
-  matchBearerFromRequest,
+  authenticateBearer,
   type BearerToken,
+  type OAuthTokenVerifier,
 } from "./middleware/bearer-auth.js";
 import {
+  setOAuthInsufficientScopeHeader,
   setOAuthWwwAuthenticateHeader,
   type OAuthProtectedResourceConfig,
 } from "./oauth-protected-resource.js";
 import type { RateLimiter } from "./middleware/rate-limit.js";
+import { checkOAuthScopes } from "./middleware/oauth-token-auth.js";
 
 export type HandleMcpHttpRequestOptions = {
   req: IncomingMessage;
   res: ServerResponse;
   registry: ToolRegistry;
   bearerTokens: readonly BearerToken[];
+  oauthTokenVerifier: OAuthTokenVerifier | null;
   rateLimiter: RateLimiter | null;
   logger: Logger;
   oauthProtectedResource?: OAuthProtectedResourceConfig | null;
@@ -35,6 +40,7 @@ export async function handleMcpHttpRequest(
     res,
     registry,
     bearerTokens,
+    oauthTokenVerifier,
     rateLimiter,
     logger,
     oauthProtectedResource = null,
@@ -51,8 +57,14 @@ export async function handleMcpHttpRequest(
   }
 
   let matchedToken: BearerToken | null = null;
-  if (bearerTokens.length > 0) {
-    matchedToken = matchBearerFromRequest(req, bearerTokens);
+  if (bearerTokens.length > 0 || oauthTokenVerifier) {
+    matchedToken = await authenticateBearer(
+      typeof req.headers.authorization === "string"
+        ? req.headers.authorization
+        : undefined,
+      bearerTokens,
+      oauthTokenVerifier,
+    );
     if (!matchedToken) {
       setOAuthWwwAuthenticateHeader(res, oauthProtectedResource);
       sendJsonRpcError(res, 401, -32001, "Unauthorized");
@@ -73,13 +85,22 @@ export async function handleMcpHttpRequest(
     }
   }
 
-  const guardedRegistry = matchedToken?.organizationId
-    ? withBoundOrganizationRegistry(registry, matchedToken.organizationId)
+  const guardedRegistry = matchedToken
+    ? withAuthenticatedRegistry(registry, matchedToken, oauthProtectedResource, res)
     : registry;
 
   const server = createMcpServer({
     registry: guardedRegistry,
     defaultActor: "mcp-http",
+    ...(matchedToken
+      ? {
+          authorizeTool: createMcpToolAuthorizer(
+            matchedToken,
+            oauthProtectedResource,
+            res,
+          ),
+        }
+      : {}),
   });
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
@@ -170,32 +191,89 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
   }
 }
 
-function withBoundOrganizationRegistry(
+function withAuthenticatedRegistry(
   registry: ToolRegistry,
-  organizationId: string,
+  auth: BearerToken,
+  oauthProtectedResource: OAuthProtectedResourceConfig | null,
+  res: ServerResponse,
 ): ToolRegistry {
   const wrap =
-    <TInput extends { organizationId?: string }, TResult>(
+    <
+      TInput extends Record<string, unknown> & { organizationId?: string },
+      TResult,
+    >(
+      toolName: ToolName,
       handler: (input: TInput) => Promise<TResult>,
     ) =>
     async (input: TInput): Promise<TResult> => {
+      const scopeCheck = checkOAuthScopes(
+        auth,
+        toolName,
+        input,
+        oauthProtectedResource,
+      );
+      if (!scopeCheck.ok) {
+        setOAuthInsufficientScopeHeader(
+          res,
+          oauthProtectedResource,
+          scopeCheck.challengeScope,
+        );
+        throw new Error("insufficient_scope");
+      }
+
       if (
+        auth.organizationId !== undefined &&
         input.organizationId !== undefined &&
-        input.organizationId !== organizationId
+        input.organizationId !== auth.organizationId
       ) {
         throw new Error(ORGANIZATION_MISMATCH_ERROR);
       }
-      return handler({ ...input, organizationId });
+      const enriched =
+        auth.organizationId !== undefined
+          ? { ...input, organizationId: auth.organizationId }
+          : input;
+      return handler(enriched);
     };
 
   return {
-    add_memory: wrap(registry.add_memory),
-    search_memory: wrap(registry.search_memory),
-    build_context_pack: wrap(registry.build_context_pack),
-    reindex_memory: wrap(registry.reindex_memory),
-    compact_memory: wrap(registry.compact_memory),
-    list_audit_log: wrap(registry.list_audit_log),
-    unarchive_memory: wrap(registry.unarchive_memory),
+    add_memory: wrap("add_memory", registry.add_memory),
+    search_memory: wrap("search_memory", registry.search_memory),
+    build_context_pack: wrap("build_context_pack", registry.build_context_pack),
+    reindex_memory: wrap("reindex_memory", registry.reindex_memory),
+    compact_memory: wrap("compact_memory", registry.compact_memory),
+    list_audit_log: wrap("list_audit_log", registry.list_audit_log),
+    unarchive_memory: wrap("unarchive_memory", registry.unarchive_memory),
+  };
+}
+
+function createMcpToolAuthorizer(
+  auth: BearerToken,
+  oauthProtectedResource: OAuthProtectedResourceConfig | null,
+  res: ServerResponse,
+): McpToolAuthorizer {
+  return ({ toolName, input }) => {
+    const scopeCheck = checkOAuthScopes(
+      auth,
+      toolName,
+      input,
+      oauthProtectedResource,
+    );
+    if (!scopeCheck.ok) {
+      setOAuthInsufficientScopeHeader(
+        res,
+        oauthProtectedResource,
+        scopeCheck.challengeScope,
+      );
+      throw new Error("insufficient_scope");
+    }
+
+    if (
+      auth.organizationId !== undefined &&
+      typeof input.organizationId === "string" &&
+      input.organizationId !== auth.organizationId
+    ) {
+      throw new Error(ORGANIZATION_MISMATCH_ERROR);
+    }
   };
 }
 

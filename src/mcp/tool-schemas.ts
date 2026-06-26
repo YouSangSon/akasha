@@ -1,20 +1,20 @@
 import * as z from "zod/v4";
-import type { ToolRegistry } from "./types.js";
 import { SUPPORTED_MEMORY_KINDS } from "./tool-utils.js";
 
-export type ToolName = keyof ToolRegistry;
-
-export type ToolRoute = {
-  readonly name: ToolName;
-  readonly method: "POST";
-  readonly path: string;
-};
-
 export type ToolDescriptor = {
-  readonly name: ToolName;
+  readonly name: string;
   readonly description: string;
   readonly inputSchema: Record<string, z.ZodTypeAny>;
   readonly outputSchema: Record<string, z.ZodTypeAny>;
+};
+
+export type ToolName = (typeof TOOL_DESCRIPTORS)[number]["name"];
+export type ServiceToolName = (typeof SERVICE_TOOL_DESCRIPTORS)[number]["name"];
+
+export type ToolRoute = {
+  readonly name: ServiceToolName;
+  readonly method: "POST";
+  readonly path: string;
 };
 
 export type ToolInputValidation =
@@ -89,7 +89,30 @@ const archiveOutcomeOutputSchema = z.union([
   }),
 ]);
 
-export const TOOL_DESCRIPTORS = [
+const workspaceRootOutputSchema = z
+  .object({
+    uri: z.string(),
+    name: z.string().optional(),
+  })
+  .passthrough();
+
+const elicitedMemoryOutputSchema = z
+  .object({
+    projectKey: z.string().optional(),
+    kind: z.string().optional(),
+    content: z.string().optional(),
+  })
+  .passthrough();
+
+const sampledMemoryClassificationOutputSchema = z
+  .object({
+    kind: z.enum(SUPPORTED_MEMORY_KINDS),
+    summary: z.string(),
+    confidence: z.number().min(0).max(1).optional(),
+  })
+  .passthrough();
+
+export const SERVICE_TOOL_DESCRIPTORS = [
   {
     name: "add_memory",
     description: "Persist a memory record for a project or user scope.",
@@ -215,6 +238,69 @@ export const TOOL_DESCRIPTORS = [
       entries: z.array(z.object({}).passthrough()),
     },
   },
+] as const satisfies readonly ToolDescriptor[];
+
+export const MCP_CONTEXT_TOOL_DESCRIPTORS = [
+  {
+    name: "list_workspace_roots",
+    description:
+      "List workspace roots advertised by the connected MCP client, when supported.",
+    inputSchema: {
+      organizationId: z.string().min(1).optional(),
+    },
+    outputSchema: {
+      ok: z.literal(true),
+      supported: z.boolean(),
+      roots: z.array(workspaceRootOutputSchema),
+      message: z.string().optional(),
+    },
+  },
+  {
+    name: "add_memory_interactive",
+    description:
+      "Use MCP elicitation to ask the user for memory details, then store the accepted memory.",
+    inputSchema: {
+      organizationId: z.string().min(1).optional(),
+      projectKey: z.string().min(1).optional(),
+      scope: z.enum(["project", "user"]).optional(),
+      userScopeId: z.string().min(1).optional(),
+      kind: z.enum(SUPPORTED_MEMORY_KINDS).optional(),
+      message: z.string().min(1).optional(),
+    },
+    outputSchema: {
+      ok: z.literal(true),
+      action: z.enum(["accept", "decline", "cancel", "unsupported"]),
+      stored: z.boolean(),
+      memoryId: z.string().optional(),
+      summary: z.string().optional(),
+      collected: elicitedMemoryOutputSchema.optional(),
+      message: z.string().optional(),
+    },
+  },
+  {
+    name: "classify_memory_candidate",
+    description:
+      "Use MCP sampling to suggest a memory kind and concise summary for candidate memory text.",
+    inputSchema: {
+      organizationId: z.string().min(1).optional(),
+      content: z.string().min(1),
+      instruction: z.string().min(1).optional(),
+      maxTokens: z.number().int().positive().max(1000).optional(),
+    },
+    outputSchema: {
+      ok: z.literal(true),
+      supported: z.boolean(),
+      classification: sampledMemoryClassificationOutputSchema.optional(),
+      model: z.string().optional(),
+      rawText: z.string().optional(),
+      message: z.string().optional(),
+    },
+  },
+] as const satisfies readonly ToolDescriptor[];
+
+export const TOOL_DESCRIPTORS = [
+  ...SERVICE_TOOL_DESCRIPTORS,
+  ...MCP_CONTEXT_TOOL_DESCRIPTORS,
 ] as const satisfies readonly ToolDescriptor[];
 
 export const TOOL_ROUTES = [

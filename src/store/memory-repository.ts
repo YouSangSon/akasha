@@ -1,5 +1,9 @@
 import { createHash } from "node:crypto";
 import type { PgPool, PgQueryable } from "../db/connection.js";
+import {
+  extractEntityMentions,
+  type EntityMention,
+} from "../entities/entity-extraction.js";
 import { rootLogger } from "../logger.js";
 import { tokenizeLexicalQuery } from "../search/lexical-score.js";
 import type {
@@ -11,6 +15,9 @@ import type {
 import { assertOrganizationId } from "./assert-organization-id.js";
 
 const DEFAULT_ORG_ID = "default";
+const MAX_STORED_ENTITY_MENTIONS = 64;
+const MAX_QUERY_ENTITY_MENTIONS = 16;
+const MAX_ENTITY_RELATIONSHIPS_PER_MEMORY = 96;
 
 type PostgresMemoryRow = {
   id: number;
@@ -41,6 +48,24 @@ type PostgresSourceRow = {
 };
 
 type PostgresSearchRow = PostgresMemoryRow & PostgresSourceRow;
+
+type PostgresEntityRow = {
+  id: number | string;
+  kind: EntityMention["kind"];
+  normalized: string;
+};
+
+type PersistedEntityMention = EntityMention & {
+  entityId: number;
+};
+
+type EntityRelationshipInput = {
+  fromEntityId: number;
+  toEntityId: number;
+  relationType: "co_mentions" | "temporal_context";
+  validFrom: string | null;
+  confidence: number;
+};
 
 type PostgresStoredSourceMetadata = {
   sourceRef: string;
@@ -143,13 +168,21 @@ export function createMemoryRepository(
             input.durability ?? "ephemeral",
             input.importance ?? 0,
             sourceRow.source_id_joined,
-          ],
+            ],
         );
+
+        const memoryRow = requireSingleRow(memoryResult.rows[0], "memory");
+        await persistPostgresEntityGraph(client, {
+          input,
+          organizationId,
+          memoryRecordId: toNumber(memoryRow.id),
+          sourceRow,
+        });
 
         await client.query("COMMIT");
 
         return mapPostgresSearchResult({
-          ...requireSingleRow(memoryResult.rows[0], "memory"),
+          ...memoryRow,
           ...sourceRow,
         });
       } catch (error: unknown) {
@@ -172,6 +205,7 @@ export function createMemoryRepository(
 
       const limit = Math.max(1, Math.min(input.limit ?? 10, 100));
       const params: unknown[] = [];
+      const tsQueryIndex = params.push(trimmedQuery);
       const searchText = `
         concat_ws(
           ' ',
@@ -183,8 +217,15 @@ export function createMemoryRepository(
         )
       `;
       const phraseIndex = params.push(likeContainsPattern(trimmedQuery));
-      const searchClauses = [`${searchText} ILIKE $${phraseIndex} ESCAPE '\\'`];
+      const tsQuery = `lexical.query`;
+      const fullTextClause =
+        `(numnode(${tsQuery}) > 0 AND mr.search_vector @@ ${tsQuery})`;
+      const searchClauses = [
+        fullTextClause,
+        `${searchText} ILIKE $${phraseIndex} ESCAPE '\\'`,
+      ];
       const scoreExpressions = [
+        `CASE WHEN numnode(${tsQuery}) > 0 THEN ts_rank_cd(mr.search_vector, ${tsQuery}, 32) * 8 ELSE 0 END`,
         `CASE WHEN ${searchText} ILIKE $${phraseIndex} ESCAPE '\\' THEN 2 ELSE 0 END`,
       ];
 
@@ -193,6 +234,17 @@ export function createMemoryRepository(
         searchClauses.push(`${searchText} ILIKE $${termIndex} ESCAPE '\\'`);
         scoreExpressions.push(
           `CASE WHEN ${searchText} ILIKE $${termIndex} ESCAPE '\\' THEN 1 ELSE 0 END`,
+        );
+      }
+
+      const entityMatchClause = buildEntityMatchClause(
+        extractEntityMentions(trimmedQuery).slice(0, MAX_QUERY_ENTITY_MENTIONS),
+        params,
+      );
+      if (entityMatchClause) {
+        searchClauses.push(entityMatchClause);
+        scoreExpressions.push(
+          `CASE WHEN ${entityMatchClause} THEN 3 ELSE 0 END`,
         );
       }
 
@@ -211,9 +263,13 @@ export function createMemoryRepository(
       const limitIndex = params.push(limit);
       const result = await pool.query<PostgresSearchRow>(
         `
+          WITH lexical AS (
+            SELECT websearch_to_tsquery('simple', $${tsQueryIndex}) AS query
+          )
           SELECT ${SEARCH_RETURN_COLUMNS}
           FROM memory_records mr
           JOIN sources s ON s.id = mr.source_id
+          CROSS JOIN lexical
           WHERE (${searchClauses.join(" OR ")})
             AND (${scopeClauses.join(" OR ")})${orgClause}
           ORDER BY (${scoreExpressions.join(" + ")}) DESC, mr.id DESC
@@ -459,6 +515,353 @@ async function upsertPostgresSource(
   );
 
   return requireSingleRow(createdResult.rows[0], "source");
+}
+
+async function persistPostgresEntityGraph(
+  queryable: PgQueryable,
+  input: {
+    input: AddMemoryInput;
+    organizationId: string;
+    memoryRecordId: number;
+    sourceRow: PostgresSourceRow;
+  },
+): Promise<void> {
+  const mentions = extractEntityMentions(
+    buildEntityExtractionText(input.input, input.sourceRow),
+  ).slice(0, MAX_STORED_ENTITY_MENTIONS);
+
+  if (mentions.length === 0) {
+    return;
+  }
+
+  const entitiesByKey = await upsertPostgresEntities(
+    queryable,
+    input.organizationId,
+    mentions,
+  );
+  const persistedMentions = mentions.flatMap((mention) => {
+    const entity = entitiesByKey.get(entityMentionKey(mention));
+    return entity ? [{ ...mention, entityId: toNumber(entity.id) }] : [];
+  });
+
+  if (persistedMentions.length === 0) {
+    return;
+  }
+
+  await insertPostgresMemoryEntityMentions(queryable, {
+    memoryRecordId: input.memoryRecordId,
+    organizationId: input.organizationId,
+    mentions: persistedMentions,
+  });
+  await insertPostgresEntityRelationships(queryable, {
+    memoryRecordId: input.memoryRecordId,
+    organizationId: input.organizationId,
+    relationships: buildEntityRelationships(persistedMentions),
+  });
+}
+
+async function upsertPostgresEntities(
+  queryable: PgQueryable,
+  organizationId: string,
+  mentions: readonly EntityMention[],
+): Promise<Map<string, PostgresEntityRow>> {
+  const params: unknown[] = [];
+  const values = mentions.map((mention) => {
+    const organizationIndex = params.push(organizationId);
+    const kindIndex = params.push(mention.kind);
+    const normalizedIndex = params.push(mention.normalized);
+    const displayTextIndex = params.push(mention.text);
+    return `($${organizationIndex}, $${kindIndex}, $${normalizedIndex}, $${displayTextIndex})`;
+  });
+
+  const result = await queryable.query<PostgresEntityRow>(
+    `
+      INSERT INTO entities (
+        organization_id,
+        kind,
+        normalized,
+        display_text
+      ) VALUES ${values.join(", ")}
+      ON CONFLICT (organization_id, kind, normalized)
+      DO UPDATE SET
+        last_seen_at = NOW(),
+        display_text = EXCLUDED.display_text
+      RETURNING id, kind, normalized
+    `,
+    params,
+  );
+
+  return new Map(
+    result.rows.map((row) => [
+      `${row.kind}:${row.normalized}`,
+      row,
+    ]),
+  );
+}
+
+async function insertPostgresMemoryEntityMentions(
+  queryable: PgQueryable,
+  input: {
+    memoryRecordId: number;
+    organizationId: string;
+    mentions: readonly PersistedEntityMention[];
+  },
+): Promise<void> {
+  const params: unknown[] = [];
+  const values = input.mentions.map((mention) => {
+    const memoryRecordIndex = params.push(input.memoryRecordId);
+    const entityIndex = params.push(mention.entityId);
+    const organizationIndex = params.push(input.organizationId);
+    const mentionTextIndex = params.push(mention.text);
+    return `($${memoryRecordIndex}, $${entityIndex}, $${organizationIndex}, $${mentionTextIndex})`;
+  });
+
+  await queryable.query(
+    `
+      INSERT INTO memory_entity_mentions (
+        memory_record_id,
+        entity_id,
+        organization_id,
+        mention_text
+      ) VALUES ${values.join(", ")}
+      ON CONFLICT (memory_record_id, entity_id)
+      DO UPDATE SET mention_text = EXCLUDED.mention_text
+    `,
+    params,
+  );
+}
+
+async function insertPostgresEntityRelationships(
+  queryable: PgQueryable,
+  input: {
+    memoryRecordId: number;
+    organizationId: string;
+    relationships: readonly EntityRelationshipInput[];
+  },
+): Promise<void> {
+  if (input.relationships.length === 0) {
+    return;
+  }
+
+  const params: unknown[] = [];
+  const values = input.relationships.map((relationship) => {
+    const organizationIndex = params.push(input.organizationId);
+    const fromIndex = params.push(relationship.fromEntityId);
+    const toIndex = params.push(relationship.toEntityId);
+    const typeIndex = params.push(relationship.relationType);
+    const evidenceIndex = params.push(input.memoryRecordId);
+    const validFromIndex = params.push(relationship.validFrom);
+    const confidenceIndex = params.push(relationship.confidence);
+
+    return `($${organizationIndex}, $${fromIndex}, $${toIndex}, $${typeIndex}, $${evidenceIndex}, $${validFromIndex}::date, $${confidenceIndex})`;
+  });
+
+  await queryable.query(
+    `
+      INSERT INTO entity_relationships (
+        organization_id,
+        from_entity_id,
+        to_entity_id,
+        relation_type,
+        evidence_memory_record_id,
+        valid_from,
+        confidence
+      ) VALUES ${values.join(", ")}
+      ON CONFLICT (
+        organization_id,
+        from_entity_id,
+        to_entity_id,
+        relation_type,
+        evidence_memory_record_id
+      )
+      DO NOTHING
+    `,
+    params,
+  );
+}
+
+function buildEntityExtractionText(
+  input: AddMemoryInput,
+  sourceRow: PostgresSourceRow,
+): string {
+  const sourceMetadata = parseStoredPostgresSourceRef(sourceRow.source_ref);
+  const parts = [
+    input.title,
+    input.content,
+    input.summary,
+    input.projectKey,
+    input.memoryType,
+    input.source.title,
+    input.source.sourceRef,
+    input.source.externalId,
+    input.source.uri,
+    sourceRow.source_title,
+    sourceMetadata.sourceRef,
+    sourceMetadata.uri,
+  ];
+
+  return parts.filter((part): part is string => Boolean(part)).join("\n");
+}
+
+function buildEntityMatchClause(
+  mentions: readonly EntityMention[],
+  params: unknown[],
+): string | null {
+  if (mentions.length === 0) {
+    return null;
+  }
+
+  const conditions = mentions.map((mention) => {
+    const kindIndex = params.push(mention.kind);
+    const normalizedIndex = params.push(mention.normalized);
+    return `(e.kind = $${kindIndex} AND e.normalized = $${normalizedIndex})`;
+  });
+
+  return `
+    EXISTS (
+      SELECT 1
+      FROM memory_entity_mentions mem
+      JOIN entities e ON e.id = mem.entity_id
+      WHERE mem.memory_record_id = mr.id
+        AND mem.organization_id = mr.organization_id
+        AND e.organization_id = mr.organization_id
+        AND (${conditions.join(" OR ")})
+    )
+  `;
+}
+
+function buildEntityRelationships(
+  mentions: readonly PersistedEntityMention[],
+): EntityRelationshipInput[] {
+  const relationships: EntityRelationshipInput[] = [];
+  const seen = new Set<string>();
+  const nonDateMentions = mentions.filter((mention) => mention.kind !== "date");
+  const dateMentions = mentions.flatMap((mention) => {
+    if (mention.kind !== "date") {
+      return [];
+    }
+
+    const validFrom = parseMentionDate(mention.text);
+    return validFrom ? [{ ...mention, validFrom }] : [];
+  });
+
+  for (let leftIndex = 0; leftIndex < nonDateMentions.length; leftIndex += 1) {
+    for (
+      let rightIndex = leftIndex + 1;
+      rightIndex < nonDateMentions.length;
+      rightIndex += 1
+    ) {
+      const left = nonDateMentions[leftIndex]!;
+      const right = nonDateMentions[rightIndex]!;
+      const [fromEntityId, toEntityId] =
+        left.entityId < right.entityId
+          ? [left.entityId, right.entityId]
+          : [right.entityId, left.entityId];
+
+      pushUniqueRelationship(relationships, seen, {
+        fromEntityId,
+        toEntityId,
+        relationType: "co_mentions",
+        validFrom: null,
+        confidence: 0.6,
+      });
+
+      if (relationships.length >= MAX_ENTITY_RELATIONSHIPS_PER_MEMORY) {
+        return relationships;
+      }
+    }
+  }
+
+  for (const dateMention of dateMentions) {
+    for (const mention of nonDateMentions) {
+      pushUniqueRelationship(relationships, seen, {
+        fromEntityId: mention.entityId,
+        toEntityId: dateMention.entityId,
+        relationType: "temporal_context",
+        validFrom: dateMention.validFrom,
+        confidence: 0.8,
+      });
+
+      if (relationships.length >= MAX_ENTITY_RELATIONSHIPS_PER_MEMORY) {
+        return relationships;
+      }
+    }
+  }
+
+  return relationships;
+}
+
+function pushUniqueRelationship(
+  relationships: EntityRelationshipInput[],
+  seen: Set<string>,
+  relationship: EntityRelationshipInput,
+): void {
+  if (relationship.fromEntityId === relationship.toEntityId) {
+    return;
+  }
+
+  const key = [
+    relationship.fromEntityId,
+    relationship.toEntityId,
+    relationship.relationType,
+    relationship.validFrom ?? "",
+  ].join(":");
+
+  if (seen.has(key)) {
+    return;
+  }
+
+  seen.add(key);
+  relationships.push(relationship);
+}
+
+function parseMentionDate(text: string): string | null {
+  const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    const value = isoMatch[0];
+    const parsed = new Date(`${value}T00:00:00.000Z`);
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+
+    return parsed.toISOString().slice(0, 10) === value ? value : null;
+  }
+
+  const monthMatch = text.match(/^([A-Za-z]+)\s+(\d{4})$/);
+  if (!monthMatch) {
+    return null;
+  }
+
+  const monthIndex = monthNameToIndex(monthMatch[1]!);
+  if (monthIndex === null) {
+    return null;
+  }
+
+  return `${monthMatch[2]}-${String(monthIndex + 1).padStart(2, "0")}-01`;
+}
+
+function monthNameToIndex(value: string): number | null {
+  const months = [
+    "jan",
+    "feb",
+    "mar",
+    "apr",
+    "may",
+    "jun",
+    "jul",
+    "aug",
+    "sep",
+    "oct",
+    "nov",
+    "dec",
+  ];
+  const prefix = value.toLocaleLowerCase().slice(0, 3);
+  const index = months.indexOf(prefix);
+  return index === -1 ? null : index;
+}
+
+function entityMentionKey(mention: EntityMention): string {
+  return `${mention.kind}:${mention.normalized}`;
 }
 
 function serializeStoredPostgresSourceRef(

@@ -2,10 +2,11 @@
 
 # API reference
 
-Akasha exposes the same tool surface through three access paths:
+Akasha exposes the same core service tool surface through three access paths:
 
 - **MCP stdio** — for AI clients like Claude Code and Codex CLI.
-  Entry point: `dist/src/mcp/server.js`. All 7 tools are registered.
+  Entry point: `dist/src/mcp/server.js`. All 7 service tools are registered,
+  plus MCP-only client-context helpers.
 - **MCP Streamable HTTP** — for MCP clients that connect over HTTP.
   Primary documented endpoint: `POST /mcp` for JSON-RPC requests. The SDK
   transport also supports GET and DELETE on the same `/mcp` endpoint.
@@ -14,21 +15,32 @@ Akasha exposes the same tool surface through three access paths:
 
 All three access paths share the same descriptor/schema/registry path in
 `src/mcp/tool-schemas.ts` and `src/mcp/tool-registry.ts`, then dispatch to the
-tool implementations in `src/mcp/tool-handlers.ts`. Tool inputs and outputs are
-identical; only the wire format differs.
+service tool implementations in `src/mcp/tool-handlers.ts`. Service tool inputs
+and outputs are identical; only the wire format differs.
 
 HTTP and MCP tool calls share the same zod-backed shared tool schema
 definitions. HTTP requests are validated after bearer-token organization
 resolution and before registry dispatch; malformed tool bodies return 400 and
 do not call the tool handler.
 
+MCP additionally registers three context-aware tools that do not have `/v1/*`
+routes: `list_workspace_roots` calls the client `roots/list` capability when it
+is advertised, and `add_memory_interactive` uses MCP form elicitation to collect
+memory details before dispatching to `add_memory`. `classify_memory_candidate`
+uses MCP sampling to suggest a memory `kind` and concise `summary` for candidate
+text without storing it.
+
 ## Authentication (HTTP only)
 
-When `MEMORY_API_TOKENS` is configured, every `/mcp` and `/v1/*` route requires
-a bearer token. `/healthz`, `/readyz`, and `/metrics` are unauthenticated. For
-local development only, an empty token list is allowed when the server binds to
+When `MEMORY_API_TOKENS` or OAuth token validation is configured, every `/mcp`
+and `/v1/*` route requires a bearer token. Static tokens are configured via
+`MEMORY_API_TOKENS`; OAuth/OIDC JWT access tokens are accepted when
+`MCP_OAUTH_AUTHORIZATION_SERVERS` and `MCP_OAUTH_RESOURCE_URL` are configured
+and the token validates against issuer JWKS, audience, expiry, and scope.
+`/healthz`, `/readyz`, and `/metrics` are unauthenticated. For local
+development only, an empty token list is allowed when the server binds to
 loopback (`127.0.0.1`, `localhost`, or `::1`); binding to a non-loopback host
-without tokens fails at startup.
+without static tokens or OAuth token validation fails at startup.
 
 ```bash
 curl -H "Authorization: Bearer dev-token" http://localhost:8787/v1/memory/search ...
@@ -39,7 +51,7 @@ Failure modes:
 | Status | Reason |
 |---|---|
 | 401 | Missing / unknown / wrong-format `Authorization` header |
-| 403 | Token bound to a different org than body / header asks for |
+| 403 | Token bound to a different org than body / header asks for, or OAuth token lacks the required scope (`insufficient_scope`) |
 | 429 | Per-token rate limit exhausted |
 | 503 | `/readyz` saw a dependency outage (see health section) |
 
@@ -78,6 +90,47 @@ Prompts:
 
 - `akasha_session_start` — builds a context pack for a new agent session.
 - `akasha_store_memory` — template for asking an agent to store durable memory.
+
+## MCP-only context tools
+
+These tools are registered only on MCP transports because they use
+server-to-client MCP capabilities. Each returns `supported: false` when the
+connected client does not advertise the required capability.
+
+```ts
+type ListWorkspaceRootsResult = {
+  ok: true;
+  supported: boolean;
+  roots: { uri: string; name?: string }[];
+  message?: string;
+};
+
+type AddMemoryInteractiveResult = {
+  ok: true;
+  action: "accept" | "decline" | "cancel" | "unsupported";
+  stored: boolean;
+  memoryId?: string;
+  summary?: string;
+};
+
+type ClassifyMemoryCandidateResult = {
+  ok: true;
+  supported: boolean;
+  classification?: {
+    kind: "decision" | "summary" | "fact";
+    summary: string;
+    confidence?: number;
+  };
+  model?: string;
+  rawText?: string;
+};
+```
+
+- `list_workspace_roots` — calls client `roots/list` (`akasha:read`).
+- `add_memory_interactive` — uses form elicitation, then calls `add_memory`
+  when the user accepts (`akasha:write`).
+- `classify_memory_candidate` — uses client sampling to classify candidate
+  text without storing it (`akasha:read`).
 
 ## Tools
 
@@ -171,10 +224,14 @@ HTTP: `POST /v1/memory/search`
 
 Behavior: query gets embedded for active vector backend similarity search
 (filtered by org + scope) and also runs through Postgres lexical candidate
-search over scoped records. Vector and lexical candidates are merged, hydrated
-from Postgres when needed, scored with reciprocal-rank source boosts plus
-metadata/recency signals, ranked, sliced to `limit`, and returned. Project-scope
-hits are stably sorted ahead of user-scope hits when there's a tie.
+search over scoped records. Lexical retrieval uses a generated `tsvector` GIN
+index with `ts_rank_cd`, plus a substring fallback for exact paths, env vars,
+and short code tokens. Query entity mentions (code symbols, paths, URLs, dates,
+and proper nouns) also match the persisted entity graph as an exact rescue/boost
+path. Vector and lexical candidates are merged, hydrated from Postgres when
+needed, scored with reciprocal-rank source boosts plus metadata/recency signals,
+ranked, sliced to `limit`, and returned. Project-scope hits are stably sorted
+ahead of user-scope hits when there's a tie.
 
 ---
 
@@ -209,7 +266,9 @@ HTTP: `POST /v1/memory/context-pack`
 
 `packMarkdown` is rendered with the task line at the bottom (after a
 delimiter) so the stable body content can sit at the cache-eligible prefix
-of an LLM prompt.
+of an LLM prompt. The body starts with a trust-boundary notice: retrieved
+memories are untrusted context, and prompt-injection-like excerpts are labeled
+with a warning.
 
 ---
 

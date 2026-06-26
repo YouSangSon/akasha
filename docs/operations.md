@@ -274,7 +274,7 @@ Postgres, Qdrant, or OpenAI itself.
 ## Schema migrations
 
 All migrations are idempotent and applied at bootstrap. Migrations currently
-span `001-009`; new migrations append the next unused number after that range.
+span `001-011`; new migrations append the next unused number after that range.
 To add a new migration:
 
 1. Create `src/db/migrations/NNN_description.sql` (next sequence number).

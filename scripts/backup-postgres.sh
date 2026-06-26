@@ -55,7 +55,7 @@ manifest.postgres = {
 fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 NODE
 
-if [ -n "${BACKUP_TARGET_HOST:-}" ]; then
+if [ -n "${BACKUP_TARGET_HOST:-}" ] && [ -z "${BACKUP_ENCRYPTION_KEY_FILE:-}" ]; then
   ssh "${BACKUP_TARGET_HOST}" "mkdir -p \"${remote_dir}\""
   scp "${artifact}" "${checksum}" "${manifest}" \
     "${BACKUP_TARGET_HOST}:${remote_dir}/"

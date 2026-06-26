@@ -47,6 +47,9 @@ Relevant variables:
 - `QDRANT_API_KEY` (optional for unauthenticated local deployments)
 - `BACKUP_TARGET_HOST` (optional; when non-empty, backup scripts copy artifacts with `ssh`/`scp`)
 - `BACKUP_TARGET_DIR` (optional, defaults to `BACKUP_DIR` on the remote host)
+- `BACKUP_ENCRYPTION_KEY_FILE` (optional; 32-byte AES data key, supplied
+  directly or by your KMS/secret manager)
+- `BACKUP_ENCRYPTION_KEEP_PLAINTEXT` (optional; defaults to false)
 
 With `VECTOR_BACKEND=qdrant`, `npm run backup:create` captures Postgres and
 Qdrant snapshot data. The backup scripts create and copy:
@@ -57,6 +60,25 @@ Qdrant snapshot data. The backup scripts create and copy:
 - `manifest-YYYYMMDD-HHMM.json`
 
 The Qdrant metadata sidecar name includes the collection name.
+
+When `BACKUP_ENCRYPTION_KEY_FILE` is set, `backup:create` encrypts the
+Postgres dump and Qdrant snapshot with AES-256-GCM, rewrites the manifest to
+point at `.enc` artifacts, records ciphertext checksums, and removes plaintext
+artifacts unless `BACKUP_ENCRYPTION_KEEP_PLAINTEXT=true`. If
+`BACKUP_TARGET_HOST` is also set, only the encrypted artifacts, manifest, and
+non-sensitive Qdrant metadata sidecar are copied off-box. KMS integration is
+intentionally external: decrypt or write a data key to
+`BACKUP_ENCRYPTION_KEY_FILE` immediately before the backup job, then remove it
+after the job under your scheduler/secret-manager policy.
+
+To decrypt one artifact before a restore command:
+
+```bash
+export BACKUP_ENCRYPTION_KEY_FILE=/run/secrets/akasha-backup-data-key
+export BACKUP_ENCRYPTED_INPUT=/var/lib/developer-memory-os/backups/postgres-YYYYMMDD-HHMM.sql.gz.enc
+export BACKUP_DECRYPTED_OUTPUT=/tmp/postgres-YYYYMMDD-HHMM.sql.gz
+npm run backup:decrypt
+```
 
 With `VECTOR_BACKEND=pgvector`, vectors live in Postgres; Qdrant snapshot data
 is not part of the logical data path. `npm run backup:create` now skips

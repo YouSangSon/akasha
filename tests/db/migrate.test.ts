@@ -89,15 +89,21 @@ describe.skipIf(!process.env.POSTGRES_HOST)("runMigrations", () => {
             'memory_chunks',
             'relationships',
             'context_pack_runs',
-            'ingest_jobs'
+            'ingest_jobs',
+            'entities',
+            'memory_entity_mentions',
+            'entity_relationships'
           )
         ORDER BY table_name
       `);
 
       expect(result.rows.map((row) => row.table_name)).toEqual([
         "context_pack_runs",
+        "entities",
+        "entity_relationships",
         "ingest_jobs",
         "memory_chunks",
+        "memory_entity_mentions",
         "memory_records",
         "relationships",
         "sources",
@@ -168,6 +174,97 @@ describe.skipIf(!process.env.POSTGRES_HOST)("runMigrations", () => {
       await pool.end();
     }
   });
+
+  it("applies migration 010 full-text search column and index", async () => {
+    const pool = createPgPool({
+      connectionString: testConnectionString,
+    });
+
+    try {
+      await runMigrations(pool);
+
+      const columns = await pool.query<InformationSchemaColumnRow>(`
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'memory_records'
+          AND column_name = 'search_vector'
+      `);
+      const indexes = await pool.query<{ indexname: string }>(`
+        SELECT indexname
+        FROM pg_indexes
+        WHERE schemaname = 'public'
+          AND tablename = 'memory_records'
+          AND indexname IN (
+            'idx_memory_records_search_vector',
+            'idx_memory_records_org_scope_recent'
+          )
+        ORDER BY indexname
+      `);
+
+      expect(columns.rows.map((row) => row.column_name)).toEqual([
+        "search_vector",
+      ]);
+      expect(indexes.rows.map((row) => row.indexname)).toEqual([
+        "idx_memory_records_org_scope_recent",
+        "idx_memory_records_search_vector",
+      ]);
+    } finally {
+      await pool.end();
+    }
+  });
+
+  it("applies migration 011 entity and temporal graph tables", async () => {
+    const pool = createPgPool({
+      connectionString: testConnectionString,
+    });
+
+    try {
+      await runMigrations(pool);
+
+      const tables = await pool.query<InformationSchemaTableRow>(`
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name IN (
+            'entities',
+            'memory_entity_mentions',
+            'entity_relationships'
+          )
+        ORDER BY table_name
+      `);
+      const indexes = await pool.query<{ indexname: string }>(`
+        SELECT indexname
+        FROM pg_indexes
+        WHERE schemaname = 'public'
+          AND indexname IN (
+            'idx_entities_org_kind_normalized',
+            'idx_memory_entity_mentions_entity',
+            'idx_memory_entity_mentions_memory',
+            'idx_entity_relationships_from',
+            'idx_entity_relationships_to',
+            'idx_entity_relationships_temporal'
+          )
+        ORDER BY indexname
+      `);
+
+      expect(tables.rows.map((row) => row.table_name)).toEqual([
+        "entities",
+        "entity_relationships",
+        "memory_entity_mentions",
+      ]);
+      expect(indexes.rows.map((row) => row.indexname)).toEqual([
+        "idx_entities_org_kind_normalized",
+        "idx_entity_relationships_from",
+        "idx_entity_relationships_temporal",
+        "idx_entity_relationships_to",
+        "idx_memory_entity_mentions_entity",
+        "idx_memory_entity_mentions_memory",
+      ]);
+    } finally {
+      await pool.end();
+    }
+  });
 });
 
 describe("readPostgresMigrationSql", () => {
@@ -188,5 +285,11 @@ describe("readPostgresMigrationSql", () => {
     expect(sql).toContain("idx_ingest_jobs_qdrant_pending_retry");
     expect(sql).toContain("qdrant_next_retry_at");
     expect(sql).toContain("idx_memory_archive_qdrant_pending_retry");
+    expect(sql).toContain("search_vector tsvector");
+    expect(sql).toContain("idx_memory_records_search_vector");
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS entities");
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS memory_entity_mentions");
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS entity_relationships");
+    expect(sql).toContain("idx_memory_entity_mentions_entity");
   });
 });

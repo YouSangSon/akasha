@@ -11,6 +11,39 @@ and JSON HTTP. For agent lifecycle use, prefer this pattern:
    facts, or summaries. Do not store raw transcripts by default.
 3. **Session end** — ask the agent to save a short durable summary when useful.
 
+## One-command init
+
+After `npm run build`, generate MCP config snippets and lifecycle hook scripts:
+
+```bash
+node dist/src/cli.js init \
+  --project my-project \
+  --organization-id default \
+  --task "continue implementation"
+```
+
+This writes:
+
+- `.akasha/mcp/claude-desktop.json`
+- `.akasha/mcp/codex.toml`
+- `.akasha/bin/mcp-server.sh`
+- `.akasha/hooks/session-start.sh`
+- `.akasha/hooks/session-end.sh`
+
+The MCP config snippets point at the wrapper script, which sources `.env` at
+runtime and starts `dist/src/mcp/server.js`. Secrets stay in `.env` instead of
+being copied into client config JSON/TOML.
+
+Use the hooks directly when your agent host supports lifecycle commands:
+
+```bash
+.akasha/hooks/session-start.sh "continue implementation"
+printf '%s\n' "Summary: durable outcome ..." | .akasha/hooks/session-end.sh
+```
+
+`./install.sh` runs the same init step after build and migrations. Re-running
+init skips existing files by default; pass `--force` to refresh generated files.
+
 ## MCP stdio
 
 Build first:
@@ -66,6 +99,16 @@ node dist/src/cli.js pack \
   --project my-project \
   --organization-id default \
   --task "continue implementation"
+```
+
+To store a short session-end summary without an HTTP server:
+
+```bash
+node dist/src/cli.js remember \
+  --project my-project \
+  --organization-id default \
+  --kind summary \
+  --content "Summary: durable outcome ..."
 ```
 
 For personal loopback deployments that intentionally use legacy anonymous

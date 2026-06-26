@@ -65,7 +65,7 @@ for env-var setup see [configuration.md](configuration.md).
 ```
 Client          Tool                Orchestrator       Repos                Stores
 ──────          ────                ────────────       ─────                ──────
-add_memory  →  add_memory tool  →  writeCanonical  →  memory-repo      →  Postgres (sources, memory_records)
+add_memory  →  add_memory tool  →  writeCanonical  →  memory-repo      →  Postgres (sources, memory_records, entity graph)
                                    Memory             canonical-       →  Postgres (memory_chunks)
                                                       indexing
                                                       ingestJobs       →  Postgres (ingest_jobs: write-ahead pending)
@@ -73,6 +73,13 @@ add_memory  →  add_memory tool  →  writeCanonical  →  memory-repo      →
                                                       vectorIndex      →  Qdrant or pgvector (chunk vectors)
                                                       ingestJobs       →  Postgres (ingest_jobs: mark completed)
 ```
+
+MCP transports also expose capability-gated context helpers. `list_workspace_roots`
+uses the client's `roots/list` capability when advertised; `add_memory_interactive`
+uses MCP form elicitation to collect user-confirmed memory details, then routes
+accepted input through the same `add_memory` write path above.
+`classify_memory_candidate` uses client sampling to suggest a memory kind and
+summary for candidate text without storing it.
 
 Write-ahead outbox: after chunks are committed to Postgres,
 `writeCanonicalMemory` calls `markQdrantPending` to record a scheduled
@@ -95,7 +102,7 @@ side effects.
 ```
 search_memory  →  search tool  →  retrieveMemory  →  embeddings.embed  →  transformers / openai / local
                                   (active vector)   vectorIndex.query → Qdrant or pgvector (scope-filtered similarity)
-                                  (lexical)         repository.searchMemory → Postgres scoped keyword candidates
+                                  (lexical)         repository.searchMemory → Postgres scoped keyword/entity candidates
                                                     repository.getMemoryRecordsByIds → Postgres hydrate vector ids
                                                     rankCandidates → hybrid in-memory ranking
 ```
@@ -103,13 +110,18 @@ search_memory  →  search tool  →  retrieveMemory  →  embeddings.embed  →
 Org filter is applied at both the active vector backend query layer and
 the Postgres lexical/hydration layers (defense-in-depth — if the vector backend
 returned a cross-org point id, the PG join filters it out). Lexical candidates
-use the same org and scope inputs as vector retrieval.
+use the same org and scope inputs as vector retrieval. Postgres lexical search
+uses a generated `search_vector` column with a GIN index and `ts_rank_cd`, while
+retaining substring fallback clauses for exact paths, env vars, and short code
+tokens that full-text tokenization may miss.
 
 The lexical scorer also extracts deterministic entity mentions (code symbols,
 paths, URLs, dates, and proper nouns) so exact operational identifiers such as
 `QDRANT_SNAPSHOT_TIMEOUT` or `docs/operations.md` can rescue otherwise weak
-semantic matches. This is the first runtime foundation for later temporal/entity
-memory; it does not yet persist a graph.
+semantic matches. Those mentions are persisted at write time in `entities` and
+`memory_entity_mentions`; same-record co-mentions and date contexts are stored
+in `entity_relationships`. Lexical retrieval uses the persisted entity graph as
+an exact-match rescue/boost path alongside FTS and substring matching.
 
 ## Data flow: compact apply (P17)
 
@@ -214,14 +226,28 @@ plan_generated_at      qdrant_cleaned_at
 started_at             original_created_at / original_updated_at
 completed_at           archived_at / unarchived_at
 idempotency_key UUID   UNIQUE (compaction_run_id, source_record_id)
+
+entities              memory_entity_mentions  entity_relationships
+────────              ──────────────────────  ────────────────────
+id PK                 memory_record_id FK      id PK
+organization_id       entity_id FK             organization_id
+kind                  organization_id          from_entity_id FK
+normalized            mention_text             to_entity_id FK
+display_text          created_at               relation_type
+first_seen_at                                  evidence_memory_record_id FK
+last_seen_at                                   valid_from / valid_to
+                                               confidence / created_at
 ```
 
-Migrations live in `src/db/migrations/`. The current range is `001-009`;
-the runner applies `001` through `009` on bootstrap (each is idempotent,
+Migrations live in `src/db/migrations/`. The current range is `001-011`;
+the runner applies `001` through `011` on bootstrap (each is idempotent,
 `CREATE … IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS`).
 `009_memory_archive_qdrant_retry.sql` supplies archive Qdrant retry metadata,
 including `qdrant_next_retry_at` and the pending-retry index used by the
-background archive cleanup sweeper.
+background archive cleanup sweeper. `010_postgres_full_text_search.sql` adds
+the generated `search_vector` column and GIN index used by lexical retrieval.
+`011_entity_temporal_graph.sql` adds persistent entity mention and temporal
+relationship tables used by graph-backed lexical rescue.
 
 ## Multi-tenancy
 

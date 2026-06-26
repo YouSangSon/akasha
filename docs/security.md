@@ -31,17 +31,32 @@ need to probe without holding credentials.
 
 When `MCP_OAUTH_AUTHORIZATION_SERVERS` is configured, Akasha also publishes
 OAuth 2.0 Protected Resource Metadata for MCP HTTP discovery and includes
-`WWW-Authenticate` discovery hints on `/mcp` and `/v1/*` 401 responses. This is
-only a discovery layer: the server still accepts bearer tokens only through the
-`Authorization` header and still validates them against `MEMORY_API_TOKENS`.
+`WWW-Authenticate` discovery hints on `/mcp` and `/v1/*` 401 responses. The
+same `Authorization: Bearer ...` header accepts either a configured static
+token or a JWT access token issued by a configured authorization server. JWTs
+are verified against issuer JWKS, exact audience (`MCP_OAUTH_RESOURCE_URL`),
+issuer, expiry / not-before, algorithm allowlist, and tool-specific scopes.
+Akasha never passes inbound MCP bearer tokens through to upstream APIs.
+
+OAuth scopes are enforced at the tool boundary:
+
+- `akasha:read` — search, context-pack, and dry-run compaction.
+- `akasha:write` — add-memory writes.
+- `akasha:admin` — reindex, unarchive, audit-log reads, and compaction apply.
+- `akasha:memory` — compatibility umbrella scope that satisfies all tool
+  checks.
+
+Insufficient OAuth scopes return HTTP 403 with a Bearer
+`insufficient_scope` `WWW-Authenticate` challenge naming the scope the client
+should request.
 
 ### HTTP attack surface
 
 `/mcp` is the MCP Streamable HTTP endpoint and must be treated like `/v1/*`,
-not like local MCP stdio. When `MEMORY_API_TOKENS` is configured, `/mcp`
-requires bearer auth. It shares the same rate limiter as JSON HTTP, and
-origin validation in `src/app/mcp-http.ts` rejects untrusted browser-origin
-requests before they reach the MCP transport.
+not like local MCP stdio. When static tokens or OAuth token validation are
+configured, `/mcp` requires bearer auth. It shares the same rate limiter as JSON
+HTTP, and origin validation in `src/app/mcp-http.ts` rejects untrusted
+browser-origin requests before they reach the MCP transport.
 
 `/healthz` and `/readyz` remain unauthenticated. Empty token lists are only
 acceptable for loopback local development; non-loopback binds fail closed.
@@ -63,9 +78,9 @@ not from the caller token — defense-in-depth.
 ### Fail-closed startup gate
 
 `startOperatorServer` refuses to bind to a non-loopback host
-(`HOST=0.0.0.0`, `HOST=10.x.x.x`, etc.) when `MEMORY_API_TOKENS` is
-empty. Loopback dev with empty tokens is permitted; accidental
-zero-auth public exposure is not.
+(`HOST=0.0.0.0`, `HOST=10.x.x.x`, etc.) when both `MEMORY_API_TOKENS` and
+OAuth token validation are absent. Loopback dev with empty tokens is
+permitted; accidental zero-auth public exposure is not.
 
 ### HTTP body validation
 
@@ -146,13 +161,15 @@ mitigate:
   embeddings. Use `local` only as a deterministic CI/offline stub when
   retrieval quality is not important.
 - **Token storage at rest** is application-side (env vars, .env files).
-  No KMS integration today.
-- **No OAuth token validation yet.** Protected-resource discovery is a
-  compatibility foundation, not a full authorization-server integration.
-  Do not pass through third-party API tokens; keep using Akasha-issued/static
-  bearer tokens until an audience-validating token verifier exists.
-- **Postgres backups contain plaintext content.** Encrypt at rest at
-  the disk / volume level if your data classification requires it.
+  KMS integration is external to Akasha.
+- **Backups contain memory content.** Set `BACKUP_ENCRYPTION_KEY_FILE` to
+  encrypt Postgres dumps and Qdrant snapshots with AES-256-GCM before off-host
+  copy, or encrypt at the disk / volume level if your data classification
+  requires it. KMS deployments should provide the backup data key via that file.
+- **Retrieved memories are untrusted context.** Context packs include an
+  explicit trust-boundary notice and flag prompt-injection-like memory text
+  (for example "ignore previous instructions") so agents treat stored memories
+  as notes, not executable instructions.
 - **Qdrant payloads contain `organization_id`** — anyone with direct
   Qdrant access can read across orgs. Restrict Qdrant network access
   to the app process.

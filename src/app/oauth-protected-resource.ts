@@ -92,11 +92,32 @@ export function setOAuthWwwAuthenticateHeader(
   res.setHeader("WWW-Authenticate", buildOAuthWwwAuthenticateHeader(config));
 }
 
+export function setOAuthInsufficientScopeHeader(
+  res: ServerResponse,
+  config: OAuthProtectedResourceConfig | null,
+  scope: string,
+): void {
+  if (!config) {
+    return;
+  }
+  res.setHeader(
+    "WWW-Authenticate",
+    buildOAuthInsufficientScopeHeader(config, scope),
+  );
+}
+
 export function buildOAuthWwwAuthenticateHeader(
   config: OAuthProtectedResourceConfig,
 ): string {
   const scope = config.metadata.scopes_supported.join(" ");
   return `Bearer resource_metadata="${quoteAuthParam(config.metadataUrl)}", scope="${quoteAuthParam(scope)}"`;
+}
+
+export function buildOAuthInsufficientScopeHeader(
+  config: OAuthProtectedResourceConfig,
+  scope: string,
+): string {
+  return `Bearer error="insufficient_scope", resource_metadata="${quoteAuthParam(config.metadataUrl)}", scope="${quoteAuthParam(scope)}"`;
 }
 
 export function buildProtectedResourceMetadataUrl(resource: string): string {

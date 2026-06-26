@@ -20,6 +20,8 @@ const MIGRATION_FILES = [
   "007_ingest_jobs_qdrant_outbox.sql",
   "008_chunks_fk_index.sql",
   "009_memory_archive_qdrant_retry.sql",
+  "010_postgres_full_text_search.sql",
+  "011_entity_temporal_graph.sql",
 ] as const;
 
 const embeddedPostgresMigrationSql = `CREATE TABLE IF NOT EXISTS sources (
@@ -274,6 +276,85 @@ CREATE INDEX IF NOT EXISTS idx_memory_archive_qdrant_pending_retry
   WHERE qdrant_status = 'pending'
     AND qdrant_next_retry_at IS NOT NULL
     AND array_length(qdrant_point_ids, 1) > 0;
+
+-- Full-text lexical search support for Postgres-backed memory retrieval.
+-- Mirrors src/db/migrations/010_postgres_full_text_search.sql.
+ALTER TABLE memory_records
+  ADD COLUMN IF NOT EXISTS search_vector tsvector
+  GENERATED ALWAYS AS (
+    setweight(to_tsvector('simple', coalesce(title, '')), 'A') ||
+    setweight(to_tsvector('simple', coalesce(content, '')), 'B') ||
+    setweight(to_tsvector('simple', coalesce(summary, '')), 'C') ||
+    setweight(to_tsvector('simple', coalesce(project_key, '')), 'D') ||
+    setweight(to_tsvector('simple', coalesce(kind, '')), 'D')
+  ) STORED;
+
+CREATE INDEX IF NOT EXISTS idx_memory_records_search_vector
+  ON memory_records USING GIN (search_vector);
+
+CREATE INDEX IF NOT EXISTS idx_memory_records_org_scope_recent
+  ON memory_records (organization_id, scope_type, scope_id, id DESC);
+
+-- Persistent entity and temporal graph foundation.
+-- Mirrors src/db/migrations/011_entity_temporal_graph.sql.
+CREATE TABLE IF NOT EXISTS entities (
+  id              BIGSERIAL    PRIMARY KEY,
+  organization_id TEXT         NOT NULL,
+  kind            TEXT         NOT NULL,
+  normalized      TEXT         NOT NULL,
+  display_text    TEXT         NOT NULL,
+  first_seen_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  last_seen_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  UNIQUE (organization_id, kind, normalized)
+);
+
+CREATE INDEX IF NOT EXISTS idx_entities_org_kind_normalized
+  ON entities (organization_id, kind, normalized);
+
+CREATE TABLE IF NOT EXISTS memory_entity_mentions (
+  memory_record_id BIGINT       NOT NULL REFERENCES memory_records(id) ON DELETE CASCADE,
+  entity_id        BIGINT       NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  organization_id  TEXT         NOT NULL,
+  mention_text     TEXT         NOT NULL,
+  created_at       TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (memory_record_id, entity_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_memory_entity_mentions_entity
+  ON memory_entity_mentions (organization_id, entity_id, memory_record_id);
+
+CREATE INDEX IF NOT EXISTS idx_memory_entity_mentions_memory
+  ON memory_entity_mentions (organization_id, memory_record_id);
+
+CREATE TABLE IF NOT EXISTS entity_relationships (
+  id                         BIGSERIAL    PRIMARY KEY,
+  organization_id            TEXT         NOT NULL,
+  from_entity_id             BIGINT       NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  to_entity_id               BIGINT       NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
+  relation_type              TEXT         NOT NULL,
+  evidence_memory_record_id  BIGINT       NOT NULL REFERENCES memory_records(id) ON DELETE CASCADE,
+  valid_from                 DATE,
+  valid_to                   DATE,
+  confidence                 NUMERIC(4,3) NOT NULL DEFAULT 1.0,
+  created_at                 TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  UNIQUE (
+    organization_id,
+    from_entity_id,
+    to_entity_id,
+    relation_type,
+    evidence_memory_record_id
+  )
+);
+
+CREATE INDEX IF NOT EXISTS idx_entity_relationships_from
+  ON entity_relationships (organization_id, from_entity_id, relation_type);
+
+CREATE INDEX IF NOT EXISTS idx_entity_relationships_to
+  ON entity_relationships (organization_id, to_entity_id, relation_type);
+
+CREATE INDEX IF NOT EXISTS idx_entity_relationships_temporal
+  ON entity_relationships (organization_id, valid_from)
+  WHERE valid_from IS NOT NULL;
 `;
 
 export type ReadPostgresMigrationSqlOptions = {

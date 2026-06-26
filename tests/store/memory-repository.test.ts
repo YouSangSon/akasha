@@ -3,6 +3,17 @@ import { createPgPool } from "../../src/db/connection.js";
 import { runMigrations } from "../../src/db/migrate.js";
 import { createMemoryRepository } from "../../src/store/memory-repository.js";
 
+type EntityMentionRow = {
+  kind: string;
+  normalized: string;
+  mention_text: string;
+};
+
+type EntityRelationshipRow = {
+  relation_type: string;
+  valid_from: string | null;
+};
+
 const postgresPort = process.env.POSTGRES_PORT ?? "5432";
 const testDatabaseName = "memory_os_store_test";
 const adminConnectionString =
@@ -260,11 +271,15 @@ describe("createMemoryRepository (unit — no PG required)", () => {
     expect(queryCalls).toHaveLength(1);
     const { sql, params } = queryCalls[0]!;
 
-    expect(sql).toContain("ILIKE $1");
+    expect(sql).toContain("websearch_to_tsquery('simple', $1)");
+    expect(sql).toContain("mr.search_vector @@ lexical.query");
+    expect(sql).toContain("ts_rank_cd(mr.search_vector, lexical.query, 32)");
+    expect(sql).toContain("ILIKE $2");
     expect(sql).toContain(" OR ");
     expect(sql).toMatch(/ORDER BY \(.+\) DESC, mr\.id DESC/s);
     expect(params).toEqual(
       expect.arrayContaining([
+        "timeout retry backoff",
         "%timeout retry backoff%",
         "%timeout%",
         "%retry%",
@@ -273,6 +288,42 @@ describe("createMemoryRepository (unit — no PG required)", () => {
         "proj-x",
         "org-a",
         5,
+      ]),
+    );
+  });
+
+  it("searchMemory adds entity graph rescue clauses for deterministic mentions", async () => {
+    const queryCalls: { sql: string; params: unknown[] }[] = [];
+    const mockPool = {
+      query: vi.fn().mockImplementation((sql: string, params: unknown[]) => {
+        queryCalls.push({ sql, params });
+        return Promise.resolve({ rows: [] });
+      }),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    await repo.searchMemory({
+      query: "QDRANT_SNAPSHOT_TIMEOUT docs/operations.md",
+      scopes: [{ scopeType: "project", scopeId: "proj-x" }],
+      organizationId: "org-a",
+      limit: 5,
+    });
+
+    expect(queryCalls).toHaveLength(1);
+    const { sql, params } = queryCalls[0]!;
+
+    expect(sql).toContain("FROM memory_entity_mentions mem");
+    expect(sql).toContain("JOIN entities e ON e.id = mem.entity_id");
+    expect(sql).toContain("mem.memory_record_id = mr.id");
+    expect(sql).toContain("e.kind = $");
+    expect(sql).toContain("e.normalized = $");
+    expect(sql).toMatch(/CASE WHEN\s+EXISTS[\s\S]+THEN 3 ELSE 0 END/);
+    expect(params).toEqual(
+      expect.arrayContaining([
+        "code_symbol",
+        "qdrant_snapshot_timeout",
+        "path",
+        "docs/operations.md",
       ]),
     );
   });
@@ -357,6 +408,97 @@ describe.skipIf(!process.env.POSTGRES_HOST)("createMemoryRepository", () => {
       expect(created.sourceId).toBeGreaterThan(0);
       expect(created.summary).toContain("Always respond in Korean");
       expect(created.source.uri).toBe("file:///tmp/manual-note.md");
+    } finally {
+      await pool.end();
+    }
+  });
+
+  it("persists entity mentions and temporal relationships in the write transaction", async () => {
+    const pool = createPgPool({
+      connectionString: testConnectionString,
+    });
+
+    try {
+      await runMigrations(pool);
+      const repository = createMemoryRepository(pool);
+
+      const created = await repository.addMemory({
+        organizationId: "org-graph",
+        scopeType: "project",
+        scopeId: "project-alpha",
+        projectKey: "project-alpha",
+        memoryType: "fact",
+        title: "Snapshot timeout",
+        content:
+          "Set QDRANT_SNAPSHOT_TIMEOUT in docs/operations.md on 2026-06-26.",
+        source: {
+          scopeType: "project",
+          scopeId: "project-alpha",
+          sourceType: "document",
+          sourceRef: "docs/operations.md",
+          title: "Operations",
+        },
+        durability: "durable",
+        importance: 3,
+      });
+
+      const mentions = await pool.query<EntityMentionRow>(
+        `
+          SELECT e.kind, e.normalized, mem.mention_text
+          FROM memory_entity_mentions mem
+          JOIN entities e ON e.id = mem.entity_id
+          WHERE mem.memory_record_id = $1
+            AND mem.organization_id = $2
+          ORDER BY e.kind, e.normalized
+        `,
+        [created.id, "org-graph"],
+      );
+      const relationships = await pool.query<EntityRelationshipRow>(
+        `
+          SELECT relation_type, valid_from::text
+          FROM entity_relationships
+          WHERE evidence_memory_record_id = $1
+            AND organization_id = $2
+          ORDER BY relation_type, valid_from NULLS FIRST
+        `,
+        [created.id, "org-graph"],
+      );
+      const searched = await repository.searchMemory({
+        organizationId: "org-graph",
+        query: "QDRANT_SNAPSHOT_TIMEOUT docs/operations.md",
+        scopes: [{ scopeType: "project", scopeId: "project-alpha" }],
+        limit: 10,
+      });
+
+      expect(mentions.rows).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "code_symbol",
+            normalized: "qdrant_snapshot_timeout",
+          }),
+          expect.objectContaining({
+            kind: "date",
+            normalized: "2026-06-26",
+          }),
+          expect.objectContaining({
+            kind: "path",
+            normalized: "docs/operations.md",
+          }),
+        ]),
+      );
+      expect(relationships.rows).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            relation_type: "co_mentions",
+            valid_from: null,
+          }),
+          expect.objectContaining({
+            relation_type: "temporal_context",
+            valid_from: "2026-06-26",
+          }),
+        ]),
+      );
+      expect(searched.map((record) => record.id)).toContain(created.id);
     } finally {
       await pool.end();
     }

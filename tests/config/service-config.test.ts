@@ -16,6 +16,7 @@ describe("resolveServiceConfig", () => {
         OPENAI_EMBEDDING_MODEL: "text-embedding-3-small",
         BACKUP_DIR: "/var/lib/developer-memory-os/backups",
         BACKUP_TARGET_HOST: "backup@example.internal",
+        BACKUP_ENCRYPTION_KEY_FILE: "/run/secrets/akasha-backup-data-key",
       },
     });
 
@@ -28,6 +29,9 @@ describe("resolveServiceConfig", () => {
     expect(config.embedding.model).toBe("text-embedding-3-small");
     expect(config.embedding.dimensions).toBe(1536);
     expect(config.backups.targetHost).toBe("backup@example.internal");
+    expect(config.backups.encryptionKeyFile).toBe(
+      "/run/secrets/akasha-backup-data-key",
+    );
   });
 
   it("defaults to the transformers provider with Xenova/all-MiniLM-L6-v2 (384-dim) when EMBEDDING_PROVIDER is unset, with no OPENAI_API_KEY required", () => {

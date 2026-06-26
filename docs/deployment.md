@@ -171,7 +171,9 @@ BACKUP_TARGET_HOST=backup@backup.example.com
 ```
 
 The `npm run backup:create` script handles the scp invocation. See
-[docs/operations.md](operations.md) for the schedule + retention policy.
+[docs/operations.md](operations.md) for the schedule + retention policy. Set
+`BACKUP_ENCRYPTION_KEY_FILE` to rewrite the manifest to encrypted `.enc`
+artifacts and prevent plaintext artifact copies to the remote host.
 
 ## Disaster recovery
 

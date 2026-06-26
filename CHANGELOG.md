@@ -39,9 +39,48 @@ small actual impact surface.
   (`docker compose -f compose.yaml -f compose.pgvector.yaml up -d`) swaps in
   `pgvector/pgvector:pg16` for local development. Switching backends requires
   `reindex_memory`.
+- **Persistent entity and temporal graph foundation** — `add_memory` now
+  extracts deterministic mentions (code symbols, paths, URLs, dates, and named
+  concepts) into `entities` and `memory_entity_mentions`, and records same-row
+  co-mentions plus date context in `entity_relationships`. `search_memory`
+  uses that graph as an exact rescue/boost path alongside Postgres FTS,
+  substring fallback, and vector retrieval. Migration range is now `001-011`.
+- **MCP roots, elicitation, and sampling helpers** — MCP transports now register
+  `list_workspace_roots` for client-advertised `roots/list` and
+  `add_memory_interactive` for form-based elicitation before storing accepted
+  memory through the normal `add_memory` path. `classify_memory_candidate` uses
+  client sampling to suggest a memory kind and concise summary without storing
+  anything. Unsupported clients receive explicit structured results instead of
+  failed requests. The TypeScript MCP SDK minimum is now `^1.28.0`, the first
+  locked version this project verifies for these server-to-client APIs.
+- **Encrypted backup artifacts** — `backup:create` now honors
+  `BACKUP_ENCRYPTION_KEY_FILE` and encrypts Postgres dumps plus Qdrant snapshots
+  with AES-256-GCM before off-host copy. The manifest is rewritten to `.enc`
+  artifacts with ciphertext checksums, plaintext artifacts are removed by
+  default, and `backup:decrypt` can restore one artifact for operator restore
+  commands. KMS remains external: provide a 32-byte data key through the key
+  file from your scheduler or secret manager.
+- **Context-pack prompt-injection hardening** — generated context packs now
+  start with a trust-boundary notice stating that retrieved memories are
+  untrusted notes, not instructions. Excerpts containing prompt-injection-like
+  phrases such as "ignore previous instructions" are labeled with a warning.
+- **Lifecycle init automation** — the CLI now includes `init` to generate
+  `.akasha/` MCP client snippets, a `.env`-sourcing MCP stdio wrapper, and
+  session-start/session-end hook scripts. The new `remember` command lets hooks
+  store short durable summaries through the existing `add_memory` path without
+  requiring the HTTP server. `install.sh` runs init after build and migrations.
 
 ### Security
 
+- **OAuth/OIDC JWT validation for HTTP transports** — `/mcp` and `/v1/*` now
+  accept OAuth/OIDC JWT access tokens in addition to static
+  `MEMORY_API_TOKENS`. Tokens are verified against configured authorization
+  servers, JWKS, `MCP_OAUTH_RESOURCE_URL` audience, expiry / not-before,
+  algorithm allowlist, and tool-specific scopes (`akasha:read`,
+  `akasha:write`, `akasha:admin`, or compatibility `akasha:memory`). JWT
+  organization claims default to `organization_id` and act like token-org
+  bindings when present; insufficient OAuth scopes return 403 with a Bearer
+  `insufficient_scope` challenge.
 - **Secret scrubber now covers `title` and `summary`, not only `content`** —
   `writeCanonicalMemory` previously only scanned `content` for credential
   shapes (AWS key, GitHub PAT, OpenAI key, PEM, JWT, etc.); a caller could
@@ -107,6 +146,11 @@ small actual impact surface.
 
 ### Performance
 
+- **Postgres full-text lexical retrieval** — `search_memory` lexical candidates
+  now use a generated `memory_records.search_vector` column, a GIN index, and
+  `ts_rank_cd` scoring before merging with vector candidates. The previous
+  substring matching remains as a fallback for exact file paths, env vars, and
+  short code identifiers.
 - **`embedBatch` API to collapse N HTTP RTTs into one** — `writeCanonicalMemory`
   and `reindexCanonicalMemory` used `Promise.all(map(embed))` to embed each
   chunk individually. For OpenAI that meant N round-trips per ingest and per

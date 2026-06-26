@@ -107,27 +107,50 @@ npm run db:migrate
 ok "Migrations applied"
 
 # ─────────────────────────────────────────────────────────────────────
-# 5. Print MCP client config
+# 5. Write MCP + lifecycle integration files
+# ─────────────────────────────────────────────────────────────────────
+
+step "Writing MCP + lifecycle integration files"
+AKASHA_PROJECT_KEY="${AKASHA_PROJECT_KEY:-$(basename "$REPO_DIR")}"
+AKASHA_ORGANIZATION_ID="${AKASHA_ORGANIZATION_ID:-default}"
+AKASHA_TASK="${AKASHA_TASK:-continue implementation}"
+AKASHA_INIT_OUT_DIR="${AKASHA_INIT_OUT_DIR:-.akasha}"
+case "$AKASHA_INIT_OUT_DIR" in
+  /*) AKASHA_INIT_DISPLAY_DIR="$AKASHA_INIT_OUT_DIR" ;;
+  *) AKASHA_INIT_DISPLAY_DIR="${REPO_DIR}/${AKASHA_INIT_OUT_DIR}" ;;
+esac
+
+INIT_ARGS=(
+  init
+  --project "$AKASHA_PROJECT_KEY"
+  --organization-id "$AKASHA_ORGANIZATION_ID"
+  --task "$AKASHA_TASK"
+  --out-dir "$AKASHA_INIT_OUT_DIR"
+)
+if [ "${AKASHA_INIT_FORCE:-false}" = "true" ]; then
+  INIT_ARGS+=(--force)
+fi
+
+node dist/src/cli.js "${INIT_ARGS[@]}"
+ok "Lifecycle files ready"
+
+# ─────────────────────────────────────────────────────────────────────
+# 6. Print MCP client config
 # ─────────────────────────────────────────────────────────────────────
 
 step "Done — point your MCP client at this server"
 
 cat <<JSON
-Add the following to your Claude Desktop config
-(typical paths: ~/Library/Application Support/Claude/claude_desktop_config.json on macOS,
-                %APPDATA%\\Claude\\claude_desktop_config.json on Windows):
+Generated MCP config snippets:
+  Claude Desktop / Claude Code: ${AKASHA_INIT_DISPLAY_DIR}/mcp/claude-desktop.json
+  Codex CLI TOML:              ${AKASHA_INIT_DISPLAY_DIR}/mcp/codex.toml
 
-{
-  "mcpServers": {
-    "akasha": {
-      "command": "node",
-      "args": ["${REPO_DIR}/dist/src/cli.js"]
-    }
-  }
-}
+Generated lifecycle helpers:
+  Session start context pack:  ${AKASHA_INIT_DISPLAY_DIR}/hooks/session-start.sh
+  Session end memory write:    ${AKASHA_INIT_DISPLAY_DIR}/hooks/session-end.sh
 
-For Codex CLI or other MCP clients, point them at:
-  ${REPO_DIR}/dist/src/cli.js
+The MCP config uses:
+  ${AKASHA_INIT_DISPLAY_DIR}/bin/mcp-server.sh
 
 HTTP API also available at: http://${HOST:-127.0.0.1}:${PORT:-8787}
   (run 'npm run start:server' to start it; 'npm run dev:server' for watch mode)

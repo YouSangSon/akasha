@@ -14,5 +14,5 @@ Read these to understand the codebase:
 
 - Embedding default is `transformers` (free local ONNX). `OPENAI_API_KEY` is **optional** — only needed when `EMBEDDING_PROVIDER=openai`.
 - All memory operations are org-scoped. Pass `organizationId` on every call.
-- Migrations live in `src/db/migrations/`. The current range is `001-009`.
+- Migrations live in `src/db/migrations/`. The current range is `001-011`.
 - Tests: `npm test`. Type-check: `npm run typecheck`.

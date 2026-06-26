@@ -14,10 +14,15 @@ import {
   type DependencyProbes,
 } from "../health/check-dependencies.js";
 import {
+  authenticateBearer,
   loadBearerTokens,
-  matchBearerFromRequest,
   type BearerToken,
+  type OAuthTokenVerifier,
 } from "./middleware/bearer-auth.js";
+import {
+  createOAuthTokenVerifier,
+  loadOAuthTokenVerifierConfig,
+} from "./middleware/oauth-token-auth.js";
 import { sendError, sendOk } from "./middleware/envelope.js";
 import {
   createMetricsRegistry,
@@ -73,6 +78,10 @@ export type CreateOperatorServerOptions = {
   // Optional OAuth protected-resource discovery metadata for MCP HTTP.
   // Undefined loads env config; null disables discovery explicitly.
   oauthProtectedResource?: OAuthProtectedResourceConfig | null;
+  // Optional OAuth/OIDC JWT verifier. Undefined builds one from OAuth env
+  // config when protected-resource metadata is enabled; null disables OAuth
+  // token validation explicitly.
+  oauthTokenVerifier?: OAuthTokenVerifier | null;
 };
 
 function normalizeTokens(
@@ -101,12 +110,15 @@ export function isLoopbackHost(host: string): boolean {
 export function assertSafeAuthConfig(args: {
   tokenCount: number;
   host: string;
+  oauthTokenValidationEnabled?: boolean;
 }): void {
   if (args.tokenCount > 0) return;
+  if (args.oauthTokenValidationEnabled) return;
   if (isLoopbackHost(args.host)) return;
   throw new Error(
-    `MEMORY_API_TOKENS must be set when binding to a non-loopback host ` +
+    `MEMORY_API_TOKENS or OAuth token validation must be set when binding to a non-loopback host ` +
       `(got host=${args.host}). Set MEMORY_API_TOKENS=<comma-separated> or ` +
+      `configure MCP_OAUTH_AUTHORIZATION_SERVERS + MCP_OAUTH_RESOURCE_URL, or ` +
       `bind to 127.0.0.1 / localhost / ::1 for local dev.`,
   );
 }
@@ -126,8 +138,18 @@ export function createOperatorServer(
     options.oauthProtectedResource === undefined
       ? loadOAuthProtectedResourceConfig(process.env)
       : options.oauthProtectedResource;
+  const oauthTokenVerifier =
+    options.oauthTokenVerifier === undefined
+      ? createOAuthTokenVerifier(
+          loadOAuthTokenVerifierConfig(process.env, oauthProtectedResource),
+        )
+      : options.oauthTokenVerifier;
   const registry = options.registry ?? createDefaultToolRegistry(log);
-  const routes: Route[] = createMemoryRoutes({ registry, logger: log });
+  const routes: Route[] = createMemoryRoutes({
+    registry,
+    logger: log,
+    oauthProtectedResource,
+  });
   const metrics = createMetricsRegistry();
 
   let rateLimiter: RateLimiter | null = options.rateLimiter ?? null;
@@ -138,7 +160,7 @@ export function createOperatorServer(
     }
   }
 
-  if (tokens.length === 0) {
+  if (tokens.length === 0 && !oauthTokenVerifier) {
     log.warn(
       { event: "auth.disabled" },
       "MEMORY_API_TOKENS not set — bearer auth is disabled",
@@ -210,6 +232,7 @@ export function createOperatorServer(
             res,
             registry,
             bearerTokens: tokens,
+            oauthTokenVerifier,
             rateLimiter,
             logger: log,
             oauthProtectedResource,
@@ -220,8 +243,14 @@ export function createOperatorServer(
         // Bearer auth gate (only when tokens are configured). When matched,
         // we keep the BearerToken so the route can enforce its org binding.
         let matchedToken: BearerToken | null = null;
-        if (tokens.length > 0) {
-          matchedToken = matchBearerFromRequest(req, tokens);
+        if (tokens.length > 0 || oauthTokenVerifier) {
+          matchedToken = await authenticateBearer(
+            typeof req.headers.authorization === "string"
+              ? req.headers.authorization
+              : undefined,
+            tokens,
+            oauthTokenVerifier,
+          );
           if (!matchedToken) {
             if (isV1Request(req.url)) {
               setOAuthWwwAuthenticateHeader(res, oauthProtectedResource);
@@ -377,7 +406,21 @@ export function startOperatorServer(
   const tokens: BearerToken[] = options.bearerTokens
     ? normalizeTokens(options.bearerTokens)
     : loadBearerTokens(process.env);
-  assertSafeAuthConfig({ tokenCount: tokens.length, host: config.host });
+  const oauthProtectedResource =
+    options.oauthProtectedResource === undefined
+      ? loadOAuthProtectedResourceConfig(process.env)
+      : options.oauthProtectedResource;
+  const oauthTokenVerifier =
+    options.oauthTokenVerifier === undefined
+      ? createOAuthTokenVerifier(
+          loadOAuthTokenVerifierConfig(process.env, oauthProtectedResource),
+        )
+      : options.oauthTokenVerifier;
+  assertSafeAuthConfig({
+    tokenCount: tokens.length,
+    host: config.host,
+    oauthTokenValidationEnabled: oauthTokenVerifier !== null,
+  });
 
   // Dedicated pool for /readyz dependency probes. Kept separate from
   // canonical-services so /readyz works before (or without) any tool call
@@ -392,6 +435,8 @@ export function startOperatorServer(
     config,
     logger: log,
     dependencyProbes,
+    oauthProtectedResource,
+    oauthTokenVerifier,
   });
 
   // Optional: background outbox sweeper for P17 compaction-apply Qdrant

@@ -75,12 +75,14 @@ Postgres 에 저장할 수 있습니다 — Qdrant 불필요.
 
 코딩 에이전트와의 대화는 세션이 끝나는 순간 컨텍스트를 잃습니다.
 Akasha는 그 에이전트가 *기억할 가치가 있는 것*을 저장하고 다음에 다시
-읽어올 수 있는 장소입니다. 동일한 7개 도구가 MCP stdio, `POST /mcp` 의
+읽어올 수 있는 장소입니다. 동일한 7개 core service 도구가 MCP stdio, `POST /mcp` 의
 MCP Streamable HTTP, 그리고 `/v1/*` 아래 JSON-HTTP 로 노출됩니다 —
 전체 요청/응답 스키마는
 [docs/api-reference.ko.md](docs/api-reference.ko.md) 참고.
-세 가지 접근 경로는 동일한 7개 도구 schema surface를 공유하므로 검증과
-payload shape가 어긋나지 않습니다.
+세 가지 접근 경로는 동일한 7개 service tool schema surface를 공유하므로 검증과
+payload shape가 어긋나지 않습니다. MCP에는 연결된 클라이언트가 capability를
+광고할 때 workspace roots, user elicitation, sampling을 쓰는 context helper도
+추가로 노출됩니다.
 
 | 도구 | 하는 일 | HTTP 라우트 |
 |------|---------|------------|
@@ -91,6 +93,11 @@ payload shape가 어긋나지 않습니다.
 | `reindex_memory` | Postgres 로부터 벡터 인덱스 재구축 (데이터 손실 0) | `POST /v1/memory/reindex` |
 | `unarchive_memory` | 아카이빙된 레코드 복원 (포렌식/실수 복구용) | `POST /v1/memory/unarchive` |
 | `list_audit_log` | 감사 로그 조회 (compliance / 디버깅) | `POST /v1/audit/list` |
+
+MCP 전용 context tool: `list_workspace_roots` 는 클라이언트가 광고한 roots를
+읽고, `add_memory_interactive` 는 MCP elicitation으로 사용자 확인 memory를
+수집해 저장하며, `classify_memory_candidate` 는 MCP sampling으로 memory kind와
+summary를 제안합니다.
 
 레코드마다 `organization_id`를 가지는 멀티-테넌트, bearer 토큰 인증, 감사 로그,
 rate limiting을 갖추고 있습니다. 노트북 위 단일 사용자 MCP 서버부터 회사 인프라
@@ -115,18 +122,13 @@ ${EDITOR:-nano} .env
 # 2. 기본 Compose 스택의 Postgres + Qdrant 실행 + 마이그레이션 + 빌드
 ./install.sh
 
-# 3. MCP 클라이언트가 이 서버를 가리키도록 설정.
-#    Claude Desktop config에 추가:
-cat <<EOF
-{
-  "mcpServers": {
-    "akasha": {
-      "command": "node",
-      "args": ["$(pwd)/dist/src/mcp/server.js"]
-    }
-  }
-}
-EOF
+# 3. 생성된 config snippet을 MCP 클라이언트에 연결:
+cat .akasha/mcp/claude-desktop.json
+cat .akasha/mcp/codex.toml
+
+# session hook을 지원하는 host라면 lifecycle helper도 사용 가능:
+.akasha/hooks/session-start.sh "continue implementation"
+printf '%s\n' "Summary: durable outcome ..." | .akasha/hooks/session-end.sh
 ```
 
 ## 실전 예제 (Worked example)
@@ -167,15 +169,16 @@ curl -sX POST http://localhost:8787/v1/memory/context-pack \
 |-------|------|
 | MCP 서버 (`src/mcp/`) | 공유 MCP 서버 surface: tool descriptor, schema, registry, handler |
 | HTTP 서버 (`src/app/`) | `/mcp` 의 MCP Streamable HTTP 와 `/v1/*` 아래 JSON HTTP 를 제공합니다 |
-| Canonical store (`src/store/memory-repository.ts`) | Postgres — 레코드, 소스, ingest job, 감사 |
+| Canonical store (`src/store/memory-repository.ts`) | Postgres — 레코드, 소스, ingest job, entity graph, 감사 |
 | Vector index (`src/vector/`) | Qdrant (기본) 또는 pgvector — 청크 임베딩 + 유사도 검색. `VECTOR_BACKEND=pgvector` 로 Postgres 단독 배포 가능. |
 | Compaction (`src/compact/`) | 중복 제거 (exact + 시맨틱), decay, archive, unarchive, sweeper |
 | Embeddings (`src/embedding/`) | `transformers` (무료 로컬 ONNX, 기본), `openai` (`text-embedding-3-small`), 또는 `local` (CI용 결정론적 stub) |
 
-데이터 흐름: 호출자가 `add_memory` → 레코드는 Postgres에 저장 + 청크 분할 +
-임베딩 + 활성 벡터 백엔드 upsert. `search_memory` → 쿼리 임베딩 → 활성 벡터
-백엔드 유사도 검색 → Postgres에서 hydrate → 랭킹 → 반환. 자세한 설계 내용은
-[docs/architecture.ko.md](docs/architecture.ko.md) 참고.
+데이터 흐름: 호출자가 `add_memory` → 레코드는 Postgres에 저장, entity mention
+연결, 청크 분할 + 임베딩 + 활성 벡터 백엔드 upsert. `search_memory` → 쿼리
+임베딩 → 활성 벡터 유사도 + Postgres FTS/entity lexical 검색 → hydrate → 랭킹
+→ 반환. 자세한 설계 내용은 [docs/architecture.ko.md](docs/architecture.ko.md)
+참고.
 
 ## 설정
 
@@ -183,7 +186,7 @@ curl -sX POST http://localhost:8787/v1/memory/context-pack \
 
 | 변수 | 기본값 | 용도 |
 |------|--------|------|
-| `MEMORY_API_TOKENS` | _(필수)_ | HTTP API 용 bearer 토큰; `token:org` 로 토큰을 org 에 바인딩 |
+| `MEMORY_API_TOKENS` | _(OAuth JWT 검증 미설정 시 필수)_ | HTTP API 용 static bearer 토큰; `token:org` 로 토큰을 org 에 바인딩 |
 | `EMBEDDING_PROVIDER` | `transformers` | `transformers` (무료 로컬 ONNX), `openai`, 또는 `local` (CI stub) |
 | `VECTOR_BACKEND` | `qdrant` | `qdrant`, 또는 Postgres 단독 배포용 `pgvector` |
 
@@ -214,6 +217,7 @@ curl -sX POST http://localhost:8787/v1/memory/context-pack \
 npm run dev:server    # HTTP API (watch 모드)
 npm run dev:mcp       # MCP stdio 서버 (watch 모드)
 npm run dev:cli       # CLI (watch 모드)
+npm run lifecycle:init -- --project my-project --organization-id default
 npm run typecheck     # tsc --noEmit
 npm run test          # vitest run
 npm run db:migrate    # 미적용 마이그레이션 실행
@@ -224,7 +228,8 @@ npm run backup:create:pgvector # 명시적 Postgres-only pgvector backup
 `VECTOR_BACKEND=qdrant` 에서는 `backup:create` 가 Postgres와 Qdrant snapshot을
 함께 캡처합니다. `VECTOR_BACKEND=pgvector` 에서는 logical vector data lives in
 Postgres 이므로 `backup:create` 는 `scripts/snapshot-qdrant.sh` 를 건너뛰며
-`QDRANT_URL` 을 요구하지 않습니다.
+`QDRANT_URL` 을 요구하지 않습니다. `BACKUP_ENCRYPTION_KEY_FILE` 을 설정하면
+off-host copy 전에 backup artifact를 AES-256-GCM으로 암호화합니다.
 
 ## 기여 & 보안
 

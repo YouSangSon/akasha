@@ -165,7 +165,9 @@ BACKUP_TARGET_HOST=backup@backup.example.com
 ```
 
 `npm run backup:create` 스크립트가 scp 호출 처리. 스케줄 + retention 정책은
-[docs/operations.ko.md](operations.ko.md) 참고.
+[docs/operations.ko.md](operations.ko.md) 참고. `BACKUP_ENCRYPTION_KEY_FILE` 을
+설정하면 manifest가 encrypted `.enc` artifact를 가리키도록 갱신되고, 원격
+호스트에는 plaintext artifact를 복사하지 않습니다.
 
 ## 재해 복구
 
