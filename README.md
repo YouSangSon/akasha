@@ -66,6 +66,9 @@ operated in production:
 - **Dual MCP transports plus JSON HTTP.** MCP clients can use stdio or
   Streamable HTTP at `POST /mcp`; scripts and non-MCP clients can keep using
   JSON HTTP under `/v1/*`.
+- **Memory governance UI.** Operators can review, edit, tag, and archive
+  records from the static `/admin/memory` shell while all data calls still go
+  through the authenticated `/v1/*` API.
 - **Production health probes.** `/healthz` (liveness) and a dependency-aware
   `/readyz` (readiness) drive Kubernetes / load-balancer health checks.
 - **Pluggable vector backend.** Qdrant by default, or `VECTOR_BACKEND=pgvector`
@@ -75,11 +78,11 @@ operated in production:
 
 Conversations with coding agents lose context the moment the session ends.
 Akasha is the place those agents save what's worth remembering and
-read it back next time. The same 7 core service tools are exposed over MCP
+read it back next time. The same 11 core service tools are exposed over MCP
 stdio, MCP Streamable HTTP at `POST /mcp`, and JSON-HTTP under `/v1/*` — full
 request/response schemas live in
 [docs/api-reference.md](docs/api-reference.md).
-HTTP and MCP share that seven-tool service schema surface, so validation and
+HTTP and MCP share that service schema surface, so validation and
 payload shapes stay aligned across both transports. MCP additionally exposes
 client-context helpers for workspace roots, user elicitation, and sampling when
 the connected client advertises those capabilities.
@@ -91,6 +94,10 @@ the connected client advertises those capabilities.
 | `build_context_pack` | Generate a compact pack to seed a new session | `POST /v1/memory/context-pack` |
 | `compact_memory` | Prune duplicates and decayed records (apply or dry-run) | `POST /v1/memory/compact` |
 | `reindex_memory` | Rebuild the vector index from Postgres (0 data loss) | `POST /v1/memory/reindex` |
+| `list_memory` | Review canonical records with tag / archived filters | `POST /v1/memory/list` |
+| `update_memory` | Edit one canonical record and refresh its vector state | `POST /v1/memory/update` |
+| `delete_memory` | Governance archive of one record plus vector cleanup | `POST /v1/memory/delete` |
+| `tag_memory` | Replace governance tags on one record | `POST /v1/memory/tag` |
 | `unarchive_memory` | Restore archived records for forensic recovery | `POST /v1/memory/unarchive` |
 | `list_audit_log` | Read the audit trail for compliance / debugging | `POST /v1/audit/list` |
 
@@ -205,7 +212,7 @@ page has a Korean (`*.ko.md`) mirror.
 | [Configuration](docs/configuration.md) | Every environment variable with types, defaults, examples |
 | [API reference](docs/api-reference.md) | HTTP endpoints and MCP tool schemas |
 | [Deployment](docs/deployment.md) | Docker Compose setup, production checklist |
-| [Operations](docs/operations.md) | Day-to-day tasks: health checks, compaction, audit log |
+| [Operations](docs/operations.md) | Day-to-day tasks: health checks, compaction, memory governance, audit log |
 | [Security](docs/security.md) | Auth model, secret scrubber, org isolation, threat model |
 | [Self-hosted operations](docs/self-hosted-operations.md) | Backup, restore, and smoke-test runbook |
 | [Troubleshooting](docs/troubleshooting.md) | Common failure modes and resolution steps |

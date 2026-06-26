@@ -193,11 +193,12 @@ OAuth access token은 다음 조건을 모두 만족할 때만 허용됩니다:
 
 Scope:
 - `akasha:read` — `search_memory`, `build_context_pack`,
-  `list_workspace_roots`, `classify_memory_candidate`, dry-run
+  `list_memory`, `list_workspace_roots`, `classify_memory_candidate`, dry-run
   `compact_memory`.
 - `akasha:write` — `add_memory`, `add_memory_interactive`.
 - `akasha:admin` — `reindex_memory`, `unarchive_memory`, `list_audit_log`,
-  `dryRun: false` 인 `compact_memory`.
+  `update_memory`, `delete_memory`, `tag_memory`, `dryRun: false` 인
+  `compact_memory`.
 - `akasha:memory` — 위 scope를 모두 만족하는 호환성 umbrella scope.
 
 JWT에 `MCP_OAUTH_ORGANIZATION_CLAIM` (기본 `organization_id`) 이 비어 있지

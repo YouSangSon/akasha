@@ -5,7 +5,7 @@
 Akasha exposes the same core service tool surface through three access paths:
 
 - **MCP stdio** — for AI clients like Claude Code and Codex CLI.
-  Entry point: `dist/src/mcp/server.js`. All 7 service tools are registered,
+  Entry point: `dist/src/mcp/server.js`. All 11 service tools are registered,
   plus MCP-only client-context helpers.
 - **MCP Streamable HTTP** — for MCP clients that connect over HTTP.
   Primary documented endpoint: `POST /mcp` for JSON-RPC requests. The SDK
@@ -37,10 +37,12 @@ and `/v1/*` route requires a bearer token. Static tokens are configured via
 `MEMORY_API_TOKENS`; OAuth/OIDC JWT access tokens are accepted when
 `MCP_OAUTH_AUTHORIZATION_SERVERS` and `MCP_OAUTH_RESOURCE_URL` are configured
 and the token validates against issuer JWKS, audience, expiry, and scope.
-`/healthz`, `/readyz`, and `/metrics` are unauthenticated. For local
-development only, an empty token list is allowed when the server binds to
-loopback (`127.0.0.1`, `localhost`, or `::1`); binding to a non-loopback host
-without static tokens or OAuth token validation fails at startup.
+`/healthz`, `/readyz`, `/metrics`, and the static `/admin/memory` shell are
+unauthenticated. `/admin/memory` embeds no data or token and its browser-side
+JSON calls still target the authenticated `/v1/*` API. For local development
+only, an empty token list is allowed when the server binds to loopback
+(`127.0.0.1`, `localhost`, or `::1`); binding to a non-loopback host without
+static tokens or OAuth token validation fails at startup.
 
 ```bash
 curl -H "Authorization: Bearer dev-token" http://localhost:8787/v1/memory/search ...
@@ -298,6 +300,119 @@ backend (`qdrant` or `pgvector`). Use after changing `EMBEDDING_PROVIDER` or
 
 ---
 
+### list_memory — governance list
+
+```ts
+type ListMemoryInput = {
+  organizationId?: string;
+  projectKey?: string;           // required for project scope
+  scope?: "project" | "user";    // default "project"
+  userScopeId?: string;          // required for user scope
+  includeArchived?: boolean;
+  tag?: string;
+  limit?: number;                // max 5000
+};
+
+type MemoryRecord = SearchMemoryResult & {
+  tags: string[];
+};
+
+type ListMemoryResult = {
+  ok: true;
+  scopeType: "project" | "user";
+  scopeId: string;
+  memories: MemoryRecord[];
+};
+```
+
+HTTP: `POST /v1/memory/list`
+MCP stdio: `list_memory`
+
+Read-only governance review. Tag filters use `memory_tags`; archived rows are
+excluded unless `includeArchived` is true.
+
+---
+
+### update_memory — edit one canonical record
+
+```ts
+type UpdateMemoryInput = {
+  organizationId?: string;
+  memoryId: number;
+  kind?: "decision" | "summary" | "fact";
+  title?: string | null;
+  content?: string;
+  summary?: string | null;
+  importance?: number;
+  durability?: "ephemeral" | "durable" | "archived";
+  tags?: string[];
+};
+
+type UpdateMemoryResult = {
+  ok: true;
+  updated: boolean;
+  memory?: MemoryRecord;
+};
+```
+
+HTTP: `POST /v1/memory/update`
+MCP stdio: `update_memory`
+
+Updates the canonical Postgres row, replaces tags when supplied, refreshes
+entity mentions, and refreshes vector state. Embedding/vector failures leave a
+due ingest retry marker instead of silently dropping index work.
+
+---
+
+### delete_memory — governance archive one record
+
+```ts
+type DeleteMemoryInput = {
+  organizationId?: string;
+  memoryId: number;
+};
+
+type DeleteMemoryResult = {
+  ok: true;
+  archived: boolean;
+  qdrantPointsDeleted: number;
+  qdrantPointsPending: number;
+};
+```
+
+HTTP: `POST /v1/memory/delete`
+MCP stdio: `delete_memory`
+
+Archives one canonical record through the same recovery path used by
+compaction, then removes active vector points. If vector deletion fails, the
+archive row remains pending for the cleanup sweeper.
+
+---
+
+### tag_memory — replace governance tags
+
+```ts
+type TagMemoryInput = {
+  organizationId?: string;
+  memoryId: number;
+  tags: string[];
+};
+
+type TagMemoryResult = {
+  ok: true;
+  updated: boolean;
+  memory?: MemoryRecord;
+};
+```
+
+HTTP: `POST /v1/memory/tag`
+MCP stdio: `tag_memory`
+
+Normalizes and replaces the record's governance tags, then refreshes vector
+payload metadata so tag-aware inspection sees current values.
+
+---
+
 ### compact_memory — dedup + decay (dry-run by default)
 
 ```ts
@@ -463,9 +578,9 @@ Emitted HTTP metrics:
   request duration.
 
 Route labels use static route names such as `/v1/memory/search`, `/mcp`,
-`/healthz`, `/readyz`, `/metrics`, or `unknown`. Raw URLs and query strings are
-never emitted. Labels and values do not include bearer tokens, organization
-IDs, request bodies, search queries, or memory content.
+`/admin/memory`, `/healthz`, `/readyz`, `/metrics`, or `unknown`. Raw URLs and
+query strings are never emitted. Labels and values do not include bearer
+tokens, organization IDs, request bodies, search queries, or memory content.
 
 Readiness dependency metrics come only from the most recent `/readyz` result:
 

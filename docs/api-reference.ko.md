@@ -5,7 +5,7 @@
 Akasha는 동일한 core service tool surface를 세 가지 접근 경로로 노출합니다:
 
 - **MCP stdio** — Claude Code, Codex CLI 같은 AI 클라이언트용.
-  진입점: `dist/src/mcp/server.js`. 7개 service tool 모두와 MCP 전용
+  진입점: `dist/src/mcp/server.js`. 11개 service tool 모두와 MCP 전용
   client-context helper가 등록됩니다.
 - **MCP Streamable HTTP** — HTTP로 연결하는 MCP 클라이언트용.
   기본 문서화 대상 엔드포인트는 JSON-RPC 요청용 `POST /mcp` 입니다. SDK
@@ -36,7 +36,9 @@ candidate text의 memory `kind` 와 짧은 `summary` 를 제안하며 저장은 
 `MEMORY_API_TOKENS` 로 설정합니다. OAuth/OIDC JWT access token은
 `MCP_OAUTH_AUTHORIZATION_SERVERS` 와 `MCP_OAUTH_RESOURCE_URL` 이 설정되어 있고
 issuer JWKS, audience, expiry, scope 검증을 통과할 때 허용됩니다.
-`/healthz`, `/readyz`, `/metrics` 는 인증 없음. 로컬 개발에서만 토큰 목록이
+`/healthz`, `/readyz`, `/metrics`, 정적 `/admin/memory` 셸은 인증이 없습니다.
+`/admin/memory` 는 데이터나 토큰을 embed하지 않으며, 브라우저 쪽 JSON 호출은
+계속 인증이 필요한 `/v1/*` API 를 대상으로 합니다. 로컬 개발에서만 토큰 목록이
 비어 있어도 loopback (`127.0.0.1`, `localhost`, `::1`) 바인딩이면 허용됩니다.
 static token 또는 OAuth token validation 없이 non-loopback host에 바인딩하면
 startup에서 실패합니다.
@@ -295,6 +297,119 @@ MCP stdio: `reindex_memory`
 
 ---
 
+### list_memory — governance 목록 조회
+
+```ts
+type ListMemoryInput = {
+  organizationId?: string;
+  projectKey?: string;           // project scope 시 필수
+  scope?: "project" | "user";    // 기본 "project"
+  userScopeId?: string;          // user scope 시 필수
+  includeArchived?: boolean;
+  tag?: string;
+  limit?: number;                // 최대 5000
+};
+
+type MemoryRecord = SearchMemoryResult & {
+  tags: string[];
+};
+
+type ListMemoryResult = {
+  ok: true;
+  scopeType: "project" | "user";
+  scopeId: string;
+  memories: MemoryRecord[];
+};
+```
+
+HTTP: `POST /v1/memory/list`
+MCP stdio: `list_memory`
+
+읽기 전용 governance 검토 도구입니다. Tag 필터는 `memory_tags` 를 사용하며,
+`includeArchived` 가 true일 때만 archived row를 포함합니다.
+
+---
+
+### update_memory — canonical 레코드 1개 수정
+
+```ts
+type UpdateMemoryInput = {
+  organizationId?: string;
+  memoryId: number;
+  kind?: "decision" | "summary" | "fact";
+  title?: string | null;
+  content?: string;
+  summary?: string | null;
+  importance?: number;
+  durability?: "ephemeral" | "durable" | "archived";
+  tags?: string[];
+};
+
+type UpdateMemoryResult = {
+  ok: true;
+  updated: boolean;
+  memory?: MemoryRecord;
+};
+```
+
+HTTP: `POST /v1/memory/update`
+MCP stdio: `update_memory`
+
+canonical Postgres row를 수정하고, 전달된 경우 tag를 교체하며, entity mention과
+vector 상태를 갱신합니다. 임베딩/vector 실패 시 인덱스 작업을 조용히 잃지 않고
+due ingest retry marker를 남깁니다.
+
+---
+
+### delete_memory — 레코드 1개 governance archive
+
+```ts
+type DeleteMemoryInput = {
+  organizationId?: string;
+  memoryId: number;
+};
+
+type DeleteMemoryResult = {
+  ok: true;
+  archived: boolean;
+  qdrantPointsDeleted: number;
+  qdrantPointsPending: number;
+};
+```
+
+HTTP: `POST /v1/memory/delete`
+MCP stdio: `delete_memory`
+
+Compaction과 같은 복구 가능한 archive 경로로 canonical 레코드 1개를 보관한 뒤
+활성 vector point를 제거합니다. Vector 삭제 실패 시 archive row가 cleanup
+sweeper 대상 pending 상태로 남습니다.
+
+---
+
+### tag_memory — governance tag 교체
+
+```ts
+type TagMemoryInput = {
+  organizationId?: string;
+  memoryId: number;
+  tags: string[];
+};
+
+type TagMemoryResult = {
+  ok: true;
+  updated: boolean;
+  memory?: MemoryRecord;
+};
+```
+
+HTTP: `POST /v1/memory/tag`
+MCP stdio: `tag_memory`
+
+레코드의 governance tag를 정규화해 교체한 뒤, tag-aware inspection이 최신 값을
+보도록 vector payload metadata를 갱신합니다.
+
+---
+
 ### compact_memory — 중복 + decay (기본 dry-run)
 
 ```ts
@@ -456,10 +571,10 @@ Kubernetes readiness probe, Docker `HEALTHCHECK`, 외부 업타임 모니터에 
 - `akasha_http_request_duration_seconds_sum{method,route,status}` — 누적 request
   duration.
 
-Route label은 `/v1/memory/search`, `/mcp`, `/healthz`, `/readyz`, `/metrics`,
-`unknown` 같은 static route 이름만 사용합니다. raw URL과 query string은
-노출하지 않습니다. label과 값에는 bearer token, organization ID, request body,
-search query, memory content를 넣지 않습니다.
+Route label은 `/v1/memory/search`, `/mcp`, `/admin/memory`, `/healthz`,
+`/readyz`, `/metrics`, `unknown` 같은 static route 이름만 사용합니다. raw URL과
+query string은 노출하지 않습니다. label과 값에는 bearer token, organization ID,
+request body, search query, memory content를 넣지 않습니다.
 
 Readiness dependency metrics는 가장 최근 `/readyz` 결과에서만 생성됩니다:
 

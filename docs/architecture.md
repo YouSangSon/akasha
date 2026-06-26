@@ -239,8 +239,8 @@ last_seen_at                                   valid_from / valid_to
                                                confidence / created_at
 ```
 
-Migrations live in `src/db/migrations/`. The current range is `001-011`;
-the runner applies `001` through `011` on bootstrap (each is idempotent,
+Migrations live in `src/db/migrations/`. The current range is `001-012`;
+the runner applies `001` through `012` on bootstrap (each is idempotent,
 `CREATE … IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS`).
 `009_memory_archive_qdrant_retry.sql` supplies archive Qdrant retry metadata,
 including `qdrant_next_retry_at` and the pending-retry index used by the
@@ -248,6 +248,8 @@ background archive cleanup sweeper. `010_postgres_full_text_search.sql` adds
 the generated `search_vector` column and GIN index used by lexical retrieval.
 `011_entity_temporal_graph.sql` adds persistent entity mention and temporal
 relationship tables used by graph-backed lexical rescue.
+`012_memory_governance_tags.sql` adds org-scoped `memory_tags` for governance
+filtering and vector payload metadata refreshes.
 
 ## Multi-tenancy
 

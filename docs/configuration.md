@@ -201,11 +201,12 @@ OAuth access tokens are accepted only when:
 
 Scopes:
 - `akasha:read` — `search_memory`, `build_context_pack`,
-  `list_workspace_roots`, `classify_memory_candidate`, and dry-run
+  `list_memory`, `list_workspace_roots`, `classify_memory_candidate`, and dry-run
   `compact_memory`.
 - `akasha:write` — `add_memory`, `add_memory_interactive`.
 - `akasha:admin` — `reindex_memory`, `unarchive_memory`, `list_audit_log`,
-  and `compact_memory` with `dryRun: false`.
+  `update_memory`, `delete_memory`, `tag_memory`, and `compact_memory` with
+  `dryRun: false`.
 - `akasha:memory` — compatibility umbrella scope that satisfies all of the
   above.
 

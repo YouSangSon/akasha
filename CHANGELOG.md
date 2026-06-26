@@ -28,6 +28,14 @@ small actual impact surface.
 
 ### Added
 
+- **Memory governance CRUD and admin shell** — MCP and JSON HTTP now expose
+  `list_memory`, `update_memory`, `delete_memory`, and `tag_memory` for
+  operator review/edit/tag/archive workflows. `delete_memory` archives through
+  the recoverable `memory_archive` path and keeps vector cleanup retryable.
+  The static `/admin/memory` page gives operators a compact browser shell while
+  leaving all data calls behind the existing authenticated `/v1/*` routes.
+  Migration range is now `001-012` with `memory_tags` for org-scoped tag
+  filters.
 - **pgvector backend — Postgres-only deploy option** — a `VectorIndex` port
   (`src/vector/vector-index.ts`) abstracts the vector backend so either Qdrant
   or pgvector can be selected at startup via `VECTOR_BACKEND`. The new
@@ -44,7 +52,7 @@ small actual impact surface.
   concepts) into `entities` and `memory_entity_mentions`, and records same-row
   co-mentions plus date context in `entity_relationships`. `search_memory`
   uses that graph as an exact rescue/boost path alongside Postgres FTS,
-  substring fallback, and vector retrieval. Migration range is now `001-011`.
+  substring fallback, and vector retrieval. Migration range is now `001-012`.
 - **MCP roots, elicitation, and sampling helpers** — MCP transports now register
   `list_workspace_roots` for client-advertised `roots/list` and
   `add_memory_interactive` for form-based elicitation before storing accepted
@@ -196,9 +204,9 @@ small actual impact surface.
 
 ### Fixed (audit cycle 2)
 
-- **MCP stdio transport now registers all 7 tools** — `reindex_memory` and `unarchive_memory`
+- **MCP stdio transport now registers all then-current 7 tools** — `reindex_memory` and `unarchive_memory`
   were missing from the stdio transport, leaving MCP clients (Claude Code, Codex CLI) with only
-  5 of the 7 tools available over HTTP. Now matches HTTP and CLI parity.
+  5 of the then-current 7 tools available over HTTP. Now matched HTTP and CLI parity.
 - **Silent failures surfaced** — parse errors, DB error messages stripped of stack traces, and
   `audit_log.error_message` capped to prevent oversized payloads. Previously these failed
   silently or exposed internal stack details.
@@ -236,7 +244,7 @@ small actual impact surface.
   `OPENAI_API_KEY` marked optional (only needed when `EMBEDDING_PROVIDER=openai`); embedding
   default corrected to `transformers`; migration range updated to 001-009; `ingest_jobs` outbox
   columns added to schema diagram; `/readyz` probe list corrected against actual
-  `check-dependencies.ts` behavior; MCP tool list updated to 7 tools.
+  `check-dependencies.ts` behavior; MCP tool list updated to the then-current 7 tools.
 - **`AGENTS.md` dangling references removed** — replaced broken `.vibe/context-index.md` and
   `.pi/skills/vibe-workflow/SKILL.md` references (both absent) with accurate contributor
   guidance pointing to `README.md`, `CONTRIBUTING.md`, and `docs/`.

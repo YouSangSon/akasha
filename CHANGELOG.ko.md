@@ -25,6 +25,13 @@ CHANGELOG에서 명시적으로 표기합니다.
 
 ### Added
 
+- **Memory governance CRUD 및 admin shell** — MCP와 JSON HTTP가 운영자
+  review/edit/tag/archive workflow용 `list_memory`, `update_memory`,
+  `delete_memory`, `tag_memory` 를 노출합니다. `delete_memory` 는 복구 가능한
+  `memory_archive` 경로로 archive하고 vector cleanup은 retry 가능하게 유지합니다.
+  정적 `/admin/memory` 페이지는 compact한 브라우저 셸을 제공하되, 모든 데이터
+  호출은 기존 인증된 `/v1/*` route 뒤에 둡니다. 마이그레이션 범위는 org-scoped
+  tag filter용 `memory_tags` 를 포함해 `001-012` 입니다.
 - **pgvector 백엔드 — Postgres 단독 배포 옵션** — `VectorIndex` 포트
   (`src/vector/vector-index.ts`) 가 벡터 백엔드를 추상화하여 시작 시
   `VECTOR_BACKEND` 로 Qdrant 또는 pgvector 를 선택할 수 있게 됨. 새
@@ -41,7 +48,7 @@ CHANGELOG에서 명시적으로 표기합니다.
   `entities`, `memory_entity_mentions` 에 추출하고, 같은 row의 co-mention 및
   date context를 `entity_relationships` 에 기록합니다. `search_memory` 는 이
   graph를 Postgres FTS, substring fallback, vector retrieval 옆의 exact
-  rescue/boost 경로로 사용합니다. 마이그레이션 범위는 `001-011` 입니다.
+  rescue/boost 경로로 사용합니다. 마이그레이션 범위는 `001-012` 입니다.
 - **MCP roots, elicitation, sampling helper** — MCP transport가 이제 클라이언트가
   광고한 `roots/list` 용 `list_workspace_roots` 와, form elicitation 후 수락된
   memory를 일반 `add_memory` 경로로 저장하는 `add_memory_interactive` 를
@@ -183,9 +190,9 @@ CHANGELOG에서 명시적으로 표기합니다.
 
 ### Fixed (audit cycle 2)
 
-- **MCP stdio transport 에 7개 도구 모두 등록** — `reindex_memory` 와 `unarchive_memory` 가
-  stdio transport 에서 누락되어 MCP 클라이언트 (Claude Code, Codex CLI) 가 HTTP 의 7개 중 5개만
-  사용 가능했음. 이제 HTTP 및 CLI 와 동등.
+- **MCP stdio transport 에 당시 기준 7개 도구 모두 등록** — `reindex_memory` 와 `unarchive_memory` 가
+  stdio transport 에서 누락되어 MCP 클라이언트 (Claude Code, Codex CLI) 가 HTTP 의 당시 기준 7개 중
+  5개만 사용 가능했음. 이 변경 당시 HTTP 및 CLI 와 동등해짐.
 - **Silent failure 제거** — 파싱 에러, DB 에러 메시지의 스택 trace 제거, `audit_log.error_message`
   크기 제한 추가. 이전엔 조용히 실패하거나 내부 스택 정보를 노출했음.
 
@@ -219,8 +226,8 @@ CHANGELOG에서 명시적으로 표기합니다.
   `CONTRIBUTING.md`, `README.md` 의 pre-existing 오류 수정: `OPENAI_API_KEY` 를 선택 사항으로
   표시 (`EMBEDDING_PROVIDER=openai` 시만 필요); embedding 기본값을 `transformers` 로 수정;
   마이그레이션 범위를 001-009 로 업데이트; 스키마 다이어그램에 `ingest_jobs` outbox 컬럼 추가;
-  실제 `check-dependencies.ts` 동작에 맞게 `/readyz` probe 목록 수정; MCP 도구 목록을 7개로
-  업데이트.
+  실제 `check-dependencies.ts` 동작에 맞게 `/readyz` probe 목록 수정; MCP 도구 목록을 당시 기준
+  7개로 업데이트.
 - **`AGENTS.md` 끊어진 참조 제거** — 존재하지 않는 `.vibe/context-index.md` 및
   `.pi/skills/vibe-workflow/SKILL.md` 참조를 `README.md`, `CONTRIBUTING.md`, `docs/` 를
   가리키는 정확한 contributor 안내로 교체.
