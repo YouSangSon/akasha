@@ -321,7 +321,7 @@ type ListMemoryResult = {
   ok: true;
   scopeType: "project" | "user";
   scopeId: string;
-  memories: MemoryRecord[];
+  memories: Array<MemoryRecord>;
 };
 ```
 

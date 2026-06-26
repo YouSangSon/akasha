@@ -45,8 +45,12 @@ describe("public documentation drift checks", () => {
     expect(apiReference).toContain("When `MEMORY_API_TOKENS` or OAuth token validation is configured, every `/mcp`");
     expect(apiReference).toContain("and `/v1/*` route requires a bearer token. Static tokens are configured via");
     expect(apiReference).toContain("OAuth/OIDC JWT access tokens are accepted");
-    expect(apiReference).toContain("development only, an empty token list is allowed when the server binds to");
-    expect(apiReference).toContain("loopback (`127.0.0.1`, `localhost`, or `::1`); binding to a non-loopback host");
+    expect(apiReference).toContain("static `/admin/memory` shell");
+    expect(apiReference).toContain("JSON calls still target the authenticated `/v1/*` API");
+    expect(apiReference).toContain("For local development");
+    expect(apiReference).toContain("only, an empty token list is allowed when the server binds to");
+    expect(apiReference).toContain("(`127.0.0.1`, `localhost`, or `::1`); binding to a non-loopback host");
+    expect(apiReference).toContain("static tokens or OAuth token validation fails at startup");
     expect(apiReference).toContain("akasha_session_start");
     expect(apiReference).toContain("akasha_store_memory");
     expect(apiReference).toContain("akasha://memory/recent/{projectKey}");
@@ -132,15 +136,16 @@ describe("public documentation drift checks", () => {
 
     for (const path of files) {
       const text = read(path);
-      expect(text).toContain("001-011");
+      expect(text).toContain("001-012");
       expect(text).not.toContain("001-010");
       expect(text).not.toContain("001-009");
+      expect(text).not.toContain("001-011");
       expect(text).not.toContain("001–008");
       expect(text).not.toContain("001-008");
     }
 
-    expect(read("CONTRIBUTING.md")).toContain("012_");
-    expect(read("CONTRIBUTING.ko.md")).toContain("012_");
+    expect(read("CONTRIBUTING.md")).toContain("013_");
+    expect(read("CONTRIBUTING.ko.md")).toContain("013_");
   });
 
   it("documents all three public transports in architecture and security docs", () => {
