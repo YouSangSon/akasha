@@ -164,6 +164,24 @@ describe("createOperatorServer", () => {
     expect(body.data).toMatchObject({ ok: true });
   });
 
+  it("serves GET /admin/memory as a static shell without bearer", async () => {
+    const res = await fetch(`${handle.baseUrl}/admin/memory`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/html");
+    expect(res.headers.get("x-content-type-options")).toBe("nosniff");
+
+    const html = await res.text();
+    expect(html).toContain("Akasha Memory Admin");
+    expect(html).toContain("/v1/memory/list");
+    expect(html).toContain("/v1/memory/update");
+    expect(html).toContain("/v1/memory/delete");
+    expect(html).toContain("/v1/memory/tag");
+    expect(html).not.toContain("localStorage");
+    expect(html).not.toContain("sessionStorage");
+    expect(html).not.toContain(tokens[0]);
+  });
+
   it("rejects POST /v1/memory without Authorization header", async () => {
     const res = await fetch(`${handle.baseUrl}/v1/memory`, {
       method: "POST",

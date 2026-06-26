@@ -60,6 +60,7 @@ import {
   startIngestSweeper,
   type IngestSweeperHandle,
 } from "../compact/ingest-sweeper-loop.js";
+import { renderMemoryAdminPage } from "./admin-memory-page.js";
 
 export type CreateOperatorServerOptions = {
   config?: ServiceConfig;
@@ -226,6 +227,15 @@ export function createOperatorServer(
           return;
         }
 
+        if (requestPath === "/admin/memory" && req.method === "GET") {
+          res.writeHead(200, {
+            "content-type": "text/html; charset=utf-8",
+            "x-content-type-options": "nosniff",
+          });
+          res.end(renderMemoryAdminPage());
+          return;
+        }
+
         if (req.url === "/mcp") {
           await handleMcpHttpRequest({
             req,
@@ -338,6 +348,7 @@ function routeLabelForMetrics(input: {
   if (input.path === "/healthz") return "/healthz";
   if (input.path === "/readyz") return "/readyz";
   if (input.path === "/metrics") return "/metrics";
+  if (input.path === "/admin/memory") return "/admin/memory";
   if (input.path === "/mcp") return "/mcp";
 
   const staticRoute = input.routes.find((route) => route.path === input.path);

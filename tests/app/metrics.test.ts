@@ -151,6 +151,8 @@ describe("GET /metrics", () => {
 
     const health = await fetch(`${handle.baseUrl}/healthz`);
     expect(health.status).toBe(200);
+    const admin = await fetch(`${handle.baseUrl}/admin/memory`);
+    expect(admin.status).toBe(200);
     const addMemory = await fetch(`${handle.baseUrl}/v1/memory`, {
       method: "POST",
       headers: {
@@ -168,6 +170,9 @@ describe("GET /metrics", () => {
     const text = await scrapeMetrics(handle);
     expect(text).toContain(
       'akasha_http_requests_total{method="GET",route="/healthz",status="200"} 1',
+    );
+    expect(text).toContain(
+      'akasha_http_requests_total{method="GET",route="/admin/memory",status="200"} 1',
     );
     expect(text).toContain(
       'akasha_http_requests_total{method="POST",route="/v1/memory",status="200"} 1',
