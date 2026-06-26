@@ -12,6 +12,8 @@ FROM node:22-alpine AS runner
 
 WORKDIR /app
 
+RUN apk add --no-cache curl
+
 RUN addgroup -S -g 10001 akasha \
   && adduser -S -D -H -u 10001 -G akasha akasha \
   && mkdir -p /var/lib/developer-memory-os/backups

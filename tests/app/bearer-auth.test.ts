@@ -203,14 +203,35 @@ describe("loadBearerTokens", () => {
     expect(tokens[2]).toEqual({ token: "legacy-token" });
   });
 
-  it("treats a trailing colon as a plain token (empty org is dropped)", () => {
-    // Arrange & Act
-    const tokens = loadBearerTokens({ MEMORY_API_TOKENS: "my-token:" });
+  it("rejects a token binding with an empty organization id", () => {
+    expect(() =>
+      loadBearerTokens({ MEMORY_API_TOKENS: "my-token:" }),
+    ).toThrow(/Invalid MEMORY_API_TOKENS entry: organization id is empty/i);
+  });
 
-    // Assert
-    expect(tokens).toHaveLength(1);
-    expect(tokens[0].token).toBe("my-token");
-    expect(tokens[0].organizationId).toBeUndefined();
+  it("rejects a token binding with an empty token", () => {
+    expect(() =>
+      loadBearerTokens({ MEMORY_API_TOKENS: ":dev-team" }),
+    ).toThrow(/Invalid MEMORY_API_TOKENS entry: token is empty/i);
+  });
+
+  it("rejects entries with multiple colons", () => {
+    expect(() =>
+      loadBearerTokens({ MEMORY_API_TOKENS: "alpha:dev:team" }),
+    ).toThrow(
+      /Invalid MEMORY_API_TOKENS entry: tokens may contain at most one colon/i,
+    );
+  });
+
+  it("ignores empty comma-separated entries while still parsing valid tokens", () => {
+    const tokens = loadBearerTokens({
+      MEMORY_API_TOKENS: "alpha-token:dev-team,  , legacy-token",
+    });
+
+    expect(tokens).toEqual([
+      { token: "alpha-token", organizationId: "dev-team" },
+      { token: "legacy-token" },
+    ]);
   });
 
   it("ignores whitespace-only entries", () => {
