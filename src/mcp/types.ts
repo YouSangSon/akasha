@@ -8,7 +8,10 @@ import type {
   StoredAuditLogEntry,
 } from "../audit/audit-log-repository.js";
 import type { ServiceConfig } from "../config.js";
-import type { ContextPackSections } from "../context-pack/build-context-pack.js";
+import type {
+  ContextPackSelectionRationale,
+  ContextPackSections,
+} from "../context-pack/build-context-pack.js";
 import type { Logger } from "../logger.js";
 import type {
   CanonicalMemoryRepository,
@@ -75,6 +78,7 @@ export type BuildContextPackToolResult = {
   packMarkdown: string;
   selectedMemoryIds: string[];
   sections: ContextPackSections;
+  selectionRationale: ContextPackSelectionRationale[];
 };
 
 export type ReindexMemoryToolInput = {

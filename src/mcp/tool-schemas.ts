@@ -49,6 +49,30 @@ const contextPackSectionsOutputSchema = z.object({
   relevant_notes: z.array(memoryRecordOutputSchema),
 });
 
+const contextPackSelectionRationaleOutputSchema = z.object({
+  memoryId: z.string(),
+  recordId: z.number(),
+  section: z.enum([
+    "project_summary",
+    "recent_decisions",
+    "constraints",
+    "open_questions",
+    "relevant_notes",
+  ]),
+  reason: z.enum([
+    "project-summary",
+    "decision-memory-or-source",
+    "constraint-prefix",
+    "open-question-prefix",
+    "fallback-relevant-note",
+  ]),
+  inputRank: z.number(),
+  scopeType: z.enum(["project", "user"]),
+  scopeId: z.string(),
+  sourceType: z.enum(["decision", "document", "conversation"]),
+  sourceTitle: z.string().nullable(),
+});
+
 const duplicateGroupOutputSchema = z
   .object({
     keepId: z.string(),
@@ -169,6 +193,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
       packMarkdown: z.string(),
       selectedMemoryIds: z.array(z.string()),
       sections: contextPackSectionsOutputSchema,
+      selectionRationale: z.array(contextPackSelectionRationaleOutputSchema),
     },
   },
   {

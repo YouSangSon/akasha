@@ -27,7 +27,6 @@ import type {
   WithCanonicalServices,
 } from "./types.js";
 import {
-  formatMemoryIdentifier,
   normalizeLimit,
   requireProjectKey,
   requireUserScopeId,
@@ -291,8 +290,8 @@ export function createToolHandlers(input: {
               toolInput.task,
               pack.markdown,
             );
-            const selectedMemoryIds = records.map((record) =>
-              formatMemoryIdentifier(record),
+            const selectedMemoryIds = pack.selectionRationale.map(
+              (entry) => entry.memoryId,
             );
 
             await services.chunkRepository.createContextPackRun({
@@ -326,8 +325,8 @@ export function createToolHandlers(input: {
                 toolInput.task,
                 pack.markdown,
               ),
-              selectedMemoryIds: records.map((record) =>
-                formatMemoryIdentifier(record),
+              selectedMemoryIds: pack.selectionRationale.map(
+                (entry) => entry.memoryId,
               ),
             };
           })();
@@ -338,6 +337,7 @@ export function createToolHandlers(input: {
         packMarkdown: builtPack.packMarkdown,
         selectedMemoryIds: builtPack.selectedMemoryIds,
         sections: builtPack.pack.sections,
+        selectionRationale: builtPack.pack.selectionRationale,
       };
     },
 

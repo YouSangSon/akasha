@@ -28,6 +28,11 @@ small actual impact surface.
 
 ### Added
 
+- **Context-pack selection rationale** — `build_context_pack` now returns
+  `selectionRationale` entries describing why each included memory was placed in
+  a section. `selectedMemoryIds` now reflects the final included memories after
+  context-pack section caps, and service-backed context-pack run persistence uses
+  the same selected-only ID list.
 - **Memory governance CRUD and admin shell** — MCP and JSON HTTP now expose
   `list_memory`, `update_memory`, `delete_memory`, and `tag_memory` for
   operator review/edit/tag/archive workflows. `delete_memory` archives through

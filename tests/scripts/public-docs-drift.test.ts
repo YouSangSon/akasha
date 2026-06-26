@@ -221,6 +221,9 @@ describe("public documentation drift checks", () => {
       expect(text).not.toMatch(/type SearchMemoryResult = \{\n\s+ok: true;/);
       expect(text).toMatch(/type SearchMemoryResponse = \{\n\s+ok: true;/);
       expect(text).toContain("results: SearchMemoryResult[];");
+      expect(text).toContain("type ContextPackSelectionRationale = {");
+      expect(text).toContain("selectionRationale: ContextPackSelectionRationale[];");
+      expect(text).toContain("inputRank: number;");
       for (const section of [
         "project_summary",
         "recent_decisions",

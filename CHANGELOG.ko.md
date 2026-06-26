@@ -25,6 +25,11 @@ CHANGELOG에서 명시적으로 표기합니다.
 
 ### Added
 
+- **Context-pack selection rationale** — `build_context_pack` 가 이제 포함된
+  각 memory가 어떤 이유로 section에 배치되었는지 설명하는
+  `selectionRationale` 를 반환합니다. `selectedMemoryIds` 는 context-pack
+  section cap 이후 실제 포함된 memory만 나타내며, service-backed context-pack
+  run persistence도 동일한 selected-only ID 목록을 사용합니다.
 - **Memory governance CRUD 및 admin shell** — MCP와 JSON HTTP가 운영자
   review/edit/tag/archive workflow용 `list_memory`, `update_memory`,
   `delete_memory`, `tag_memory` 를 노출합니다. `delete_memory` 는 복구 가능한

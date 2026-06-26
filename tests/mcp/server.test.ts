@@ -347,8 +347,62 @@ describe("createToolRegistry", () => {
     expect(taskIndex).toBeGreaterThan(headerIndex);
     expect(taskIndex).toBeGreaterThan(separatorIndex);
     expect(result.selectedMemoryIds).toEqual(["project:project-alpha:12"]);
+    expect(result.selectionRationale).toEqual([
+      expect.objectContaining({
+        memoryId: "project:project-alpha:12",
+        recordId: 12,
+        section: "recent_decisions",
+        reason: "decision-memory-or-source",
+        inputRank: 1,
+      }),
+    ]);
     expect(result.sections.recent_decisions).toEqual([
       expect.objectContaining({ id: 12 }),
+    ]);
+  });
+
+  it("reports selected memory ids only for records included after context pack caps", async () => {
+    const retrieveMemory = vi.fn().mockResolvedValue([
+      createRecord({
+        id: 101,
+        memoryType: "summary",
+        content: "First project summary.",
+        sourceType: "document",
+        externalId: "summary-1",
+      }),
+      createRecord({
+        id: 102,
+        memoryType: "summary",
+        content: "Second project summary.",
+        sourceType: "document",
+        externalId: "summary-2",
+      }),
+      createRecord({
+        id: 103,
+        memoryType: "summary",
+        content: "Overflow project summary.",
+        sourceType: "document",
+        externalId: "summary-3",
+      }),
+    ]);
+    const registry = createToolRegistry({
+      retrieveMemory,
+    });
+
+    const result = await registry.build_context_pack({
+      projectKey: "project-alpha",
+      task: "continue work",
+    });
+
+    expect(result.sections.project_summary.map((record) => record.id)).toEqual([
+      101, 102,
+    ]);
+    expect(result.selectedMemoryIds).toEqual([
+      "project:project-alpha:101",
+      "project:project-alpha:102",
+    ]);
+    expect(result.selectionRationale.map((entry) => entry.recordId)).toEqual([
+      101, 102,
     ]);
   });
 
@@ -569,6 +623,66 @@ describe("createToolRegistry", () => {
       projectKey: "project-alpha",
       task: "continue work",
       selectedMemoryIds: ["project:project-alpha:12"],
+      packMarkdown: result.packMarkdown,
+    });
+  });
+
+  it("persists selected context pack ids after section caps in service-backed mode", async () => {
+    const services = createCanonicalServices();
+    services.vectorIndex.query.mockResolvedValue([
+      { id: "chunk:101", score: 0.99, payload: { memory_record_id: 101 } },
+      { id: "chunk:102", score: 0.98, payload: { memory_record_id: 102 } },
+      { id: "chunk:103", score: 0.97, payload: { memory_record_id: 103 } },
+    ]);
+    services.repository.getMemoryRecordsByIds.mockResolvedValue([
+      createRecord({
+        id: 101,
+        memoryType: "summary",
+        content: "First project summary.",
+        sourceType: "document",
+        externalId: "summary-1",
+      }),
+      createRecord({
+        id: 102,
+        memoryType: "summary",
+        content: "Second project summary.",
+        sourceType: "document",
+        externalId: "summary-2",
+      }),
+      createRecord({
+        id: 103,
+        memoryType: "summary",
+        content: "Overflow project summary.",
+        sourceType: "document",
+        externalId: "summary-3",
+      }),
+    ]);
+    services.repository.searchMemory.mockResolvedValue([]);
+    const registry = createToolRegistry({
+      resolveCanonicalServices: async () => services,
+    });
+
+    const result = await registry.build_context_pack({
+      organizationId: "org-a",
+      projectKey: "project-alpha",
+      task: "continue work",
+    });
+
+    expect(result.sections.project_summary.map((record) => record.id)).toEqual([
+      101, 102,
+    ]);
+    expect(result.selectedMemoryIds).toEqual([
+      "project:project-alpha:101",
+      "project:project-alpha:102",
+    ]);
+    expect(services.chunkRepository.createContextPackRun).toHaveBeenCalledWith({
+      organizationId: "org-a",
+      projectKey: "project-alpha",
+      task: "continue work",
+      selectedMemoryIds: [
+        "project:project-alpha:101",
+        "project:project-alpha:102",
+      ],
       packMarkdown: result.packMarkdown,
     });
   });
@@ -2189,6 +2303,19 @@ function buildRegistryForMcpProtocol(): ToolRegistry {
       projectKey: "project-alpha",
       packMarkdown: "# Context Pack\n\n- Decision: use Postgres",
       selectedMemoryIds: ["project:project-alpha:12"],
+      selectionRationale: [
+        {
+          memoryId: "project:project-alpha:12",
+          recordId: 12,
+          section: "recent_decisions",
+          reason: "decision-memory-or-source",
+          inputRank: 1,
+          scopeType: "project",
+          scopeId: "project-alpha",
+          sourceType: "decision",
+          sourceTitle: "adr-1",
+        },
+      ],
       sections: {
         project_summary: [],
         recent_decisions: [],

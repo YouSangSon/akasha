@@ -238,6 +238,7 @@ describe("parseCliArgs", () => {
         projectKey: "project-alpha",
         packMarkdown: "# Context Pack",
         selectedMemoryIds: [],
+        selectionRationale: [],
         sections: {
           project_summary: [],
           recent_decisions: [],

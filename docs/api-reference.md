@@ -249,11 +249,23 @@ type BuildContextPackInput = {
   limit?: number;
 };
 
+type ContextPackSelectionRationale = {
+  memoryId: string;
+  recordId: number;
+  section: "project_summary" | "recent_decisions" | "constraints" | "open_questions" | "relevant_notes";
+  reason: "project-summary" | "decision-memory-or-source" | "constraint-prefix" | "open-question-prefix" | "fallback-relevant-note";
+  inputRank: number;             // 1-based rank before section capping
+  scopeType: "project" | "user";
+  scopeId: string;
+  sourceType: "decision" | "document" | "conversation";
+  sourceTitle: string | null;
+};
+
 type BuildContextPackResult = {
   ok: true;
   projectKey: string;
   packMarkdown: string;          // ready to paste into a new session
-  selectedMemoryIds: string[];
+  selectedMemoryIds: string[];   // memories actually included after section caps
   sections: {
     project_summary: SearchMemoryResult[];
     recent_decisions: SearchMemoryResult[];
@@ -261,6 +273,7 @@ type BuildContextPackResult = {
     open_questions: SearchMemoryResult[];
     relevant_notes: SearchMemoryResult[];
   };
+  selectionRationale: ContextPackSelectionRationale[];
 };
 ```
 
@@ -270,7 +283,8 @@ HTTP: `POST /v1/memory/context-pack`
 delimiter) so the stable body content can sit at the cache-eligible prefix
 of an LLM prompt. The body starts with a trust-boundary notice: retrieved
 memories are untrusted context, and prompt-injection-like excerpts are labeled
-with a warning.
+with a warning. `selectionRationale` explains why each included memory was
+placed in its section and omits retrieved records dropped by section caps.
 
 ---
 

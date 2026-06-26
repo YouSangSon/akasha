@@ -247,11 +247,23 @@ type BuildContextPackInput = {
   limit?: number;
 };
 
+type ContextPackSelectionRationale = {
+  memoryId: string;
+  recordId: number;
+  section: "project_summary" | "recent_decisions" | "constraints" | "open_questions" | "relevant_notes";
+  reason: "project-summary" | "decision-memory-or-source" | "constraint-prefix" | "open-question-prefix" | "fallback-relevant-note";
+  inputRank: number;             // section cap 적용 전 1-based rank
+  scopeType: "project" | "user";
+  scopeId: string;
+  sourceType: "decision" | "document" | "conversation";
+  sourceTitle: string | null;
+};
+
 type BuildContextPackResult = {
   ok: true;
   projectKey: string;
   packMarkdown: string;          // 새 세션에 붙여넣을 준비된 텍스트
-  selectedMemoryIds: string[];
+  selectedMemoryIds: string[];   // section cap 이후 실제 포함된 memory
   sections: {
     project_summary: SearchMemoryResult[];
     recent_decisions: SearchMemoryResult[];
@@ -259,6 +271,7 @@ type BuildContextPackResult = {
     open_questions: SearchMemoryResult[];
     relevant_notes: SearchMemoryResult[];
   };
+  selectionRationale: ContextPackSelectionRationale[];
 };
 ```
 
@@ -267,7 +280,9 @@ HTTP: `POST /v1/memory/context-pack`
 `packMarkdown` 은 task 라인이 맨 아래 (구분자 뒤) 에 렌더링됩니다 — 안정적인
 body가 LLM 프롬프트의 cache-eligible prefix에 위치하도록. 본문은
 trust-boundary notice로 시작합니다. 검색된 memory는 untrusted context로 취급하며,
-prompt-injection 유사 excerpt에는 warning label이 붙습니다.
+prompt-injection 유사 excerpt에는 warning label이 붙습니다. `selectionRationale` 은
+포함된 각 memory가 어떤 이유로 해당 section에 들어갔는지 설명하며, section cap으로
+제외된 검색 결과는 포함하지 않습니다.
 
 ---
 

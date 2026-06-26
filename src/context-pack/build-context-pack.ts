@@ -28,8 +28,30 @@ export type ContextPackSections = {
   relevant_notes: SearchMemoryResult[];
 };
 
+export type ContextPackSectionName = keyof ContextPackSections;
+
+export type ContextPackSelectionReason =
+  | "project-summary"
+  | "decision-memory-or-source"
+  | "constraint-prefix"
+  | "open-question-prefix"
+  | "fallback-relevant-note";
+
+export type ContextPackSelectionRationale = {
+  memoryId: string;
+  recordId: number;
+  section: ContextPackSectionName;
+  reason: ContextPackSelectionReason;
+  inputRank: number;
+  scopeType: SearchMemoryResult["scopeType"];
+  scopeId: string;
+  sourceType: SearchMemoryResult["source"]["sourceType"];
+  sourceTitle: string | null;
+};
+
 export type ContextPack = {
   sections: ContextPackSections;
+  selectionRationale: ContextPackSelectionRationale[];
   markdown: string;
 };
 
@@ -47,45 +69,76 @@ export function buildContextPack(
     open_questions: [],
     relevant_notes: [],
   };
+  const selectionRationale: ContextPackSelectionRationale[] = [];
 
-  for (const record of input.records) {
+  for (const [index, record] of input.records.entries()) {
+    const inputRank = index + 1;
     if (isOpenQuestion(record)) {
-      pushIfWithinLimit(sections.open_questions, record, SECTION_LIMITS.open_questions);
+      pushSelection({
+        sections,
+        selectionRationale,
+        section: "open_questions",
+        record,
+        limit: SECTION_LIMITS.open_questions,
+        reason: "open-question-prefix",
+        inputRank,
+      });
       continue;
     }
 
     if (isConstraint(record)) {
-      pushIfWithinLimit(sections.constraints, record, SECTION_LIMITS.constraints);
+      pushSelection({
+        sections,
+        selectionRationale,
+        section: "constraints",
+        record,
+        limit: SECTION_LIMITS.constraints,
+        reason: "constraint-prefix",
+        inputRank,
+      });
       continue;
     }
 
     if (isDecision(record)) {
-      pushIfWithinLimit(
-        sections.recent_decisions,
+      pushSelection({
+        sections,
+        selectionRationale,
+        section: "recent_decisions",
         record,
-        SECTION_LIMITS.recent_decisions,
-      );
+        limit: SECTION_LIMITS.recent_decisions,
+        reason: "decision-memory-or-source",
+        inputRank,
+      });
       continue;
     }
 
     if (isProjectSummary(record)) {
-      pushIfWithinLimit(
-        sections.project_summary,
+      pushSelection({
+        sections,
+        selectionRationale,
+        section: "project_summary",
         record,
-        SECTION_LIMITS.project_summary,
-      );
+        limit: SECTION_LIMITS.project_summary,
+        reason: "project-summary",
+        inputRank,
+      });
       continue;
     }
 
-    pushIfWithinLimit(
-      sections.relevant_notes,
+    pushSelection({
+      sections,
+      selectionRationale,
+      section: "relevant_notes",
       record,
-      SECTION_LIMITS.relevant_notes,
-    );
+      limit: SECTION_LIMITS.relevant_notes,
+      reason: "fallback-relevant-note",
+      inputRank,
+    });
   }
 
   return {
     sections,
+    selectionRationale,
     markdown: renderMarkdown(sections),
   };
 }
@@ -155,14 +208,36 @@ function scopeRank(record: SearchMemoryResult): number {
   return record.scopeType === "project" ? 0 : 1;
 }
 
-function pushIfWithinLimit(
-  section: SearchMemoryResult[],
-  record: SearchMemoryResult,
-  limit: number,
-): void {
-  if (section.length < limit) {
-    section.push(record);
+function pushSelection(input: {
+  sections: ContextPackSections;
+  selectionRationale: ContextPackSelectionRationale[];
+  section: ContextPackSectionName;
+  record: SearchMemoryResult;
+  limit: number;
+  reason: ContextPackSelectionReason;
+  inputRank: number;
+}): void {
+  const target = input.sections[input.section];
+  if (target.length >= input.limit) {
+    return;
   }
+
+  target.push(input.record);
+  input.selectionRationale.push({
+    memoryId: formatContextMemoryIdentifier(input.record),
+    recordId: input.record.id,
+    section: input.section,
+    reason: input.reason,
+    inputRank: input.inputRank,
+    scopeType: input.record.scopeType,
+    scopeId: input.record.scopeId,
+    sourceType: input.record.source.sourceType,
+    sourceTitle: input.record.source.title,
+  });
+}
+
+function formatContextMemoryIdentifier(record: SearchMemoryResult): string {
+  return `${record.scopeType}:${record.scopeId}:${record.id}`;
 }
 
 function toSingleLineExcerpt(content: string): string {

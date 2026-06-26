@@ -35,6 +35,7 @@ function buildRegistry(): ToolRegistry {
       projectKey: "p",
       packMarkdown: "# Context Pack",
       selectedMemoryIds: [],
+      selectionRationale: [],
       sections: {
         project_summary: [],
         recent_decisions: [],
