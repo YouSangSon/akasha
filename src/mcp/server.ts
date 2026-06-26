@@ -29,6 +29,10 @@ export type {
   CompactMemoryToolResult,
   CreateMcpServerOptions,
   CreateToolRegistryOptions,
+  DeleteMemoryToolInput,
+  DeleteMemoryToolResult,
+  ListMemoryToolInput,
+  ListMemoryToolResult,
   ListAuditLogToolInput,
   ListAuditLogToolResult,
   ReindexMemoryToolInput,
@@ -37,9 +41,13 @@ export type {
   RetrieveMemoryService,
   SearchMemoryToolInput,
   SearchMemoryToolResult,
+  TagMemoryToolInput,
+  TagMemoryToolResult,
   ToolRegistry,
   UnarchiveMemoryToolInput,
   UnarchiveMemoryToolResult,
+  UpdateMemoryToolInput,
+  UpdateMemoryToolResult,
 } from "./types.js";
 
 const ELICITED_MEMORY_SCHEMA = z.object({

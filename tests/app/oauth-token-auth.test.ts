@@ -138,6 +138,7 @@ describe("OAuth token verifier", () => {
 describe("OAuth scope enforcement", () => {
   it("maps tools to read/write/admin scope kinds", () => {
     expect(requiredScopeKindForTool("search_memory", {})).toBe("read");
+    expect(requiredScopeKindForTool("list_memory", {})).toBe("read");
     expect(requiredScopeKindForTool("build_context_pack", {})).toBe("read");
     expect(requiredScopeKindForTool("add_memory", {})).toBe("write");
     expect(requiredScopeKindForTool("compact_memory", { dryRun: true })).toBe(
@@ -146,6 +147,9 @@ describe("OAuth scope enforcement", () => {
     expect(requiredScopeKindForTool("compact_memory", { dryRun: false })).toBe(
       "admin",
     );
+    expect(requiredScopeKindForTool("update_memory", {})).toBe("admin");
+    expect(requiredScopeKindForTool("delete_memory", {})).toBe("admin");
+    expect(requiredScopeKindForTool("tag_memory", {})).toBe("admin");
     expect(requiredScopeKindForTool("list_audit_log", {})).toBe("admin");
   });
 

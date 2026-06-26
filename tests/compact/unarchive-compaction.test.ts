@@ -93,6 +93,7 @@ function makeDeps(
         },
       ]),
       updatePointIds: vi.fn().mockResolvedValue(undefined),
+      deleteChunksForRecord: vi.fn().mockResolvedValue(undefined),
       listChunks: vi.fn(),
       getChunksByRecordId: vi.fn().mockResolvedValue([]),
       createContextPackRun: vi.fn(),

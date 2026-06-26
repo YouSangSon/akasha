@@ -127,6 +127,22 @@ function instrumentToolRegistry(input: {
       instrument("compact_memory", toolInput, () =>
         handlers.compact_memory(toolInput),
       ),
+    list_memory: (toolInput) =>
+      instrument("list_memory", toolInput, () =>
+        handlers.list_memory(toolInput),
+      ),
+    update_memory: (toolInput) =>
+      instrument("update_memory", toolInput, () =>
+        handlers.update_memory(toolInput),
+      ),
+    delete_memory: (toolInput) =>
+      instrument("delete_memory", toolInput, () =>
+        handlers.delete_memory(toolInput),
+      ),
+    tag_memory: (toolInput) =>
+      instrument("tag_memory", toolInput, () =>
+        handlers.tag_memory(toolInput),
+      ),
     list_audit_log: (toolInput) =>
       instrument("list_audit_log", toolInput, () =>
         handlers.list_audit_log(toolInput),

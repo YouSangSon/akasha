@@ -12,7 +12,9 @@ import type { ContextPackSections } from "../context-pack/build-context-pack.js"
 import type { Logger } from "../logger.js";
 import type {
   CanonicalMemoryRepository,
+  Durability,
   IngestJobRepository,
+  MemoryType,
   MemoryRepository,
   ScopeType,
   SearchMemoryResult,
@@ -144,6 +146,65 @@ export type CompactMemoryToolInput_v2Extension = {
   decayThreshold?: number;
   // Half-life in days for the decay curve (default 30).
   halfLifeDays?: number;
+};
+
+export type ListMemoryToolInput = {
+  organizationId?: string;
+  projectKey?: string;
+  scope?: ScopeType;
+  userScopeId?: string;
+  includeArchived?: boolean;
+  tag?: string;
+  limit?: number;
+};
+
+export type ListMemoryToolResult = {
+  ok: true;
+  scopeType: ScopeType;
+  scopeId: string;
+  memories: SearchMemoryResult[];
+};
+
+export type UpdateMemoryToolInput = {
+  organizationId?: string;
+  memoryId: number;
+  kind?: MemoryType;
+  title?: string | null;
+  content?: string;
+  summary?: string | null;
+  importance?: number;
+  durability?: Durability;
+  tags?: string[];
+};
+
+export type UpdateMemoryToolResult = {
+  ok: true;
+  updated: boolean;
+  memory?: SearchMemoryResult;
+};
+
+export type DeleteMemoryToolInput = {
+  organizationId?: string;
+  memoryId: number;
+};
+
+export type DeleteMemoryToolResult = {
+  ok: true;
+  archived: boolean;
+  qdrantPointsDeleted: number;
+  qdrantPointsPending: number;
+};
+
+export type TagMemoryToolInput = {
+  organizationId?: string;
+  memoryId: number;
+  tags: string[];
+};
+
+export type TagMemoryToolResult = {
+  ok: true;
+  updated: boolean;
+  memory?: SearchMemoryResult;
 };
 
 export type ListAuditLogToolInput = {
@@ -279,6 +340,10 @@ export type ToolRegistry = {
     input: ReindexMemoryToolInput,
   ): Promise<ReindexMemoryToolResult>;
   compact_memory(input: CompactMemoryToolInput): Promise<CompactMemoryToolResult>;
+  list_memory(input: ListMemoryToolInput): Promise<ListMemoryToolResult>;
+  update_memory(input: UpdateMemoryToolInput): Promise<UpdateMemoryToolResult>;
+  delete_memory(input: DeleteMemoryToolInput): Promise<DeleteMemoryToolResult>;
+  tag_memory(input: TagMemoryToolInput): Promise<TagMemoryToolResult>;
   list_audit_log(
     input: ListAuditLogToolInput,
   ): Promise<ListAuditLogToolResult>;

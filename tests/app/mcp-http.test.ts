@@ -64,10 +64,33 @@ function buildRegistry(): ToolRegistry {
       projectKey: "p",
       dryRun: true,
       archivedIds: [],
+      mergedIds: [],
       duplicateGroups: [],
       decayCandidates: [],
       promotionCandidates: [],
       summary: "noop",
+    }),
+    list_memory: vi.fn().mockResolvedValue({
+      ok: true,
+      scopeType: "project",
+      scopeId: "p",
+      memories: [],
+    }),
+    update_memory: vi.fn().mockResolvedValue({
+      ok: true,
+      updated: true,
+      memory: undefined,
+    }),
+    delete_memory: vi.fn().mockResolvedValue({
+      ok: true,
+      archived: true,
+      qdrantPointsDeleted: 0,
+      qdrantPointsPending: 0,
+    }),
+    tag_memory: vi.fn().mockResolvedValue({
+      ok: true,
+      updated: true,
+      memory: undefined,
     }),
     list_audit_log: vi.fn().mockResolvedValue({
       ok: true,
@@ -385,6 +408,16 @@ describe("Streamable HTTP /mcp", () => {
       query: "q",
     });
 
+    const list = await client.callTool({
+      name: "list_memory",
+      arguments: { projectKey: "p" },
+    });
+    expect(list.isError).not.toBe(true);
+    expect(handle.registry.list_memory).toHaveBeenCalledWith({
+      organizationId: "org-oauth",
+      projectKey: "p",
+    });
+
     const add = await client.callTool({
       name: "add_memory",
       arguments: {
@@ -398,6 +431,19 @@ describe("Streamable HTTP /mcp", () => {
       { type: "text", text: "insufficient_scope" },
     ]);
     expect(handle.registry.add_memory).not.toHaveBeenCalled();
+
+    const update = await client.callTool({
+      name: "update_memory",
+      arguments: {
+        memoryId: 42,
+        title: "New title",
+      },
+    });
+    expect(update.isError).toBe(true);
+    expect(update.content).toEqual([
+      { type: "text", text: "insufficient_scope" },
+    ]);
+    expect(handle.registry.update_memory).not.toHaveBeenCalled();
 
     await client.close();
   });

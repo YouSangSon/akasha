@@ -158,8 +158,12 @@ export function requiredScopeKindForTool(
     case "reindex_memory":
     case "unarchive_memory":
     case "list_audit_log":
+    case "update_memory":
+    case "delete_memory":
+    case "tag_memory":
       return "admin";
     case "search_memory":
+    case "list_memory":
     case "build_context_pack":
     case "list_workspace_roots":
     case "classify_memory_candidate":

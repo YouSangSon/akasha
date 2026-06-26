@@ -60,6 +60,28 @@ function buildRegistry(): ToolRegistry {
       promotionCandidates: [],
       summary: "noop",
     }),
+    list_memory: vi.fn().mockResolvedValue({
+      ok: true,
+      scopeType: "project",
+      scopeId: "p",
+      memories: [],
+    }),
+    update_memory: vi.fn().mockResolvedValue({
+      ok: true,
+      updated: true,
+      memory: undefined,
+    }),
+    delete_memory: vi.fn().mockResolvedValue({
+      ok: true,
+      archived: true,
+      qdrantPointsDeleted: 0,
+      qdrantPointsPending: 0,
+    }),
+    tag_memory: vi.fn().mockResolvedValue({
+      ok: true,
+      updated: true,
+      memory: undefined,
+    }),
     list_audit_log: vi.fn().mockResolvedValue({
       ok: true,
       organizationId: "default",

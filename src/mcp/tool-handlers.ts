@@ -7,6 +7,7 @@ import { rankResults } from "../search/rank-results.js";
 import { retrieveMemory as retrieveMemoryFromQdrant } from "../search/retrieve-memory.js";
 import { createServiceBackedAuditLog } from "./canonical-services.js";
 import {
+  refreshCanonicalMemoryIndex,
   reindexCanonicalMemory,
   writeCanonicalMemory,
 } from "../store/canonical-indexing.js";
@@ -43,6 +44,7 @@ export function createToolHandlers(input: {
   const { options, cwd, withCanonicalServices } = input;
   const baseLogger = options.logger ?? rootLogger;
   const hasOverrides = hasRepositoryOverrides(options);
+  const hasGovernanceOverrides = hasOverrides || Boolean(options.retrieveMemory);
   const serviceBackedAuditLog =
     !hasOverrides && !options.retrieveMemory
       ? createServiceBackedAuditLog(withCanonicalServices)
@@ -492,6 +494,166 @@ export function createToolHandlers(input: {
       });
     },
 
+    async list_memory(toolInput) {
+      ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      const scope = toolInput.scope ?? "project";
+      const userScopeId = resolveUserScopeId({
+        cwd,
+        explicitUserScopeId: toolInput.userScopeId,
+        defaultUserScopeId: options.defaultUserScopeId,
+      });
+      const scopeRef =
+        scope === "user"
+          ? {
+              scopeType: "user" as const,
+              scopeId: requireUserScopeId(userScopeId),
+            }
+          : {
+              scopeType: "project" as const,
+              scopeId: requireProjectKey(toolInput.projectKey, scope),
+            };
+      const organizationId = toolInput.organizationId ?? "default";
+
+      const memories = await withCanonicalRepository((repository) =>
+        repository.listMemoryForGovernance(scopeRef, {
+          organizationId,
+          includeArchived: toolInput.includeArchived,
+          tag: toolInput.tag,
+          limit: toolInput.limit,
+        }),
+      );
+
+      return {
+        ok: true,
+        scopeType: scopeRef.scopeType,
+        scopeId: scopeRef.scopeId,
+        memories,
+      };
+    },
+
+    async update_memory(toolInput) {
+      ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      return await withCanonicalServices(async (services) => {
+        const organizationId = toolInput.organizationId ?? "default";
+        const memory = await services.repository.updateMemoryRecord({
+          id: toolInput.memoryId,
+          organizationId,
+          kind: toolInput.kind,
+          title: toolInput.title,
+          content: toolInput.content,
+          summary: toolInput.summary,
+          importance: toolInput.importance,
+          durability: toolInput.durability,
+          tags: toolInput.tags,
+        });
+
+        if (!memory) {
+          return {
+            ok: true,
+            updated: false,
+          };
+        }
+
+        if (shouldRefreshMemoryIndex(toolInput)) {
+          await refreshCanonicalMemoryIndex({
+            chunkRepository: services.chunkRepository,
+            embeddings: services.embeddings,
+            vectorIndex: services.vectorIndex,
+            embedding: canonicalEmbeddingConfig(services),
+            record: memory,
+          });
+        }
+
+        return {
+          ok: true,
+          updated: true,
+          memory,
+        };
+      });
+    },
+
+    async delete_memory(toolInput) {
+      ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      return await withCanonicalServices(async (services) => {
+        const organizationId = toolInput.organizationId ?? "default";
+        const archived = await services.repository.archiveMemoryRecord({
+          id: toolInput.memoryId,
+          organizationId,
+        });
+
+        if (archived.qdrantPointIds.length === 0) {
+          return {
+            ok: true,
+            archived: archived.archived,
+            qdrantPointsDeleted: 0,
+            qdrantPointsPending: 0,
+          };
+        }
+
+        try {
+          await services.vectorIndex.delete(archived.qdrantPointIds, {
+            organizationId,
+          });
+          return {
+            ok: true,
+            archived: archived.archived,
+            qdrantPointsDeleted: archived.qdrantPointIds.length,
+            qdrantPointsPending: 0,
+          };
+        } catch (error: unknown) {
+          baseLogger.warn(
+            {
+              event: "memory.delete_vector_cleanup_failed",
+              memoryId: toolInput.memoryId,
+              organizationId,
+              qdrantPointCount: archived.qdrantPointIds.length,
+              err: error,
+            },
+            "delete_memory archived the record but vector cleanup remains pending",
+          );
+          return {
+            ok: true,
+            archived: archived.archived,
+            qdrantPointsDeleted: 0,
+            qdrantPointsPending: archived.qdrantPointIds.length,
+          };
+        }
+      });
+    },
+
+    async tag_memory(toolInput) {
+      ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      return await withCanonicalServices(async (services) => {
+        const organizationId = toolInput.organizationId ?? "default";
+        const memory = await services.repository.updateMemoryRecord({
+          id: toolInput.memoryId,
+          organizationId,
+          tags: toolInput.tags,
+        });
+
+        if (!memory) {
+          return {
+            ok: true,
+            updated: false,
+          };
+        }
+
+        await refreshCanonicalMemoryIndex({
+          chunkRepository: services.chunkRepository,
+          embeddings: services.embeddings,
+          vectorIndex: services.vectorIndex,
+          embedding: canonicalEmbeddingConfig(services),
+          record: memory,
+        });
+
+        return {
+          ok: true,
+          updated: true,
+          memory,
+        };
+      });
+    },
+
     async list_audit_log(toolInput) {
       if (!auditLogForListing) {
         throw new Error(
@@ -652,6 +814,42 @@ function collectRecords(input: {
   }
 
   return rankResults(results).slice(0, perScopeLimit);
+}
+
+function ensureGovernanceCanonicalMode(hasOverrides: boolean): void {
+  if (hasOverrides) {
+    throw new Error(
+      "memory governance tools require canonical services (Postgres + vector index); " +
+        "legacy repository or retrieval overrides are not supported.",
+    );
+  }
+}
+
+function shouldRefreshMemoryIndex(input: {
+  kind?: unknown;
+  content?: unknown;
+  summary?: unknown;
+  durability?: unknown;
+  tags?: unknown;
+}): boolean {
+  return (
+    input.kind !== undefined ||
+    input.content !== undefined ||
+    input.summary !== undefined ||
+    input.durability !== undefined ||
+    input.tags !== undefined
+  );
+}
+
+function canonicalEmbeddingConfig(services: CanonicalServices) {
+  return {
+    provider: services.config.embedding.provider,
+    model: services.config.embedding.model,
+    dimensions: services.config.embedding.dimensions,
+    version: services.config.embedding.version,
+    targetTokens: services.config.embedding.chunkTargetTokens,
+    overlapTokens: services.config.embedding.chunkOverlapTokens,
+  };
 }
 
 function hasRepositoryOverrides(options: CreateToolRegistryOptions): boolean {

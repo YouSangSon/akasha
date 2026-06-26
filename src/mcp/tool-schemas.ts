@@ -29,10 +29,12 @@ const memoryRecordOutputSchema = z
     scopeType: z.string(),
     scopeId: z.string(),
     memoryType: z.string(),
+    title: z.string().nullable().optional(),
     content: z.string(),
     summary: z.string().nullable().optional(),
     durability: z.string().optional(),
     importance: z.number().optional(),
+    tags: z.array(z.string()).optional(),
     createdAt: z.string(),
     updatedAt: z.string(),
     source: z.object({}).passthrough().optional(),
@@ -111,6 +113,8 @@ const sampledMemoryClassificationOutputSchema = z
     confidence: z.number().min(0).max(1).optional(),
   })
   .passthrough();
+
+const durabilityInputSchema = z.enum(["ephemeral", "durable", "archived"]);
 
 export const SERVICE_TOOL_DESCRIPTORS = [
   {
@@ -208,6 +212,77 @@ export const SERVICE_TOOL_DESCRIPTORS = [
       summary: z.string(),
       compactionRunId: z.string().optional(),
       applyStats: compactionApplyStatsOutputSchema.optional(),
+    },
+  },
+  {
+    name: "list_memory",
+    description:
+      "List memory records for governance review with optional tag and archived filters.",
+    inputSchema: {
+      organizationId: z.string().min(1).optional(),
+      projectKey: z.string().min(1).optional(),
+      scope: z.enum(["project", "user"]).optional(),
+      userScopeId: z.string().min(1).optional(),
+      includeArchived: z.boolean().optional(),
+      tag: z.string().min(1).optional(),
+      limit: z.number().int().positive().max(5000).optional(),
+    },
+    outputSchema: {
+      ok: z.literal(true),
+      scopeType: z.enum(["project", "user"]),
+      scopeId: z.string(),
+      memories: z.array(memoryRecordOutputSchema),
+    },
+  },
+  {
+    name: "update_memory",
+    description:
+      "Update one memory record through governance controls and refresh its vector index state.",
+    inputSchema: {
+      organizationId: z.string().min(1).optional(),
+      memoryId: z.number().int().positive(),
+      kind: z.enum(SUPPORTED_MEMORY_KINDS).optional(),
+      title: z.string().nullable().optional(),
+      content: z.string().min(1).optional(),
+      summary: z.string().nullable().optional(),
+      importance: z.number().int().optional(),
+      durability: durabilityInputSchema.optional(),
+      tags: z.array(z.string()).optional(),
+    },
+    outputSchema: {
+      ok: z.literal(true),
+      updated: z.boolean(),
+      memory: memoryRecordOutputSchema.optional(),
+    },
+  },
+  {
+    name: "delete_memory",
+    description:
+      "Archive one memory record for governance deletion and remove its vector points.",
+    inputSchema: {
+      organizationId: z.string().min(1).optional(),
+      memoryId: z.number().int().positive(),
+    },
+    outputSchema: {
+      ok: z.literal(true),
+      archived: z.boolean(),
+      qdrantPointsDeleted: z.number().int().nonnegative(),
+      qdrantPointsPending: z.number().int().nonnegative(),
+    },
+  },
+  {
+    name: "tag_memory",
+    description:
+      "Replace normalized governance tags on one memory record and refresh its vector index state.",
+    inputSchema: {
+      organizationId: z.string().min(1).optional(),
+      memoryId: z.number().int().positive(),
+      tags: z.array(z.string()),
+    },
+    outputSchema: {
+      ok: z.literal(true),
+      updated: z.boolean(),
+      memory: memoryRecordOutputSchema.optional(),
     },
   },
   {
@@ -309,6 +384,10 @@ export const TOOL_ROUTES = [
   { name: "build_context_pack", method: "POST", path: "/v1/memory/context-pack" },
   { name: "reindex_memory", method: "POST", path: "/v1/memory/reindex" },
   { name: "compact_memory", method: "POST", path: "/v1/memory/compact" },
+  { name: "list_memory", method: "POST", path: "/v1/memory/list" },
+  { name: "update_memory", method: "POST", path: "/v1/memory/update" },
+  { name: "delete_memory", method: "POST", path: "/v1/memory/delete" },
+  { name: "tag_memory", method: "POST", path: "/v1/memory/tag" },
   { name: "list_audit_log", method: "POST", path: "/v1/audit/list" },
   { name: "unarchive_memory", method: "POST", path: "/v1/memory/unarchive" },
 ] as const satisfies readonly ToolRoute[];
@@ -339,7 +418,11 @@ function scopeRequiresProjectKey(input: {
 function validationSchemaForTool(toolName: ToolName): z.ZodType<Record<string, unknown>> {
   const schema = z.object(descriptorForTool(toolName).inputSchema);
 
-  if (toolName === "add_memory" || toolName === "compact_memory") {
+  if (
+    toolName === "add_memory" ||
+    toolName === "compact_memory" ||
+    toolName === "list_memory"
+  ) {
     return schema.superRefine((input, ctx) => {
       if (scopeRequiresProjectKey(input)) {
         addProjectKeyRequiredIssue(ctx, toolName);

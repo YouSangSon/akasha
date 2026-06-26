@@ -55,6 +55,7 @@ export type MemoryChunkRepository = {
   updatePointIds(
     mappings: Array<{ chunkId: number; qdrantPointId: string }>,
   ): Promise<void>;
+  deleteChunksForRecord(recordId: number, organizationId: string): Promise<void>;
   listChunks(
     organizationId: string,
     scopes: ScopeRef[],
@@ -197,6 +198,17 @@ export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository
           WHERE m.id = v.id
         `,
         params,
+      );
+    },
+
+    async deleteChunksForRecord(recordId, organizationId) {
+      await pool.query(
+        `
+          DELETE FROM memory_chunks
+          WHERE memory_record_id = $1
+            AND organization_id = $2
+        `,
+        [recordId, organizationId],
       );
     },
 
@@ -358,6 +370,72 @@ export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository
       );
     },
   };
+}
+
+export async function refreshCanonicalMemoryIndex(input: {
+  chunkRepository: MemoryChunkRepository;
+  embeddings: EmbeddingClient;
+  vectorIndex: VectorIndex;
+  embedding: ChunkEmbeddingConfig;
+  record: SearchMemoryResult;
+}): Promise<{ chunkCount: number }> {
+  const organizationId = input.record.organizationId ?? "default";
+
+  await input.vectorIndex.deleteByRecordIds([input.record.id], {
+    organizationId,
+  });
+  await input.chunkRepository.deleteChunksForRecord(
+    input.record.id,
+    organizationId,
+  );
+
+  const chunks = chunkText({
+    text: input.record.content,
+    targetTokens: input.embedding.targetTokens,
+    overlapTokens: input.embedding.overlapTokens,
+  });
+  const storedChunks = await input.chunkRepository.insertChunks({
+    record: input.record,
+    chunks,
+    embedding: input.embedding,
+  });
+
+  const embeddings = await input.embeddings.embedBatch(
+    storedChunks.map((chunk) => chunk.content),
+  );
+  if (embeddings.length !== storedChunks.length) {
+    throw new Error(
+      `refresh embedBatch returned ${embeddings.length} vectors for ${storedChunks.length} chunks`,
+    );
+  }
+
+  const points: VectorPoint[] = storedChunks.map((chunk, index) =>
+    buildVectorPoint({
+      chunkId: chunk.id,
+      vector: embeddings[index] ?? [],
+      memoryRecordId: input.record.id,
+      organizationId,
+      scopeType: input.record.scopeType,
+      scopeId: input.record.scopeId,
+      projectKey: input.record.projectKey ?? null,
+      kind: input.record.memoryType,
+      durability: input.record.durability ?? "ephemeral",
+      updatedAt: input.record.updatedAt,
+      embeddingVersion: chunk.embeddingVersion,
+    }),
+  );
+
+  if (points.length > 0) {
+    await input.vectorIndex.upsert(points);
+    await input.chunkRepository.updatePointIds(
+      points.map((point, index) => ({
+        chunkId: storedChunks[index]!.id,
+        qdrantPointId: point.id,
+      })),
+    );
+  }
+
+  return { chunkCount: storedChunks.length };
 }
 
 export async function writeCanonicalMemory(input: {
