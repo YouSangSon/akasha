@@ -25,10 +25,10 @@ do not call the tool handler.
 ## Authentication (HTTP only)
 
 When `MEMORY_API_TOKENS` is configured, every `/mcp` and `/v1/*` route requires
-a bearer token. `/healthz` and `/readyz` are unauthenticated. For local
-development only, an empty token list is allowed when the server binds to loopback
-(`127.0.0.1`, `localhost`, or `::1`); binding to a non-loopback host without
-tokens fails at startup.
+a bearer token. `/healthz`, `/readyz`, and `/metrics` are unauthenticated. For
+local development only, an empty token list is allowed when the server binds to
+loopback (`127.0.0.1`, `localhost`, or `::1`); binding to a non-loopback host
+without tokens fails at startup.
 
 ```bash
 curl -H "Authorization: Bearer dev-token" http://localhost:8787/v1/memory/search ...
@@ -359,7 +359,7 @@ Read-only. Org-scoped by token binding; entries from other orgs never leak.
 
 ---
 
-## Health probes (HTTP only)
+## Health and metrics (HTTP only)
 
 ### `GET /healthz` — liveness
 
@@ -390,3 +390,30 @@ vectors live in Postgres in that mode.
 Use this for Kubernetes readiness probes, Docker `HEALTHCHECK`, or external
 uptime monitors. The `/healthz` endpoint remains the unconditional liveness
 check (process alive, no dependency checks).
+
+### `GET /metrics` — Prometheus text exposition
+
+Unauthenticated. Returns `text/plain; version=0.0.4` for Prometheus scraping.
+
+Emitted HTTP metrics:
+
+- `akasha_http_requests_total{method,route,status}` — request counter.
+- `akasha_http_request_duration_seconds_count{method,route,status}` — request
+  duration sample count.
+- `akasha_http_request_duration_seconds_sum{method,route,status}` — cumulative
+  request duration.
+
+Route labels use static route names such as `/v1/memory/search`, `/mcp`,
+`/healthz`, `/readyz`, `/metrics`, or `unknown`. Raw URLs and query strings are
+never emitted. Labels and values do not include bearer tokens, organization
+IDs, request bodies, search queries, or memory content.
+
+Readiness dependency metrics come only from the most recent `/readyz` result:
+
+- `akasha_dependency_up{name="postgres"}` — `1` when the latest check passed,
+  `0` when it failed.
+- `akasha_dependency_check_duration_seconds{name="postgres"}` — duration of
+  the latest check.
+
+If `/readyz` has not run yet, dependency metrics are omitted; `/metrics` does
+not probe Postgres, Qdrant, or OpenAI itself.

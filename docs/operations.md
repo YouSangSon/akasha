@@ -249,10 +249,27 @@ Key event names to monitor:
 
 ### Metrics
 
-No native metrics export today. The audit log + structured logs are
-the primary observability surface. If you need Prometheus, scrape from
-the structured logs via a log-to-metrics pipeline (Loki/Promtail,
-Vector, etc.).
+`GET /metrics` exposes native Prometheus text exposition
+(`text/plain; version=0.0.4`) and is unauthenticated like `/healthz` and
+`/readyz`.
+
+Key series:
+
+- `akasha_http_requests_total{method,route,status}`
+- `akasha_http_request_duration_seconds_count{method,route,status}`
+- `akasha_http_request_duration_seconds_sum{method,route,status}`
+- `akasha_dependency_up{name="postgres"}`
+- `akasha_dependency_check_duration_seconds{name="postgres"}`
+
+HTTP labels are deliberately low-cardinality and privacy-safe. `route` is a
+static route name (`/v1/memory/search`, `/mcp`, `/healthz`, `/readyz`,
+`/metrics`, or `unknown`), never the raw URL or query string. Metrics do not
+include bearer tokens, organization IDs, request bodies, search queries, or
+memory content.
+
+Dependency gauges use the most recent `/readyz` report. If `/readyz` has not
+run yet, dependency metrics are omitted, and `/metrics` does not probe
+Postgres, Qdrant, or OpenAI itself.
 
 ## Schema migrations
 

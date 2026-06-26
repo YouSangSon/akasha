@@ -244,9 +244,27 @@ docker compose logs --since 1h app | jq 'select(.level >= 40)'  # warn+
 
 ### 메트릭
 
-네이티브 metrics export 없음. audit log + 구조화 로그가 주 observability
-surface. Prometheus 필요 시 log-to-metrics 파이프라인 (Loki/Promtail,
-Vector 등) 으로 구조화 로그에서 scrape.
+`GET /metrics` 는 native Prometheus text exposition
+(`text/plain; version=0.0.4`) 을 제공하며 `/healthz`, `/readyz` 와 마찬가지로
+인증이 없습니다.
+
+주요 series:
+
+- `akasha_http_requests_total{method,route,status}`
+- `akasha_http_request_duration_seconds_count{method,route,status}`
+- `akasha_http_request_duration_seconds_sum{method,route,status}`
+- `akasha_dependency_up{name="postgres"}`
+- `akasha_dependency_check_duration_seconds{name="postgres"}`
+
+HTTP label은 low-cardinality와 privacy-safe를 기준으로 제한합니다. `route` 는
+`/v1/memory/search`, `/mcp`, `/healthz`, `/readyz`, `/metrics`, `unknown` 같은
+static route 이름이며 raw URL이나 query string이 아닙니다. Metrics에는 bearer
+token, organization ID, request body, search query, memory content를 넣지
+않습니다.
+
+Dependency gauge는 가장 최근 `/readyz` report를 사용합니다. 아직 `/readyz` 가
+실행되지 않았다면 dependency metrics는 생략되며, `/metrics` 는 Postgres,
+Qdrant, OpenAI를 직접 probe하지 않습니다.
 
 ## 스키마 마이그레이션
 
