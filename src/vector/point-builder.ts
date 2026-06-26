@@ -22,6 +22,9 @@ export type VectorPointInput = {
   projectKey: string | null;
   kind: string;
   durability: string;
+  title?: string | null;
+  summary?: string | null;
+  tags?: readonly string[];
   updatedAt: string;
   embeddingVersion: string;
 };
@@ -39,7 +42,9 @@ export function buildVectorPoint(input: VectorPointInput): VectorPoint {
       project_key: input.projectKey,
       kind: input.kind,
       durability: input.durability,
-      tags: [],
+      title: input.title ?? null,
+      summary: input.summary ?? null,
+      tags: [...(input.tags ?? [])],
       updated_at: input.updatedAt,
       embedding_version: input.embeddingVersion,
     },

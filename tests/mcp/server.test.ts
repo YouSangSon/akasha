@@ -748,13 +748,47 @@ describe("createToolRegistry", () => {
     expect(services.vectorIndex.deleteByRecordIds).toHaveBeenCalledWith([501], {
       organizationId: "org-a",
     });
-    expect(services.chunkRepository.deleteChunksForRecord).toHaveBeenCalledWith(
-      501,
-      "org-a",
-    );
-    expect(services.chunkRepository.insertChunks).toHaveBeenCalledOnce();
+    expect(services.chunkRepository.replaceChunksForRecord).toHaveBeenCalledOnce();
+    expect(services.chunkRepository.deleteChunksForRecord).not.toHaveBeenCalled();
+    expect(services.chunkRepository.insertChunks).not.toHaveBeenCalled();
     expect(services.vectorIndex.upsert).toHaveBeenCalledOnce();
     expect(services.chunkRepository.updatePointIds).toHaveBeenCalledOnce();
+    const replaceOrder =
+      services.chunkRepository.replaceChunksForRecord.mock.invocationCallOrder[0]!;
+    const vectorDeleteOrder =
+      services.vectorIndex.deleteByRecordIds.mock.invocationCallOrder[0]!;
+    expect(replaceOrder).toBeLessThan(vectorDeleteOrder);
+  });
+
+  it("does not delete existing index state when update_memory embedding refresh fails", async () => {
+    const services = createCanonicalServices();
+    services.repository.updateMemoryRecord.mockResolvedValueOnce(
+      createRecord({
+        id: 501,
+        organizationId: "org-a",
+        memoryType: "decision",
+        content: "Decision: this refresh will fail before mutations.",
+        sourceType: "conversation",
+        externalId: "decision:manual",
+      }),
+    );
+    services.embeddings.embedBatch.mockRejectedValueOnce(new Error("embed down"));
+    const registry = createToolRegistry({
+      resolveCanonicalServices: async () => services,
+    });
+
+    await expect(
+      registry.update_memory({
+        organizationId: "org-a",
+        memoryId: 501,
+        content: "Decision: this refresh will fail before mutations.",
+      }),
+    ).rejects.toThrow(/embed down/);
+
+    expect(services.chunkRepository.replaceChunksForRecord).not.toHaveBeenCalled();
+    expect(services.chunkRepository.deleteChunksForRecord).not.toHaveBeenCalled();
+    expect(services.vectorIndex.deleteByRecordIds).not.toHaveBeenCalled();
+    expect(services.vectorIndex.upsert).not.toHaveBeenCalled();
   });
 
   it("updates memory without vector refresh for metadata-only edits", async () => {
@@ -863,6 +897,7 @@ describe("createToolRegistry", () => {
     expect(services.vectorIndex.deleteByRecordIds).toHaveBeenCalledWith([501], {
       organizationId: "org-a",
     });
+    expect(services.chunkRepository.replaceChunksForRecord).toHaveBeenCalledOnce();
     expect(services.repository.deleteMemoryRecord).not.toHaveBeenCalled();
   });
 
@@ -2136,6 +2171,17 @@ function createCanonicalServices() {
       ]),
       updatePointIds: vi.fn().mockResolvedValue(undefined),
       deleteChunksForRecord: vi.fn().mockResolvedValue(undefined),
+      replaceChunksForRecord: vi.fn().mockResolvedValue([
+        {
+          id: 701,
+          memoryRecordId: createdRecord.id,
+          chunkIndex: 0,
+          content: createdRecord.content,
+          startOffset: 0,
+          endOffset: createdRecord.content.length,
+          embeddingVersion: "v1",
+        },
+      ]),
       listChunks: vi.fn().mockResolvedValue([]),
       getChunksByRecordId: vi.fn().mockResolvedValue([]),
       createContextPackRun: vi.fn().mockResolvedValue(undefined),
