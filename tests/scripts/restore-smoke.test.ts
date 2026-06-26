@@ -78,6 +78,34 @@ describe("runRestoreSmoke", () => {
     expect(startApp).not.toHaveBeenCalled();
     expect(stopEnvironment).toHaveBeenCalledTimes(1);
   });
+
+  it("skips Qdrant restore when the active backend is pgvector", async () => {
+    const events: string[] = [];
+
+    await runRestoreSmoke({
+      startEnvironment: vi.fn().mockImplementation(async () => {
+        events.push("start");
+      }),
+      restorePostgres: vi.fn().mockImplementation(async () => {
+        events.push("restore-postgres");
+      }),
+      startApp: vi.fn().mockImplementation(async () => {
+        events.push("start-app");
+      }),
+      callSearch: vi.fn().mockResolvedValue([{ id: 12 }]),
+      callPack: vi.fn().mockResolvedValue({ ok: true }),
+      stopEnvironment: vi.fn().mockImplementation(async () => {
+        events.push("stop");
+      }),
+    });
+
+    expect(events).toEqual([
+      "start",
+      "restore-postgres",
+      "start-app",
+      "stop",
+    ]);
+  });
 });
 
 describe("buildRestoreSmokeToolInput", () => {

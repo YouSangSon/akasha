@@ -186,7 +186,7 @@ If a host goes away entirely, restore from the latest backup:
 
 1. Spin up new host with same compose stack.
 2. Restore Postgres from `pg_dump` snapshot.
-3. Restore Qdrant from snapshot.
+3. Restore Qdrant from snapshot when `VECTOR_BACKEND=qdrant`; skip this for pgvector because vectors are in the Postgres dump.
 4. Run `npm run restore:smoke` to validate.
 5. Cut traffic to the new host.
 

@@ -173,17 +173,21 @@ describe("public documentation drift checks", () => {
   });
 
   it("documents backup differences for Qdrant and pgvector backends", () => {
-    expect(read("package.json")).toContain("./scripts/snapshot-qdrant.sh");
+    expect(read("package.json")).toContain("./scripts/create-backup.sh");
+    expect(read("scripts/create-backup.sh")).toContain("./scripts/snapshot-qdrant.sh");
+    expect(read("package.json")).toContain("backup:create:pgvector");
 
     for (const path of ["README.md", "README.ko.md"]) {
       const text = read(path);
       expect(text).toContain("npm run backup:create");
+      expect(text).toContain("npm run backup:create:pgvector");
       expect(text).toContain("scripts/snapshot-qdrant.sh");
       expect(text).toContain("QDRANT_URL");
       expect(text).toContain("VECTOR_BACKEND=pgvector");
-      expect(text).toContain("logical vector data lives in Postgres");
-      expect(text).toContain("Qdrant-oriented");
-      expect(text).toContain("later script split");
+      expect(text).toMatch(/logical vector data lives in\s+Postgres/);
+      expect(/skips|건너뛰/.test(text)).toBe(true);
+      expect(text).not.toContain("later script split");
+      expect(text).not.toContain("Qdrant-oriented until");
     }
 
     for (const path of [
@@ -200,6 +204,9 @@ describe("public documentation drift checks", () => {
       expect(text).toContain("scripts/snapshot-qdrant.sh");
       expect(text).toContain("QDRANT_URL");
       expect(text).toContain("logical data path");
+      expect(text).toContain("backup:create:pgvector");
+      expect(text).not.toContain("later script split");
+      expect(text).not.toContain("still invokes");
     }
   });
 });

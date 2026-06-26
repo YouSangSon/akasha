@@ -112,6 +112,7 @@ describe.skipIf(!RUN_EVAL)("retrieval eval harness", () => {
         vectorIndex: services.vectorIndex,
         repository: services.repository,
         vector,
+        query: query.query,
         projectKey,
         userScopeId: query.scope.userScopeId,
         limit: TOP_K,

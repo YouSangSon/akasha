@@ -116,7 +116,7 @@ curl -X POST http://localhost:8787/v1/memory \
 
 ---
 
-### search_memory — 시맨틱 + scope 필터링 검색
+### search_memory — 시맨틱 + lexical 하이브리드 검색
 
 ```ts
 type SearchMemoryInput = {
@@ -167,9 +167,11 @@ type SearchMemoryResponse = {
 
 HTTP: `POST /v1/memory/search`
 
-동작: 쿼리 임베딩 → 활성 vector backend 유사도 검색 (org + scope 필터) →
-top-K를 Postgres에서 hydrate → 랭킹 → 반환. 동점인 경우 project-scope
-결과가 user-scope 결과보다 안정적으로 앞에 옴.
+동작: 쿼리를 임베딩해 활성 vector backend 유사도 검색 (org + scope 필터)을
+수행하고, 동시에 scope가 적용된 Postgres lexical 후보 검색을 실행. vector와
+lexical 후보를 merge하고 필요한 경우 Postgres에서 hydrate한 뒤, reciprocal-rank
+source boost와 metadata/recency signal로 채점, 랭킹, `limit` slice 후 반환.
+동점인 경우 project-scope 결과가 user-scope 결과보다 안정적으로 앞에 옴.
 
 ---
 

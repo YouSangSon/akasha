@@ -263,9 +263,9 @@ isolated compose project and validates search/context-pack behavior.
 | Variable | Default | Notes |
 |---|---|---|
 | `RESTORE_POSTGRES_URL` | required | Connection string for the isolated restore Postgres. |
-| `RESTORE_QDRANT_URL` | required | URL for the isolated restore Qdrant. |
+| `RESTORE_QDRANT_URL` | required for Qdrant manifests | URL for the isolated restore Qdrant. Pgvector manifests skip Qdrant restore. |
 | `RESTORE_SMOKE_POSTGRES_RESTORE_CMD` | required | Shell command that restores `RESTORE_SMOKE_POSTGRES_ARTIFACT_PATH`. |
-| `RESTORE_SMOKE_QDRANT_RESTORE_CMD` | required | Shell command that restores `RESTORE_SMOKE_QDRANT_ARTIFACT_PATH`. |
+| `RESTORE_SMOKE_QDRANT_RESTORE_CMD` | required for Qdrant manifests | Shell command that restores `RESTORE_SMOKE_QDRANT_ARTIFACT_PATH`. Pgvector manifests skip this command. |
 | `RESTORE_SMOKE_PROJECT` | `restore-smoke` | Docker Compose project name for the isolated stack. |
 | `RESTORE_SMOKE_PROJECT_KEY` | `project-alpha` | Project key used by smoke-search and context-pack checks. |
 | `RESTORE_SMOKE_ORGANIZATION_ID` | unset | Optional organization id passed to strict search/context-pack checks. Set this for default-strict restores unless you intentionally use `LEGACY_ANONYMOUS_SEARCH=true`. |

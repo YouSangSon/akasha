@@ -11,11 +11,12 @@ const execFileAsync = promisify(execFile);
 
 type BackupManifest = {
   createdAt: string;
+  vectorBackend?: "qdrant" | "pgvector";
   postgres: {
     fileName: string;
     sha256: string;
   };
-  qdrant: {
+  qdrant?: {
     fileName: string;
     sha256: string;
     metadataFileName?: string;
@@ -73,13 +74,15 @@ export async function verifyBackups(
     fileExists,
     sha256File,
   });
-  await verifyLocalArtifact({
-    backupDir: input.backupDir,
-    artifact: manifest.qdrant,
-    artifactLabel: "Qdrant snapshot",
-    fileExists,
-    sha256File,
-  });
+  if (manifest.qdrant) {
+    await verifyLocalArtifact({
+      backupDir: input.backupDir,
+      artifact: manifest.qdrant,
+      artifactLabel: "Qdrant snapshot",
+      fileExists,
+      sha256File,
+    });
+  }
 
   const remoteManifest = parseManifest(
     await input.remoteReadTextFile(manifestFileName),
@@ -95,12 +98,14 @@ export async function verifyBackups(
     remoteFileExists: input.remoteFileExists,
     remoteSha256File: input.remoteSha256File,
   });
-  await verifyRemoteArtifact({
-    artifact: manifest.qdrant,
-    artifactLabel: "Qdrant snapshot",
-    remoteFileExists: input.remoteFileExists,
-    remoteSha256File: input.remoteSha256File,
-  });
+  if (manifest.qdrant) {
+    await verifyRemoteArtifact({
+      artifact: manifest.qdrant,
+      artifactLabel: "Qdrant snapshot",
+      remoteFileExists: input.remoteFileExists,
+      remoteSha256File: input.remoteSha256File,
+    });
+  }
 
   return {
     manifestFileName,
@@ -168,11 +173,16 @@ function parseManifest(raw: string): BackupManifest {
   if (
     !parsed.createdAt ||
     !parsed.postgres?.fileName ||
-    !parsed.postgres?.sha256 ||
-    !parsed.qdrant?.fileName ||
-    !parsed.qdrant?.sha256
+    !parsed.postgres?.sha256
   ) {
     throw new Error("backup manifest is missing required artifact metadata");
+  }
+
+  if (
+    parsed.vectorBackend !== "pgvector" &&
+    (!parsed.qdrant?.fileName || !parsed.qdrant?.sha256)
+  ) {
+    throw new Error("backup manifest is missing required Qdrant artifact metadata");
   }
 
   return parsed as BackupManifest;

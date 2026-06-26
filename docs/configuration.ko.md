@@ -253,9 +253,9 @@ context-pack 동작을 검증합니다.
 | 변수 | 기본값 | 메모 |
 |---|---|---|
 | `RESTORE_POSTGRES_URL` | 필수 | 격리 restore Postgres 연결 문자열. |
-| `RESTORE_QDRANT_URL` | 필수 | 격리 restore Qdrant URL. |
+| `RESTORE_QDRANT_URL` | Qdrant manifest에서 필수 | 격리 restore Qdrant URL. pgvector manifest는 Qdrant restore를 건너뜁니다. |
 | `RESTORE_SMOKE_POSTGRES_RESTORE_CMD` | 필수 | `RESTORE_SMOKE_POSTGRES_ARTIFACT_PATH` 를 복원하는 shell command. |
-| `RESTORE_SMOKE_QDRANT_RESTORE_CMD` | 필수 | `RESTORE_SMOKE_QDRANT_ARTIFACT_PATH` 를 복원하는 shell command. |
+| `RESTORE_SMOKE_QDRANT_RESTORE_CMD` | Qdrant manifest에서 필수 | `RESTORE_SMOKE_QDRANT_ARTIFACT_PATH` 를 복원하는 shell command. pgvector manifest는 이 command를 건너뜁니다. |
 | `RESTORE_SMOKE_PROJECT` | `restore-smoke` | 격리 stack의 Docker Compose project 이름. |
 | `RESTORE_SMOKE_PROJECT_KEY` | `project-alpha` | smoke search와 context-pack check에 쓰는 project key. |
 | `RESTORE_SMOKE_ORGANIZATION_ID` | unset | strict search/context-pack check에 전달할 선택적 organization id. 기본 strict restore에서는 설정하고, 의도적으로 `LEGACY_ANONYMOUS_SEARCH=true`를 쓸 때만 생략. |

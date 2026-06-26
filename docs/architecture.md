@@ -95,14 +95,15 @@ side effects.
 ```
 search_memory  →  search tool  →  retrieveMemory  →  embeddings.embed  →  transformers / openai / local
                                   (active vector)   vectorIndex.query → Qdrant or pgvector (scope-filtered similarity)
-                                                    repository        →  Postgres (hydrate by id)
-                                                    .getMemoryRecordsByIds
-                                                    rankResults       →  in-memory ranking
+                                  (lexical)         repository.searchMemory → Postgres scoped keyword candidates
+                                                    repository.getMemoryRecordsByIds → Postgres hydrate vector ids
+                                                    rankCandidates → hybrid in-memory ranking
 ```
 
 Org filter is applied at both the active vector backend query layer and
-the Postgres hydration layer (defense-in-depth — if the vector backend
-returned a cross-org point id, the PG join filters it out).
+the Postgres lexical/hydration layers (defense-in-depth — if the vector backend
+returned a cross-org point id, the PG join filters it out). Lexical candidates
+use the same org and scope inputs as vector retrieval.
 
 ## Data flow: compact apply (P17)
 

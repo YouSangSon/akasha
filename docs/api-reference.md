@@ -118,7 +118,7 @@ Errors: `SecretDetectedError` (400) when content contains scrubbed patterns
 
 ---
 
-### search_memory — semantic + scope-filtered retrieval
+### search_memory — hybrid semantic + lexical retrieval
 
 ```ts
 type SearchMemoryInput = {
@@ -169,10 +169,12 @@ type SearchMemoryResponse = {
 
 HTTP: `POST /v1/memory/search`
 
-Behavior: query gets embedded → active vector backend similarity search
-(filtered by org + scope) → top-K hydrated from Postgres → ranked → returned.
-Project-scope hits are stably sorted ahead of user-scope hits when there's a
-tie.
+Behavior: query gets embedded for active vector backend similarity search
+(filtered by org + scope) and also runs through Postgres lexical candidate
+search over scoped records. Vector and lexical candidates are merged, hydrated
+from Postgres when needed, scored with reciprocal-rank source boosts plus
+metadata/recency signals, ranked, sliced to `limit`, and returned. Project-scope
+hits are stably sorted ahead of user-scope hits when there's a tie.
 
 ---
 

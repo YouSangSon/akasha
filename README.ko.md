@@ -85,7 +85,7 @@ payload shape가 어긋나지 않습니다.
 | 도구 | 하는 일 | HTTP 라우트 |
 |------|---------|------------|
 | `add_memory` | 결정, 사실, 요약을 저장 (쓰기 시점 시크릿 스크러빙) | `POST /v1/memory` |
-| `search_memory` | 벡터 + scope 필터링 검색 | `POST /v1/memory/search` |
+| `search_memory` | 벡터 + lexical 하이브리드 scope 필터링 검색 | `POST /v1/memory/search` |
 | `build_context_pack` | 새 세션에 주입할 컴팩트한 컨텍스트 팩 생성 | `POST /v1/memory/context-pack` |
 | `compact_memory` | 중복 및 decay된 레코드 정리 (apply 또는 dry-run) | `POST /v1/memory/compact` |
 | `reindex_memory` | Postgres 로부터 벡터 인덱스 재구축 (데이터 손실 0) | `POST /v1/memory/reindex` |
@@ -217,14 +217,14 @@ npm run dev:cli       # CLI (watch 모드)
 npm run typecheck     # tsc --noEmit
 npm run test          # vitest run
 npm run db:migrate    # 미적용 마이그레이션 실행
-npm run backup:create # 현재 packaged command: Postgres + Qdrant snapshot
+npm run backup:create # VECTOR_BACKEND 기준 backend-aware backup
+npm run backup:create:pgvector # 명시적 Postgres-only pgvector backup
 ```
 
-참고: 현재 `npm run backup:create` 는 여전히 `scripts/snapshot-qdrant.sh` 를
-호출하므로 `QDRANT_URL` 이 필요하며, later script split 전까지는
-Qdrant-oriented 명령입니다. `VECTOR_BACKEND=pgvector` 에서는 논리 벡터
-데이터가 Postgres에 있습니다 (logical vector data lives in Postgres). 다만
-이 packaged command는 아직 Qdrant snapshot 단계를 건너뛰지 않습니다.
+`VECTOR_BACKEND=qdrant` 에서는 `backup:create` 가 Postgres와 Qdrant snapshot을
+함께 캡처합니다. `VECTOR_BACKEND=pgvector` 에서는 logical vector data lives in
+Postgres 이므로 `backup:create` 는 `scripts/snapshot-qdrant.sh` 를 건너뛰며
+`QDRANT_URL` 을 요구하지 않습니다.
 
 ## 기여 & 보안
 

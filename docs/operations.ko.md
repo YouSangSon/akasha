@@ -19,12 +19,11 @@ npm run backup:create
 `manifest-YYYYMMDD-HHMM.json`.
 
 `VECTOR_BACKEND=pgvector` 에서는 벡터가 Postgres 안에 있으므로 Qdrant snapshot
-data는 logical data path의 일부가 아닙니다. 현재 packaged command caveat:
-`npm run backup:create` 는 Postgres backup 후에도 `scripts/snapshot-qdrant.sh` 를
-계속 호출하므로 오늘 기준 `QDRANT_URL` 과 접근 가능한 Qdrant endpoint가 여전히
-필요합니다. 이는 pgvector data dependency가 아니라 packaging/script 한계입니다.
-기존 restore smoke helper는 아직 Qdrant-oriented 이며 추후 script split 전까지
-`RESTORE_QDRANT_URL` 이 필요합니다.
+data는 logical data path의 일부가 아닙니다. `npm run backup:create` 는 pgvector
+manifest에서 `scripts/snapshot-qdrant.sh` 를 건너뛰므로 pgvector backup에는
+`DATABASE_URL`, `BACKUP_DIR` 만 필요하고 `QDRANT_URL` 은 필요하지 않습니다.
+환경 기본값과 무관하게 backend를 고정하려면 `npm run backup:create:qdrant` 또는
+`npm run backup:create:pgvector` 를 사용하세요.
 
 ### 스케줄
 
@@ -71,9 +70,9 @@ npm run restore:smoke
 
 격리된 compose 스택 (`compose.restore-smoke.yaml`) 을 띄워 최신 백업을
 복원하고 데이터 검증 실행. **Production을 건드리지 않음.** 실패는 critical
-경고로 처리 — 백업이 신뢰 불가. 현재 helper는 아직 Qdrant-oriented 이며
-`RESTORE_QDRANT_URL` 을 요구합니다. pgvector 배포는 helper split 전까지
-Postgres를 logical data path로 복원하세요.
+경고로 처리 — 백업이 신뢰 불가. Qdrant manifest는 `RESTORE_QDRANT_URL` 과
+`RESTORE_SMOKE_QDRANT_RESTORE_CMD` 를 요구합니다. pgvector manifest는 Qdrant
+복원 단계를 건너뛰고 `VECTOR_BACKEND=pgvector` 로 검증합니다.
 
 ### Production 복원
 
@@ -87,10 +86,12 @@ docker compose up -d postgres
 gunzip -c /var/lib/developer-memory-os/backups/postgres-YYYYMMDD-HHMM.sql.gz \
   | docker compose exec -T postgres psql -U memory -d memory_os
 
-# 3. Qdrant 스냅샷 복원.
+# 3. VECTOR_BACKEND=qdrant 인 경우 Qdrant 스냅샷 복원.
 docker compose exec qdrant curl -X POST \
   http://localhost:6333/collections/memory_chunks_v1/snapshots/upload \
   -F snapshot=@/var/lib/developer-memory-os/backups/qdrant-YYYYMMDD-HHMM.snapshot
+
+#    VECTOR_BACKEND=pgvector 에서는 벡터가 Postgres dump 안에 있으므로 이 단계 생략.
 
 # 4. 검증 + 트래픽 재개.
 docker compose start app

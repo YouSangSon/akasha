@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { PgPool, PgQueryable } from "../db/connection.js";
 import { rootLogger } from "../logger.js";
+import { tokenizeLexicalQuery } from "../search/lexical-score.js";
 import type {
   AddMemoryInput,
   CanonicalMemoryRepository,
@@ -164,8 +165,37 @@ export function createMemoryRepository(
         return [];
       }
 
+      const trimmedQuery = input.query.trim();
+      if (trimmedQuery.length === 0) {
+        return [];
+      }
+
       const limit = Math.max(1, Math.min(input.limit ?? 10, 100));
-      const params: unknown[] = [`%${input.query}%`];
+      const params: unknown[] = [];
+      const searchText = `
+        concat_ws(
+          ' ',
+          mr.title,
+          mr.content,
+          mr.summary,
+          s.title,
+          s.source_ref
+        )
+      `;
+      const phraseIndex = params.push(likeContainsPattern(trimmedQuery));
+      const searchClauses = [`${searchText} ILIKE $${phraseIndex} ESCAPE '\\'`];
+      const scoreExpressions = [
+        `CASE WHEN ${searchText} ILIKE $${phraseIndex} ESCAPE '\\' THEN 2 ELSE 0 END`,
+      ];
+
+      for (const term of tokenizeLexicalQuery(trimmedQuery).slice(0, 12)) {
+        const termIndex = params.push(likeContainsPattern(term));
+        searchClauses.push(`${searchText} ILIKE $${termIndex} ESCAPE '\\'`);
+        scoreExpressions.push(
+          `CASE WHEN ${searchText} ILIKE $${termIndex} ESCAPE '\\' THEN 1 ELSE 0 END`,
+        );
+      }
+
       const scopeClauses = input.scopes.map((scope) => {
         const scopeTypeIndex = params.push(scope.scopeType);
         const scopeIdIndex = params.push(scope.scopeId);
@@ -184,9 +214,9 @@ export function createMemoryRepository(
           SELECT ${SEARCH_RETURN_COLUMNS}
           FROM memory_records mr
           JOIN sources s ON s.id = mr.source_id
-          WHERE mr.content ILIKE $1
+          WHERE (${searchClauses.join(" OR ")})
             AND (${scopeClauses.join(" OR ")})${orgClause}
-          ORDER BY mr.id DESC
+          ORDER BY (${scoreExpressions.join(" + ")}) DESC, mr.id DESC
           LIMIT $${limitIndex}
         `,
         params,
@@ -317,6 +347,10 @@ function toIsoString(value: string | Date): string {
 
 function toNumber(value: number | string): number {
   return typeof value === "number" ? value : Number(value);
+}
+
+function likeContainsPattern(value: string): string {
+  return `%${value.replace(/[\\%_]/g, (match) => `\\${match}`)}%`;
 }
 
 function requireSingleRow<TRow>(row: TRow | undefined, label: string): TRow {

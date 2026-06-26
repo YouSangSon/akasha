@@ -239,6 +239,57 @@ describe("createMemoryRepository (unit — no PG required)", () => {
         expect(limitParam).toBeGreaterThan(0);
       });
   });
+
+  it("searchMemory tokenizes query terms into parameterized lexical OR clauses", async () => {
+    const queryCalls: { sql: string; params: unknown[] }[] = [];
+    const mockPool = {
+      query: vi.fn().mockImplementation((sql: string, params: unknown[]) => {
+        queryCalls.push({ sql, params });
+        return Promise.resolve({ rows: [] });
+      }),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    await repo.searchMemory({
+      query: "timeout retry backoff",
+      scopes: [{ scopeType: "project", scopeId: "proj-x" }],
+      organizationId: "org-a",
+      limit: 5,
+    });
+
+    expect(queryCalls).toHaveLength(1);
+    const { sql, params } = queryCalls[0]!;
+
+    expect(sql).toContain("ILIKE $1");
+    expect(sql).toContain(" OR ");
+    expect(sql).toMatch(/ORDER BY \(.+\) DESC, mr\.id DESC/s);
+    expect(params).toEqual(
+      expect.arrayContaining([
+        "%timeout retry backoff%",
+        "%timeout%",
+        "%retry%",
+        "%backoff%",
+        "project",
+        "proj-x",
+        "org-a",
+        5,
+      ]),
+    );
+  });
+
+  it("searchMemory returns no rows for an empty lexical query", async () => {
+    const mockPool = { query: vi.fn() };
+    const repo = createMemoryRepository(mockPool as never);
+
+    await expect(
+      repo.searchMemory({
+        query: "   ",
+        scopes: [{ scopeType: "project", scopeId: "proj-x" }],
+        limit: 5,
+      }),
+    ).resolves.toEqual([]);
+    expect(mockPool.query).not.toHaveBeenCalled();
+  });
 });
 
 // PG-dependent suite: skip when POSTGRES_HOST is unset (e.g. the non-PG CI

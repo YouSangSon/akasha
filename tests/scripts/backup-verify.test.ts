@@ -56,6 +56,35 @@ describe("verifyBackups", () => {
     ).rejects.toThrow("latest off-box qdrant snapshot is missing");
   });
 
+  it("passes pgvector manifests without Qdrant artifacts", async () => {
+    const { localDir, remoteDir } = await createBackupFixture({
+      vectorBackend: "pgvector",
+    });
+
+    await expect(
+      verifyBackups({
+        now: new Date("2026-03-29T20:00:00.000Z"),
+        backupDir: localDir,
+        remoteReadTextFile(fileName) {
+          return readFile(path.join(remoteDir, fileName), "utf8");
+        },
+        remoteFileExists(fileName) {
+          return exists(path.join(remoteDir, fileName));
+        },
+        remoteSha256File(fileName) {
+          return sha256(path.join(remoteDir, fileName));
+        },
+      }),
+    ).resolves.toMatchObject({
+      manifest: {
+        vectorBackend: "pgvector",
+        postgres: {
+          fileName: "postgres-20260329-1200.sql.gz",
+        },
+      },
+    });
+  });
+
   it("fails when the newest manifest is older than 24 hours", async () => {
     const { localDir, remoteDir } = await createBackupFixture({
       createdAt: "2026-03-27T00:00:00.000Z",
@@ -79,7 +108,10 @@ describe("verifyBackups", () => {
   });
 });
 
-async function createBackupFixture(options: { createdAt?: string } = {}) {
+async function createBackupFixture(options: {
+  createdAt?: string;
+  vectorBackend?: "qdrant" | "pgvector";
+} = {}) {
   const localDir = await mkdtemp(path.join(os.tmpdir(), "developer-memory-os-backup-local-"));
   const remoteDir = await mkdtemp(path.join(os.tmpdir(), "developer-memory-os-backup-remote-"));
   tempDirs.push(localDir, remoteDir);
@@ -89,30 +121,39 @@ async function createBackupFixture(options: { createdAt?: string } = {}) {
   const postgresFileName = "postgres-20260329-1200.sql.gz";
   const qdrantFileName = "qdrant-20260329-1200.snapshot";
   const manifestFileName = "manifest-20260329-1200.json";
-  const manifest = JSON.stringify(
-    {
-      createdAt: options.createdAt ?? "2026-03-29T12:00:00.000Z",
-      postgres: {
-        fileName: postgresFileName,
-        sha256: sha256Text(postgresContent),
-      },
-      qdrant: {
-        fileName: qdrantFileName,
-        sha256: sha256Text(qdrantContent),
-      },
+  const manifestPayload = {
+    createdAt: options.createdAt ?? "2026-03-29T12:00:00.000Z",
+    ...(options.vectorBackend ? { vectorBackend: options.vectorBackend } : {}),
+    postgres: {
+      fileName: postgresFileName,
+      sha256: sha256Text(postgresContent),
     },
-    null,
-    2,
-  );
+    ...(options.vectorBackend === "pgvector"
+      ? {}
+      : {
+          qdrant: {
+            fileName: qdrantFileName,
+            sha256: sha256Text(qdrantContent),
+          },
+        }),
+  };
+  const manifest = JSON.stringify(manifestPayload, null, 2);
 
-  await Promise.all([
+  const writes = [
     writeFile(path.join(localDir, postgresFileName), postgresContent),
-    writeFile(path.join(localDir, qdrantFileName), qdrantContent),
     writeFile(path.join(localDir, manifestFileName), `${manifest}\n`),
     writeFile(path.join(remoteDir, postgresFileName), postgresContent),
-    writeFile(path.join(remoteDir, qdrantFileName), qdrantContent),
     writeFile(path.join(remoteDir, manifestFileName), `${manifest}\n`),
-  ]);
+  ];
+
+  if (options.vectorBackend !== "pgvector") {
+    writes.push(
+      writeFile(path.join(localDir, qdrantFileName), qdrantContent),
+      writeFile(path.join(remoteDir, qdrantFileName), qdrantContent),
+    );
+  }
+
+  await Promise.all(writes);
 
   return { localDir, remoteDir };
 }
