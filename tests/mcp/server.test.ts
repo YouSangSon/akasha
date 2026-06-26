@@ -748,25 +748,29 @@ describe("createToolRegistry", () => {
     expect(services.vectorIndex.deleteByRecordIds).toHaveBeenCalledWith([501], {
       organizationId: "org-a",
     });
-    expect(services.chunkRepository.replaceChunksForRecord).toHaveBeenCalledOnce();
+    expect(
+      services.chunkRepository.replaceChunksForRecordWithPendingIngest,
+    ).toHaveBeenCalledOnce();
+    expect(services.chunkRepository.replaceChunksForRecord).not.toHaveBeenCalled();
     expect(services.chunkRepository.deleteChunksForRecord).not.toHaveBeenCalled();
     expect(services.chunkRepository.insertChunks).not.toHaveBeenCalled();
     expect(services.vectorIndex.upsert).toHaveBeenCalledOnce();
     expect(services.chunkRepository.updatePointIds).toHaveBeenCalledOnce();
-    expect(services.ingestJobs.create).toHaveBeenCalledWith({
-      memoryRecordId: 501,
-      organizationId: "org-a",
-    });
-    expect(services.ingestJobs.markQdrantPending).toHaveBeenCalledWith(
+    expect(
+      services.chunkRepository.replaceChunksForRecordWithPendingIngest,
+    ).toHaveBeenCalledWith(
       expect.objectContaining({
-        jobId: 801,
-        attempts: 0,
+        record: updatedRecord,
+        nextRetryAt: expect.any(Date),
       }),
     );
+    expect(services.ingestJobs.create).not.toHaveBeenCalled();
+    expect(services.ingestJobs.markQdrantPending).not.toHaveBeenCalled();
     expect(services.ingestJobs.markQdrantCompleted).toHaveBeenCalledWith(801);
     expect(services.ingestJobs.markCompleted).toHaveBeenCalledWith(801);
     const replaceOrder =
-      services.chunkRepository.replaceChunksForRecord.mock.invocationCallOrder[0]!;
+      services.chunkRepository.replaceChunksForRecordWithPendingIngest.mock
+        .invocationCallOrder[0]!;
     const vectorDeleteOrder =
       services.vectorIndex.deleteByRecordIds.mock.invocationCallOrder[0]!;
     expect(replaceOrder).toBeLessThan(vectorDeleteOrder);
@@ -797,6 +801,9 @@ describe("createToolRegistry", () => {
       }),
     ).rejects.toThrow(/embed down/);
 
+    expect(
+      services.chunkRepository.replaceChunksForRecordWithPendingIngest,
+    ).not.toHaveBeenCalled();
     expect(services.chunkRepository.replaceChunksForRecord).not.toHaveBeenCalled();
     expect(services.chunkRepository.deleteChunksForRecord).not.toHaveBeenCalled();
     expect(services.vectorIndex.deleteByRecordIds).not.toHaveBeenCalled();
@@ -829,14 +836,13 @@ describe("createToolRegistry", () => {
       }),
     ).rejects.toThrow(/vector down/);
 
-    expect(services.chunkRepository.replaceChunksForRecord).toHaveBeenCalledOnce();
+    expect(
+      services.chunkRepository.replaceChunksForRecordWithPendingIngest,
+    ).toHaveBeenCalledOnce();
     expect(services.vectorIndex.deleteByRecordIds).toHaveBeenCalledWith([501], {
       organizationId: "org-a",
     });
-    expect(services.ingestJobs.create).toHaveBeenCalledWith({
-      memoryRecordId: 501,
-      organizationId: "org-a",
-    });
+    expect(services.ingestJobs.create).not.toHaveBeenCalled();
     expect(services.ingestJobs.markQdrantPending).toHaveBeenCalledWith(
       expect.objectContaining({
         jobId: 801,
@@ -859,9 +865,8 @@ describe("createToolRegistry", () => {
         externalId: "decision:manual",
       }),
     );
-    services.chunkRepository.replaceChunksForRecord.mockRejectedValueOnce(
-      new Error("replace failed"),
-    );
+    services.chunkRepository.replaceChunksForRecordWithPendingIngest
+      .mockRejectedValueOnce(new Error("replace failed"));
     const registry = createToolRegistry({
       resolveCanonicalServices: async () => services,
     });
@@ -985,7 +990,9 @@ describe("createToolRegistry", () => {
     expect(services.vectorIndex.deleteByRecordIds).toHaveBeenCalledWith([501], {
       organizationId: "org-a",
     });
-    expect(services.chunkRepository.replaceChunksForRecord).toHaveBeenCalledOnce();
+    expect(
+      services.chunkRepository.replaceChunksForRecordWithPendingIngest,
+    ).toHaveBeenCalledOnce();
     expect(services.repository.deleteMemoryRecord).not.toHaveBeenCalled();
   });
 
@@ -2270,6 +2277,23 @@ function createCanonicalServices() {
           embeddingVersion: "v1",
         },
       ]),
+      replaceChunksForRecordWithPendingIngest: vi.fn().mockResolvedValue({
+        chunks: [
+          {
+            id: 701,
+            memoryRecordId: createdRecord.id,
+            chunkIndex: 0,
+            content: createdRecord.content,
+            startOffset: 0,
+            endOffset: createdRecord.content.length,
+            embeddingVersion: "v1",
+          },
+        ],
+        job: {
+          id: 801,
+          qdrantAttempts: 0,
+        },
+      }),
       listChunks: vi.fn().mockResolvedValue([]),
       getChunksByRecordId: vi.fn().mockResolvedValue([]),
       createContextPackRun: vi.fn().mockResolvedValue(undefined),

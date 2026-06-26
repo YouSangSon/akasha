@@ -31,6 +31,11 @@ export type StoredMemoryChunk = {
   embeddingVersion: string;
 };
 
+type PendingIngestJobRef = {
+  id: number;
+  qdrantAttempts: number;
+};
+
 export type ReindexableMemoryChunk = StoredMemoryChunk & {
   organizationId: string;
   scopeType: SearchMemoryResult["scopeType"];
@@ -64,6 +69,12 @@ export type MemoryChunkRepository = {
     chunks: TextChunk[];
     embedding: ChunkEmbeddingConfig;
   }): Promise<StoredMemoryChunk[]>;
+  replaceChunksForRecordWithPendingIngest?(input: {
+    record: SearchMemoryResult;
+    chunks: TextChunk[];
+    embedding: ChunkEmbeddingConfig;
+    nextRetryAt: Date;
+  }): Promise<{ chunks: StoredMemoryChunk[]; job: PendingIngestJobRef }>;
   listChunks(
     organizationId: string,
     scopes: ScopeRef[],
@@ -148,6 +159,55 @@ export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository
         const chunks = await insertPostgresChunks(client, input);
         await client.query("COMMIT");
         return chunks;
+      } catch (error: unknown) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+
+    async replaceChunksForRecordWithPendingIngest(input) {
+      const client = await pool.connect();
+      const organizationId = input.record.organizationId ?? "default";
+
+      try {
+        await client.query("BEGIN");
+        await client.query(
+          `
+            DELETE FROM memory_chunks
+            WHERE memory_record_id = $1
+              AND organization_id = $2
+          `,
+          [input.record.id, organizationId],
+        );
+        const chunks = await insertPostgresChunks(client, input);
+        const jobResult = await client.query<{
+          id: number | string;
+          qdrant_attempts: number | string;
+        }>(
+          `
+            INSERT INTO ingest_jobs (
+              memory_record_id,
+              organization_id,
+              status,
+              qdrant_status,
+              qdrant_attempts,
+              qdrant_next_retry_at
+            ) VALUES ($1, $2, 'pending', 'pending', 0, $3)
+            RETURNING id, qdrant_attempts
+          `,
+          [input.record.id, organizationId, input.nextRetryAt],
+        );
+        await client.query("COMMIT");
+        const row = requireSingleRow(jobResult.rows[0], "ingest job");
+        return {
+          chunks,
+          job: {
+            id: toNumber(row.id),
+            qdrantAttempts: toNumber(row.qdrant_attempts),
+          },
+        };
       } catch (error: unknown) {
         await client.query("ROLLBACK").catch(() => undefined);
         throw error;
@@ -370,35 +430,39 @@ export async function refreshCanonicalMemoryIndex(input: {
     );
   }
 
-  let job: Awaited<ReturnType<IngestJobRepository["create"]>> | null = null;
+  let job: PendingIngestJobRef | null = null;
 
   try {
-    const storedChunks =
-      input.chunkRepository.replaceChunksForRecord !== undefined
+    const retryAt = new Date(Date.now() + nextRetryDelayMs(0));
+    let storedChunks: StoredMemoryChunk[];
+    if (input.ingestJobs) {
+      if (!input.chunkRepository.replaceChunksForRecordWithPendingIngest) {
+        throw new Error(
+          "refreshCanonicalMemoryIndex requires atomic chunk replacement with pending ingest",
+        );
+      }
+      const replaced =
+        await input.chunkRepository.replaceChunksForRecordWithPendingIngest({
+          record: input.record,
+          chunks,
+          embedding: input.embedding,
+          nextRetryAt: retryAt,
+        });
+      job = replaced.job;
+      storedChunks = replaced.chunks;
+    } else {
+      storedChunks = input.chunkRepository.replaceChunksForRecord !== undefined
         ? await input.chunkRepository.replaceChunksForRecord({
-            record: input.record,
-            chunks,
-            embedding: input.embedding,
-          })
-        : await replaceChunksForRecordFallback(input.chunkRepository, {
-            organizationId,
-            record: input.record,
-            chunks,
-            embedding: input.embedding,
-          });
-
-    job = input.ingestJobs
-      ? await input.ingestJobs.create({
-          memoryRecordId: input.record.id,
-          organizationId,
+          record: input.record,
+          chunks,
+          embedding: input.embedding,
         })
-      : null;
-    if (job && storedChunks.length > 0) {
-      await input.ingestJobs!.markQdrantPending({
-        jobId: job.id,
-        attempts: 0,
-        nextRetryAt: new Date(Date.now() + nextRetryDelayMs(0)),
-      });
+        : await replaceChunksForRecordFallback(input.chunkRepository, {
+          organizationId,
+          record: input.record,
+          chunks,
+          embedding: input.embedding,
+        });
     }
 
     await input.vectorIndex.deleteByRecordIds([input.record.id], {
