@@ -977,6 +977,100 @@ describe("canonical indexing", () => {
     expect(params).toContain("chunk:3");
   });
 
+  it("replaceChunksForRecordWithPendingIngest replaces chunks and inserts a due retry row in one transaction", async () => {
+    const clientQueryCalls: { sql: string; params: unknown[] }[] = [];
+    const retryAt = new Date("2026-06-26T00:00:01.000Z");
+    const mockClient = {
+      query: vi.fn().mockImplementation((sql: string, params?: unknown[]) => {
+        clientQueryCalls.push({ sql, params: params ?? [] });
+        if (sql === "BEGIN" || sql === "COMMIT" || sql === "ROLLBACK") {
+          return Promise.resolve({ rows: [] });
+        }
+        if (sql.includes("INSERT INTO memory_chunks")) {
+          return Promise.resolve({
+            rows: [{
+              id: 701,
+              memory_record_id: 501,
+              chunk_index: 0,
+              content: "replacement chunk",
+              start_offset: 0,
+              end_offset: 17,
+              embedding_version: "v1",
+            }],
+          });
+        }
+        if (sql.includes("INSERT INTO ingest_jobs")) {
+          return Promise.resolve({
+            rows: [{ id: 801, qdrant_attempts: 0 }],
+          });
+        }
+        return Promise.resolve({ rows: [] });
+      }),
+      release: vi.fn(),
+    };
+    const mockPool = {
+      connect: vi.fn().mockResolvedValue(mockClient),
+    };
+    const repo = createMemoryChunkRepository(mockPool as never);
+
+    const result = await repo.replaceChunksForRecordWithPendingIngest!({
+      record: {
+        id: 501,
+        organizationId: "org-a",
+        sourceId: 1,
+        scopeType: "project",
+        scopeId: "project-alpha",
+        projectKey: "project-alpha",
+        memoryType: "fact",
+        content: "replacement chunk",
+        createdAt: "2026-06-26T00:00:00.000Z",
+        updatedAt: "2026-06-26T00:00:00.000Z",
+        source: {
+          id: 1,
+          scopeType: "project",
+          scopeId: "project-alpha",
+          sourceType: "document",
+          title: null,
+          uri: null,
+          createdAt: "2026-06-26T00:00:00.000Z",
+        },
+      },
+      chunks: [{
+        chunkIndex: 0,
+        content: "replacement chunk",
+        startOffset: 0,
+        endOffset: 17,
+      }],
+      embedding: {
+        provider: "openai",
+        model: "text-embedding-3-small",
+        dimensions: 1536,
+        version: "v1",
+        targetTokens: 800,
+        overlapTokens: 120,
+      },
+      nextRetryAt: retryAt,
+    });
+
+    expect(result).toEqual({
+      chunks: [expect.objectContaining({ id: 701, memoryRecordId: 501 })],
+      job: { id: 801, qdrantAttempts: 0 },
+    });
+    expect(clientQueryCalls.map((call) => call.sql)).toEqual([
+      "BEGIN",
+      expect.stringContaining("DELETE FROM memory_chunks"),
+      expect.stringContaining("INSERT INTO memory_chunks"),
+      expect.stringContaining("INSERT INTO ingest_jobs"),
+      "COMMIT",
+    ]);
+    const ingestInsert = clientQueryCalls.find((call) =>
+      call.sql.includes("INSERT INTO ingest_jobs"),
+    );
+    expect(ingestInsert?.sql).toContain("qdrant_next_retry_at");
+    expect(ingestInsert?.params).toEqual([501, "org-a", retryAt]);
+    expect(mockClient.release).toHaveBeenCalledOnce();
+  });
+
   it("listChunks filters by organizationId to prevent cross-tenant data leakage (SEC-1)", () => {
     // Proof via mock-based SQL inspection:
     // createMemoryChunkRepository.listChunks must pass organizationId as

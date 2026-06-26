@@ -853,6 +853,46 @@ describe("createToolRegistry", () => {
     expect(services.ingestJobs.markCompleted).not.toHaveBeenCalled();
   });
 
+  it("deletes newly upserted points and keeps retry marker when updatePointIds fails", async () => {
+    const services = createCanonicalServices();
+    services.repository.updateMemoryRecord.mockResolvedValueOnce(
+      createRecord({
+        id: 501,
+        organizationId: "org-a",
+        memoryType: "decision",
+        content: "Decision: retry after point id failure.",
+        sourceType: "conversation",
+        externalId: "decision:manual",
+      }),
+    );
+    services.chunkRepository.updatePointIds.mockRejectedValueOnce(
+      new Error("point id update failed"),
+    );
+    const registry = createToolRegistry({
+      resolveCanonicalServices: async () => services,
+    });
+
+    await expect(
+      registry.update_memory({
+        organizationId: "org-a",
+        memoryId: 501,
+        content: "Decision: retry after point id failure.",
+      }),
+    ).rejects.toThrow(/point id update failed/);
+
+    expect(services.vectorIndex.delete).toHaveBeenCalledWith(["chunk:701"], {
+      organizationId: "org-a",
+    });
+    expect(services.ingestJobs.markQdrantPending).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobId: 801,
+        error: expect.any(Error),
+      }),
+    );
+    expect(services.ingestJobs.markQdrantCompleted).not.toHaveBeenCalled();
+    expect(services.ingestJobs.markCompleted).not.toHaveBeenCalled();
+  });
+
   it("does not create a retry marker when update_memory chunk replacement rolls back", async () => {
     const services = createCanonicalServices();
     services.repository.updateMemoryRecord.mockResolvedValueOnce(
