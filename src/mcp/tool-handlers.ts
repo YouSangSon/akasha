@@ -111,6 +111,7 @@ export function createToolHandlers(input: {
       vectorIndex: services.vectorIndex,
       repository: services.repository,
       vector,
+      query: serviceInput.query,
       organizationId: serviceInput.organizationId,
       // Default-strict: undefined organizationId throws unless the operator
       // explicitly opted into the legacy single-tenant org-blind read by

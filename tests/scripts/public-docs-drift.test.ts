@@ -37,12 +37,15 @@ describe("public documentation drift checks", () => {
     expect(readmeKo).toContain("`/mcp` 의 MCP Streamable HTTP 와 `/v1/*` 아래 JSON HTTP");
 
     expect(apiReference).toContain("MCP Streamable HTTP");
+    expect(apiReference).toContain("dist/src/mcp/server.js");
+    expect(apiReference).not.toContain("Entry point: `dist/src/cli.js`");
     expect(apiReference).toContain("POST /mcp");
     expect(apiReference).toContain("three access paths");
     expect(apiReference).not.toContain("Both transports share");
     expect(apiReference).toContain("When `MEMORY_API_TOKENS` is configured, every `/mcp` and `/v1/*` route requires");
-    expect(apiReference).toContain("a bearer token. `/healthz` and `/readyz` are unauthenticated. For local");
-    expect(apiReference).toContain("development only, an empty token list is allowed when the server binds to loopback");
+    expect(apiReference).toContain("a bearer token. `/healthz`, `/readyz`, and `/metrics` are unauthenticated. For");
+    expect(apiReference).toContain("local development only, an empty token list is allowed when the server binds to");
+    expect(apiReference).toContain("loopback (`127.0.0.1`, `localhost`, or `::1`); binding to a non-loopback host");
     expect(apiReference).toContain("akasha_session_start");
     expect(apiReference).toContain("akasha_store_memory");
     expect(apiReference).toContain("akasha://memory/recent/{projectKey}");
@@ -50,18 +53,37 @@ describe("public documentation drift checks", () => {
     expect(apiReference).toContain("mergedIds: string[];");
 
     expect(apiReferenceKo).toContain("MCP Streamable HTTP");
+    expect(apiReferenceKo).toContain("dist/src/mcp/server.js");
+    expect(apiReferenceKo).not.toContain("진입점: `dist/src/cli.js`");
     expect(apiReferenceKo).toContain("POST /mcp");
     expect(apiReferenceKo).toContain("세 가지 접근 경로");
     expect(apiReferenceKo).not.toContain("두 transport 모두");
     expect(apiReferenceKo).toContain("`MEMORY_API_TOKENS` 가 설정되어 있으면 모든 `/mcp`, `/v1/*` 라우트에 bearer");
-    expect(apiReferenceKo).toContain("토큰이 필요합니다. `/healthz`, `/readyz` 는 인증 없음. 로컬 개발에서만 토큰 목록이");
-    expect(apiReferenceKo).toContain("로컬 개발에서만 토큰 목록이");
-    expect(apiReferenceKo).toContain("비어 있어도 loopback (`127.0.0.1`, `localhost`, `::1`) 바인딩이면 허용됩니다.");
+    expect(apiReferenceKo).toContain("토큰이 필요합니다. `/healthz`, `/readyz`, `/metrics` 는 인증 없음. 로컬 개발에서만");
+    expect(apiReferenceKo).toContain("토큰 목록이 비어 있어도 loopback (`127.0.0.1`, `localhost`, `::1`) 바인딩이면");
+    expect(apiReferenceKo).toContain("허용됩니다. 토큰 없이 non-loopback host에 바인딩하면 startup에서 실패합니다.");
     expect(apiReferenceKo).toContain("akasha_session_start");
     expect(apiReferenceKo).toContain("akasha_store_memory");
     expect(apiReferenceKo).toContain("akasha://memory/recent/{projectKey}");
     expect(apiReferenceKo).toContain("akasha://context-pack/{projectKey}/{task}");
     expect(apiReferenceKo).toContain("mergedIds: string[];");
+  });
+
+  it("documents agent lifecycle integrations", () => {
+    const index = read("docs/README.md");
+    const indexKo = read("docs/README.ko.md");
+    const integrations = read("docs/integrations.md");
+    const integrationsKo = read("docs/integrations.ko.md");
+
+    expect(index).toContain("integrations.md");
+    expect(indexKo).toContain("integrations.ko.md");
+    for (const text of [integrations, integrationsKo]) {
+      expect(text).toContain("dist/src/mcp/server.js");
+      expect(text).toContain("akasha_session_start");
+      expect(text).toContain("akasha_store_memory");
+      expect(text).toContain("node dist/src/cli.js pack");
+      expect(text).toContain("--organization-id");
+    }
   });
 
   it("documents the current audit instrumentation module in architecture docs", () => {
@@ -120,6 +142,30 @@ describe("public documentation drift checks", () => {
     }
   });
 
+  it("documents OAuth protected-resource discovery configuration and security limits", () => {
+    for (const path of [
+      ".env.example",
+      "docs/configuration.md",
+      "docs/configuration.ko.md",
+    ]) {
+      const text = read(path);
+      expect(text).toContain("MCP_OAUTH_AUTHORIZATION_SERVERS");
+      expect(text).toContain("MCP_OAUTH_RESOURCE_URL");
+      expect(text).toContain("MCP_OAUTH_SCOPES");
+      expect(text).toContain("MCP_OAUTH_RESOURCE_NAME");
+      expect(text).toContain("MCP_OAUTH_RESOURCE_DOCUMENTATION_URL");
+      expect(text).toContain("/.well-known/oauth-protected-resource");
+    }
+
+    for (const path of ["docs/security.md", "docs/security.ko.md"]) {
+      const text = read(path);
+      expect(text).toContain("MCP_OAUTH_AUTHORIZATION_SERVERS");
+      expect(text).toContain("WWW-Authenticate");
+      expect(text).toContain("MEMORY_API_TOKENS");
+      expect(text).toContain("discovery");
+    }
+  });
+
   it("keeps API reference examples aligned with tool schemas and context-pack output", () => {
     const api = read("docs/api-reference.md");
     const apiKo = read("docs/api-reference.ko.md");
@@ -173,17 +219,21 @@ describe("public documentation drift checks", () => {
   });
 
   it("documents backup differences for Qdrant and pgvector backends", () => {
-    expect(read("package.json")).toContain("./scripts/snapshot-qdrant.sh");
+    expect(read("package.json")).toContain("./scripts/create-backup.sh");
+    expect(read("scripts/create-backup.sh")).toContain("./scripts/snapshot-qdrant.sh");
+    expect(read("package.json")).toContain("backup:create:pgvector");
 
     for (const path of ["README.md", "README.ko.md"]) {
       const text = read(path);
       expect(text).toContain("npm run backup:create");
+      expect(text).toContain("npm run backup:create:pgvector");
       expect(text).toContain("scripts/snapshot-qdrant.sh");
       expect(text).toContain("QDRANT_URL");
       expect(text).toContain("VECTOR_BACKEND=pgvector");
-      expect(text).toContain("logical vector data lives in Postgres");
-      expect(text).toContain("Qdrant-oriented");
-      expect(text).toContain("later script split");
+      expect(text).toMatch(/logical vector data lives in\s+Postgres/);
+      expect(/skips|건너뛰/.test(text)).toBe(true);
+      expect(text).not.toContain("later script split");
+      expect(text).not.toContain("Qdrant-oriented until");
     }
 
     for (const path of [
@@ -200,6 +250,28 @@ describe("public documentation drift checks", () => {
       expect(text).toContain("scripts/snapshot-qdrant.sh");
       expect(text).toContain("QDRANT_URL");
       expect(text).toContain("logical data path");
+      expect(text).toContain("backup:create:pgvector");
+      expect(text).not.toContain("later script split");
+      expect(text).not.toContain("still invokes");
+    }
+  });
+
+  it("documents the native Prometheus metrics endpoint", () => {
+    for (const path of [
+      "docs/api-reference.md",
+      "docs/api-reference.ko.md",
+      "docs/operations.md",
+      "docs/operations.ko.md",
+    ]) {
+      const text = read(path);
+      expect(text).toContain("GET /metrics");
+      expect(text).toContain("text/plain; version=0.0.4");
+      expect(text).toContain("akasha_http_requests_total");
+      expect(text).toContain("akasha_http_request_duration_seconds");
+      expect(text).toContain("akasha_dependency_up");
+      expect(text).toContain("/readyz");
+      expect(text).not.toContain("No native metrics export today");
+      expect(text).not.toContain("네이티브 metrics export 없음");
     }
   });
 });

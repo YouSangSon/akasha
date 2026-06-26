@@ -171,6 +171,30 @@ When a token has no binding (legacy form):
   (`listMemory`), and the vector-hydration step (`getMemoryRecordsByIds`).
   Without it, every read that omits an org throws an operational error.
 
+### OAuth/OIDC protected-resource discovery
+
+Akasha can advertise OAuth 2.0 Protected Resource Metadata for MCP Streamable
+HTTP clients. This is discovery only: it does **not** replace
+`MEMORY_API_TOKENS`, token-org binding, origin checks, or rate limiting.
+
+Leave `MCP_OAUTH_AUTHORIZATION_SERVERS` unset to disable discovery. When it is
+set, `MCP_OAUTH_RESOURCE_URL` is required and the app serves metadata
+unauthenticated at:
+
+- `/.well-known/oauth-protected-resource`
+- `/.well-known/oauth-protected-resource/mcp`
+
+Unauthorized `/mcp` and `/v1/*` requests also include a `WWW-Authenticate`
+challenge with `resource_metadata` and `scope` parameters.
+
+| Variable | Default | Notes |
+|---|---|---|
+| `MCP_OAUTH_AUTHORIZATION_SERVERS` | unset → disabled | Comma-separated HTTPS issuer URLs for authorization servers. |
+| `MCP_OAUTH_RESOURCE_URL` | required when enabled | Public protected resource URL. Use the externally reachable HTTPS URL, normally `https://.../mcp`. |
+| `MCP_OAUTH_SCOPES` | `akasha:memory` | Comma-separated scopes advertised in metadata and space-delimited in the challenge header. |
+| `MCP_OAUTH_RESOURCE_NAME` | unset | Optional human-readable `resource_name`. |
+| `MCP_OAUTH_RESOURCE_DOCUMENTATION_URL` | unset | Optional HTTPS URL emitted as `resource_documentation`. |
+
 ## Personal / single-tenant use
 
 `organization_id` is just a string label, not a "company" or "account" concept —
@@ -263,9 +287,9 @@ isolated compose project and validates search/context-pack behavior.
 | Variable | Default | Notes |
 |---|---|---|
 | `RESTORE_POSTGRES_URL` | required | Connection string for the isolated restore Postgres. |
-| `RESTORE_QDRANT_URL` | required | URL for the isolated restore Qdrant. |
+| `RESTORE_QDRANT_URL` | required for Qdrant manifests | URL for the isolated restore Qdrant. Pgvector manifests skip Qdrant restore. |
 | `RESTORE_SMOKE_POSTGRES_RESTORE_CMD` | required | Shell command that restores `RESTORE_SMOKE_POSTGRES_ARTIFACT_PATH`. |
-| `RESTORE_SMOKE_QDRANT_RESTORE_CMD` | required | Shell command that restores `RESTORE_SMOKE_QDRANT_ARTIFACT_PATH`. |
+| `RESTORE_SMOKE_QDRANT_RESTORE_CMD` | required for Qdrant manifests | Shell command that restores `RESTORE_SMOKE_QDRANT_ARTIFACT_PATH`. Pgvector manifests skip this command. |
 | `RESTORE_SMOKE_PROJECT` | `restore-smoke` | Docker Compose project name for the isolated stack. |
 | `RESTORE_SMOKE_PROJECT_KEY` | `project-alpha` | Project key used by smoke-search and context-pack checks. |
 | `RESTORE_SMOKE_ORGANIZATION_ID` | unset | Optional organization id passed to strict search/context-pack checks. Set this for default-strict restores unless you intentionally use `LEGACY_ANONYMOUS_SEARCH=true`. |

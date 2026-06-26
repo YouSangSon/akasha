@@ -29,6 +29,12 @@ drop old).
 `/healthz` and `/readyz` are unauthenticated by design — orchestrators
 need to probe without holding credentials.
 
+When `MCP_OAUTH_AUTHORIZATION_SERVERS` is configured, Akasha also publishes
+OAuth 2.0 Protected Resource Metadata for MCP HTTP discovery and includes
+`WWW-Authenticate` discovery hints on `/mcp` and `/v1/*` 401 responses. This is
+only a discovery layer: the server still accepts bearer tokens only through the
+`Authorization` header and still validates them against `MEMORY_API_TOKENS`.
+
 ### HTTP attack surface
 
 `/mcp` is the MCP Streamable HTTP endpoint and must be treated like `/v1/*`,
@@ -39,6 +45,8 @@ requests before they reach the MCP transport.
 
 `/healthz` and `/readyz` remain unauthenticated. Empty token lists are only
 acceptable for loopback local development; non-loopback binds fail closed.
+The OAuth protected-resource metadata endpoints are also unauthenticated by
+design and expose only configured issuer/resource/scope metadata, not secrets.
 
 ### Multi-tenant isolation
 
@@ -126,7 +134,8 @@ mitigate:
 
 - **No HTTPS termination.** The HTTP server speaks plaintext. Pair with
   a reverse proxy that terminates TLS for any non-loopback bind. See
-  [deployment.md](deployment.md).
+  [deployment.md](deployment.md). Configure `MCP_OAUTH_RESOURCE_URL` with the
+  public HTTPS URL clients should request tokens for.
 - **No CSRF protection on the HTTP API.** The API is bearer-token-only;
   cookies aren't used. If you build a browser client that stores tokens,
   the browser environment becomes the attack surface (XSS = token theft).
@@ -138,6 +147,10 @@ mitigate:
   retrieval quality is not important.
 - **Token storage at rest** is application-side (env vars, .env files).
   No KMS integration today.
+- **No OAuth token validation yet.** Protected-resource discovery is a
+  compatibility foundation, not a full authorization-server integration.
+  Do not pass through third-party API tokens; keep using Akasha-issued/static
+  bearer tokens until an audience-validating token verifier exists.
 - **Postgres backups contain plaintext content.** Encrypt at rest at
   the disk / volume level if your data classification requires it.
 - **Qdrant payloads contain `organization_id`** — anyone with direct

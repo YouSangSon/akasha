@@ -164,6 +164,30 @@ MEMORY_API_TOKENS=alpha-token:dev-team,legacy-token
   벡터 하이드레이션 단계 (`getMemoryRecordsByIds`). 플래그 없이 org 를
   생략하면 해당 읽기 호출이 운영 안내 에러를 던집니다.
 
+### OAuth/OIDC protected-resource discovery
+
+Akasha는 MCP Streamable HTTP 클라이언트용 OAuth 2.0 Protected Resource
+Metadata를 광고할 수 있습니다. 이는 discovery 전용이며 `MEMORY_API_TOKENS`,
+토큰-org 바인딩, origin check, rate limit을 **대체하지 않습니다**.
+
+비활성화하려면 `MCP_OAUTH_AUTHORIZATION_SERVERS` 를 설정하지 마세요. 이 값이
+설정되면 `MCP_OAUTH_RESOURCE_URL` 이 필수이며, 앱은 다음 metadata endpoint를
+인증 없이 제공합니다:
+
+- `/.well-known/oauth-protected-resource`
+- `/.well-known/oauth-protected-resource/mcp`
+
+인증되지 않은 `/mcp`, `/v1/*` 요청의 401 응답에는 `resource_metadata` 와
+`scope` 파라미터가 들어간 `WWW-Authenticate` challenge도 포함됩니다.
+
+| 변수 | 기본값 | 메모 |
+|---|---|---|
+| `MCP_OAUTH_AUTHORIZATION_SERVERS` | unset → 비활성 | Authorization server issuer HTTPS URL 콤마 구분 목록. |
+| `MCP_OAUTH_RESOURCE_URL` | 활성화 시 필수 | 외부에서 접근 가능한 public protected resource HTTPS URL. 보통 `https://.../mcp`. |
+| `MCP_OAUTH_SCOPES` | `akasha:memory` | Metadata에는 배열로, challenge header에는 공백 구분으로 들어가는 콤마 구분 scope. |
+| `MCP_OAUTH_RESOURCE_NAME` | unset | 선택적 human-readable `resource_name`. |
+| `MCP_OAUTH_RESOURCE_DOCUMENTATION_URL` | unset | 선택적 HTTPS URL. Metadata의 `resource_documentation` 으로 노출. |
+
 ## 개인 / 단일 테넌트 사용
 
 `organization_id` 는 단순한 문자열 라벨이며 "회사" 나 "계정" 개념이 아닙니다 —
@@ -253,9 +277,9 @@ context-pack 동작을 검증합니다.
 | 변수 | 기본값 | 메모 |
 |---|---|---|
 | `RESTORE_POSTGRES_URL` | 필수 | 격리 restore Postgres 연결 문자열. |
-| `RESTORE_QDRANT_URL` | 필수 | 격리 restore Qdrant URL. |
+| `RESTORE_QDRANT_URL` | Qdrant manifest에서 필수 | 격리 restore Qdrant URL. pgvector manifest는 Qdrant restore를 건너뜁니다. |
 | `RESTORE_SMOKE_POSTGRES_RESTORE_CMD` | 필수 | `RESTORE_SMOKE_POSTGRES_ARTIFACT_PATH` 를 복원하는 shell command. |
-| `RESTORE_SMOKE_QDRANT_RESTORE_CMD` | 필수 | `RESTORE_SMOKE_QDRANT_ARTIFACT_PATH` 를 복원하는 shell command. |
+| `RESTORE_SMOKE_QDRANT_RESTORE_CMD` | Qdrant manifest에서 필수 | `RESTORE_SMOKE_QDRANT_ARTIFACT_PATH` 를 복원하는 shell command. pgvector manifest는 이 command를 건너뜁니다. |
 | `RESTORE_SMOKE_PROJECT` | `restore-smoke` | 격리 stack의 Docker Compose project 이름. |
 | `RESTORE_SMOKE_PROJECT_KEY` | `project-alpha` | smoke search와 context-pack check에 쓰는 project key. |
 | `RESTORE_SMOKE_ORGANIZATION_ID` | unset | strict search/context-pack check에 전달할 선택적 organization id. 기본 strict restore에서는 설정하고, 의도적으로 `LEGACY_ANONYMOUS_SEARCH=true`를 쓸 때만 생략. |

@@ -1,6 +1,6 @@
 import type { SearchMemoryResult } from "../types.js";
 
-export type CandidateSource = "vector" | "lexical";
+export type CandidateSource = "vector" | "lexical" | "hybrid";
 
 export type RetrievedMemoryCandidate = {
   record: SearchMemoryResult;

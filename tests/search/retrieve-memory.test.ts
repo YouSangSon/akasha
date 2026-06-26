@@ -374,4 +374,124 @@ describe("retrieveMemory", () => {
 
     expect(results.map((result) => result.id)).toEqual([12, 13]);
   });
+
+  it("returns lexical-only candidates when vector search misses", async () => {
+    const vectorIndex = {
+      query: vi.fn().mockResolvedValue([]),
+      upsert: vi.fn(),
+      delete: vi.fn(),
+      deleteByRecordIds: vi.fn().mockResolvedValue(undefined),
+      ensureCollection: vi.fn(),
+    };
+
+    const lexicalRecord = {
+      id: 44,
+      sourceId: 204,
+      scopeType: "project" as const,
+      scopeId: "project-alpha",
+      memoryType: "decision" as const,
+      title: "Timeout retry ADR",
+      content: "Decision: fix timeout failures with bounded retry backoff.",
+      summary: "Timeout retry backoff",
+      createdAt: "2026-04-25T00:00:00.000Z",
+      updatedAt: "2026-04-25T00:00:00.000Z",
+      source: {
+        id: 304,
+        scopeType: "project" as const,
+        scopeId: "project-alpha",
+        sourceType: "decision" as const,
+        externalId: "adr-timeout",
+        sourceRef: "adr-timeout",
+        title: "Timeout ADR",
+        uri: "file:///tmp/timeout.md",
+        createdAt: "2026-04-25T00:00:00.000Z",
+      },
+    };
+    const repository = {
+      searchMemory: vi.fn().mockResolvedValue([lexicalRecord]),
+      getMemoryRecordsByIds: vi.fn(),
+    };
+
+    const results = await retrieveMemory({
+      vectorIndex: vectorIndex as never,
+      repository: repository as never,
+      vector: [0.1, 0.2, 0.3],
+      query: "timeout retry backoff",
+      organizationId: "dev-team",
+      projectKey: "project-alpha",
+      limit: 5,
+    });
+
+    expect(repository.searchMemory).toHaveBeenCalledWith({
+      query: "timeout retry backoff",
+      scopes: [{ scopeType: "project", scopeId: "project-alpha" }],
+      organizationId: "dev-team",
+      limit: 20,
+    });
+    expect(repository.getMemoryRecordsByIds).not.toHaveBeenCalled();
+    expect(results.map((result) => result.id)).toEqual([44]);
+  });
+
+  it("fuses vector and lexical evidence for the same record", async () => {
+    const vectorIndex = {
+      query: vi.fn().mockResolvedValue([
+        { id: "chunk:12", score: 0.68, payload: { memory_record_id: 12 } },
+        { id: "chunk:13", score: 0.95, payload: { memory_record_id: 13 } },
+      ]),
+      upsert: vi.fn(),
+      delete: vi.fn(),
+      deleteByRecordIds: vi.fn().mockResolvedValue(undefined),
+      ensureCollection: vi.fn(),
+    };
+
+    const baseRecord = {
+      sourceId: 202,
+      scopeType: "project" as const,
+      scopeId: "project-alpha",
+      memoryType: "summary" as const,
+      createdAt: "2026-04-25T00:00:00.000Z",
+      updatedAt: "2026-04-25T00:00:00.000Z",
+      source: {
+        id: 302,
+        scopeType: "project" as const,
+        scopeId: "project-alpha",
+        sourceType: "document" as const,
+        externalId: "doc",
+        title: "Doc",
+        uri: "file:///tmp/doc.md",
+        createdAt: "2026-04-25T00:00:00.000Z",
+      },
+    };
+    const hybridRecord = {
+      ...baseRecord,
+      id: 12,
+      title: "Qdrant retry policy",
+      content: "Retry Qdrant snapshot cleanup with bounded backoff.",
+    };
+    const vectorOnlyRecord = {
+      ...baseRecord,
+      id: 13,
+      title: "General retrieval note",
+      content: "Project retrieval summary.",
+    };
+    const repository = {
+      searchMemory: vi.fn().mockResolvedValue([hybridRecord]),
+      getMemoryRecordsByIds: vi.fn().mockResolvedValue([
+        hybridRecord,
+        vectorOnlyRecord,
+      ]),
+    };
+
+    const results = await retrieveMemory({
+      vectorIndex: vectorIndex as never,
+      repository: repository as never,
+      vector: [0.1, 0.2, 0.3],
+      query: "qdrant retry cleanup",
+      organizationId: "dev-team",
+      projectKey: "project-alpha",
+      limit: 5,
+    });
+
+    expect(results.map((result) => result.id)).toEqual([12, 13]);
+  });
 });

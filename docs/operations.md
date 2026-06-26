@@ -19,12 +19,11 @@ then writes a manifest with checksums. Files are named
 `manifest-YYYYMMDD-HHMM.json`.
 
 With `VECTOR_BACKEND=pgvector`, vectors live in Postgres; Qdrant snapshot data
-is not part of the logical data path. Current packaged-command caveat:
-`npm run backup:create` still invokes `scripts/snapshot-qdrant.sh` after the
-Postgres backup, so it still requires `QDRANT_URL` and a reachable Qdrant
-endpoint today. This is a packaging/script limitation, not a pgvector data
-dependency. Existing restore smoke helpers are still Qdrant-oriented and
-require `RESTORE_QDRANT_URL` until a later script split.
+is not part of the logical data path. `npm run backup:create` skips
+`scripts/snapshot-qdrant.sh` for pgvector manifests, so pgvector backups require
+`DATABASE_URL` and `BACKUP_DIR` but do not require `QDRANT_URL`. Use
+`npm run backup:create:qdrant` or `npm run backup:create:pgvector` to force a
+specific backend regardless of environment defaults.
 
 ### Schedule
 
@@ -74,9 +73,9 @@ npm run restore:smoke
 Spins up an isolated compose stack (`compose.restore-smoke.yaml`),
 restores the latest backup, and runs assertions against the restored
 data. **Doesn't touch production.** Treat any failure as a critical
-alert — your backups are unreliable. The current helper is still
-Qdrant-oriented and requires `RESTORE_QDRANT_URL`; pgvector deployments should
-restore Postgres as the logical data path until the helper is split.
+alert — your backups are unreliable. Qdrant manifests require
+`RESTORE_QDRANT_URL` and `RESTORE_SMOKE_QDRANT_RESTORE_CMD`; pgvector manifests
+skip the Qdrant restore step and validate with `VECTOR_BACKEND=pgvector`.
 
 ### Production restore
 
@@ -90,10 +89,12 @@ docker compose up -d postgres
 gunzip -c /var/lib/developer-memory-os/backups/postgres-YYYYMMDD-HHMM.sql.gz \
   | docker compose exec -T postgres psql -U memory -d memory_os
 
-# 3. Restore Qdrant snapshot.
+# 3. Restore Qdrant snapshot when VECTOR_BACKEND=qdrant.
 docker compose exec qdrant curl -X POST \
   http://localhost:6333/collections/memory_chunks_v1/snapshots/upload \
   -F snapshot=@/var/lib/developer-memory-os/backups/qdrant-YYYYMMDD-HHMM.snapshot
+
+#    For VECTOR_BACKEND=pgvector, vectors are in the Postgres dump; skip this step.
 
 # 4. Verify and resume traffic.
 docker compose start app
@@ -248,10 +249,27 @@ Key event names to monitor:
 
 ### Metrics
 
-No native metrics export today. The audit log + structured logs are
-the primary observability surface. If you need Prometheus, scrape from
-the structured logs via a log-to-metrics pipeline (Loki/Promtail,
-Vector, etc.).
+`GET /metrics` exposes native Prometheus text exposition
+(`text/plain; version=0.0.4`) and is unauthenticated like `/healthz` and
+`/readyz`.
+
+Key series:
+
+- `akasha_http_requests_total{method,route,status}`
+- `akasha_http_request_duration_seconds_count{method,route,status}`
+- `akasha_http_request_duration_seconds_sum{method,route,status}`
+- `akasha_dependency_up{name="postgres"}`
+- `akasha_dependency_check_duration_seconds{name="postgres"}`
+
+HTTP labels are deliberately low-cardinality and privacy-safe. `route` is a
+static route name (`/v1/memory/search`, `/mcp`, `/healthz`, `/readyz`,
+`/metrics`, or `unknown`), never the raw URL or query string. Metrics do not
+include bearer tokens, organization IDs, request bodies, search queries, or
+memory content.
+
+Dependency gauges use the most recent `/readyz` report. If `/readyz` has not
+run yet, dependency metrics are omitted, and `/metrics` does not probe
+Postgres, Qdrant, or OpenAI itself.
 
 ## Schema migrations
 

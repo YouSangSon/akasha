@@ -531,6 +531,7 @@ describe("createToolRegistry", () => {
         externalId: "adr-2",
       }),
     ]);
+    services.repository.searchMemory.mockResolvedValue([]);
     const registry = createToolRegistry({
       defaultUserScopeId: "alice",
       resolveCanonicalServices: async () => services,

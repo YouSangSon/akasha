@@ -19,12 +19,11 @@ npm run backup:create
 `manifest-YYYYMMDD-HHMM.json`.
 
 `VECTOR_BACKEND=pgvector` 에서는 벡터가 Postgres 안에 있으므로 Qdrant snapshot
-data는 logical data path의 일부가 아닙니다. 현재 packaged command caveat:
-`npm run backup:create` 는 Postgres backup 후에도 `scripts/snapshot-qdrant.sh` 를
-계속 호출하므로 오늘 기준 `QDRANT_URL` 과 접근 가능한 Qdrant endpoint가 여전히
-필요합니다. 이는 pgvector data dependency가 아니라 packaging/script 한계입니다.
-기존 restore smoke helper는 아직 Qdrant-oriented 이며 추후 script split 전까지
-`RESTORE_QDRANT_URL` 이 필요합니다.
+data는 logical data path의 일부가 아닙니다. `npm run backup:create` 는 pgvector
+manifest에서 `scripts/snapshot-qdrant.sh` 를 건너뛰므로 pgvector backup에는
+`DATABASE_URL`, `BACKUP_DIR` 만 필요하고 `QDRANT_URL` 은 필요하지 않습니다.
+환경 기본값과 무관하게 backend를 고정하려면 `npm run backup:create:qdrant` 또는
+`npm run backup:create:pgvector` 를 사용하세요.
 
 ### 스케줄
 
@@ -71,9 +70,9 @@ npm run restore:smoke
 
 격리된 compose 스택 (`compose.restore-smoke.yaml`) 을 띄워 최신 백업을
 복원하고 데이터 검증 실행. **Production을 건드리지 않음.** 실패는 critical
-경고로 처리 — 백업이 신뢰 불가. 현재 helper는 아직 Qdrant-oriented 이며
-`RESTORE_QDRANT_URL` 을 요구합니다. pgvector 배포는 helper split 전까지
-Postgres를 logical data path로 복원하세요.
+경고로 처리 — 백업이 신뢰 불가. Qdrant manifest는 `RESTORE_QDRANT_URL` 과
+`RESTORE_SMOKE_QDRANT_RESTORE_CMD` 를 요구합니다. pgvector manifest는 Qdrant
+복원 단계를 건너뛰고 `VECTOR_BACKEND=pgvector` 로 검증합니다.
 
 ### Production 복원
 
@@ -87,10 +86,12 @@ docker compose up -d postgres
 gunzip -c /var/lib/developer-memory-os/backups/postgres-YYYYMMDD-HHMM.sql.gz \
   | docker compose exec -T postgres psql -U memory -d memory_os
 
-# 3. Qdrant 스냅샷 복원.
+# 3. VECTOR_BACKEND=qdrant 인 경우 Qdrant 스냅샷 복원.
 docker compose exec qdrant curl -X POST \
   http://localhost:6333/collections/memory_chunks_v1/snapshots/upload \
   -F snapshot=@/var/lib/developer-memory-os/backups/qdrant-YYYYMMDD-HHMM.snapshot
+
+#    VECTOR_BACKEND=pgvector 에서는 벡터가 Postgres dump 안에 있으므로 이 단계 생략.
 
 # 4. 검증 + 트래픽 재개.
 docker compose start app
@@ -243,9 +244,27 @@ docker compose logs --since 1h app | jq 'select(.level >= 40)'  # warn+
 
 ### 메트릭
 
-네이티브 metrics export 없음. audit log + 구조화 로그가 주 observability
-surface. Prometheus 필요 시 log-to-metrics 파이프라인 (Loki/Promtail,
-Vector 등) 으로 구조화 로그에서 scrape.
+`GET /metrics` 는 native Prometheus text exposition
+(`text/plain; version=0.0.4`) 을 제공하며 `/healthz`, `/readyz` 와 마찬가지로
+인증이 없습니다.
+
+주요 series:
+
+- `akasha_http_requests_total{method,route,status}`
+- `akasha_http_request_duration_seconds_count{method,route,status}`
+- `akasha_http_request_duration_seconds_sum{method,route,status}`
+- `akasha_dependency_up{name="postgres"}`
+- `akasha_dependency_check_duration_seconds{name="postgres"}`
+
+HTTP label은 low-cardinality와 privacy-safe를 기준으로 제한합니다. `route` 는
+`/v1/memory/search`, `/mcp`, `/healthz`, `/readyz`, `/metrics`, `unknown` 같은
+static route 이름이며 raw URL이나 query string이 아닙니다. Metrics에는 bearer
+token, organization ID, request body, search query, memory content를 넣지
+않습니다.
+
+Dependency gauge는 가장 최근 `/readyz` report를 사용합니다. 아직 `/readyz` 가
+실행되지 않았다면 dependency metrics는 생략되며, `/metrics` 는 Postgres,
+Qdrant, OpenAI를 직접 probe하지 않습니다.
 
 ## 스키마 마이그레이션
 

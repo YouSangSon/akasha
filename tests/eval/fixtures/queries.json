@@ -88,5 +88,35 @@
     "query": "Was authentication implemented in phase 1 of the beta project?",
     "relevantRecordSeedKeys": ["beta.auth-deferred"],
     "scope": { "projectKey": "project-beta" }
+  },
+  {
+    "id": "q16",
+    "query": "QDRANT_SNAPSHOT_TIMEOUT cleanup retry",
+    "relevantRecordSeedKeys": ["alpha.qdrant-snapshot-timeout"],
+    "scope": { "projectKey": "project-alpha" }
+  },
+  {
+    "id": "q17",
+    "query": "How should snapshot deletion failures be retried?",
+    "relevantRecordSeedKeys": ["alpha.qdrant-snapshot-timeout"],
+    "scope": { "projectKey": "project-alpha" }
+  },
+  {
+    "id": "q18",
+    "query": "What must remote MCP OAuth require?",
+    "relevantRecordSeedKeys": ["alpha.oauth-pkce"],
+    "scope": { "projectKey": "project-alpha" }
+  },
+  {
+    "id": "q19",
+    "query": "한국어 mirror docs should change with which English docs?",
+    "relevantRecordSeedKeys": ["alpha.docs-ko-parity"],
+    "scope": { "projectKey": "project-alpha" }
+  },
+  {
+    "id": "q20",
+    "query": "How do we prevent one noisy source from crowding out context pack decisions?",
+    "relevantRecordSeedKeys": ["alpha.context-pack-diversity"],
+    "scope": { "projectKey": "project-alpha" }
   }
 ]

@@ -59,11 +59,11 @@ Qdrant snapshot data. The backup scripts create and copy:
 The Qdrant metadata sidecar name includes the collection name.
 
 With `VECTOR_BACKEND=pgvector`, vectors live in Postgres; Qdrant snapshot data
-is not part of the logical data path. However, today's packaged
-`npm run backup:create` command still invokes `scripts/snapshot-qdrant.sh`
-unconditionally after the Postgres dump. Pgvector operators using the packaged
-command still need `QDRANT_URL` and a reachable Qdrant endpoint, or the backup
-job fails at the snapshot step until the script split lands.
+is not part of the logical data path. `npm run backup:create` now skips
+`scripts/snapshot-qdrant.sh` for pgvector, so pgvector operators do not need
+`QDRANT_URL` for backups. Use `npm run backup:create:qdrant` or
+`npm run backup:create:pgvector` when you want the command to ignore the current
+environment default.
 
 ## Backup verification
 
@@ -82,8 +82,9 @@ manifest checksums match both copies.
 
 Run a disposable restore check against the newest manifest in `BACKUP_DIR`:
 
-The existing restore smoke helpers are still Qdrant-oriented and require
-`RESTORE_QDRANT_URL` until a later script split.
+Qdrant manifests require `RESTORE_QDRANT_URL` and
+`RESTORE_SMOKE_QDRANT_RESTORE_CMD`. Pgvector manifests skip the Qdrant restore
+step and validate with `VECTOR_BACKEND=pgvector`.
 
 ```bash
 export RESTORE_POSTGRES_PORT=15432
@@ -100,7 +101,7 @@ export RESTORE_SMOKE_QDRANT_RESTORE_CMD='curl -fsS -X POST "$RESTORE_QDRANT_URL/
 npm run restore:smoke
 ```
 
-This helper always:
+For Qdrant manifests, this helper:
 
 - boots `docker compose -f compose.yaml -f compose.restore-smoke.yaml -p restore-smoke up -d postgres qdrant`
 - resolves the newest manifest and artifact paths from `BACKUP_DIR`
@@ -110,6 +111,10 @@ This helper always:
 - runs one real `search_memory` query and one real `build_context_pack` call against the restored services
   using `RESTORE_SMOKE_ORGANIZATION_ID` when set (or `LEGACY_ANONYMOUS_SEARCH=true` for intentional legacy org-blind checks)
 - tears the disposable environment down with `docker compose -f compose.yaml -f compose.restore-smoke.yaml -p restore-smoke down -v`
+
+For pgvector manifests, it boots the pgvector compose overlay, restores only the
+Postgres dump, skips the Qdrant snapshot command, and runs the same
+search/context-pack checks with `VECTOR_BACKEND=pgvector`.
 
 Manual teardown is still safe if a shell command fails mid-run:
 

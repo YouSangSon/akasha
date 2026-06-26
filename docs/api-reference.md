@@ -5,7 +5,7 @@
 Akasha exposes the same tool surface through three access paths:
 
 - **MCP stdio** — for AI clients like Claude Code and Codex CLI.
-  Entry point: `dist/src/cli.js`. All 7 tools are registered.
+  Entry point: `dist/src/mcp/server.js`. All 7 tools are registered.
 - **MCP Streamable HTTP** — for MCP clients that connect over HTTP.
   Primary documented endpoint: `POST /mcp` for JSON-RPC requests. The SDK
   transport also supports GET and DELETE on the same `/mcp` endpoint.
@@ -25,10 +25,10 @@ do not call the tool handler.
 ## Authentication (HTTP only)
 
 When `MEMORY_API_TOKENS` is configured, every `/mcp` and `/v1/*` route requires
-a bearer token. `/healthz` and `/readyz` are unauthenticated. For local
-development only, an empty token list is allowed when the server binds to loopback
-(`127.0.0.1`, `localhost`, or `::1`); binding to a non-loopback host without
-tokens fails at startup.
+a bearer token. `/healthz`, `/readyz`, and `/metrics` are unauthenticated. For
+local development only, an empty token list is allowed when the server binds to
+loopback (`127.0.0.1`, `localhost`, or `::1`); binding to a non-loopback host
+without tokens fails at startup.
 
 ```bash
 curl -H "Authorization: Bearer dev-token" http://localhost:8787/v1/memory/search ...
@@ -118,7 +118,7 @@ Errors: `SecretDetectedError` (400) when content contains scrubbed patterns
 
 ---
 
-### search_memory — semantic + scope-filtered retrieval
+### search_memory — hybrid semantic + lexical retrieval
 
 ```ts
 type SearchMemoryInput = {
@@ -169,10 +169,12 @@ type SearchMemoryResponse = {
 
 HTTP: `POST /v1/memory/search`
 
-Behavior: query gets embedded → active vector backend similarity search
-(filtered by org + scope) → top-K hydrated from Postgres → ranked → returned.
-Project-scope hits are stably sorted ahead of user-scope hits when there's a
-tie.
+Behavior: query gets embedded for active vector backend similarity search
+(filtered by org + scope) and also runs through Postgres lexical candidate
+search over scoped records. Vector and lexical candidates are merged, hydrated
+from Postgres when needed, scored with reciprocal-rank source boosts plus
+metadata/recency signals, ranked, sliced to `limit`, and returned. Project-scope
+hits are stably sorted ahead of user-scope hits when there's a tie.
 
 ---
 
@@ -357,7 +359,7 @@ Read-only. Org-scoped by token binding; entries from other orgs never leak.
 
 ---
 
-## Health probes (HTTP only)
+## Health and metrics (HTTP only)
 
 ### `GET /healthz` — liveness
 
@@ -388,3 +390,30 @@ vectors live in Postgres in that mode.
 Use this for Kubernetes readiness probes, Docker `HEALTHCHECK`, or external
 uptime monitors. The `/healthz` endpoint remains the unconditional liveness
 check (process alive, no dependency checks).
+
+### `GET /metrics` — Prometheus text exposition
+
+Unauthenticated. Returns `text/plain; version=0.0.4` for Prometheus scraping.
+
+Emitted HTTP metrics:
+
+- `akasha_http_requests_total{method,route,status}` — request counter.
+- `akasha_http_request_duration_seconds_count{method,route,status}` — request
+  duration sample count.
+- `akasha_http_request_duration_seconds_sum{method,route,status}` — cumulative
+  request duration.
+
+Route labels use static route names such as `/v1/memory/search`, `/mcp`,
+`/healthz`, `/readyz`, `/metrics`, or `unknown`. Raw URLs and query strings are
+never emitted. Labels and values do not include bearer tokens, organization
+IDs, request bodies, search queries, or memory content.
+
+Readiness dependency metrics come only from the most recent `/readyz` result:
+
+- `akasha_dependency_up{name="postgres"}` — `1` when the latest check passed,
+  `0` when it failed.
+- `akasha_dependency_check_duration_seconds{name="postgres"}` — duration of
+  the latest check.
+
+If `/readyz` has not run yet, dependency metrics are omitted; `/metrics` does
+not probe Postgres, Qdrant, or OpenAI itself.

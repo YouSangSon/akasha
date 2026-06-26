@@ -181,4 +181,72 @@ export const SEED_ENTRIES: readonly SeedEntry[] = [
       },
     },
   },
+  {
+    seedKey: "alpha.qdrant-snapshot-timeout",
+    memory: {
+      scopeType: "project",
+      scopeId: PROJECT_ALPHA,
+      projectKey: PROJECT_ALPHA,
+      memoryType: "summary",
+      content:
+        "Runbook: if QDRANT_SNAPSHOT_TIMEOUT appears during cleanup, retry snapshot deletion with bounded exponential backoff and leave canonical Postgres rows untouched.",
+      source: {
+        scopeType: "project",
+        scopeId: PROJECT_ALPHA,
+        sourceType: "document",
+        sourceRef: "ops/qdrant-cleanup.md",
+      },
+    },
+  },
+  {
+    seedKey: "alpha.oauth-pkce",
+    memory: {
+      scopeType: "project",
+      scopeId: PROJECT_ALPHA,
+      projectKey: PROJECT_ALPHA,
+      memoryType: "decision",
+      content:
+        "Decision: remote MCP OAuth must require PKCE and short-lived access tokens; static bearer tokens are only an interim self-hosted option.",
+      source: {
+        scopeType: "project",
+        scopeId: PROJECT_ALPHA,
+        sourceType: "decision",
+        sourceRef: "adr-oauth-pkce",
+      },
+    },
+  },
+  {
+    seedKey: "alpha.docs-ko-parity",
+    memory: {
+      scopeType: "project",
+      scopeId: PROJECT_ALPHA,
+      projectKey: PROJECT_ALPHA,
+      memoryType: "fact",
+      content:
+        "Documentation rule: when README.md, docs/operations.md, docs/security.md, or docs/api-reference.md changes, update the Korean mirror in the same PR.",
+      source: {
+        scopeType: "project",
+        scopeId: PROJECT_ALPHA,
+        sourceType: "document",
+        sourceRef: "CONTRIBUTING.md",
+      },
+    },
+  },
+  {
+    seedKey: "alpha.context-pack-diversity",
+    memory: {
+      scopeType: "project",
+      scopeId: PROJECT_ALPHA,
+      projectKey: PROJECT_ALPHA,
+      memoryType: "decision",
+      content:
+        "Decision: context pack selection should preserve source diversity so one noisy document cannot crowd out decisions, constraints, and user preferences.",
+      source: {
+        scopeType: "project",
+        scopeId: PROJECT_ALPHA,
+        sourceType: "decision",
+        sourceRef: "adr-context-pack-diversity",
+      },
+    },
+  },
 ];

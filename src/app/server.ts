@@ -20,11 +20,23 @@ import {
 } from "./middleware/bearer-auth.js";
 import { sendError, sendOk } from "./middleware/envelope.js";
 import {
+  createMetricsRegistry,
+  METRICS_CONTENT_TYPE,
+  type MetricsRegistry,
+} from "./metrics.js";
+import {
   createTokenBucketLimiter,
   loadRateLimitFromEnv,
   type RateLimiter,
 } from "./middleware/rate-limit.js";
 import { handleMcpHttpRequest } from "./mcp-http.js";
+import {
+  isOAuthProtectedResourceMetadataPath,
+  loadOAuthProtectedResourceConfig,
+  sendOAuthProtectedResourceMetadata,
+  setOAuthWwwAuthenticateHeader,
+  type OAuthProtectedResourceConfig,
+} from "./oauth-protected-resource.js";
 import { createMemoryRoutes, type Route } from "./routes/memory.js";
 import {
   bootstrapCanonicalServices,
@@ -58,6 +70,9 @@ export type CreateOperatorServerOptions = {
   // When provided, every non-health request is rate-limited per-token. Tests
   // inject a precomputed limiter; production reads RATE_LIMIT_PER_MINUTE.
   rateLimiter?: RateLimiter;
+  // Optional OAuth protected-resource discovery metadata for MCP HTTP.
+  // Undefined loads env config; null disables discovery explicitly.
+  oauthProtectedResource?: OAuthProtectedResourceConfig | null;
 };
 
 function normalizeTokens(
@@ -107,8 +122,13 @@ export function createOperatorServer(
   const tokens: BearerToken[] = options.bearerTokens
     ? normalizeTokens(options.bearerTokens)
     : loadBearerTokens(process.env);
+  const oauthProtectedResource =
+    options.oauthProtectedResource === undefined
+      ? loadOAuthProtectedResourceConfig(process.env)
+      : options.oauthProtectedResource;
   const registry = options.registry ?? createDefaultToolRegistry(log);
   const routes: Route[] = createMemoryRoutes({ registry, logger: log });
+  const metrics = createMetricsRegistry();
 
   let rateLimiter: RateLimiter | null = options.rateLimiter ?? null;
   if (!rateLimiter) {
@@ -127,7 +147,23 @@ export function createOperatorServer(
 
   return http.createServer(
     async (req: IncomingMessage, res: ServerResponse) => {
+      const requestPath = parseRequestPath(req.url);
+      observeRequestMetrics(req, res, metrics, routeLabelForMetrics({
+        path: requestPath,
+        routes,
+        oauthProtectedResource,
+      }));
+
       try {
+        if (
+          req.method === "GET" &&
+          oauthProtectedResource &&
+          isOAuthProtectedResourceMetadataPath(req.url)
+        ) {
+          sendOAuthProtectedResourceMetadata(res, oauthProtectedResource);
+          return;
+        }
+
         // Liveness: process is up. Unauthenticated, no dependency check.
         if (req.url === "/healthz" && req.method === "GET") {
           sendOk(res, 200, {
@@ -152,12 +188,19 @@ export function createOperatorServer(
             return;
           }
           const report = await checkDependencies(options.dependencyProbes);
+          metrics.setDependencyReport(report);
           if (report.status === "ok") {
             sendOk(res, 200, report);
           } else {
             res.writeHead(503, { "content-type": "application/json" });
             res.end(JSON.stringify({ success: false, data: report }));
           }
+          return;
+        }
+
+        if (requestPath === "/metrics" && req.method === "GET") {
+          res.writeHead(200, { "content-type": METRICS_CONTENT_TYPE });
+          res.end(metrics.render());
           return;
         }
 
@@ -169,6 +212,7 @@ export function createOperatorServer(
             bearerTokens: tokens,
             rateLimiter,
             logger: log,
+            oauthProtectedResource,
           });
           return;
         }
@@ -179,6 +223,9 @@ export function createOperatorServer(
         if (tokens.length > 0) {
           matchedToken = matchBearerFromRequest(req, tokens);
           if (!matchedToken) {
+            if (isV1Request(req.url)) {
+              setOAuthWwwAuthenticateHeader(res, oauthProtectedResource);
+            }
             sendError(res, 401, "unauthorized");
             return;
           }
@@ -226,6 +273,57 @@ export function createOperatorServer(
       }
     },
   );
+}
+
+function observeRequestMetrics(
+  req: IncomingMessage,
+  res: ServerResponse,
+  metrics: MetricsRegistry,
+  route: string,
+): void {
+  const start = process.hrtime.bigint();
+  res.once("finish", () => {
+    const durationSeconds =
+      Number(process.hrtime.bigint() - start) / 1_000_000_000;
+    metrics.observeHttpRequest({
+      method: req.method,
+      route,
+      statusCode: res.statusCode,
+      durationSeconds,
+    });
+  });
+}
+
+function routeLabelForMetrics(input: {
+  path: string;
+  routes: readonly Route[];
+  oauthProtectedResource: OAuthProtectedResourceConfig | null;
+}): string {
+  if (
+    input.oauthProtectedResource &&
+    isOAuthProtectedResourceMetadataPath(input.path)
+  ) {
+    return input.path;
+  }
+
+  if (input.path === "/healthz") return "/healthz";
+  if (input.path === "/readyz") return "/readyz";
+  if (input.path === "/metrics") return "/metrics";
+  if (input.path === "/mcp") return "/mcp";
+
+  const staticRoute = input.routes.find((route) => route.path === input.path);
+  return staticRoute?.path ?? "unknown";
+}
+
+function isV1Request(url: string | undefined): boolean {
+  return parseRequestPath(url).startsWith("/v1/");
+}
+
+function parseRequestPath(url: string | undefined): string {
+  if (!url) {
+    return "";
+  }
+  return new URL(url, "http://localhost").pathname;
 }
 
 function createDefaultToolRegistry(log: Logger): ToolRegistry {

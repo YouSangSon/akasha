@@ -6,6 +6,11 @@ import {
   isLoopbackHost,
   selectDependencyProbes,
 } from "../../src/app/server.js";
+import {
+  createTokenBucketLimiter,
+  type RateLimiter,
+} from "../../src/app/middleware/rate-limit.js";
+import type { OAuthProtectedResourceConfig } from "../../src/app/oauth-protected-resource.js";
 import type { ToolRegistry } from "../../src/mcp/types.js";
 import type { Logger } from "../../src/logger.js";
 import type { PgPool } from "../../src/db/connection.js";
@@ -90,8 +95,15 @@ function buildLogger(): Logger {
 async function startTestServer(
   registry: ToolRegistry,
   bearerTokens: ReadonlyArray<string | { token: string; organizationId?: string }>,
+  oauthProtectedResource: OAuthProtectedResourceConfig | null = null,
+  rateLimiter?: RateLimiter,
 ): Promise<ServerHandle> {
-  const server = createOperatorServer({ registry, bearerTokens });
+  const server = createOperatorServer({
+    registry,
+    bearerTokens,
+    oauthProtectedResource,
+    rateLimiter,
+  });
   await new Promise<void>((resolve) =>
     server.listen(0, "127.0.0.1", () => resolve()),
   );
@@ -574,6 +586,7 @@ describe("createOperatorServer", () => {
       createOperatorServerWithMock({
         bearerTokens: [],
         logger,
+        oauthProtectedResource: null,
       });
     } finally {
       vi.doUnmock("../../src/mcp/server.js");
@@ -591,6 +604,128 @@ describe("createOperatorServer", () => {
         withCanonicalServices: expect.any(Function),
       }),
     );
+  });
+});
+
+describe("createOperatorServer (OAuth protected-resource discovery)", () => {
+  let handle: ServerHandle;
+  let registry: ToolRegistry;
+  const oauthProtectedResource: OAuthProtectedResourceConfig = {
+    metadataUrl:
+      "https://akasha.example.com/.well-known/oauth-protected-resource/mcp",
+    metadata: {
+      resource: "https://akasha.example.com/mcp",
+      authorization_servers: ["https://auth.example.com/"],
+      bearer_methods_supported: ["header"],
+      scopes_supported: ["akasha:memory", "akasha:write"],
+      resource_name: "Akasha Memory",
+      resource_documentation: "https://docs.example.com/akasha",
+    },
+  };
+
+  beforeEach(async () => {
+    registry = buildRegistry();
+    handle = await startTestServer(registry, ["token-aaa"], oauthProtectedResource);
+  });
+
+  afterEach(async () => {
+    await handle.close();
+  });
+
+  it("serves OAuth protected-resource metadata without bearer auth", async () => {
+    for (const path of [
+      "/.well-known/oauth-protected-resource",
+      "/.well-known/oauth-protected-resource/mcp",
+    ]) {
+      const res = await fetch(`${handle.baseUrl}${path}`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("application/json");
+      const body = await res.json();
+      expect(body).toEqual(oauthProtectedResource.metadata);
+    }
+  });
+
+  it("adds WWW-Authenticate metadata and scope hints to /v1 401 responses", async () => {
+    const res = await fetch(`${handle.baseUrl}/v1/memory`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        projectKey: "p",
+        kind: "decision",
+        content: "x",
+      }),
+    });
+
+    expect(res.status).toBe(401);
+    expect(res.headers.get("www-authenticate")).toBe(
+      'Bearer resource_metadata="https://akasha.example.com/.well-known/oauth-protected-resource/mcp", scope="akasha:memory akasha:write"',
+    );
+    const body = (await res.json()) as {
+      success: boolean;
+      error: { message: string };
+    };
+    expect(body.success).toBe(false);
+    expect(body.error.message).toBe("unauthorized");
+    expect(registry.add_memory).not.toHaveBeenCalled();
+  });
+
+  it("does not add OAuth challenges to unauthenticated health probes", async () => {
+    const res = await fetch(`${handle.baseUrl}/healthz`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("www-authenticate")).toBeNull();
+  });
+
+  it("keeps rate limiting active for /v1 requests when OAuth discovery is configured", async () => {
+    await handle.close();
+    registry = buildRegistry();
+    const rateLimiter = createTokenBucketLimiter({
+      capacity: 1,
+      windowMs: 60_000,
+      now: () => 0,
+    });
+    handle = await startTestServer(
+      registry,
+      ["token-aaa"],
+      oauthProtectedResource,
+      rateLimiter,
+    );
+
+    const first = await fetch(`${handle.baseUrl}/v1/memory`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer token-aaa",
+      },
+      body: JSON.stringify({
+        projectKey: "p",
+        kind: "decision",
+        content: "x",
+      }),
+    });
+    expect(first.status).toBe(200);
+
+    const second = await fetch(`${handle.baseUrl}/v1/memory`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer token-aaa",
+      },
+      body: JSON.stringify({
+        projectKey: "p",
+        kind: "decision",
+        content: "x",
+      }),
+    });
+
+    expect(second.status).toBe(429);
+    expect(second.headers.get("retry-after")).toBe("60");
+    const body = (await second.json()) as {
+      success: boolean;
+      error: { message: string };
+    };
+    expect(body.success).toBe(false);
+    expect(body.error.message).toBe("rate limit exceeded");
+    expect(registry.add_memory).toHaveBeenCalledOnce();
   });
 });
 
@@ -786,6 +921,7 @@ describe("createOperatorServer (/readyz with injected probes)", () => {
       registry: buildRegistry(),
       bearerTokens: [],
       dependencyProbes: probes,
+      oauthProtectedResource: null,
     });
     await new Promise<void>((resolve) =>
       server.listen(0, "127.0.0.1", () => resolve()),

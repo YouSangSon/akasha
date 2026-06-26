@@ -26,6 +26,9 @@ const RANKING_WEIGHTS = {
   vector: {
     maxBonus: 50,
   },
+  lexical: {
+    maxBonus: 50,
+  },
   penalty: {
     genericNote: 35,
   },
@@ -186,7 +189,7 @@ function lexicalScore(
   if (rawScore === undefined) {
     return undefined;
   }
-  const score = clampUnitScore(rawScore) * RANKING_WEIGHTS.vector.maxBonus;
+  const score = clampUnitScore(rawScore) * RANKING_WEIGHTS.lexical.maxBonus;
   reasons.push(`lexical:${score}`);
   return score;
 }

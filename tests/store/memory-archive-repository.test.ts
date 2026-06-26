@@ -402,6 +402,22 @@ describe("MemoryArchiveRepository.restoreToCanonical (P19.1)", () => {
   });
 });
 
+describe("MemoryArchiveRepository.deleteRestoredCanonicalRecord (P19.1)", () => {
+  it("deletes only the restored canonical record for the caller organization", async () => {
+    const { pool, query } = makeMockPool(async () => ({ rows: [] }));
+    const repo = createMemoryArchiveRepository(pool);
+
+    await repo.deleteRestoredCanonicalRecord(999, "org-a");
+
+    const sql = query.mock.calls[0]![0] as string;
+    const params = query.mock.calls[0]![1] as unknown[];
+    expect(sql).toContain("DELETE FROM memory_records");
+    expect(sql).toContain("WHERE id = $1");
+    expect(sql).toContain("AND organization_id = $2");
+    expect(params).toEqual([999, "org-a"]);
+  });
+});
+
 describe("MemoryArchiveRepository.markUnarchived (P19.1)", () => {
   it("sets unarchived_at = NOW() for the given archive id", async () => {
     const { pool, query } = makeMockPool(async () => ({ rows: [] }));

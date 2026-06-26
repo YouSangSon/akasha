@@ -47,7 +47,9 @@
     "dev:mcp": "tsx src/mcp/server.ts",
     "dev:cli": "tsx src/cli.ts",
     "db:migrate": "node dist/src/db/migrate.js",
-    "backup:create": "sh -lc 'timestamp=$(date -u +%Y%m%d-%H%M); BACKUP_TIMESTAMP=$timestamp ./scripts/backup-postgres.sh && BACKUP_TIMESTAMP=$timestamp ./scripts/snapshot-qdrant.sh'",
+    "backup:create": "./scripts/create-backup.sh",
+    "backup:create:qdrant": "VECTOR_BACKEND=qdrant ./scripts/create-backup.sh",
+    "backup:create:pgvector": "VECTOR_BACKEND=pgvector ./scripts/create-backup.sh",
     "backup:verify": "node dist/scripts/backup-verify.js",
     "restore:smoke": "node dist/scripts/restore-smoke.js"
   },

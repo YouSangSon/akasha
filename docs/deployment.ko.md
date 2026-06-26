@@ -179,7 +179,7 @@ Transient 실패 복구 시 다음 요청이 canonical-services singleton을 다
 
 1. 같은 compose stack의 새 호스트 띄움.
 2. `pg_dump` 스냅샷에서 Postgres 복원.
-3. 스냅샷에서 Qdrant 복원.
+3. `VECTOR_BACKEND=qdrant` 인 경우 스냅샷에서 Qdrant 복원. pgvector는 벡터가 Postgres dump 안에 있으므로 생략.
 4. `npm run restore:smoke` 로 검증.
 5. 새 호스트로 트래픽 cut.
 

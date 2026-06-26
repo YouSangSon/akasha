@@ -85,7 +85,7 @@ payload shapes stay aligned across both transports.
 | Tool | What it does | HTTP route |
 |------|--------------|------------|
 | `add_memory` | Save a decision, fact, or summary (secret-scrubbed at write) | `POST /v1/memory` |
-| `search_memory` | Vector + scope-filtered retrieval | `POST /v1/memory/search` |
+| `search_memory` | Hybrid vector + lexical scope-filtered retrieval | `POST /v1/memory/search` |
 | `build_context_pack` | Generate a compact pack to seed a new session | `POST /v1/memory/context-pack` |
 | `compact_memory` | Prune duplicates and decayed records (apply or dry-run) | `POST /v1/memory/compact` |
 | `reindex_memory` | Rebuild the vector index from Postgres (0 data loss) | `POST /v1/memory/reindex` |
@@ -120,7 +120,7 @@ cat <<EOF
   "mcpServers": {
     "akasha": {
       "command": "node",
-      "args": ["$(pwd)/dist/src/cli.js"]
+      "args": ["$(pwd)/dist/src/mcp/server.js"]
     }
   }
 }
@@ -215,14 +215,14 @@ npm run dev:cli       # CLI in watch mode
 npm run typecheck     # tsc --noEmit
 npm run test          # vitest run
 npm run db:migrate    # apply pending migrations
-npm run backup:create # current packaged command snapshots Postgres + Qdrant
+npm run backup:create # backend-aware backup for VECTOR_BACKEND
+npm run backup:create:pgvector # explicit Postgres-only pgvector backup
 ```
 
-Note: current `npm run backup:create` still invokes
-`scripts/snapshot-qdrant.sh`, so it requires `QDRANT_URL` and remains
-Qdrant-oriented until a later script split. With `VECTOR_BACKEND=pgvector`,
-logical vector data lives in Postgres; the packaged command does not yet skip
-the Qdrant snapshot step.
+With `VECTOR_BACKEND=qdrant`, `backup:create` captures Postgres plus a Qdrant
+snapshot. With `VECTOR_BACKEND=pgvector`, logical vector data lives in Postgres,
+so `backup:create` skips `scripts/snapshot-qdrant.sh` and does not require
+`QDRANT_URL`.
 
 ## Contributing & security
 

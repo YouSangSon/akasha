@@ -9,11 +9,12 @@ const execFileAsync = promisify(execFile);
 
 type BackupManifest = {
   createdAt: string;
+  vectorBackend?: "qdrant" | "pgvector";
   postgres: {
     fileName: string;
     sha256: string;
   };
-  qdrant: {
+  qdrant?: {
     fileName: string;
     sha256: string;
     metadataFileName?: string;
@@ -23,7 +24,7 @@ type BackupManifest = {
 export type RunRestoreSmokeInput = {
   startEnvironment: () => Promise<void>;
   restorePostgres: () => Promise<void>;
-  restoreQdrant: () => Promise<void>;
+  restoreQdrant?: () => Promise<void>;
   startApp: () => Promise<void>;
   callSearch: () => Promise<unknown[]>;
   callPack: () => Promise<{ ok: boolean }>;
@@ -48,7 +49,9 @@ export async function runRestoreSmoke(input: RunRestoreSmokeInput) {
   try {
     await input.startEnvironment();
     await input.restorePostgres();
-    await input.restoreQdrant();
+    if (input.restoreQdrant) {
+      await input.restoreQdrant();
+    }
     await input.startApp();
 
     const searchResults = await input.callSearch();
@@ -108,10 +111,16 @@ async function findLatestManifest(backupDir: string): Promise<{
   ) as Partial<BackupManifest>;
 
   if (
-    !manifest.postgres?.fileName ||
-    !manifest.qdrant?.fileName
+    !manifest.postgres?.fileName
   ) {
     throw new Error("backup manifest is missing required artifact metadata");
+  }
+
+  if (
+    manifest.vectorBackend !== "pgvector" &&
+    !manifest.qdrant?.fileName
+  ) {
+    throw new Error("backup manifest is missing required Qdrant artifact metadata");
   }
 
   return {
@@ -143,14 +152,24 @@ async function waitForHealth(url: string): Promise<void> {
 }
 
 async function withRestoreServiceEnv<T>(
-  restoreEnv: { databaseUrl: string; qdrantUrl: string },
+  restoreEnv: {
+    databaseUrl: string;
+    vectorBackend: "qdrant" | "pgvector";
+    qdrantUrl?: string;
+  },
   callback: () => Promise<T>,
 ): Promise<T> {
   const previousDatabaseUrl = process.env.DATABASE_URL;
   const previousQdrantUrl = process.env.QDRANT_URL;
+  const previousVectorBackend = process.env.VECTOR_BACKEND;
 
   process.env.DATABASE_URL = restoreEnv.databaseUrl;
-  process.env.QDRANT_URL = restoreEnv.qdrantUrl;
+  process.env.VECTOR_BACKEND = restoreEnv.vectorBackend;
+  if (restoreEnv.qdrantUrl) {
+    process.env.QDRANT_URL = restoreEnv.qdrantUrl;
+  } else {
+    delete process.env.QDRANT_URL;
+  }
 
   try {
     return await callback();
@@ -166,15 +185,19 @@ async function withRestoreServiceEnv<T>(
     } else {
       process.env.QDRANT_URL = previousQdrantUrl;
     }
+
+    if (previousVectorBackend === undefined) {
+      delete process.env.VECTOR_BACKEND;
+    } else {
+      process.env.VECTOR_BACKEND = previousVectorBackend;
+    }
   }
 }
 
 async function main() {
   const backupDir = requireEnv("BACKUP_DIR");
   const restorePostgresUrl = requireEnv("RESTORE_POSTGRES_URL");
-  const restoreQdrantUrl = requireEnv("RESTORE_QDRANT_URL");
   const restorePostgresCommand = requireEnv("RESTORE_SMOKE_POSTGRES_RESTORE_CMD");
-  const restoreQdrantCommand = requireEnv("RESTORE_SMOKE_QDRANT_RESTORE_CMD");
   const projectName = process.env.RESTORE_SMOKE_PROJECT ?? "restore-smoke";
   const projectKey = process.env.RESTORE_SMOKE_PROJECT_KEY ?? "project-alpha";
   const userScopeId = process.env.RESTORE_SMOKE_USER_SCOPE_ID?.trim();
@@ -183,16 +206,26 @@ async function main() {
   const packTask = process.env.RESTORE_SMOKE_PACK_TASK ?? "continue work";
   const appPort = process.env.RESTORE_APP_PORT ?? "18787";
   const { fileName: manifestFileName, manifest } = await findLatestManifest(backupDir);
+  const vectorBackend = manifest.vectorBackend ?? "qdrant";
+  const restoreQdrantUrl =
+    vectorBackend === "qdrant" ? requireEnv("RESTORE_QDRANT_URL") : undefined;
+  const restoreQdrantCommand =
+    vectorBackend === "qdrant"
+      ? requireEnv("RESTORE_SMOKE_QDRANT_RESTORE_CMD")
+      : undefined;
   const manifestPath = path.join(backupDir, manifestFileName);
   const postgresArtifactPath = path.join(backupDir, manifest.postgres.fileName);
-  const qdrantArtifactPath = path.join(backupDir, manifest.qdrant.fileName);
-  const qdrantMetadataPath = manifest.qdrant.metadataFileName
+  const qdrantArtifactPath = manifest.qdrant?.fileName
+    ? path.join(backupDir, manifest.qdrant.fileName)
+    : "";
+  const qdrantMetadataPath = manifest.qdrant?.metadataFileName
     ? path.join(backupDir, manifest.qdrant.metadataFileName)
     : "";
   const composeArgs = [
     "compose",
     "-f",
     "compose.yaml",
+    ...(vectorBackend === "pgvector" ? ["-f", "compose.pgvector.yaml"] : []),
     "-f",
     "compose.restore-smoke.yaml",
     "-p",
@@ -201,7 +234,8 @@ async function main() {
   const restoreCommandEnv = {
     ...process.env,
     DATABASE_URL: restorePostgresUrl,
-    QDRANT_URL: restoreQdrantUrl,
+    VECTOR_BACKEND: vectorBackend,
+    ...(restoreQdrantUrl ? { QDRANT_URL: restoreQdrantUrl } : {}),
     RESTORE_SMOKE_MANIFEST_PATH: manifestPath,
     RESTORE_SMOKE_POSTGRES_ARTIFACT_PATH: postgresArtifactPath,
     RESTORE_SMOKE_QDRANT_ARTIFACT_PATH: qdrantArtifactPath,
@@ -215,7 +249,7 @@ async function main() {
         "up",
         "-d",
         "postgres",
-        "qdrant",
+        ...(vectorBackend === "qdrant" ? ["qdrant"] : []),
       ]).then(() => undefined);
     },
     restorePostgres() {
@@ -223,14 +257,18 @@ async function main() {
         () => undefined,
       );
     },
-    restoreQdrant() {
-      return execShell(restoreQdrantCommand, restoreCommandEnv).then(
-        () => undefined,
-      );
-    },
+    ...(restoreQdrantCommand
+      ? {
+          restoreQdrant() {
+            return execShell(restoreQdrantCommand, restoreCommandEnv).then(
+              () => undefined,
+            );
+          },
+        }
+      : {}),
     async startApp() {
       await execFileAsync("docker", [...composeArgs, "up", "-d", "app"], {
-        env: process.env,
+        env: { ...process.env, VECTOR_BACKEND: vectorBackend },
       });
       await waitForHealth(`http://127.0.0.1:${appPort}/healthz`);
     },
@@ -238,6 +276,7 @@ async function main() {
       return withRestoreServiceEnv(
         {
           databaseUrl: restorePostgresUrl,
+          vectorBackend,
           qdrantUrl: restoreQdrantUrl,
         },
         async () => {
@@ -260,6 +299,7 @@ async function main() {
       return withRestoreServiceEnv(
         {
           databaseUrl: restorePostgresUrl,
+          vectorBackend,
           qdrantUrl: restoreQdrantUrl,
         },
         async () => {
