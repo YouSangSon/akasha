@@ -1,5 +1,26 @@
 # DECISIONS
 
+## 2026-06-28 — Guard Public Docs Index Coverage In Existing Test Suite
+
+Decision: add docs index coverage to `tests/scripts/public-docs-drift.test.ts`
+instead of adding a separate CI job.
+
+Why:
+- Public docs are paired English/Korean markdown files under `docs/`, plus the
+  migrations subdirectory.
+- `docs/superpowers/**` contains historical/planning docs and is not a public
+  docs surface.
+- CI already runs `npm test`, so putting the guard in the existing drift suite
+  covers CI without new workflow or dependency surface.
+
+Implementation:
+- Discover tracked markdown under `docs/`, excluding `docs/superpowers/**` and
+  `docs/README*.md`.
+- Assert every non-Korean public doc has a `.ko.md` sibling and every Korean
+  doc has an English sibling.
+- Assert `docs/README.md` lists pairs English-first and `docs/README.ko.md`
+  lists pairs Korean-first.
+
 ## 2026-06-27 — Separate Sweeper Lifecycle From HTTP Serving
 
 Decision: add a dedicated background worker entrypoint while preserving the

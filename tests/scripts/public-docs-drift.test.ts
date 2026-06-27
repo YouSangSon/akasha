@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import { describe, expect, it } from "vitest";
 import { TOOL_ROUTES } from "../../src/mcp/tool-schemas.js";
@@ -39,7 +40,72 @@ function nextMigrationPrefix(): string {
   return `${String(last + 1).padStart(3, "0")}_`;
 }
 
+const docsIndexFiles = new Set(["docs/README.md", "docs/README.ko.md"]);
+
+function publicDocsMarkdownPaths(): string[] {
+  return execFileSync("git", ["ls-files", "docs"], { encoding: "utf8" })
+    .split(/\r?\n/)
+    .filter((docPath) => docPath.endsWith(".md"))
+    .filter((docPath) => !docPath.startsWith("docs/superpowers/"))
+    .filter((docPath) => !docsIndexFiles.has(docPath))
+    .sort();
+}
+
+function isKoreanDocPath(docPath: string): boolean {
+  return docPath.endsWith(".ko.md");
+}
+
+function englishSiblingPath(docPath: string): string {
+  return docPath.replace(/\.ko\.md$/, ".md");
+}
+
+function koreanSiblingPath(docPath: string): string {
+  return docPath.replace(/\.md$/, ".ko.md");
+}
+
+function docsIndexLinkPath(docPath: string): string {
+  return docPath.replace(/^docs\//, "");
+}
+
+function markdownLinkTargets(markdown: string): string[] {
+  return [...markdown.matchAll(/\[[^\]]+]\(([^)]+)\)/g)].map(
+    (match) => match[1] ?? "",
+  );
+}
+
 describe("public documentation drift checks", () => {
+  it("indexes every paired public docs page", () => {
+    const publicDocs = publicDocsMarkdownPaths();
+    const englishDocs = publicDocs.filter((docPath) => !isKoreanDocPath(docPath));
+    const koreanDocs = publicDocs.filter(isKoreanDocPath);
+
+    for (const docPath of englishDocs) {
+      expect(publicDocs).toContain(koreanSiblingPath(docPath));
+    }
+    for (const docPath of koreanDocs) {
+      expect(publicDocs).toContain(englishSiblingPath(docPath));
+    }
+
+    const englishIndexLinks = markdownLinkTargets(read("docs/README.md"));
+    const koreanIndexLinks = markdownLinkTargets(read("docs/README.ko.md"));
+    for (const docPath of englishDocs) {
+      const englishLink = docsIndexLinkPath(docPath);
+      const koreanLink = docsIndexLinkPath(koreanSiblingPath(docPath));
+      const englishIndexEnglishPosition = englishIndexLinks.indexOf(englishLink);
+      const englishIndexKoreanPosition = englishIndexLinks.indexOf(koreanLink);
+      const koreanIndexKoreanPosition = koreanIndexLinks.indexOf(koreanLink);
+      const koreanIndexEnglishPosition = koreanIndexLinks.indexOf(englishLink);
+
+      expect(englishIndexEnglishPosition).toBeGreaterThanOrEqual(0);
+      expect(englishIndexKoreanPosition).toBeGreaterThanOrEqual(0);
+      expect(englishIndexEnglishPosition).toBeLessThan(englishIndexKoreanPosition);
+
+      expect(koreanIndexKoreanPosition).toBeGreaterThanOrEqual(0);
+      expect(koreanIndexEnglishPosition).toBeGreaterThanOrEqual(0);
+      expect(koreanIndexKoreanPosition).toBeLessThan(koreanIndexEnglishPosition);
+    }
+  });
+
   it("documents Node 22 as the minimum supported runtime", () => {
     const packageJson = readJson<{ engines: { node: string } }>("package.json");
     const packageLock = readJson<{ packages: Record<string, { engines?: { node?: string } }> }>(

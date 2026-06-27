@@ -4,21 +4,21 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Restore Smoke Qdrant Collection Names
+## Current Loop — Public Docs Drift Coverage
 
-Goal: keep the backup/restore runbook aligned with custom Qdrant collection
-names and current uploaded-snapshot recovery behavior.
+Goal: make the docs index fail CI when a public docs page or English/Korean
+pair is added without index coverage.
 
 Status:
-- Restore smoke exposes the manifest Qdrant collection as
-  `RESTORE_SMOKE_QDRANT_COLLECTION_NAME`, with env/default fallback for older
-  manifests.
-- Self-hosted restore commands use the manifest-derived collection and Qdrant
-  uploaded-snapshot `priority=snapshot`.
+- `tests/scripts/public-docs-drift.test.ts` now discovers tracked public docs
+  markdown under `docs/`, excluding `docs/superpowers/**` and docs index files.
+- The guard checks English/Korean sibling pairs and both docs indexes'
+  English-first / Korean-first link coverage.
+- CI already runs `npm test`, so this guard runs in CI without workflow changes.
 - Focused and full verification passed; no push was performed.
 
 Loop closeout:
-- Local commit is the terminal action for this loop; do not push.
+- Commit locally; do not push.
 - Choose the next target from `BACKLOG.md`.
 
 ## Next Loop Candidates

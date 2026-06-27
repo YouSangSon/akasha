@@ -118,3 +118,20 @@ Verification:
 - `npm audit --audit-level=moderate` (`0` vulnerabilities)
 - `npm test` (`63` files passed, `2` skipped; `611` tests passed, `34` skipped)
 - `git diff --check`
+
+- Implemented public docs index drift coverage:
+  - `tests/scripts/public-docs-drift.test.ts` now discovers tracked public
+    markdown under `docs/`, excluding `docs/superpowers/**` and the docs index
+    files.
+  - The guard checks every English public doc has a `.ko.md` sibling, every
+    Korean doc has an English sibling, and both docs indexes contain the pair
+    in English-first / Korean-first order.
+  - No CI workflow change is needed because CI already runs `npm test`.
+
+Verification:
+- `npx vitest run tests/scripts/public-docs-drift.test.ts` (`19` tests passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (`0` vulnerabilities)
+- `npm test` (`63` files passed, `2` skipped; `612` tests passed, `34` skipped)
+- `git diff --check`
