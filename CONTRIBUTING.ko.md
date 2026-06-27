@@ -30,6 +30,7 @@ ${EDITOR:-nano} .env       # MEMORY_API_TOKENS 설정 (OPENAI_API_KEY 는 EMBEDD
 | 목적 | 명령어 |
 |------|--------|
 | HTTP API watch 모드 | `npm run dev:server` |
+| 백그라운드 sweeper watch 모드 | `npm run dev:worker` |
 | MCP 서버 watch 모드 | `npm run dev:mcp` |
 | CLI watch 모드 | `npm run dev:cli` |
 | 타입 체크 | `npm run typecheck` |
@@ -70,7 +71,7 @@ PG 의존 테스트 3개 (`tests/store/memory-repository.test.ts`,
 ### 마이그레이션
 
 SQL 파일은 `src/db/migrations/NNN_*.sql` 에 있습니다. 현재 마이그레이션 파일은
-`001-012` 범위이며, 다음 마이그레이션은 `013_*.sql` 이어야 합니다. 이후 schema
+`001-015` 범위이며, 다음 마이그레이션은 `016_*.sql` 이어야 합니다. 이후 schema
 변경은 현재 범위 뒤의 다음 미사용 번호를 붙이고, `src/db/migrate.ts` 의
 `MIGRATION_FILES` 배열과 production fallback용 임베디드 SQL 문자열에도 추가하세요.
 모든 마이그레이션은 idempotent (`CREATE … IF NOT EXISTS`,

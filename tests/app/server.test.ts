@@ -378,6 +378,56 @@ describe("createOperatorServer", () => {
     });
   });
 
+  it("rejects goal-run default/project-scope payloads without projectKey before dispatch", async () => {
+    const startDefaultScope = await fetch(`${handle.baseUrl}/v1/goal-run/start`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({ goal: "missing project" }),
+    });
+    expect(startDefaultScope.status).toBe(400);
+    expect(registry.start_goal_run).not.toHaveBeenCalled();
+
+    const listProjectScope = await fetch(`${handle.baseUrl}/v1/goal-run/list`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({ scope: "project", status: "active" }),
+    });
+    expect(listProjectScope.status).toBe(400);
+    const body = (await listProjectScope.json()) as {
+      success: boolean;
+      error: { message: string };
+    };
+    expect(body.success).toBe(false);
+    expect(body.error.message).toContain("projectKey");
+    expect(registry.list_goal_runs).not.toHaveBeenCalled();
+  });
+
+  it("allows goal-run user-scope payloads without projectKey before dispatch", async () => {
+    const res = await fetch(`${handle.baseUrl}/v1/goal-run/start`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        scope: "user",
+        goal: "user scoped goal",
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(registry.start_goal_run).toHaveBeenCalledWith({
+      scope: "user",
+      goal: "user scoped goal",
+    });
+  });
+
   it("validates the token-resolved organizationId through the shared schema", async () => {
     await handle.close();
     registry = buildRegistry();

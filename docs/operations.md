@@ -137,18 +137,27 @@ reports the backlog. Enable the sweeper to drain it:
 ```bash
 COMPACTION_SWEEP_ENABLED=true
 COMPACTION_SWEEP_INTERVAL_MS=30000
+npm run start:worker
 ```
+
+You can set the same env vars on one HTTP replica instead. In multi-replica
+deploys, prefer one dedicated worker process and leave the flags disabled on
+request-serving replicas.
 
 Each tick atomically claims pending archive rows and pushes
 `qdrant_next_retry_at` into a short visibility window. If a worker crashes
 after claim, the row becomes due again when that window expires.
 
-Then check the audit log for sweep activity:
+Then check pino logs and Prometheus metrics for sweep activity. Sweeper loops
+emit process log events, not audit-log rows. If you run a dedicated worker,
+read that process's logs; HTTP `/metrics` still reports queue backlog gauges.
 
 ```bash
-curl -X POST http://localhost:8787/v1/audit/list \
-  -H "Authorization: Bearer $MEMORY_API_TOKENS" \
-  -d '{"limit": 50}' | jq '.data.entries[] | select(.tool=="compact_memory")'
+docker compose logs --no-log-prefix --since 10m app \
+  | jq 'select(.event=="compact.sweep_tick" or .event=="compact.sweep_tick_failed")'
+
+curl -s http://localhost:8787/metrics \
+  | grep '^akasha_sweeper_.*worker="compaction"'
 ```
 
 ### Stuck rows
@@ -180,7 +189,12 @@ Enable it on exactly one continuously-running replica:
 ```bash
 INGEST_SWEEP_ENABLED=true
 INGEST_SWEEP_INTERVAL_MS=30000
+npm run start:worker
 ```
+
+For a shared worker process, set both ingest and compaction sweeper flags in the
+same environment. For the old single-process topology, set them on one HTTP
+replica instead.
 
 Check failed ingest rows:
 
@@ -281,9 +295,11 @@ Key event names to monitor:
 | `auth.disabled` | warn | Expected only in dev. In prod = misconfig. |
 | `compact.qdrant_delete_failed` | warn | Sweeper will retry. |
 | `compact.sweep_giveup` | warn | Manual investigation (see "Stuck rows"). |
+| `ingest.sweep_giveup` | warn | Manual investigation (see ingest failed rows). |
 | `compact.unarchive_failed` | error | Per-archive failure; check the response outcomes. |
 | `http.unhandled` | error | Unexpected exception in an HTTP handler. |
 | `compact.sweep_tick_failed` | error | Sweeper threw; loop continues. |
+| `ingest.sweep_tick_failed` | error | Ingest sweeper threw; loop continues. |
 
 ### Health probes
 
@@ -305,6 +321,12 @@ Key series:
 - `akasha_http_requests_total{method,route,status}`
 - `akasha_http_request_duration_seconds_count{method,route,status}`
 - `akasha_http_request_duration_seconds_sum{method,route,status}`
+- `akasha_sweeper_ticks_total{worker,status}`
+- `akasha_sweeper_tick_duration_seconds_count{worker,status}`
+- `akasha_sweeper_tick_duration_seconds_sum{worker,status}`
+- `akasha_sweeper_rows_total{worker,outcome}`
+- `akasha_background_queue_collect_success`
+- `akasha_background_queue_rows{queue,state}`
 - `akasha_dependency_up{name="postgres"}`
 - `akasha_dependency_check_duration_seconds{name="postgres"}`
 
@@ -314,17 +336,29 @@ static route name (`/v1/memory/search`, `/mcp`, `/healthz`, `/readyz`,
 Metrics do not include bearer tokens, organization IDs, request bodies, search
 queries, or memory content.
 
+Sweeper metrics are emitted only after a loop tick has run in the HTTP process.
+`worker` is `compaction` or `ingest`; `status` is `success` or `error`;
+`outcome` is a bounded row outcome such as `scanned`, `cleaned`, `completed`,
+`retried`, or `failed`. If both sweepers are disabled, these series stay empty.
+
+Background queue gauges are collected on each `/metrics` scrape from Postgres.
+`queue` is `ingest` or `compaction`; `state` is `pending`, `due`, or `failed`.
+`due` means work is eligible for the next sweeper claim. If collection fails,
+`akasha_background_queue_collect_success` is `0` and the scrape still returns
+200 with no error details in the metrics body.
+
 Dependency gauges use the most recent `/readyz` report. If `/readyz` has not
-run yet, dependency metrics are omitted, and `/metrics` does not probe
-Postgres, Qdrant, or OpenAI itself.
+run yet, dependency metrics are omitted. `/metrics` does not call readiness
+probes for Postgres, Qdrant, or OpenAI, but it does issue read-only Postgres
+backlog count queries for the background queue gauges.
 
 ## Schema migrations
 
 All migrations are idempotent and applied at bootstrap. Migrations currently
-span `001-012`; new migrations append the next unused number after that range.
+span `001-015`; new migrations append the next unused number after that range.
 To add a new migration:
 
-1. Create `src/db/migrations/NNN_description.sql` (next sequence number).
+1. Create `src/db/migrations/NNN_description.sql` (next sequence number, currently `016_*.sql`).
 2. Append the filename to `MIGRATION_FILES` in `src/db/migrate.ts`.
 3. Append the SQL to `embeddedPostgresMigrationSql` in the same file
    (production fallback when SQL files aren't on disk).
@@ -355,7 +389,7 @@ without reindexing. Run:
 ```bash
 curl -X POST http://localhost:8787/v1/memory/reindex \
   -H "Authorization: Bearer $MEMORY_API_TOKENS" \
-  -d '{"projectKey": "my-project"}' | jq
+  -d '{"organizationId": "default", "projectKey": "my-project"}' | jq
 ```
 
 ### "Server refuses to start with 'fail-closed' error"

@@ -63,12 +63,14 @@ describe("startIngestSweeper", () => {
 
   it("calls claimPendingForRetry on each tick", async () => {
     const ingestJobs = makeIngestJobRepo();
+    const metrics = { observeSweeperTick: vi.fn() };
     const handle = startIngestSweeper({
       ingestJobs,
       chunkRepository: makeChunkRepo(),
       embeddings: { embed: vi.fn(), embedBatch: vi.fn() },
       vectorIndex: { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), ensureCollection: vi.fn() },
       logger: SILENT_LOGGER,
+      metrics,
       intervalMs: 1000,
     });
 
@@ -76,6 +78,19 @@ describe("startIngestSweeper", () => {
 
     await vi.advanceTimersByTimeAsync(1000);
     expect(ingestJobs.claimPendingForRetry).toHaveBeenCalledTimes(1);
+    expect(metrics.observeSweeperTick).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worker: "ingest",
+        status: "success",
+        counts: {
+          scanned: 0,
+          completed: 0,
+          retried: 0,
+          failed: 0,
+        },
+        durationSeconds: expect.any(Number),
+      }),
+    );
 
     await vi.advanceTimersByTimeAsync(1000);
     expect(ingestJobs.claimPendingForRetry).toHaveBeenCalledTimes(2);
@@ -105,6 +120,7 @@ describe("startIngestSweeper", () => {
 
   it("swallows tick errors and continues looping", async () => {
     const ingestJobs = makeIngestJobRepo();
+    const metrics = { observeSweeperTick: vi.fn() };
     (ingestJobs.claimPendingForRetry as ReturnType<typeof vi.fn>)
       .mockRejectedValueOnce(new Error("transient PG failure"))
       .mockResolvedValueOnce([]);
@@ -115,6 +131,7 @@ describe("startIngestSweeper", () => {
       embeddings: { embed: vi.fn(), embedBatch: vi.fn() },
       vectorIndex: { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), ensureCollection: vi.fn() },
       logger: SILENT_LOGGER,
+      metrics,
       intervalMs: 1000,
     });
 
@@ -122,6 +139,21 @@ describe("startIngestSweeper", () => {
     await vi.advanceTimersByTimeAsync(1000);
 
     expect(ingestJobs.claimPendingForRetry).toHaveBeenCalledTimes(2);
+    expect(metrics.observeSweeperTick).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        worker: "ingest",
+        status: "error",
+        durationSeconds: expect.any(Number),
+      }),
+    );
+    expect(metrics.observeSweeperTick).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        worker: "ingest",
+        status: "success",
+      }),
+    );
     await handle.stop();
   });
 });

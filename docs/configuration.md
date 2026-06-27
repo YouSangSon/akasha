@@ -201,9 +201,12 @@ OAuth access tokens are accepted only when:
 
 Scopes:
 - `akasha:read` — `search_memory`, `build_context_pack`,
-  `list_memory`, `inspect_memory_graph`, `list_workspace_roots`,
+  `list_memory`, `inspect_memory_graph`, `get_goal_run`, `list_goal_runs`,
+  `build_goal_context`, `check_repeat_attempt`, `list_workspace_roots`,
   `classify_memory_candidate`, and dry-run `compact_memory`.
-- `akasha:write` — `add_memory`, `add_memory_interactive`.
+- `akasha:write` — `add_memory`, `add_memory_interactive`,
+  `start_goal_run`, `record_iteration`, `complete_goal_run`, and
+  `abandon_goal_run`.
 - `akasha:admin` — `reindex_memory`, `unarchive_memory`, `list_audit_log`,
   `update_memory`, `delete_memory`, `tag_memory`, and `compact_memory` with
   `dryRun: false`.
@@ -266,7 +269,8 @@ constructing the orchestrator differently in custom integrations.
 ## Compaction sweeper
 
 The sweeper retries Qdrant cleanup for archived records whose in-line delete
-failed. Off by default — opt in on a single replica that runs continuously.
+failed. Off by default — opt in on one continuously running HTTP replica, or
+run a dedicated `npm run start:worker` process with this flag set.
 
 | Variable | Default | Notes |
 |---|---|---|
@@ -282,8 +286,9 @@ The ingest sweeper re-indexes memory records whose Qdrant upsert was interrupted
 by a process crash between the write-ahead `markQdrantPending` and
 `markQdrantCompleted`. Without it, crash-orphaned records remain in Qdrant's
 backlog indefinitely (invisible to search); with it enabled, they are picked up
-on the next sweep cycle. Off by default — opt in on a single continuously-running
-replica.
+on the next sweep cycle. Off by default — opt in on one continuously running
+HTTP replica, or run a dedicated `npm run start:worker` process with this flag
+set.
 
 | Variable | Default | Notes |
 |---|---|---|
@@ -301,6 +306,8 @@ exponential: 1 s, 2 s, 4 s, 8 s, capped at 5 min.
 | `BACKUP_DIR` | `./.developer-memory-os/backups` | Where `npm run backup:create` writes. |
 | `BACKUP_TARGET_HOST` | unset | Optional SSH/scp target for off-host replication. Leave empty to keep `backup:create` local-only; `backup:verify` requires a non-empty remote target. |
 | `BACKUP_TARGET_DIR` | `BACKUP_DIR` | Optional remote directory used by backup copy and verification scripts. |
+| `BACKUP_ENCRYPTION_KEY_FILE` | unset | Optional file containing a 32-byte AES key (hex, base64, or raw bytes). When set, backup artifacts are encrypted with AES-256-GCM before off-host copy. |
+| `BACKUP_ENCRYPTION_KEEP_PLAINTEXT` | `false` | Set `true` only for local debugging; by default plaintext artifacts are removed after encrypted `.enc` artifacts and manifest checksums are written. |
 
 See [docs/operations.md](operations.md) for the backup/restore workflow.
 

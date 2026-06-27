@@ -56,6 +56,30 @@ describe("goal-run handlers", () => {
     });
   });
 
+  it("start_goal_run resolves default user scope when userScopeId is omitted", async () => {
+    const goalRuns = goalRunServicesStub();
+    const registry = createToolRegistry({
+      defaultUserScopeId: "resolved-user",
+      withCanonicalServices: (async (cb: (s: CanonicalServices) => Promise<unknown>) =>
+        cb({ goalRuns } as unknown as CanonicalServices)) as never,
+    });
+
+    await registry.start_goal_run({
+      organizationId: "org-a",
+      scope: "user",
+      goal: "learn rust",
+    });
+
+    expect(goalRuns.start).toHaveBeenCalledWith({
+      organizationId: "org-a",
+      scopeType: "user",
+      scopeId: "resolved-user",
+      projectKey: null,
+      goal: "learn rust",
+      terminationCriteria: null,
+    });
+  });
+
   it("record_iteration forwards outcome, memory links, and org default", async () => {
     const goalRuns = goalRunServicesStub();
     const registry = registryWith(goalRuns);
@@ -105,6 +129,28 @@ describe("goal-run handlers", () => {
     });
   });
 
+  it("list_goal_runs resolves default user scope when userScopeId is omitted", async () => {
+    const goalRuns = goalRunServicesStub();
+    const registry = createToolRegistry({
+      defaultUserScopeId: "resolved-user",
+      withCanonicalServices: (async (cb: (s: CanonicalServices) => Promise<unknown>) =>
+        cb({ goalRuns } as unknown as CanonicalServices)) as never,
+    });
+
+    await registry.list_goal_runs({
+      organizationId: "org-a",
+      scope: "user",
+      status: "active",
+    });
+
+    expect(goalRuns.list).toHaveBeenCalledWith({
+      organizationId: "org-a",
+      scopeType: "user",
+      scopeId: "resolved-user",
+      status: "active",
+    });
+  });
+
   it("build_goal_context returns found:false for a missing run", async () => {
     const goalRuns = goalRunServicesStub();
     goalRuns.get.mockResolvedValue(null);
@@ -140,6 +186,7 @@ describe("goal-run handlers", () => {
       createdAt: "2026-06-27T00:00:00.000Z",
       updatedAt: "2026-06-27T00:00:00.000Z",
       closedAt: null,
+      closeNote: null,
       iterations: [],
     });
     const listMemory = vi.fn().mockResolvedValue([]);
@@ -174,6 +221,7 @@ describe("goal-run handlers", () => {
       createdAt: "t",
       updatedAt: "t",
       closedAt: null,
+      closeNote: null,
       iterations: [
         { id: 1, goalRunId: 7, organizationId: "default", iterationIndex: 1, attempt: "use regex", outcome: "failure", summary: null, error: "nope", createdAt: "t" },
         { id: 2, goalRunId: 7, organizationId: "default", iterationIndex: 2, attempt: "succeeded", outcome: "success", summary: null, error: null, createdAt: "t" },

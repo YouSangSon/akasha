@@ -34,6 +34,7 @@ function goalRun(
     createdAt: "2026-06-27T00:00:00.000Z",
     updatedAt: "2026-06-27T00:00:00.000Z",
     closedAt: null,
+    closeNote: null,
     iterations,
     ...overrides,
   };

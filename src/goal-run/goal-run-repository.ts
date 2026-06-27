@@ -33,6 +33,7 @@ type GoalRunRow = {
   created_at: string | Date;
   updated_at: string | Date;
   closed_at: string | Date | null;
+  close_note: string | null;
 };
 
 type GoalRunIterationRow = {
@@ -59,7 +60,8 @@ const RUN_COLUMNS = `
   iteration_count,
   created_at,
   updated_at,
-  closed_at
+  closed_at,
+  close_note
 `;
 
 const ITERATION_COLUMNS = `
@@ -244,13 +246,14 @@ export function createGoalRunRepository(pool: PgPool): GoalRunRepository {
 
 async function closeRun(
   pool: PgPool,
-  input: { organizationId: string; goalRunId: number },
+  input: { organizationId: string; goalRunId: number; note?: string | null },
   status: "completed" | "abandoned",
 ): Promise<GoalRun> {
   const result = await pool.query<GoalRunRow>(
     `
       UPDATE goal_runs
       SET status = $3,
+          close_note = $4,
           closed_at = NOW(),
           updated_at = NOW()
       WHERE id = $1
@@ -258,7 +261,7 @@ async function closeRun(
         AND status = 'active'
       RETURNING ${RUN_COLUMNS}
     `,
-    [input.goalRunId, input.organizationId, status],
+    [input.goalRunId, input.organizationId, status, input.note ?? null],
   );
 
   const row = result.rows[0];
@@ -283,6 +286,7 @@ function mapRun(row: GoalRunRow): GoalRun {
     createdAt: toIsoString(row.created_at),
     updatedAt: toIsoString(row.updated_at),
     closedAt: row.closed_at === null ? null : toIsoString(row.closed_at),
+    closeNote: row.close_note,
   };
 }
 

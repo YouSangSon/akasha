@@ -5,7 +5,7 @@
 Akasha exposes the same core service tool surface through three access paths:
 
 - **MCP stdio** — for AI clients like Claude Code and Codex CLI.
-  Entry point: `dist/src/mcp/server.js`. All 12 service tools are registered,
+  Entry point: `dist/src/mcp/server.js`. All 20 service tools are registered,
   plus MCP-only client-context helpers.
 - **MCP Streamable HTTP** — for MCP clients that connect over HTTP.
   Primary documented endpoint: `POST /mcp` for JSON-RPC requests. The SDK
@@ -614,6 +614,243 @@ Read-only. Org-scoped by token binding; entries from other orgs never leak.
 
 ---
 
+### start_goal_run — begin a persistent objective
+
+```ts
+type StartGoalRunInput = {
+  organizationId?: string;
+  scope?: "project" | "user";    // default "project"
+  projectKey?: string;           // required for project scope
+  userScopeId?: string;          // resolved like memory user-scope tools
+  goal: string;                  // secret-scrubbed
+  terminationCriteria?: string | null; // secret-scrubbed when present
+};
+
+type GoalRun = {
+  id: number;
+  organizationId: string;
+  scopeType: "project" | "user";
+  scopeId: string;
+  projectKey: string | null;
+  goal: string;
+  terminationCriteria: string | null;
+  status: "active" | "completed" | "abandoned";
+  iterationCount: number;
+  createdAt: string;
+  updatedAt: string;
+  closedAt: string | null;
+  closeNote: string | null;
+};
+
+type StartGoalRunResult = {
+  ok: true;
+  goalRun: GoalRun;
+};
+```
+
+HTTP: `POST /v1/goal-run/start`
+MCP stdio: `start_goal_run`
+
+Use this to make a long-running objective first-class in memory. While a run is
+active, memories linked by `record_iteration.memoryIds` are pinned out of
+compaction.
+
+---
+
+### record_iteration — append one goal-run attempt
+
+```ts
+type RecordIterationInput = {
+  organizationId?: string;
+  goalRunId: number;
+  attempt: string;               // secret-scrubbed
+  outcome: "success" | "failure" | "partial";
+  summary?: string | null;       // secret-scrubbed when present
+  error?: string | null;         // secret-scrubbed when present
+  memoryIds?: number[];          // org-scoped records to pin to this run
+};
+
+type GoalRunIteration = {
+  id: number;
+  goalRunId: number;
+  organizationId: string;
+  iterationIndex: number;
+  attempt: string;
+  outcome: "success" | "failure" | "partial";
+  summary: string | null;
+  error: string | null;
+  createdAt: string;
+};
+
+type RecordIterationResult = {
+  ok: true;
+  iteration: GoalRunIteration;
+};
+```
+
+HTTP: `POST /v1/goal-run/iteration`
+MCP stdio: `record_iteration`
+
+The repository atomically increments `iterationCount`, inserts the ordered
+iteration, and links any same-org `memoryIds` to `memory_records.goal_run_id`.
+Closed or cross-org runs fail rather than accepting new iterations.
+
+---
+
+### get_goal_run — fetch one run with iterations
+
+```ts
+type GetGoalRunInput = {
+  organizationId?: string;
+  goalRunId: number;
+};
+
+type GoalRunWithIterations = GoalRun & {
+  iterations: GoalRunIteration[];
+};
+
+type GetGoalRunResult = {
+  ok: true;
+  goalRun: GoalRunWithIterations | null;
+};
+```
+
+HTTP: `POST /v1/goal-run/get`
+MCP stdio: `get_goal_run`
+
+Returns `null` when the run is missing or outside the caller's organization.
+
+---
+
+### list_goal_runs — list scoped runs
+
+```ts
+type ListGoalRunsInput = {
+  organizationId?: string;
+  scope?: "project" | "user";    // default "project"
+  projectKey?: string;           // required for project scope
+  userScopeId?: string;          // resolved like memory user-scope tools
+  status?: "active" | "completed" | "abandoned";
+};
+
+type ListGoalRunsResult = {
+  ok: true;
+  goalRuns: GoalRun[];
+};
+```
+
+HTTP: `POST /v1/goal-run/list`
+MCP stdio: `list_goal_runs`
+
+Use this at session start to discover active or recently closed runs for a
+project/user scope.
+
+---
+
+### complete_goal_run — close a run as completed
+
+```ts
+type CompleteGoalRunInput = {
+  organizationId?: string;
+  goalRunId: number;
+  resolution?: string | null;    // stored as closeNote; secret-scrubbed
+};
+
+type CompleteGoalRunResult = {
+  ok: true;
+  goalRun: GoalRun;
+};
+```
+
+HTTP: `POST /v1/goal-run/complete`
+MCP stdio: `complete_goal_run`
+
+Only active same-org runs can be completed. Closing a run makes its linked
+memories eligible for future compaction again.
+
+---
+
+### abandon_goal_run — close a run as abandoned
+
+```ts
+type AbandonGoalRunInput = {
+  organizationId?: string;
+  goalRunId: number;
+  reason?: string | null;        // stored as closeNote; secret-scrubbed
+};
+
+type AbandonGoalRunResult = {
+  ok: true;
+  goalRun: GoalRun;
+};
+```
+
+HTTP: `POST /v1/goal-run/abandon`
+MCP stdio: `abandon_goal_run`
+
+Only active same-org runs can be abandoned. The optional `reason` is persisted
+as `goalRun.closeNote`.
+
+---
+
+### build_goal_context — render goal-focused continuation context
+
+```ts
+type BuildGoalContextInput = {
+  organizationId?: string;
+  goalRunId: number;
+  limit?: number;                // max 200
+};
+
+type BuildGoalContextResult = {
+  ok: true;
+  found: boolean;
+  goalRunId: number;
+  packMarkdown: string;
+};
+```
+
+HTTP: `POST /v1/goal-run/context`
+MCP stdio: `build_goal_context`
+
+When the run exists, the pack includes the goal, termination criteria, recent
+iterations, last error, and normal context-pack sections from scoped memories.
+Missing runs return `found: false` and an empty `packMarkdown`.
+
+---
+
+### check_repeat_attempt — detect repeated failed attempts
+
+```ts
+type CheckRepeatAttemptInput = {
+  organizationId?: string;
+  goalRunId: number;
+  attempt: string;               // secret-scrubbed before embedding
+  threshold?: number;            // default 0.85, range (0, 1]
+};
+
+type CheckRepeatAttemptResult = {
+  ok: true;
+  found: boolean;
+  repeat: boolean;
+  threshold: number;
+  matches: Array<{
+    iterationIndex: number;
+    attempt: string;
+    score: number;
+  }>;
+};
+```
+
+HTTP: `POST /v1/goal-run/check-repeat`
+MCP stdio: `check_repeat_attempt`
+
+Embeds the candidate attempt and compares it with prior failed iterations in
+the same goal run. Use this before retrying a strategy so the agent can avoid
+looping on approaches that already failed.
+
+---
+
 ## Health and metrics (HTTP only)
 
 ### `GET /healthz` — liveness
@@ -658,10 +895,38 @@ Emitted HTTP metrics:
 - `akasha_http_request_duration_seconds_sum{method,route,status}` — cumulative
   request duration.
 
+Emitted background sweeper metrics (only after a loop tick has run):
+
+- `akasha_sweeper_ticks_total{worker,status}` — compaction/ingest sweeper tick
+  counter.
+- `akasha_sweeper_tick_duration_seconds_count{worker,status}` — sweeper tick
+  duration sample count.
+- `akasha_sweeper_tick_duration_seconds_sum{worker,status}` — cumulative
+  sweeper tick duration.
+- `akasha_sweeper_rows_total{worker,outcome}` — rows observed by sweepers by
+  bounded outcome (`scanned`, `cleaned`, `completed`, `retried`, `failed`).
+
+These tick counters are in-process. If sweepers run in a dedicated
+`npm run start:worker` process, use worker logs for tick activity and use HTTP
+`/metrics` for backlog gauges.
+
+Emitted background queue backlog metrics:
+
+- `akasha_background_queue_collect_success` — `1` when the scrape-time backlog
+  collection succeeded, `0` when it failed.
+- `akasha_background_queue_rows{queue,state}` — current backlog counts for
+  `queue` values `ingest` and `compaction`, with `state` values `pending`,
+  `due`, and `failed`.
+
 Route labels use static route names such as `/v1/memory/search`, `/mcp`,
 `/admin/memory`, `/healthz`, `/readyz`, `/metrics`, or `unknown`. Raw URLs and
 query strings are never emitted. Labels and values do not include bearer
 tokens, organization IDs, request bodies, search queries, or memory content.
+Sweeper labels are fixed worker/status/outcome names and do not include row ids,
+organization ids, or error strings.
+Background queue labels are fixed queue/state names and do not include row ids,
+organization ids, or error strings. Backlog collection failures keep `/metrics`
+at HTTP 200 with `akasha_background_queue_collect_success 0`.
 
 Readiness dependency metrics come only from the most recent `/readyz` result:
 
@@ -670,5 +935,7 @@ Readiness dependency metrics come only from the most recent `/readyz` result:
 - `akasha_dependency_check_duration_seconds{name="postgres"}` — duration of
   the latest check.
 
-If `/readyz` has not run yet, dependency metrics are omitted; `/metrics` does
-not probe Postgres, Qdrant, or OpenAI itself.
+If `/readyz` has not run yet, dependency metrics are omitted. `/metrics` does
+not call readiness probes for Postgres, Qdrant, or OpenAI, but production
+servers do issue read-only Postgres count queries for background queue backlog
+gauges.

@@ -14,9 +14,11 @@ import {
   type RunIngestSweepInput,
   type IngestSweepResult,
 } from "./ingest-sweeper.js";
+import type { SweeperMetricsRecorder } from "./sweeper-metrics.js";
 
 export type StartIngestSweeperInput = RunIngestSweepInput & {
   intervalMs?: number;
+  metrics?: SweeperMetricsRecorder;
 };
 
 export type IngestSweeperHandle = {
@@ -41,9 +43,21 @@ export function startIngestSweeper(
 
   const tick = async () => {
     if (stopped) return;
+    const start = process.hrtime.bigint();
     inFlight = runIngestSweep(input);
     try {
       const result = await inFlight;
+      input.metrics?.observeSweeperTick({
+        worker: "ingest",
+        status: "success",
+        durationSeconds: elapsedSeconds(start),
+        counts: {
+          scanned: result.scanned,
+          completed: result.completed,
+          retried: result.retried,
+          failed: result.failed,
+        },
+      });
       if (result.scanned > 0) {
         input.logger.info(
           {
@@ -64,6 +78,11 @@ export function startIngestSweeper(
         },
         "ingest sweep tick threw; loop continues",
       );
+      input.metrics?.observeSweeperTick({
+        worker: "ingest",
+        status: "error",
+        durationSeconds: elapsedSeconds(start),
+      });
     } finally {
       inFlight = null;
     }
@@ -106,6 +125,10 @@ export function startIngestSweeper(
       );
     },
   };
+}
+
+function elapsedSeconds(start: bigint): number {
+  return Number(process.hrtime.bigint() - start) / 1_000_000_000;
 }
 
 // Helper for ops/tests: manually fire one sweep without starting a loop.

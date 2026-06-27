@@ -24,6 +24,8 @@ const MIGRATION_FILES = [
   "011_entity_temporal_graph.sql",
   "012_memory_governance_tags.sql",
   "013_add_goal_runs.sql",
+  "014_add_goal_run_close_note.sql",
+  "015_background_queue_metrics_indexes.sql",
 ] as const;
 
 const embeddedPostgresMigrationSql = `CREATE TABLE IF NOT EXISTS sources (
@@ -393,6 +395,9 @@ CREATE TABLE IF NOT EXISTS goal_runs (
   closed_at            TIMESTAMPTZ
 );
 
+ALTER TABLE goal_runs
+  ADD COLUMN IF NOT EXISTS close_note TEXT;
+
 CREATE TABLE IF NOT EXISTS goal_run_iterations (
   id               BIGSERIAL    PRIMARY KEY,
   goal_run_id      BIGINT       NOT NULL REFERENCES goal_runs(id) ON DELETE CASCADE,
@@ -419,6 +424,26 @@ CREATE INDEX IF NOT EXISTS idx_goal_run_iterations_run
 CREATE INDEX IF NOT EXISTS idx_memory_records_goal_run
   ON memory_records (goal_run_id)
   WHERE goal_run_id IS NOT NULL;
+
+-- Partial indexes for scrape-time background queue backlog gauges.
+-- Mirrors src/db/migrations/015_background_queue_metrics_indexes.sql.
+CREATE INDEX IF NOT EXISTS idx_ingest_jobs_qdrant_pending_status
+  ON ingest_jobs (id)
+  WHERE qdrant_status = 'pending';
+
+CREATE INDEX IF NOT EXISTS idx_ingest_jobs_qdrant_failed_status
+  ON ingest_jobs (id)
+  WHERE qdrant_status = 'failed';
+
+CREATE INDEX IF NOT EXISTS idx_memory_archive_qdrant_pending_status
+  ON memory_archive (id)
+  WHERE qdrant_status = 'pending'
+    AND array_length(qdrant_point_ids, 1) > 0;
+
+CREATE INDEX IF NOT EXISTS idx_memory_archive_qdrant_failed_status
+  ON memory_archive (id)
+  WHERE qdrant_status = 'failed'
+    AND array_length(qdrant_point_ids, 1) > 0;
 `;
 
 export type ReadPostgresMigrationSqlOptions = {

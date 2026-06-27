@@ -193,9 +193,12 @@ OAuth access token은 다음 조건을 모두 만족할 때만 허용됩니다:
 
 Scope:
 - `akasha:read` — `search_memory`, `build_context_pack`,
-  `list_memory`, `inspect_memory_graph`, `list_workspace_roots`,
+  `list_memory`, `inspect_memory_graph`, `get_goal_run`, `list_goal_runs`,
+  `build_goal_context`, `check_repeat_attempt`, `list_workspace_roots`,
   `classify_memory_candidate`, dry-run `compact_memory`.
-- `akasha:write` — `add_memory`, `add_memory_interactive`.
+- `akasha:write` — `add_memory`, `add_memory_interactive`,
+  `start_goal_run`, `record_iteration`, `complete_goal_run`,
+  `abandon_goal_run`.
 - `akasha:admin` — `reindex_memory`, `unarchive_memory`, `list_audit_log`,
   `update_memory`, `delete_memory`, `tag_memory`, `dryRun: false` 인
   `compact_memory`.
@@ -255,7 +258,8 @@ Compaction-apply 경로에는 별도 더 엄격한 limit (org당 1회/시간 기
 ## Compaction sweeper
 
 archive 된 레코드의 인라인 Qdrant delete가 실패한 경우 sweeper가 재시도.
-기본 off — 지속 실행 단일 replica에서만 opt-in.
+기본 off — 지속 실행 HTTP replica 하나에서 켜거나, 이 값을 설정한 전용
+`npm run start:worker` 프로세스로 실행합니다.
 
 | 변수 | 기본값 | 메모 |
 |---|---|---|
@@ -270,7 +274,8 @@ archive 된 레코드의 인라인 Qdrant delete가 실패한 경우 sweeper가 
 ingest sweeper 는 write-ahead `markQdrantPending` 과 `markQdrantCompleted`
 사이에 프로세스 크래시로 Qdrant upsert 가 중단된 메모리 레코드를 재인덱스합니다.
 활성화하지 않으면 크래시 고아 레코드는 Qdrant 대기열에 무기한 남아 검색에 노출되지
-않습니다. 기본 off — 지속 실행 단일 replica 에서만 opt-in.
+않습니다. 기본 off — 지속 실행 HTTP replica 하나에서 켜거나, 이 값을 설정한 전용
+`npm run start:worker` 프로세스로 실행합니다.
 
 | 변수 | 기본값 | 메모 |
 |---|---|---|
@@ -288,6 +293,8 @@ ingest sweeper 는 write-ahead `markQdrantPending` 과 `markQdrantCompleted`
 | `BACKUP_DIR` | `./.developer-memory-os/backups` | `npm run backup:create` 의 출력 디렉토리. |
 | `BACKUP_TARGET_HOST` | unset | 옵션. 오프-호스트 복제용 SSH/scp 대상. 비워두면 `backup:create` 는 로컬에만 저장; `backup:verify` 는 비어 있지 않은 원격 대상 필요. |
 | `BACKUP_TARGET_DIR` | `BACKUP_DIR` | 옵션. 백업 복사와 검증 스크립트가 사용하는 원격 디렉토리. |
+| `BACKUP_ENCRYPTION_KEY_FILE` | unset | 32-byte AES key(hex, base64, raw bytes)를 담은 선택적 파일. 설정하면 off-host copy 전에 backup artifact를 AES-256-GCM으로 암호화. |
+| `BACKUP_ENCRYPTION_KEEP_PLAINTEXT` | `false` | 로컬 디버깅 때만 `true`; 기본값은 encrypted `.enc` artifact와 manifest checksum 작성 후 plaintext artifact 제거. |
 
 백업/복원 워크플로는 [docs/operations.md](operations.md) 참고.
 

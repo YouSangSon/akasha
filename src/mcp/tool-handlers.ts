@@ -789,7 +789,10 @@ export function createToolHandlers(input: {
     async start_goal_run(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
       const scope = toolInput.scope ?? "project";
-      const scopeId = resolveGoalRunScopeId(scope, toolInput);
+      const scopeId = resolveGoalRunScopeId(scope, toolInput, {
+        cwd,
+        defaultUserScopeId: options.defaultUserScopeId,
+      });
       assertNoSecrets(toolInput.goal);
       if (toolInput.terminationCriteria) {
         assertNoSecrets(toolInput.terminationCriteria);
@@ -844,7 +847,10 @@ export function createToolHandlers(input: {
     async list_goal_runs(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
       const scope = toolInput.scope ?? "project";
-      const scopeId = resolveGoalRunScopeId(scope, toolInput);
+      const scopeId = resolveGoalRunScopeId(scope, toolInput, {
+        cwd,
+        defaultUserScopeId: options.defaultUserScopeId,
+      });
       return await withCanonicalServices(async (services) => {
         const goalRuns = await services.goalRuns.list({
           organizationId: toolInput.organizationId ?? "default",
@@ -988,9 +994,16 @@ const GOAL_CONTEXT_RECORD_LIMIT = 50;
 function resolveGoalRunScopeId(
   scope: ScopeType,
   toolInput: { projectKey?: string; userScopeId?: string },
+  resolutionInput: { cwd: string; defaultUserScopeId?: string },
 ): string {
   if (scope === "user") {
-    return requireUserScopeId(toolInput.userScopeId);
+    return requireUserScopeId(
+      resolveUserScopeId({
+        cwd: resolutionInput.cwd,
+        explicitUserScopeId: toolInput.userScopeId,
+        defaultUserScopeId: resolutionInput.defaultUserScopeId,
+      }),
+    );
   }
   return requireProjectKey(toolInput.projectKey, scope);
 }

@@ -87,6 +87,50 @@ is not part of the logical data path. `npm run backup:create` now skips
 `npm run backup:create:pgvector` when you want the command to ignore the current
 environment default.
 
+### systemd timer example
+
+`/etc/systemd/system/akasha-backup.service`:
+
+```ini
+[Unit]
+Description=Akasha backup
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/akasha
+EnvironmentFile=/opt/akasha/.env
+ExecStart=/usr/bin/npm run backup:create
+ExecStartPost=/usr/bin/npm run backup:verify
+```
+
+`/etc/systemd/system/akasha-backup.timer`:
+
+```ini
+[Unit]
+Description=Run Akasha backup nightly
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+Unit=akasha-backup.service
+
+[Install]
+WantedBy=timers.target
+```
+
+Enable it with:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now akasha-backup.timer
+```
+
+For local-only backups with no `BACKUP_TARGET_HOST`, omit the
+`ExecStartPost=/usr/bin/npm run backup:verify` line or replace it with your
+local checksum/restore-smoke policy.
+
 ## Backup verification
 
 Run the verification helper against the newest local manifest and the copied files on `BACKUP_TARGET_HOST`:

@@ -305,6 +305,60 @@ describe.skipIf(!process.env.POSTGRES_HOST)("runMigrations", () => {
       await pool.end();
     }
   });
+
+  it("applies migration 014 close_note column to goal_runs", async () => {
+    const pool = createPgPool({
+      connectionString: testConnectionString,
+    });
+
+    try {
+      await runMigrations(pool);
+
+      const result = await pool.query<InformationSchemaColumnRow>(`
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'goal_runs'
+          AND column_name = 'close_note'
+      `);
+
+      expect(result.rows.map((row) => row.column_name)).toEqual(["close_note"]);
+    } finally {
+      await pool.end();
+    }
+  });
+
+  it("applies migration 015 background queue metrics indexes", async () => {
+    const pool = createPgPool({
+      connectionString: testConnectionString,
+    });
+
+    try {
+      await runMigrations(pool);
+
+      const result = await pool.query<{ indexname: string }>(`
+        SELECT indexname
+        FROM pg_indexes
+        WHERE schemaname = 'public'
+          AND indexname IN (
+            'idx_ingest_jobs_qdrant_pending_status',
+            'idx_ingest_jobs_qdrant_failed_status',
+            'idx_memory_archive_qdrant_pending_status',
+            'idx_memory_archive_qdrant_failed_status'
+          )
+        ORDER BY indexname
+      `);
+
+      expect(result.rows.map((row) => row.indexname)).toEqual([
+        "idx_ingest_jobs_qdrant_failed_status",
+        "idx_ingest_jobs_qdrant_pending_status",
+        "idx_memory_archive_qdrant_failed_status",
+        "idx_memory_archive_qdrant_pending_status",
+      ]);
+    } finally {
+      await pool.end();
+    }
+  });
 });
 
 describe("readPostgresMigrationSql", () => {
@@ -340,5 +394,10 @@ describe("readPostgresMigrationSql", () => {
     expect(sql).toContain("CREATE TABLE IF NOT EXISTS goal_run_iterations");
     expect(sql).toContain("idx_goal_runs_org_scope_status");
     expect(sql).toContain("idx_memory_records_goal_run");
+    expect(sql).toContain("ADD COLUMN IF NOT EXISTS close_note TEXT");
+    expect(sql).toContain("idx_ingest_jobs_qdrant_pending_status");
+    expect(sql).toContain("idx_ingest_jobs_qdrant_failed_status");
+    expect(sql).toContain("idx_memory_archive_qdrant_pending_status");
+    expect(sql).toContain("idx_memory_archive_qdrant_failed_status");
   });
 });

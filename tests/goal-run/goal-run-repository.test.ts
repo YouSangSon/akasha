@@ -20,6 +20,7 @@ function runRow(overrides: Record<string, unknown> = {}) {
     created_at: "2026-06-27T00:00:00.000Z",
     updated_at: "2026-06-27T00:00:00.000Z",
     closed_at: null,
+    close_note: null,
     ...overrides,
   };
 }
@@ -48,6 +49,7 @@ describe("createGoalRunRepository", () => {
     expect(run.scopeType).toBe("project");
     expect(run.iterationCount).toBe(0);
     expect(run.closedAt).toBeNull();
+    expect(run.closeNote).toBeNull();
     expect(calls[0]?.sql).toContain("INSERT INTO goal_runs");
     expect(calls[0]?.params).toEqual([
       "org-a",
@@ -221,17 +223,32 @@ describe("createGoalRunRepository", () => {
   });
 
   it("complete closes an active run; throws when none matched", async () => {
+    const calls: SqlQueryCall[] = [];
     const okPool = {
-      query: vi.fn(() =>
-        Promise.resolve({
-          rows: [runRow({ status: "completed", closed_at: "2026-06-27T01:00:00.000Z" })],
-        }),
-      ),
+      query: vi.fn((sql: string, params?: unknown[]) => {
+        calls.push({ sql, params: params ?? [] });
+        return Promise.resolve({
+          rows: [
+            runRow({
+              status: "completed",
+              closed_at: "2026-06-27T01:00:00.000Z",
+              close_note: "done",
+            }),
+          ],
+        });
+      }),
     };
     const repo = createGoalRunRepository(okPool as never);
-    const closed = await repo.complete({ organizationId: "org-a", goalRunId: 7 });
+    const closed = await repo.complete({
+      organizationId: "org-a",
+      goalRunId: 7,
+      note: "done",
+    });
     expect(closed.status).toBe("completed");
     expect(closed.closedAt).not.toBeNull();
+    expect(closed.closeNote).toBe("done");
+    expect(calls[0]?.sql).toContain("close_note = $4");
+    expect(calls[0]?.params).toEqual([7, "org-a", "completed", "done"]);
 
     const emptyPool = { query: vi.fn(() => Promise.resolve({ rows: [] })) };
     const repo2 = createGoalRunRepository(emptyPool as never);

@@ -1,4 +1,8 @@
-import http, { type IncomingMessage, type ServerResponse } from "node:http";
+import http, {
+  type IncomingMessage,
+  type Server as HttpServer,
+  type ServerResponse,
+} from "node:http";
 import { pathToFileURL } from "node:url";
 
 import { resolveServiceConfig, type ServiceConfig } from "../config.js";
@@ -30,6 +34,11 @@ import {
   type MetricsRegistry,
 } from "./metrics.js";
 import {
+  createBackgroundQueueMetricsCollector,
+  type BackgroundQueueBacklogSnapshot,
+  type BackgroundQueueMetricsCollector,
+} from "./background-queue-metrics.js";
+import {
   createTokenBucketLimiter,
   loadRateLimitFromEnv,
   type RateLimiter,
@@ -44,23 +53,16 @@ import {
 } from "./oauth-protected-resource.js";
 import { createMemoryRoutes, type Route } from "./routes/memory.js";
 import {
-  bootstrapCanonicalServices,
   createCanonicalServicesResolver,
   createServiceBackedAuditLog,
 } from "../mcp/canonical-services.js";
 import {
-  loadSweeperEnabled,
-  loadSweeperIntervalMs,
-  startBackgroundSweeper,
-  type BackgroundSweeperHandle,
-} from "../compact/sweeper-loop.js";
-import {
-  loadIngestSweepEnabled,
-  loadIngestSweepIntervalMs,
-  startIngestSweeper,
-  type IngestSweeperHandle,
-} from "../compact/ingest-sweeper-loop.js";
+  startBackgroundWorkers,
+  type BackgroundWorkersHandle,
+} from "./background-workers.js";
 import { renderMemoryAdminPage } from "./admin-memory-page.js";
+
+const operatorServerCleanup = new WeakMap<HttpServer, () => Promise<void>>();
 
 export type CreateOperatorServerOptions = {
   config?: ServiceConfig;
@@ -83,6 +85,13 @@ export type CreateOperatorServerOptions = {
   // config when protected-resource metadata is enabled; null disables OAuth
   // token validation explicitly.
   oauthTokenVerifier?: OAuthTokenVerifier | null;
+  // Optional shared registry. startOperatorServer passes one through so
+  // background sweeper loops and the /metrics endpoint report to the same
+  // in-process counters.
+  metrics?: MetricsRegistry;
+  // Optional live backlog collector for /metrics. startOperatorServer wires
+  // this to the probe Postgres pool; tests can inject or disable it.
+  backgroundQueueMetrics?: BackgroundQueueMetricsCollector | null;
 };
 
 function normalizeTokens(
@@ -151,7 +160,8 @@ export function createOperatorServer(
     logger: log,
     oauthProtectedResource,
   });
-  const metrics = createMetricsRegistry();
+  const metrics = options.metrics ?? createMetricsRegistry();
+  const backgroundQueueMetrics = options.backgroundQueueMetrics ?? null;
 
   let rateLimiter: RateLimiter | null = options.rateLimiter ?? null;
   if (!rateLimiter) {
@@ -222,8 +232,12 @@ export function createOperatorServer(
         }
 
         if (requestPath === "/metrics" && req.method === "GET") {
+          const backgroundQueueBacklog = await collectBackgroundQueueBacklog({
+            collector: backgroundQueueMetrics,
+            logger: log,
+          });
           res.writeHead(200, { "content-type": METRICS_CONTENT_TYPE });
-          res.end(metrics.render());
+          res.end(metrics.render(backgroundQueueBacklog));
           return;
         }
 
@@ -441,6 +455,12 @@ export function startOperatorServer(
   const dependencyProbes =
     options.dependencyProbes ?? selectDependencyProbes(config, probePool);
 
+  const metrics = options.metrics ?? createMetricsRegistry();
+  const backgroundQueueMetrics =
+    options.backgroundQueueMetrics === undefined
+      ? createBackgroundQueueMetricsCollector(probePool)
+      : options.backgroundQueueMetrics;
+
   const server = createOperatorServer({
     ...options,
     config,
@@ -448,37 +468,47 @@ export function startOperatorServer(
     dependencyProbes,
     oauthProtectedResource,
     oauthTokenVerifier,
+    metrics,
+    backgroundQueueMetrics,
   });
 
-  // Optional: background outbox sweeper for P17 compaction-apply Qdrant
-  // cleanup. Opt-in via COMPACTION_SWEEP_ENABLED=true so existing deploys
-  // don't get a surprise worker. Stopped on server.close().
-  let sweeper: BackgroundSweeperHandle | null = null;
-  if (loadSweeperEnabled(process.env)) {
-    void startSweeperOnce(log, sweeperHandle => {
-      sweeper = sweeperHandle;
-    }).catch((err: unknown) => {
-      log.error(
-        { event: "compact.sweep_start_failed", err },
-        "failed to start outbox sweeper; continuing without it",
-      );
-    });
-  }
-
-  // Optional: background ingest sweeper for re-indexing records whose Qdrant
-  // upsert was left pending (e.g. process crash). Opt-in via
-  // INGEST_SWEEP_ENABLED=true. Stopped on server.close().
-  let ingestSweeper: IngestSweeperHandle | null = null;
-  if (loadIngestSweepEnabled(process.env)) {
-    void startIngestSweeperOnce(log, handle => {
-      ingestSweeper = handle;
-    }).catch((err: unknown) => {
-      log.error(
-        { event: "ingest.sweep_start_failed", err },
-        "failed to start ingest sweeper; continuing without it",
-      );
-    });
-  }
+  let backgroundWorkers: BackgroundWorkersHandle | null = null;
+  let backgroundWorkerStartup: Promise<BackgroundWorkersHandle | null> =
+    Promise.resolve(null);
+  const startWorkers = (): void => {
+    backgroundWorkerStartup = Promise.resolve()
+      .then(() =>
+        startBackgroundWorkers({
+          logger: log,
+          metrics,
+          failFast: false,
+        }),
+      )
+      .then((handle) => {
+        backgroundWorkers = handle;
+        return handle;
+      })
+      .catch((err: unknown) => {
+        log.error(
+          { event: "background_workers.start_failed", err },
+          "failed to start background workers; continuing without them",
+        );
+        return null;
+      });
+  };
+  let cleanupPromise: Promise<void> | null = null;
+  const cleanup = (): Promise<void> => {
+    if (!cleanupPromise) {
+      cleanupPromise = settleCleanup([
+        probePool.end(),
+        backgroundWorkerStartup.then((handle) =>
+          (handle ?? backgroundWorkers)?.stop(),
+        ),
+      ]);
+    }
+    return cleanupPromise;
+  };
+  operatorServerCleanup.set(server, cleanup);
 
   server.listen(config.port, config.host, () => {
     log.info(
@@ -489,59 +519,113 @@ export function startOperatorServer(
       },
       `developer-memory-os listening on http://${config.host}:${config.port}`,
     );
+    startWorkers();
   });
 
   server.on("close", () => {
-    void probePool.end();
-    if (sweeper) {
-      void sweeper.stop();
-    }
-    if (ingestSweeper) {
-      void ingestSweeper.stop();
-    }
+    void cleanup().catch((err: unknown) => {
+      log.error(
+        { event: "http.shutdown_cleanup_failed", err },
+        "failed to clean up HTTP server resources",
+      );
+    });
+  });
+  server.on("error", (err: unknown) => {
+    void cleanup().catch((cleanupError: unknown) => {
+      log.error(
+        { event: "http.shutdown_cleanup_failed", err: cleanupError },
+        "failed to clean up HTTP server resources",
+      );
+    });
+    log.error(
+      { event: "http.listen_failed", err },
+      "HTTP server failed; cleaning up resources",
+    );
   });
 
   return server;
 }
 
-async function startSweeperOnce(
-  log: Logger,
-  attach: (handle: BackgroundSweeperHandle) => void,
-): Promise<void> {
-  // Eager bootstrap so the loop has somewhere to call. The canonical
-  // services bootstrap also runs migrations — same as the lazy path.
-  const services = await bootstrapCanonicalServices();
-  const handle = startBackgroundSweeper({
-    archiveRepository: services.archiveRepository,
-    vectorIndex: services.vectorIndex,
-    logger: log,
-    intervalMs: loadSweeperIntervalMs(process.env),
-  });
-  attach(handle);
+export async function closeOperatorServer(server: HttpServer): Promise<void> {
+  await closeHttpServer(server);
+  await operatorServerCleanup.get(server)?.();
 }
 
-async function startIngestSweeperOnce(
-  log: Logger,
-  attach: (handle: IngestSweeperHandle) => void,
-): Promise<void> {
-  const services = await bootstrapCanonicalServices();
-  const handle = startIngestSweeper({
-    ingestJobs: services.ingestJobs,
-    chunkRepository: services.chunkRepository,
-    embeddings: services.embeddings,
-    vectorIndex: services.vectorIndex,
-    logger: log,
-    intervalMs: loadIngestSweepIntervalMs(process.env),
+function closeHttpServer(server: HttpServer): Promise<void> {
+  return new Promise((resolve, reject) => {
+    server.close((err?: Error) => {
+      if (!err || isServerNotRunningError(err)) {
+        resolve();
+        return;
+      }
+      reject(err);
+    });
   });
-  attach(handle);
+}
+
+function isServerNotRunningError(err: Error): boolean {
+  return (err as NodeJS.ErrnoException).code === "ERR_SERVER_NOT_RUNNING";
+}
+
+async function settleCleanup(tasks: readonly Promise<unknown>[]): Promise<void> {
+  const results = await Promise.allSettled(tasks);
+  const rejected = results.filter(
+    (result): result is PromiseRejectedResult => result.status === "rejected",
+  );
+  if (rejected.length === 0) {
+    return;
+  }
+  if (rejected.length === 1) {
+    throw rejected[0].reason;
+  }
+  throw new AggregateError(
+    rejected.map((result) => result.reason),
+    "multiple HTTP server cleanup steps failed",
+  );
+}
+
+async function collectBackgroundQueueBacklog(input: {
+  collector: BackgroundQueueMetricsCollector | null;
+  logger: Logger;
+}): Promise<BackgroundQueueBacklogSnapshot | undefined> {
+  if (!input.collector) {
+    return undefined;
+  }
+
+  try {
+    return await input.collector.collect();
+  } catch (err: unknown) {
+    input.logger.error(
+      { event: "background_queue_metrics.collect_failed", err },
+      "failed to collect background queue backlog metrics",
+    );
+    return {
+      collectSuccess: false,
+      rows: [],
+    };
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const server = startOperatorServer();
+  let shuttingDown = false;
   const shutdown = () => {
-    server.close(() => {
-      process.exit(0);
-    });
+    if (shuttingDown) {
+      return;
+    }
+    shuttingDown = true;
+
+    void closeOperatorServer(server)
+      .then(() => {
+        process.exit(0);
+      })
+      .catch((err: unknown) => {
+        rootLogger.error(
+          { event: "http.shutdown_failed", err },
+          "failed to shut down HTTP server cleanly",
+        );
+        process.exit(1);
+      });
   };
 
   process.on("SIGINT", shutdown);

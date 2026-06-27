@@ -37,6 +37,8 @@
 │   src/compact/unarchive-compaction.ts  복구 흐름                 │
 │   src/compact/outbox-sweeper.ts        Qdrant cleanup retry     │
 │   src/compact/sweeper-loop.ts          백그라운드 스케줄러        │
+│   src/app/background-workers.ts        공용 worker lifecycle    │
+│   src/app/worker.ts                    전용 worker 프로세스      │
 │   src/context-pack/build-context-pack.ts  pack assembler        │
 │   src/search/retrieve-memory.ts        vector + PG hydrate       │
 └────────────────┬────────────────────────────────────────────────┘
@@ -150,6 +152,9 @@ RETURNING id, organization_id, qdrant_point_ids, qdrant_attempt_count`
 문으로 pending archive row를 claim하고 `qdrant_next_retry_at`을 짧은
 visibility window로 밀어둡니다. claim 이후 worker가 크래시되어도 window가
 끝나면 row가 다시 due 상태가 됩니다.
+운영자는 이 loop를 HTTP replica 하나 안에서 실행하거나 전용
+`npm run start:worker` 프로세스로 실행할 수 있으며, 두 경로 모두 같은 sweeper
+lifecycle을 사용합니다.
 
 ## 데이터 흐름: unarchive (P19.1)
 
@@ -235,11 +240,28 @@ display_text          created_at               relation_type
 first_seen_at                                  evidence_memory_record_id FK
 last_seen_at                                   valid_from / valid_to
                                                confidence / created_at
+
+memory_tags           goal_runs                goal_run_iterations
+───────────           ─────────                ───────────────────
+memory_record_id FK   id PK                    id PK
+organization_id       organization_id          goal_run_id FK
+tag                   scope_type/id            organization_id
+created_at            project_key              iteration_index
+updated_at            goal                     attempt
+                      termination_criteria     outcome
+memory_records        status                   summary / error
+goal_run_id FK        iteration_count          created_at
+                      close_note
+                      created_at / updated_at
+                      closed_at
 ```
 
-마이그레이션은 `src/db/migrations/` 에 위치. 현재 범위는 `001-012` 이며,
-런너는 부트스트랩 시 `001` 부터 `012` 까지 적용합니다 (모두 idempotent,
+마이그레이션은 `src/db/migrations/` 에 위치. 현재 범위는 `001-015` 이며,
+런너는 부트스트랩 시 `001` 부터 `015` 까지 적용합니다 (모두 idempotent,
 `CREATE … IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS`).
+source of truth는 `src/db/migrate.ts` 의 `MIGRATION_FILES` 와 mirror된
+`embeddedPostgresMigrationSql` fallback입니다. 오래된 `src/db/schema.sql` 은
+historical SQLite/FTS artifact이며 active Postgres schema가 아닙니다.
 `009_memory_archive_qdrant_retry.sql` 은 archive Qdrant retry metadata를
 제공하며, `qdrant_next_retry_at` 과 백그라운드 archive cleanup sweeper가
 사용하는 pending-retry 인덱스를 포함합니다. `010_postgres_full_text_search.sql`
@@ -247,7 +269,13 @@ last_seen_at                                   valid_from / valid_to
 추가합니다. `011_entity_temporal_graph.sql` 은 graph-backed lexical rescue가
 사용하는 persistent entity mention 및 temporal relationship 테이블을 추가합니다.
 `012_memory_governance_tags.sql` 은 governance 필터링과 vector payload metadata
-갱신에 쓰이는 org-scoped `memory_tags` 를 추가합니다.
+갱신에 쓰이는 org-scoped `memory_tags` 를 추가합니다. `013_add_goal_runs.sql` 은
+first-class goal run, ordered iteration, active-run compaction 보호용
+`memory_records.goal_run_id` pinning을 추가합니다. `014_add_goal_run_close_note.sql`
+은 goal run 완료/포기 시 resolution/reason note를 저장합니다.
+`015_background_queue_metrics_indexes.sql` 은 `/metrics` background queue backlog
+gauge가 historical `ingest_jobs`, `memory_archive` row를 스캔하지 않도록 partial
+index를 추가합니다.
 
 ## 멀티-테넌트
 

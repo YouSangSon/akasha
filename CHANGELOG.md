@@ -11,6 +11,20 @@ changes; CHANGELOG entries call those out explicitly.
 
 ## [Unreleased]
 
+- First-class goal runs: MCP and JSON HTTP now expose `start_goal_run`,
+  `record_iteration`, `get_goal_run`, `list_goal_runs`, `complete_goal_run`,
+  `abandon_goal_run`, `build_goal_context`, and `check_repeat_attempt` under
+  `/v1/goal-run/*`. Active-run memories can be pinned out of compaction, close
+  resolutions/reasons persist as `goal_runs.close_note`, and the current
+  migration range is `001-015`.
+- Background sweeper observability: `/metrics` now emits low-cardinality
+  compaction/ingest sweeper tick counters, tick duration summaries, and row
+  outcome counters, plus live Postgres-backed backlog gauges for pending, due,
+  and failed ingest/compaction queue rows so operators can alert on failed or
+  stalled cleanup loops.
+- Dedicated sweeper worker: `npm run start:worker` / `npm run dev:worker` run
+  the compaction and ingest sweepers outside request-serving replicas while
+  preserving the existing opt-in HTTP-server path.
 - PR #19 added MCP Streamable HTTP at `/mcp`, MCP resources, MCP prompts, and
   structured MCP tool output for clients that consume typed results.
 - Docs: public docs now describe descriptor-shared validation, non-root

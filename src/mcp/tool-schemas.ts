@@ -652,7 +652,9 @@ function validationSchemaForTool(toolName: ToolName): z.ZodType<Record<string, u
     toolName === "add_memory" ||
     toolName === "compact_memory" ||
     toolName === "list_memory" ||
-    toolName === "inspect_memory_graph"
+    toolName === "inspect_memory_graph" ||
+    toolName === "start_goal_run" ||
+    toolName === "list_goal_runs"
   ) {
     return schema.superRefine((input, ctx) => {
       if (scopeRequiresProjectKey(input)) {

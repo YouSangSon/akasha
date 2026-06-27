@@ -40,8 +40,9 @@ load balancer 뒤의 다중 `app` 인스턴스 사용.
       바인딩 (`token:org` 문법) 해서 멀티-테넌트 격리 강제.
 - [ ] **Rate limit** — `RATE_LIMIT_PER_MINUTE` 을 production 적합한 값
       (예: 300) 으로 설정. unset = 무제한, 권장 안 함.
-- [ ] **Compaction sweeper** — 지속 실행 replica 정확히 1개에서 활성:
-      `COMPACTION_SWEEP_ENABLED=true`.
+- [ ] **Background sweeper** — 지속 실행 HTTP replica 하나에서 compaction/ingest
+      sweeper를 켜거나, sweeper env flag를 설정한 전용
+      `npm run start:worker` 프로세스 하나를 실행.
 - [ ] **백업** — `npm run backup:create` 를 cron / systemd timer로 스케줄,
       `npm run restore:smoke` 로 정기 검증.
 - [ ] **모니터링** — `/readyz` 를 오케스트레이터 readiness probe에 연결,
@@ -66,7 +67,7 @@ ${EDITOR:-vim} .env
 #   - MEMORY_API_TOKENS 에 token:org 바인딩
 #   - 강한 POSTGRES_PASSWORD, QDRANT_API_KEY
 #   - RATE_LIMIT_PER_MINUTE=300
-#   - COMPACTION_SWEEP_ENABLED=true
+#   - COMPACTION_SWEEP_ENABLED=true (또는 전용 worker에만 설정)
 #   - NODE_ENV=production
 
 # 3. 빌드 + 실행
@@ -139,13 +140,15 @@ DB에서 안전. 새 버전 배포하면 부트스트랩이 pending 마이그레
 load balancer 뒤의 다중 replica 가능; 각 replica가 자체 bucket 가지므로
 클라이언트가 약간 느슨한 rate limit을 볼 수 있음.
 
-**Sweeper 조정**: 기본값으로는 `COMPACTION_SWEEP_ENABLED=true` 를 **단 하나의**
-replica 에서만 켭니다. 각 sweep tick은 atomic 한
+**Sweeper 조정**: 기본값으로는 `COMPACTION_SWEEP_ENABLED=true` 및/또는
+`INGEST_SWEEP_ENABLED=true` 를 지속 실행 HTTP replica **하나**에서만 켜거나,
+HTTP replica에서는 끄고 해당 env flag를 설정한 전용 `npm run start:worker`
+프로세스 하나를 실행합니다. 각 sweep tick은 atomic 한
 `UPDATE ... WHERE id IN (SELECT ... FOR UPDATE SKIP LOCKED) RETURNING`
-문 하나로 pending archive row를 claim하고 `qdrant_next_retry_at` 을 짧은
+문 하나로 pending row를 claim하고 `qdrant_next_retry_at` 을 짧은
 visibility window 로 밀어 worker 크래시 후에도 자동 재처리되게 합니다.
-더 높은 cleanup throughput 이 필요하면 여러 replica 를 켤 수 있지만,
-불필요한 중복 Qdrant 트래픽을 피하려면 기본 권장값은 여전히 단일 replica 입니다.
+더 높은 cleanup throughput 이 필요하면 worker를 늘릴 수 있지만, 불필요한 중복
+Qdrant 트래픽을 피하려면 기본 권장값은 여전히 단일 worker 입니다.
 
 **Postgres 스케일링**: read replica 미지원 (`searchMemory`, `listMemory` 는
 항상 primary 읽음). 높은 read 볼륨은 vertical scale.

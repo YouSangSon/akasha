@@ -41,8 +41,9 @@ self-hosted) and run multiple `app` instances behind a load balancer.
       tokens to orgs (`token:org` syntax) to enforce multi-tenant isolation.
 - [ ] **Rate limit** — set `RATE_LIMIT_PER_MINUTE` to a sane production
       value (e.g., 300). Unset = unlimited, not recommended.
-- [ ] **Compaction sweeper** — enable on exactly one continuously-running
-      replica: `COMPACTION_SWEEP_ENABLED=true`.
+- [ ] **Background sweepers** — enable compaction/ingest sweepers on exactly
+      one continuously-running HTTP replica, or run one dedicated
+      `npm run start:worker` process with the sweeper env flags set.
 - [ ] **Backups** — schedule `npm run backup:create` (cron / systemd timer)
       and verify with `npm run restore:smoke` periodically.
 - [ ] **Monitoring** — wire `/readyz` to your orchestrator's readiness probe
@@ -68,7 +69,7 @@ ${EDITOR:-vim} .env
 #   - MEMORY_API_TOKENS with token:org bindings
 #   - Strong POSTGRES_PASSWORD, QDRANT_API_KEY
 #   - RATE_LIMIT_PER_MINUTE=300
-#   - COMPACTION_SWEEP_ENABLED=true
+#   - COMPACTION_SWEEP_ENABLED=true (or set this only on a dedicated worker)
 #   - NODE_ENV=production
 
 # 3. Build + run
@@ -143,12 +144,15 @@ The app process is stateless except for the per-token rate limiter
 fine; clients may see slightly looser rate limiting because each replica
 has its own bucket.
 
-**Sweeper coordination**: enable `COMPACTION_SWEEP_ENABLED=true` on **only
-one** replica by default. Each sweep tick claims pending archive rows with one
+**Sweeper coordination**: enable `COMPACTION_SWEEP_ENABLED=true` and/or
+`INGEST_SWEEP_ENABLED=true` on **only one** continuously running HTTP replica by
+default, or leave them disabled on HTTP replicas and run one dedicated
+`npm run start:worker` process with those env flags set. Each sweep tick claims
+pending rows with one
 atomic `UPDATE ... WHERE id IN (SELECT ... FOR UPDATE SKIP LOCKED) RETURNING`
 statement, pushing `qdrant_next_retry_at` into a short visibility window so a
 crashed worker's rows become due again automatically. Operators who need
-higher cleanup throughput can enable more replicas, but one enabled replica is
+higher cleanup throughput can enable more workers, but one enabled worker is
 still the recommended baseline to avoid unnecessary duplicate Qdrant traffic.
 
 **Postgres scaling**: read replicas are not yet supported (`searchMemory`

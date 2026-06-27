@@ -37,6 +37,8 @@ for env-var setup see [configuration.md](configuration.md).
 │   src/compact/unarchive-compaction.ts  recovery flow            │
 │   src/compact/outbox-sweeper.ts        Qdrant cleanup retry     │
 │   src/compact/sweeper-loop.ts          background scheduler     │
+│   src/app/background-workers.ts        shared worker lifecycle  │
+│   src/app/worker.ts                    dedicated worker process │
 │   src/context-pack/build-context-pack.ts  pack assembler        │
 │   src/search/retrieve-memory.ts        vector + PG hydrate       │
 └────────────────┬────────────────────────────────────────────────┘
@@ -153,6 +155,8 @@ WHERE id IN (SELECT id FROM memory_archive FOR UPDATE SKIP LOCKED)
 RETURNING id, organization_id, qdrant_point_ids, qdrant_attempt_count`
 statement and pushes `qdrant_next_retry_at` into a short visibility window.
 If a worker crashes after claim, the row becomes due again after that window.
+Operators can run these loops inside one HTTP replica or in a dedicated
+`npm run start:worker` process; both paths use the same sweeper lifecycle.
 
 ## Data flow: unarchive (P19.1)
 
@@ -237,11 +241,29 @@ display_text          created_at               relation_type
 first_seen_at                                  evidence_memory_record_id FK
 last_seen_at                                   valid_from / valid_to
                                                confidence / created_at
+
+memory_tags           goal_runs                goal_run_iterations
+───────────           ─────────                ───────────────────
+memory_record_id FK   id PK                    id PK
+organization_id       organization_id          goal_run_id FK
+tag                   scope_type/id            organization_id
+created_at            project_key              iteration_index
+updated_at            goal                     attempt
+                      termination_criteria     outcome
+memory_records        status                   summary / error
+goal_run_id FK        iteration_count          created_at
+                      close_note
+                      created_at / updated_at
+                      closed_at
 ```
 
-Migrations live in `src/db/migrations/`. The current range is `001-012`;
-the runner applies `001` through `012` on bootstrap (each is idempotent,
+Migrations live in `src/db/migrations/`. The current range is `001-015`;
+the runner applies `001` through `015` on bootstrap (each is idempotent,
 `CREATE … IF NOT EXISTS` / `ADD COLUMN IF NOT EXISTS`).
+The source of truth is `MIGRATION_FILES` plus the mirrored
+`embeddedPostgresMigrationSql` fallback in `src/db/migrate.ts`; the older
+`src/db/schema.sql` is a historical SQLite/FTS artifact, not the active
+Postgres schema.
 `009_memory_archive_qdrant_retry.sql` supplies archive Qdrant retry metadata,
 including `qdrant_next_retry_at` and the pending-retry index used by the
 background archive cleanup sweeper. `010_postgres_full_text_search.sql` adds
@@ -249,7 +271,13 @@ the generated `search_vector` column and GIN index used by lexical retrieval.
 `011_entity_temporal_graph.sql` adds persistent entity mention and temporal
 relationship tables used by graph-backed lexical rescue.
 `012_memory_governance_tags.sql` adds org-scoped `memory_tags` for governance
-filtering and vector payload metadata refreshes.
+filtering and vector payload metadata refreshes. `013_add_goal_runs.sql` adds
+first-class goal runs, ordered iterations, and `memory_records.goal_run_id`
+pinning for active-run compaction protection. `014_add_goal_run_close_note.sql`
+stores the resolution/reason note used when a goal run is completed or
+abandoned. `015_background_queue_metrics_indexes.sql` adds partial indexes that
+keep `/metrics` background queue backlog gauges from scanning historical
+`ingest_jobs` and `memory_archive` rows.
 
 ## Multi-tenancy
 

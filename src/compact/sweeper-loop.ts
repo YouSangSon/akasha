@@ -14,9 +14,11 @@ import {
   type RunOutboxSweepInput,
   type SweepResult,
 } from "./outbox-sweeper.js";
+import type { SweeperMetricsRecorder } from "./sweeper-metrics.js";
 
 export type StartBackgroundSweeperInput = RunOutboxSweepInput & {
   intervalMs?: number;
+  metrics?: SweeperMetricsRecorder;
 };
 
 export type BackgroundSweeperHandle = {
@@ -41,9 +43,21 @@ export function startBackgroundSweeper(
 
   const tick = async () => {
     if (stopped) return;
+    const start = process.hrtime.bigint();
     inFlight = runOutboxSweep(input);
     try {
       const result = await inFlight;
+      input.metrics?.observeSweeperTick({
+        worker: "compaction",
+        status: "success",
+        durationSeconds: elapsedSeconds(start),
+        counts: {
+          scanned: result.scanned,
+          cleaned: result.cleaned,
+          retried: result.retried,
+          failed: result.failed,
+        },
+      });
       if (result.scanned > 0) {
         input.logger.info(
           {
@@ -64,6 +78,11 @@ export function startBackgroundSweeper(
         },
         "outbox sweep tick threw; loop continues",
       );
+      input.metrics?.observeSweeperTick({
+        worker: "compaction",
+        status: "error",
+        durationSeconds: elapsedSeconds(start),
+      });
     } finally {
       inFlight = null;
     }
@@ -106,6 +125,10 @@ export function startBackgroundSweeper(
       );
     },
   };
+}
+
+function elapsedSeconds(start: bigint): number {
+  return Number(process.hrtime.bigint() - start) / 1_000_000_000;
 }
 
 // Helper for ops/tests: manually fire one sweep without starting a loop.

@@ -78,7 +78,7 @@ operated in production:
 
 Conversations with coding agents lose context the moment the session ends.
 Akasha is the place those agents save what's worth remembering and
-read it back next time. The same 12 core service tools are exposed over MCP
+read it back next time. The same 20 service tools are exposed over MCP
 stdio, MCP Streamable HTTP at `POST /mcp`, and JSON-HTTP under `/v1/*` — full
 request/response schemas live in
 [docs/api-reference.md](docs/api-reference.md).
@@ -101,6 +101,14 @@ the connected client advertises those capabilities.
 | `tag_memory` | Replace governance tags on one record | `POST /v1/memory/tag` |
 | `unarchive_memory` | Restore archived records for forensic recovery | `POST /v1/memory/unarchive` |
 | `list_audit_log` | Read the audit trail for compliance / debugging | `POST /v1/audit/list` |
+| `start_goal_run` | Start a persistent objective with optional termination criteria | `POST /v1/goal-run/start` |
+| `record_iteration` | Append an attempt/outcome and optionally pin linked memories | `POST /v1/goal-run/iteration` |
+| `get_goal_run` | Fetch one goal run with ordered iterations | `POST /v1/goal-run/get` |
+| `list_goal_runs` | List scoped goal runs by status | `POST /v1/goal-run/list` |
+| `complete_goal_run` | Close an active goal run as completed with a resolution note | `POST /v1/goal-run/complete` |
+| `abandon_goal_run` | Close an active goal run as abandoned with a reason note | `POST /v1/goal-run/abandon` |
+| `build_goal_context` | Build goal-focused continuation context from run history and memory | `POST /v1/goal-run/context` |
+| `check_repeat_attempt` | Detect candidate attempts that repeat prior failed iterations | `POST /v1/goal-run/check-repeat` |
 
 MCP-only context tools: `list_workspace_roots` reads client-advertised roots,
 `add_memory_interactive` uses MCP elicitation to collect and store
@@ -222,6 +230,8 @@ page has a Korean (`*.ko.md`) mirror.
 
 ```bash
 npm run dev:server    # HTTP API in watch mode
+npm run dev:worker    # background sweepers in watch mode
+npm run start:worker  # background sweepers from dist/
 npm run dev:mcp       # MCP stdio server in watch mode
 npm run dev:cli       # CLI in watch mode
 npm run lifecycle:init -- --project my-project --organization-id default

@@ -31,6 +31,7 @@ Daily commands:
 | Goal | Command |
 |------|---------|
 | HTTP API watch mode | `npm run dev:server` |
+| Background sweeper watch mode | `npm run dev:worker` |
 | MCP server watch mode | `npm run dev:mcp` |
 | CLI watch mode | `npm run dev:cli` |
 | Type-check | `npm run typecheck` |
@@ -71,7 +72,7 @@ factory. Tool handlers and orchestrators consume the interface, not the impl.
 ### Migrations
 
 SQL files live in `src/db/migrations/NNN_*.sql`. Current migration files span
-`001-012`; the next migration should be `013_*.sql`. Future schema changes
+`001-015`; the next migration should be `016_*.sql`. Future schema changes
 append the next unused number after the current range, add the filename to
 `MIGRATION_FILES` in `src/db/migrate.ts`, and add the embedded snapshot string
 for production fallbacks. All migrations must be idempotent

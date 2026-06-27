@@ -245,9 +245,10 @@ export type IngestJobRepository = {
     error: unknown;
   }): Promise<IngestJob>;
   listPendingForRetry(input: { limit: number; now: Date }): Promise<IngestJob[]>;
-  // Atomically claim rows due for retry by nulling qdrant_next_retry_at in the
-  // same UPDATE that holds the FOR UPDATE SKIP LOCKED, preventing concurrent
-  // sweeper replicas from re-claiming the same row.
+  // Atomically claim rows due for retry by pushing qdrant_next_retry_at into a
+  // visibility window in the same UPDATE that holds the FOR UPDATE SKIP LOCKED,
+  // preventing concurrent sweeper replicas from re-claiming the same row while
+  // still allowing crash recovery when the window expires.
   claimPendingForRetry(input: {
     limit: number;
     now: Date;
@@ -273,6 +274,7 @@ export type GoalRun = {
   createdAt: string;
   updatedAt: string;
   closedAt: string | null;
+  closeNote: string | null;
 };
 
 export type GoalRunIteration = {

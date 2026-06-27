@@ -11,6 +11,20 @@ CHANGELOG에서 명시적으로 표기합니다.
 
 ## [Unreleased]
 
+- First-class goal run: MCP와 JSON HTTP가 `/v1/goal-run/*` 아래
+  `start_goal_run`, `record_iteration`, `get_goal_run`, `list_goal_runs`,
+  `complete_goal_run`, `abandon_goal_run`, `build_goal_context`,
+  `check_repeat_attempt` 를 노출합니다. Active-run memory는 compaction에서
+  pin 될 수 있고, close resolution/reason은 `goal_runs.close_note` 로 저장되며
+  현재 마이그레이션 범위는 `001-015` 입니다.
+- Background sweeper observability: `/metrics` 가 이제 compaction/ingest
+  sweeper tick counter, tick duration summary, row outcome counter를
+  low-cardinality series로 노출하고, pending/due/failed ingest/compaction queue
+  row에 대한 live Postgres-backed backlog gauge도 제공해 실패하거나 멈춘 cleanup
+  loop를 alert할 수 있습니다.
+- 전용 sweeper worker: `npm run start:worker` / `npm run dev:worker` 로
+  compaction/ingest sweeper를 request-serving replica 밖에서 실행할 수 있으며,
+  기존 HTTP 서버 내부 opt-in 경로도 유지됩니다.
 - PR #19: `/mcp` 의 MCP Streamable HTTP, MCP resources, MCP prompts, typed
   result를 쓰는 클라이언트용 structured MCP tool output 추가.
 - 문서: 공개 문서가 descriptor 공유 검증, non-root 컨테이너 런타임 기본값,

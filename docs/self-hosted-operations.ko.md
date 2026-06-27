@@ -89,6 +89,50 @@ data는 logical data path의 일부가 아닙니다. `npm run backup:create` 는
 고정하려면 `npm run backup:create:qdrant` 또는 `npm run backup:create:pgvector`
 를 사용하세요.
 
+### systemd timer 예시
+
+`/etc/systemd/system/akasha-backup.service`:
+
+```ini
+[Unit]
+Description=Akasha backup
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/akasha
+EnvironmentFile=/opt/akasha/.env
+ExecStart=/usr/bin/npm run backup:create
+ExecStartPost=/usr/bin/npm run backup:verify
+```
+
+`/etc/systemd/system/akasha-backup.timer`:
+
+```ini
+[Unit]
+Description=Run Akasha backup nightly
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+Unit=akasha-backup.service
+
+[Install]
+WantedBy=timers.target
+```
+
+활성화:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now akasha-backup.timer
+```
+
+`BACKUP_TARGET_HOST` 없는 local-only backup에서는
+`ExecStartPost=/usr/bin/npm run backup:verify` 줄을 제거하거나 로컬 checksum /
+restore-smoke 정책으로 교체하세요.
+
 ## 백업 검증
 
 최신 로컬 매니페스트와 `BACKUP_TARGET_HOST`의 복사된 파일에 대해 검증 도우미를 실행합니다:

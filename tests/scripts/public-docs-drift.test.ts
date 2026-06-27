@@ -1,8 +1,38 @@
 import fs from "node:fs";
 import { describe, expect, it } from "vitest";
+import { TOOL_ROUTES } from "../../src/mcp/tool-schemas.js";
 
 function read(path: string): string {
   return fs.readFileSync(path, "utf8");
+}
+
+function migrationNumbers(): number[] {
+  return fs
+    .readdirSync("src/db/migrations")
+    .flatMap((filename) => {
+      const match = /^(\d{3})_.*\.sql$/.exec(filename);
+      return match ? [Number(match[1])] : [];
+    })
+    .sort((a, b) => a - b);
+}
+
+function currentMigrationRange(): string {
+  const numbers = migrationNumbers();
+  const first = numbers[0];
+  const last = numbers[numbers.length - 1];
+  if (first === undefined || last === undefined) {
+    throw new Error("No migrations found");
+  }
+  return `${String(first).padStart(3, "0")}-${String(last).padStart(3, "0")}`;
+}
+
+function nextMigrationPrefix(): string {
+  const numbers = migrationNumbers();
+  const last = numbers[numbers.length - 1];
+  if (last === undefined) {
+    throw new Error("No migrations found");
+  }
+  return `${String(last + 1).padStart(3, "0")}_`;
 }
 
 describe("public documentation drift checks", () => {
@@ -133,6 +163,8 @@ describe("public documentation drift checks", () => {
   });
 
   it("documents the current migration range and next migration number", () => {
+    const range = currentMigrationRange();
+    const next = nextMigrationPrefix();
     const files = [
       "AGENTS.md",
       "CONTRIBUTING.md",
@@ -145,16 +177,35 @@ describe("public documentation drift checks", () => {
 
     for (const path of files) {
       const text = read(path);
-      expect(text).toContain("001-012");
+      expect(text).toContain(range);
       expect(text).not.toContain("001-010");
       expect(text).not.toContain("001-009");
       expect(text).not.toContain("001-011");
       expect(text).not.toContain("001–008");
       expect(text).not.toContain("001-008");
+      expect(text).not.toContain("001-012");
     }
 
-    expect(read("CONTRIBUTING.md")).toContain("013_");
-    expect(read("CONTRIBUTING.ko.md")).toContain("013_");
+    expect(read("CONTRIBUTING.md")).toContain(next);
+    expect(read("CONTRIBUTING.ko.md")).toContain(next);
+  });
+
+  it("documents every service tool and JSON HTTP route in public docs", () => {
+    const docs = [
+      "README.md",
+      "README.ko.md",
+      "docs/api-reference.md",
+      "docs/api-reference.ko.md",
+    ];
+
+    for (const path of docs) {
+      const text = read(path);
+      expect(text).toContain(`${TOOL_ROUTES.length} service tools`);
+      for (const route of TOOL_ROUTES) {
+        expect(text).toContain(route.name);
+        expect(text).toContain(route.path);
+      }
+    }
   });
 
   it("documents all three public transports in architecture and security docs", () => {
@@ -344,6 +395,27 @@ describe("public documentation drift checks", () => {
       expect(text).toContain("/readyz");
       expect(text).not.toContain("No native metrics export today");
       expect(text).not.toContain("네이티브 metrics export 없음");
+    }
+  });
+
+  it("documents the dedicated background worker command", () => {
+    for (const path of [
+      "README.md",
+      "README.ko.md",
+      "docs/configuration.md",
+      "docs/configuration.ko.md",
+      "docs/deployment.md",
+      "docs/deployment.ko.md",
+      "docs/operations.md",
+      "docs/operations.ko.md",
+      "docs/api-reference.md",
+      "docs/api-reference.ko.md",
+    ]) {
+      expect(read(path)).toContain("npm run start:worker");
+    }
+
+    for (const path of ["README.md", "README.ko.md", "package.json"]) {
+      expect(read(path)).toContain("dev:worker");
     }
   });
 });

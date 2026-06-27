@@ -54,10 +54,12 @@ describe("startBackgroundSweeper", () => {
 
   it("claims pending qdrant cleanup on each tick", async () => {
     const repo = makeRepo();
+    const metrics = { observeSweeperTick: vi.fn() };
     const handle = startBackgroundSweeper({
       archiveRepository: repo,
       vectorIndex: { delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), upsert: vi.fn(), query: vi.fn(), ensureCollection: vi.fn() },
       logger: SILENT_LOGGER,
+      metrics,
       intervalMs: 1000,
     });
 
@@ -65,6 +67,19 @@ describe("startBackgroundSweeper", () => {
 
     await vi.advanceTimersByTimeAsync(1000);
     expect(repo.claimPendingQdrantCleanup).toHaveBeenCalledTimes(1);
+    expect(metrics.observeSweeperTick).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worker: "compaction",
+        status: "success",
+        counts: {
+          scanned: 0,
+          cleaned: 0,
+          retried: 0,
+          failed: 0,
+        },
+        durationSeconds: expect.any(Number),
+      }),
+    );
 
     await vi.advanceTimersByTimeAsync(1000);
     expect(repo.claimPendingQdrantCleanup).toHaveBeenCalledTimes(2);
@@ -92,6 +107,7 @@ describe("startBackgroundSweeper", () => {
 
   it("swallows tick errors and continues looping", async () => {
     const repo = makeRepo();
+    const metrics = { observeSweeperTick: vi.fn() };
     (repo.claimPendingQdrantCleanup as ReturnType<typeof vi.fn>)
       .mockRejectedValueOnce(new Error("transient PG failure"))
       .mockResolvedValueOnce([]);
@@ -100,6 +116,7 @@ describe("startBackgroundSweeper", () => {
       archiveRepository: repo,
       vectorIndex: { delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), upsert: vi.fn(), query: vi.fn(), ensureCollection: vi.fn() },
       logger: SILENT_LOGGER,
+      metrics,
       intervalMs: 1000,
     });
 
@@ -107,6 +124,21 @@ describe("startBackgroundSweeper", () => {
     await vi.advanceTimersByTimeAsync(1000);
 
     expect(repo.claimPendingQdrantCleanup).toHaveBeenCalledTimes(2);
+    expect(metrics.observeSweeperTick).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        worker: "compaction",
+        status: "error",
+        durationSeconds: expect.any(Number),
+      }),
+    );
+    expect(metrics.observeSweeperTick).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        worker: "compaction",
+        status: "success",
+      }),
+    );
     await handle.stop();
   });
 });
