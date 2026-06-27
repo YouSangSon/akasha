@@ -26,3 +26,4 @@ experience, documentation, features.
 - Background queue backlog gauges with partial indexes.
 - Dedicated background worker lifecycle and worker scripts.
 - Node runtime support moved from Node 20 to Node 22+, with CI on Node 22/24.
+- Repo secret hygiene guard for tracked secret-shaped literals.

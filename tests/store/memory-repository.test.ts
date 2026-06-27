@@ -23,6 +23,11 @@ const adminConnectionString =
   `postgres://memory:memory@127.0.0.1:${postgresPort}/postgres`;
 const testConnectionString =
   `postgres://memory:memory@127.0.0.1:${postgresPort}/${testDatabaseName}`;
+const exampleAwsAccessKey = ["AKIA", "IOSFODNN7EXAMPLE"].join("");
+const exampleGitHubToken = [
+  "ghp",
+  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+].join("_");
 
 async function waitForPostgres() {
   let lastError: unknown;
@@ -642,14 +647,14 @@ describe("createMemoryRepository (unit — no PG required)", () => {
 
   it("updateMemoryRecord rejects secret-shaped content before persistence", async () => {
     await expectUpdateSecretRejection(
-      { content: "Rotate AWS key AKIAIOSFODNN7EXAMPLE immediately." },
+      { content: `Rotate AWS key ${exampleAwsAccessKey} immediately.` },
       ["aws-access-key"],
     );
   });
 
   it("updateMemoryRecord rejects secret-shaped titles before persistence", async () => {
     await expectUpdateSecretRejection(
-      { title: "Leaked token ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" },
+      { title: `Leaked token ${exampleGitHubToken}` },
       ["github-token"],
     );
   });
@@ -664,8 +669,8 @@ describe("createMemoryRepository (unit — no PG required)", () => {
   it("updateMemoryRecord reports categories across multiple updated fields", async () => {
     await expectUpdateSecretRejection(
       {
-        title: "Rotate AKIAIOSFODNN7EXAMPLE today",
-        summary: "GitHub token ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        title: `Rotate ${exampleAwsAccessKey} today`,
+        summary: `GitHub token ${exampleGitHubToken}`,
       },
       ["aws-access-key", "github-token"],
     );

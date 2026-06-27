@@ -59,11 +59,38 @@ Verification:
   - Spec compliance passed.
   - Quality review initially caught Node 24 type definitions and missing
     installer drift coverage; both were fixed and re-review approved.
+- Implemented repo secret hygiene guard:
+  - Added `tests/scripts/repo-secret-hygiene.test.ts` to scan `git ls-files`
+    text files with Akasha's existing `scanForSecrets` helper.
+  - Failure output is limited to file path and secret category; matched values
+    are never reported.
+  - Excluded the detector source and scrubber unit test, where regexes and
+    examples are intentional.
+  - Allowed only exact placeholder DB URL userinfo pairs such as
+    `memory:memory`, `user:pass`, `user:pw`, `postgres:test`, `memory:STRONG_PW`,
+    and the exact `${POSTGRES_USER:-memory}:${POSTGRES_PASSWORD:-memory}` form;
+    other embedded DB credentials still fail.
+  - Split synthetic AWS/GitHub secret-shaped literals in non-scrubber store
+    tests into runtime string fragments.
+  - Review gates:
+    - Spec compliance passed.
+    - Quality review caught broad DB credential allowlisting and untracked test
+      risk; both were fixed before final verification.
+- Source rationale:
+  - GitHub push protection blocks hardcoded credentials before they reach a
+    repository, including test/fixture-shaped tokens:
+    https://docs.github.com/en/code-security/concepts/secret-security/push-protection
+  - OWASP Secrets Management calls out API keys, database credentials, SSH
+    keys, certificates, and similar secrets hardcoded in source/config as a
+    common leak source:
+    https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html
 
 Verification:
 - `npx vitest run tests/scripts/public-docs-drift.test.ts`
+- `npx vitest run tests/scripts/repo-secret-hygiene.test.ts`
+- `npx vitest run tests/store/secret-scrub.test.ts tests/store/canonical-indexing.test.ts tests/store/memory-repository.test.ts`
 - `npm run typecheck`
 - `npm run build`
 - `npm audit --audit-level=moderate` (`0` vulnerabilities)
-- `npm test` (`62` files passed, `2` skipped; `606` tests passed, `34` skipped)
+- `npm test` (`63` files passed, `2` skipped; `608` tests passed, `34` skipped)
 - `git diff --check`

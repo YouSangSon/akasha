@@ -8,6 +8,12 @@ import { SecretDetectedError } from "../../src/store/secret-scrub.js";
 import type { TextChunk } from "../../src/chunk/chunk-text.js";
 import type { SearchMemoryResult } from "../../src/types.js";
 
+const exampleAwsAccessKey = ["AKIA", "IOSFODNN7EXAMPLE"].join("");
+const exampleGitHubToken = [
+  "ghp",
+  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+].join("_");
+
 describe("canonical indexing", () => {
   it("writes chunks, embeddings, ingest jobs, and qdrant points for a canonical memory", async () => {
     const record = createRecord({
@@ -543,7 +549,7 @@ describe("canonical indexing", () => {
           memoryType: "decision",
           // Synthetic AWS access key (canonical AWS docs example, not a real key).
           content:
-            "Decision: rotate AWS access key AKIAIOSFODNN7EXAMPLE next week.",
+            `Decision: rotate AWS access key ${exampleAwsAccessKey} next week.`,
           source: {
             scopeType: "project",
             scopeId: "project-alpha",
@@ -595,7 +601,7 @@ describe("canonical indexing", () => {
           projectKey: "project-alpha",
           memoryType: "decision",
           // Synthetic AWS access key (canonical AWS docs example) in title.
-          title: "rotate key AKIAIOSFODNN7EXAMPLE",
+          title: `rotate key ${exampleAwsAccessKey}`,
           content: "see title for the rotation target.",
           source: {
             scopeType: "project",
@@ -649,8 +655,7 @@ describe("canonical indexing", () => {
           memoryType: "decision",
           content: "Plan: rotate the demo key noted in the summary.",
           // Synthetic GitHub PAT (placeholder shape) in summary.
-          summary:
-            "Token to rotate: ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.",
+          summary: `Token to rotate: ${exampleGitHubToken}.`,
           source: {
             scopeType: "project",
             scopeId: "project-alpha",
@@ -702,10 +707,9 @@ describe("canonical indexing", () => {
           scopeId: "project-alpha",
           projectKey: "project-alpha",
           memoryType: "decision",
-          title: "rotate key AKIAIOSFODNN7EXAMPLE",
+          title: `rotate key ${exampleAwsAccessKey}`,
           content: "no secret in content.",
-          summary:
-            "Old token: ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa replaced.",
+          summary: `Old token: ${exampleGitHubToken} replaced.`,
           source: {
             scopeType: "project",
             scopeId: "project-alpha",

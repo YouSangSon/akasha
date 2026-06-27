@@ -55,3 +55,38 @@ Implementation:
 - `@types/node` is on the Node 22 line to match the oldest supported runtime.
 - `.github/workflows/ci.yml` tests Node 22 and 24.
 - `install.sh` refuses Node majors below 22.
+
+## 2026-06-28 — Guard Tracked Secret-Shaped Literals Without Reporting Values
+
+Decision: add a repo-level Vitest script that scans tracked text files with the
+existing `scanForSecrets` helper, while reporting only file path and category.
+
+Why:
+- Runtime memory writes are already blocked by `src/store/secret-scrub.ts`, but
+  tracked tests, fixtures, docs, env examples, YAML, JSON, TOML, Docker, and
+  CI files can still contain high-confidence secret-shaped literals.
+- GitHub push protection is designed to stop hardcoded credentials before they
+  reach a repository, so synthetic contiguous examples can block pushes even
+  when fake.
+- OWASP Secrets Management identifies API keys, database credentials, SSH keys,
+  certificates, and similar values hardcoded in source/config as a common
+  secret-leak source.
+
+Implementation:
+- `tests/scripts/repo-secret-hygiene.test.ts` scans `git ls-files` text files.
+- The test excludes `src/store/secret-scrub.ts` and
+  `tests/store/secret-scrub.test.ts`, where detector regexes and examples are
+  intentional.
+- The test allowlists only exact placeholder database URL userinfo pairs such as
+  `memory:memory`, `user:pass`, `user:pw`, `postgres:test`, `memory:STRONG_PW`,
+  and the exact `${POSTGRES_USER:-memory}:${POSTGRES_PASSWORD:-memory}` form;
+  other embedded DB credentials still fail.
+- Non-scrubber store tests now build fake AWS/GitHub tokens from string
+  fragments at runtime so the tracked source does not contain contiguous
+  secret-shaped literals.
+
+Sources:
+- GitHub push protection:
+  https://docs.github.com/en/code-security/concepts/secret-security/push-protection
+- OWASP Secrets Management Cheat Sheet:
+  https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html
