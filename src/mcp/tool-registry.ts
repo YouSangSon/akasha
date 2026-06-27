@@ -183,6 +183,10 @@ function instrumentToolRegistry(input: {
       instrument("build_goal_context", toolInput, () =>
         handlers.build_goal_context(toolInput),
       ),
+    check_repeat_attempt: (toolInput) =>
+      instrument("check_repeat_attempt", toolInput, () =>
+        handlers.check_repeat_attempt(toolInput),
+      ),
   };
 }
 

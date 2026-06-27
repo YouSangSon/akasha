@@ -176,6 +176,7 @@ export function requiredScopeKindForTool(
     case "get_goal_run":
     case "list_goal_runs":
     case "build_goal_context":
+    case "check_repeat_attempt":
       return "read";
   }
 }

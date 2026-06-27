@@ -13,6 +13,10 @@ import {
 } from "../store/canonical-indexing.js";
 import { assertNoSecrets } from "../store/secret-scrub.js";
 import { buildGoalContextPack } from "../goal-run/build-goal-context.js";
+import {
+  DEFAULT_REPEAT_THRESHOLD,
+  findRepeatAttempts,
+} from "../goal-run/find-repeat-attempts.js";
 import type {
   AddMemoryInput,
   CanonicalMemoryRepository,
@@ -911,6 +915,64 @@ export function createToolHandlers(input: {
           found: true,
           goalRunId: goalRun.id,
           packMarkdown: pack.markdown,
+        };
+      });
+    },
+
+    async check_repeat_attempt(toolInput) {
+      ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      assertNoSecrets(toolInput.attempt);
+      const threshold = toolInput.threshold ?? DEFAULT_REPEAT_THRESHOLD;
+      return await withCanonicalServices(async (services) => {
+        const organizationId = toolInput.organizationId ?? "default";
+        const goalRun = await services.goalRuns.get({
+          organizationId,
+          goalRunId: toolInput.goalRunId,
+        });
+        if (!goalRun) {
+          return { ok: true, found: false, repeat: false, threshold, matches: [] };
+        }
+
+        const failures = goalRun.iterations.filter(
+          (iteration) =>
+            iteration.outcome === "failure" && iteration.attempt.trim().length > 0,
+        );
+        if (failures.length === 0) {
+          return { ok: true, found: true, repeat: false, threshold, matches: [] };
+        }
+
+        const vectors = await services.embeddings.embedBatch([
+          toolInput.attempt,
+          ...failures.map((failure) => failure.attempt),
+        ]);
+        const candidateEmbedding = vectors[0];
+        if (!candidateEmbedding) {
+          return { ok: true, found: true, repeat: false, threshold, matches: [] };
+        }
+
+        const priorFailures = failures
+          .map((failure, index) => ({
+            iterationIndex: failure.iterationIndex,
+            attempt: failure.attempt,
+            embedding: vectors[index + 1] ?? [],
+          }))
+          // Guard cosineSimilarity (throws on length mismatch); embedBatch
+          // normally returns same-dim vectors, so this only drops anomalies.
+          .filter(
+            (failure) => failure.embedding.length === candidateEmbedding.length,
+          );
+        const matches = findRepeatAttempts({
+          candidateEmbedding,
+          priorFailures,
+          threshold,
+        });
+
+        return {
+          ok: true,
+          found: true,
+          repeat: matches.length > 0,
+          threshold,
+          matches,
         };
       });
     },

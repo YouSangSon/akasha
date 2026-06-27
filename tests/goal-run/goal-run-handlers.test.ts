@@ -158,4 +158,71 @@ describe("goal-run handlers", () => {
       expect.objectContaining({ organizationId: "default" }),
     );
   });
+
+  it("check_repeat_attempt flags a candidate matching a prior failed attempt", async () => {
+    const goalRuns = goalRunServicesStub();
+    goalRuns.get.mockResolvedValue({
+      id: 7,
+      organizationId: "default",
+      scopeType: "project",
+      scopeId: "proj-x",
+      projectKey: "proj-x",
+      goal: "g",
+      terminationCriteria: null,
+      status: "active",
+      iterationCount: 3,
+      createdAt: "t",
+      updatedAt: "t",
+      closedAt: null,
+      iterations: [
+        { id: 1, goalRunId: 7, organizationId: "default", iterationIndex: 1, attempt: "use regex", outcome: "failure", summary: null, error: "nope", createdAt: "t" },
+        { id: 2, goalRunId: 7, organizationId: "default", iterationIndex: 2, attempt: "succeeded", outcome: "success", summary: null, error: null, createdAt: "t" },
+        { id: 3, goalRunId: 7, organizationId: "default", iterationIndex: 3, attempt: "call api", outcome: "failure", summary: null, error: "nope2", createdAt: "t" },
+      ],
+    });
+    // candidate vs [failure#1, failure#3]: matches failure#1 only.
+    const embedBatch = vi
+      .fn()
+      .mockResolvedValue([[1, 0, 0], [1, 0, 0], [0, 1, 0]]);
+    const registry = createToolRegistry({
+      withCanonicalServices: (async (cb: (s: CanonicalServices) => Promise<unknown>) =>
+        cb({ goalRuns, embeddings: { embedBatch } } as unknown as CanonicalServices)) as never,
+    });
+
+    const result = await registry.check_repeat_attempt({
+      goalRunId: 7,
+      attempt: "use a regular expression",
+    });
+
+    // Only the two FAILED attempts are embedded (plus the candidate).
+    expect(embedBatch).toHaveBeenCalledWith([
+      "use a regular expression",
+      "use regex",
+      "call api",
+    ]);
+    expect(result.repeat).toBe(true);
+    expect(result.matches).toHaveLength(1);
+    expect(result.matches[0]?.iterationIndex).toBe(1);
+  });
+
+  it("check_repeat_attempt returns found:false for a missing run without embedding", async () => {
+    const goalRuns = goalRunServicesStub();
+    goalRuns.get.mockResolvedValue(null);
+    const embedBatch = vi.fn();
+    const registry = createToolRegistry({
+      withCanonicalServices: (async (cb: (s: CanonicalServices) => Promise<unknown>) =>
+        cb({ goalRuns, embeddings: { embedBatch } } as unknown as CanonicalServices)) as never,
+    });
+
+    const result = await registry.check_repeat_attempt({ goalRunId: 99, attempt: "x" });
+
+    expect(result).toEqual({
+      ok: true,
+      found: false,
+      repeat: false,
+      threshold: 0.85,
+      matches: [],
+    });
+    expect(embedBatch).not.toHaveBeenCalled();
+  });
 });

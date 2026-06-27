@@ -51,6 +51,13 @@ export function goalRunRegistryStubs() {
       goalRunId: 1,
       packMarkdown: "## Goal\n- g (status: active; iterations: 0)",
     }),
+    check_repeat_attempt: vi.fn().mockResolvedValue({
+      ok: true,
+      found: true,
+      repeat: false,
+      threshold: 0.85,
+      matches: [],
+    }),
   };
 }
 

@@ -506,6 +506,30 @@ export const SERVICE_TOOL_DESCRIPTORS = [
       packMarkdown: z.string(),
     },
   },
+  {
+    name: "check_repeat_attempt",
+    description:
+      "Warn if a candidate attempt is semantically close to a prior failed attempt in the goal run (already-tried-and-failed detection).",
+    inputSchema: {
+      organizationId: z.string().min(1).optional(),
+      goalRunId: z.number().int().positive(),
+      attempt: z.string().min(1),
+      threshold: z.number().gt(0).max(1).optional(),
+    },
+    outputSchema: {
+      ok: z.literal(true),
+      found: z.boolean(),
+      repeat: z.boolean(),
+      threshold: z.number(),
+      matches: z.array(
+        z.object({
+          iterationIndex: z.number(),
+          attempt: z.string(),
+          score: z.number(),
+        }),
+      ),
+    },
+  },
 ] as const satisfies readonly ToolDescriptor[];
 
 export const MCP_CONTEXT_TOOL_DESCRIPTORS = [
@@ -591,6 +615,11 @@ export const TOOL_ROUTES = [
   { name: "complete_goal_run", method: "POST", path: "/v1/goal-run/complete" },
   { name: "abandon_goal_run", method: "POST", path: "/v1/goal-run/abandon" },
   { name: "build_goal_context", method: "POST", path: "/v1/goal-run/context" },
+  {
+    name: "check_repeat_attempt",
+    method: "POST",
+    path: "/v1/goal-run/check-repeat",
+  },
 ] as const satisfies readonly ToolRoute[];
 
 export function descriptorForTool(name: ToolName): ToolDescriptor {

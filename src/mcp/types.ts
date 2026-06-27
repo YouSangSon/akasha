@@ -450,6 +450,27 @@ export type BuildGoalContextToolResult = {
   packMarkdown: string;
 };
 
+export type CheckRepeatAttemptToolInput = {
+  organizationId?: string;
+  goalRunId: number;
+  attempt: string;
+  threshold?: number;
+};
+
+export type RepeatAttemptMatchView = {
+  iterationIndex: number;
+  attempt: string;
+  score: number;
+};
+
+export type CheckRepeatAttemptToolResult = {
+  ok: true;
+  found: boolean;
+  repeat: boolean;
+  threshold: number;
+  matches: RepeatAttemptMatchView[];
+};
+
 export type ToolRegistry = {
   add_memory(input: AddMemoryToolInput): Promise<AddMemoryToolResult>;
   search_memory(input: SearchMemoryToolInput): Promise<SearchMemoryToolResult>;
@@ -492,6 +513,9 @@ export type ToolRegistry = {
   build_goal_context(
     input: BuildGoalContextToolInput,
   ): Promise<BuildGoalContextToolResult>;
+  check_repeat_attempt(
+    input: CheckRepeatAttemptToolInput,
+  ): Promise<CheckRepeatAttemptToolResult>;
 };
 
 export type RetrieveMemoryServiceInput = {

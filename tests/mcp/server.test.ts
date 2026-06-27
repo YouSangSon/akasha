@@ -1524,6 +1524,7 @@ describe("createMcpServer", () => {
       "add_memory_interactive",
       "build_context_pack",
       "build_goal_context",
+      "check_repeat_attempt",
       "classify_memory_candidate",
       "compact_memory",
       "complete_goal_run",
@@ -1586,6 +1587,7 @@ describe("createMcpServer", () => {
         "complete_goal_run",
         "abandon_goal_run",
         "build_goal_context",
+        "check_repeat_attempt",
       ].sort(),
     );
   });
