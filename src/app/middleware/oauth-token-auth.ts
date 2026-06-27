@@ -153,6 +153,11 @@ export function requiredScopeKindForTool(
     case "add_memory":
     case "add_memory_interactive":
       return "write";
+    case "start_goal_run":
+    case "record_iteration":
+    case "complete_goal_run":
+    case "abandon_goal_run":
+      return "write";
     case "compact_memory":
       return input.dryRun === false ? "admin" : "read";
     case "reindex_memory":
@@ -168,6 +173,8 @@ export function requiredScopeKindForTool(
     case "build_context_pack":
     case "list_workspace_roots":
     case "classify_memory_candidate":
+    case "get_goal_run":
+    case "list_goal_runs":
       return "read";
   }
 }

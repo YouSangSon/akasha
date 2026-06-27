@@ -399,6 +399,97 @@ export const SERVICE_TOOL_DESCRIPTORS = [
       entries: z.array(z.object({}).passthrough()),
     },
   },
+  {
+    name: "start_goal_run",
+    description:
+      "Start a goal run: a persistent objective plus termination criteria the agent iterates toward.",
+    inputSchema: {
+      organizationId: z.string().min(1).optional(),
+      scope: z.enum(["project", "user"]).optional(),
+      projectKey: z.string().min(1).optional(),
+      userScopeId: z.string().min(1).optional(),
+      goal: z.string().min(1),
+      terminationCriteria: z.string().nullable().optional(),
+    },
+    outputSchema: {
+      ok: z.literal(true),
+      goalRun: z.object({}).passthrough(),
+    },
+  },
+  {
+    name: "record_iteration",
+    description:
+      "Record one iteration of a goal run (attempt + outcome) and optionally link memories to the run.",
+    inputSchema: {
+      organizationId: z.string().min(1).optional(),
+      goalRunId: z.number().int().positive(),
+      attempt: z.string().min(1),
+      outcome: z.enum(["success", "failure", "partial"]),
+      summary: z.string().nullable().optional(),
+      error: z.string().nullable().optional(),
+      memoryIds: z.array(z.number().int().positive()).optional(),
+    },
+    outputSchema: {
+      ok: z.literal(true),
+      iteration: z.object({}).passthrough(),
+    },
+  },
+  {
+    name: "get_goal_run",
+    description:
+      "Fetch a goal run with its ordered iterations, for continuity and termination evidence.",
+    inputSchema: {
+      organizationId: z.string().min(1).optional(),
+      goalRunId: z.number().int().positive(),
+    },
+    outputSchema: {
+      ok: z.literal(true),
+      goalRun: z.object({}).passthrough().nullable(),
+    },
+  },
+  {
+    name: "list_goal_runs",
+    description: "List goal runs for a scope, optionally filtered by status.",
+    inputSchema: {
+      organizationId: z.string().min(1).optional(),
+      scope: z.enum(["project", "user"]).optional(),
+      projectKey: z.string().min(1).optional(),
+      userScopeId: z.string().min(1).optional(),
+      status: z.enum(["active", "completed", "abandoned"]).optional(),
+    },
+    outputSchema: {
+      ok: z.literal(true),
+      goalRuns: z.array(z.object({}).passthrough()),
+    },
+  },
+  {
+    name: "complete_goal_run",
+    description:
+      "Mark a goal run completed; its memories become eligible for compaction again.",
+    inputSchema: {
+      organizationId: z.string().min(1).optional(),
+      goalRunId: z.number().int().positive(),
+      resolution: z.string().nullable().optional(),
+    },
+    outputSchema: {
+      ok: z.literal(true),
+      goalRun: z.object({}).passthrough(),
+    },
+  },
+  {
+    name: "abandon_goal_run",
+    description:
+      "Mark a goal run abandoned; its memories become eligible for compaction again.",
+    inputSchema: {
+      organizationId: z.string().min(1).optional(),
+      goalRunId: z.number().int().positive(),
+      reason: z.string().nullable().optional(),
+    },
+    outputSchema: {
+      ok: z.literal(true),
+      goalRun: z.object({}).passthrough(),
+    },
+  },
 ] as const satisfies readonly ToolDescriptor[];
 
 export const MCP_CONTEXT_TOOL_DESCRIPTORS = [
@@ -477,6 +568,12 @@ export const TOOL_ROUTES = [
   { name: "tag_memory", method: "POST", path: "/v1/memory/tag" },
   { name: "list_audit_log", method: "POST", path: "/v1/audit/list" },
   { name: "unarchive_memory", method: "POST", path: "/v1/memory/unarchive" },
+  { name: "start_goal_run", method: "POST", path: "/v1/goal-run/start" },
+  { name: "record_iteration", method: "POST", path: "/v1/goal-run/iteration" },
+  { name: "get_goal_run", method: "POST", path: "/v1/goal-run/get" },
+  { name: "list_goal_runs", method: "POST", path: "/v1/goal-run/list" },
+  { name: "complete_goal_run", method: "POST", path: "/v1/goal-run/complete" },
+  { name: "abandon_goal_run", method: "POST", path: "/v1/goal-run/abandon" },
 ] as const satisfies readonly ToolRoute[];
 
 export function descriptorForTool(name: ToolName): ToolDescriptor {

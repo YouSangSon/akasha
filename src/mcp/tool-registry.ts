@@ -155,6 +155,30 @@ function instrumentToolRegistry(input: {
       instrument("unarchive_memory", toolInput, () =>
         handlers.unarchive_memory(toolInput),
       ),
+    start_goal_run: (toolInput) =>
+      instrument("start_goal_run", toolInput, () =>
+        handlers.start_goal_run(toolInput),
+      ),
+    record_iteration: (toolInput) =>
+      instrument("record_iteration", toolInput, () =>
+        handlers.record_iteration(toolInput),
+      ),
+    get_goal_run: (toolInput) =>
+      instrument("get_goal_run", toolInput, () =>
+        handlers.get_goal_run(toolInput),
+      ),
+    list_goal_runs: (toolInput) =>
+      instrument("list_goal_runs", toolInput, () =>
+        handlers.list_goal_runs(toolInput),
+      ),
+    complete_goal_run: (toolInput) =>
+      instrument("complete_goal_run", toolInput, () =>
+        handlers.complete_goal_run(toolInput),
+      ),
+    abandon_goal_run: (toolInput) =>
+      instrument("abandon_goal_run", toolInput, () =>
+        handlers.abandon_goal_run(toolInput),
+      ),
   };
 }
 

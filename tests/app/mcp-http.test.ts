@@ -4,6 +4,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { goalRunRegistryStubs } from "../fixtures/goal-run-stubs.js";
 import type { BearerToken } from "../../src/app/middleware/bearer-auth.js";
 import type { OAuthTokenVerifier } from "../../src/app/middleware/bearer-auth.js";
 import {
@@ -29,6 +30,7 @@ const oauthProtectedResource: OAuthProtectedResourceConfig = {
 
 function buildRegistry(): ToolRegistry {
   return {
+    ...goalRunRegistryStubs(),
     add_memory: vi.fn().mockResolvedValue({
       ok: true,
       memoryId: "1",

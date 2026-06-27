@@ -20,6 +20,7 @@ import { createPgVectorIndex } from "../vector/pgvector-index.js";
 import { createMemoryRepository } from "../store/memory-repository.js";
 import { createMemoryChunkRepository } from "../store/canonical-indexing.js";
 import { createMemoryArchiveRepository } from "../store/memory-archive-repository.js";
+import { createGoalRunRepository } from "../goal-run/goal-run-repository.js";
 import type {
   CanonicalServices,
   CreateToolRegistryOptions,
@@ -70,6 +71,7 @@ export async function bootstrapCanonicalServices(): Promise<CanonicalServices> {
     ingestJobs: createIngestJobRepository(pool),
     auditLog: createAuditLogRepository(pool),
     archiveRepository: createMemoryArchiveRepository(pool),
+    goalRuns: createGoalRunRepository(pool),
     embeddings: createEmbeddingProvider({
       config: {
         provider: config.embedding.provider,

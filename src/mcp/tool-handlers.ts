@@ -11,10 +11,12 @@ import {
   reindexCanonicalMemory,
   writeCanonicalMemory,
 } from "../store/canonical-indexing.js";
+import { assertNoSecrets } from "../store/secret-scrub.js";
 import type {
   AddMemoryInput,
   CanonicalMemoryRepository,
   MemoryRepository,
+  ScopeType,
   SearchMemoryResult,
 } from "../types.js";
 import type {
@@ -778,7 +780,119 @@ export function createToolHandlers(input: {
         };
       });
     },
+
+    async start_goal_run(toolInput) {
+      ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      const scope = toolInput.scope ?? "project";
+      const scopeId = resolveGoalRunScopeId(scope, toolInput);
+      assertNoSecrets(toolInput.goal);
+      if (toolInput.terminationCriteria) {
+        assertNoSecrets(toolInput.terminationCriteria);
+      }
+      return await withCanonicalServices(async (services) => {
+        const goalRun = await services.goalRuns.start({
+          organizationId: toolInput.organizationId ?? "default",
+          scopeType: scope,
+          scopeId,
+          projectKey: scope === "project" ? scopeId : null,
+          goal: toolInput.goal,
+          terminationCriteria: toolInput.terminationCriteria ?? null,
+        });
+        return { ok: true, goalRun };
+      });
+    },
+
+    async record_iteration(toolInput) {
+      ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      assertNoSecrets(toolInput.attempt);
+      if (toolInput.summary) {
+        assertNoSecrets(toolInput.summary);
+      }
+      if (toolInput.error) {
+        assertNoSecrets(toolInput.error);
+      }
+      return await withCanonicalServices(async (services) => {
+        const iteration = await services.goalRuns.recordIteration({
+          organizationId: toolInput.organizationId ?? "default",
+          goalRunId: toolInput.goalRunId,
+          attempt: toolInput.attempt,
+          outcome: toolInput.outcome,
+          summary: toolInput.summary ?? null,
+          error: toolInput.error ?? null,
+          memoryIds: toolInput.memoryIds,
+        });
+        return { ok: true, iteration };
+      });
+    },
+
+    async get_goal_run(toolInput) {
+      ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      return await withCanonicalServices(async (services) => {
+        const goalRun = await services.goalRuns.get({
+          organizationId: toolInput.organizationId ?? "default",
+          goalRunId: toolInput.goalRunId,
+        });
+        return { ok: true, goalRun };
+      });
+    },
+
+    async list_goal_runs(toolInput) {
+      ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      const scope = toolInput.scope ?? "project";
+      const scopeId = resolveGoalRunScopeId(scope, toolInput);
+      return await withCanonicalServices(async (services) => {
+        const goalRuns = await services.goalRuns.list({
+          organizationId: toolInput.organizationId ?? "default",
+          scopeType: scope,
+          scopeId,
+          status: toolInput.status,
+        });
+        return { ok: true, goalRuns };
+      });
+    },
+
+    async complete_goal_run(toolInput) {
+      ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      if (toolInput.resolution) {
+        assertNoSecrets(toolInput.resolution);
+      }
+      return await withCanonicalServices(async (services) => {
+        const goalRun = await services.goalRuns.complete({
+          organizationId: toolInput.organizationId ?? "default",
+          goalRunId: toolInput.goalRunId,
+          note: toolInput.resolution ?? null,
+        });
+        return { ok: true, goalRun };
+      });
+    },
+
+    async abandon_goal_run(toolInput) {
+      ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      if (toolInput.reason) {
+        assertNoSecrets(toolInput.reason);
+      }
+      return await withCanonicalServices(async (services) => {
+        const goalRun = await services.goalRuns.abandon({
+          organizationId: toolInput.organizationId ?? "default",
+          goalRunId: toolInput.goalRunId,
+          note: toolInput.reason ?? null,
+        });
+        return { ok: true, goalRun };
+      });
+    },
   };
+}
+
+// Resolve a goal-run scope into the scopeId the repository stores: the
+// projectKey for project scope, or the resolved user scope id for user scope.
+function resolveGoalRunScopeId(
+  scope: ScopeType,
+  toolInput: { projectKey?: string; userScopeId?: string },
+): string {
+  if (scope === "user") {
+    return requireUserScopeId(toolInput.userScopeId);
+  }
+  return requireProjectKey(toolInput.projectKey, scope);
 }
 
 function toRepositoryAddMemoryInput(input: AddMemoryToolInput): AddMemoryInput {

@@ -17,6 +17,12 @@ import type { Logger } from "../logger.js";
 import type {
   CanonicalMemoryRepository,
   Durability,
+  GoalRun,
+  GoalRunIteration,
+  GoalRunIterationOutcome,
+  GoalRunRepository,
+  GoalRunStatus,
+  GoalRunWithIterations,
   IngestJobRepository,
   MemoryGraphEntity,
   MemoryGraphRelationship,
@@ -357,6 +363,80 @@ export type McpToolAuthorizer = (
 // decoupled from the concrete StoredAuditLogEntry shape over time.
 export type _AuditLogEntryRef = StoredAuditLogEntry;
 
+export type StartGoalRunToolInput = {
+  organizationId?: string;
+  scope?: ScopeType;
+  projectKey?: string;
+  userScopeId?: string;
+  goal: string;
+  terminationCriteria?: string | null;
+};
+
+export type StartGoalRunToolResult = {
+  ok: true;
+  goalRun: GoalRun;
+};
+
+export type RecordIterationToolInput = {
+  organizationId?: string;
+  goalRunId: number;
+  attempt: string;
+  outcome: GoalRunIterationOutcome;
+  summary?: string | null;
+  error?: string | null;
+  memoryIds?: number[];
+};
+
+export type RecordIterationToolResult = {
+  ok: true;
+  iteration: GoalRunIteration;
+};
+
+export type GetGoalRunToolInput = {
+  organizationId?: string;
+  goalRunId: number;
+};
+
+export type GetGoalRunToolResult = {
+  ok: true;
+  goalRun: GoalRunWithIterations | null;
+};
+
+export type ListGoalRunsToolInput = {
+  organizationId?: string;
+  scope?: ScopeType;
+  projectKey?: string;
+  userScopeId?: string;
+  status?: GoalRunStatus;
+};
+
+export type ListGoalRunsToolResult = {
+  ok: true;
+  goalRuns: GoalRun[];
+};
+
+export type CompleteGoalRunToolInput = {
+  organizationId?: string;
+  goalRunId: number;
+  resolution?: string | null;
+};
+
+export type CompleteGoalRunToolResult = {
+  ok: true;
+  goalRun: GoalRun;
+};
+
+export type AbandonGoalRunToolInput = {
+  organizationId?: string;
+  goalRunId: number;
+  reason?: string | null;
+};
+
+export type AbandonGoalRunToolResult = {
+  ok: true;
+  goalRun: GoalRun;
+};
+
 export type ToolRegistry = {
   add_memory(input: AddMemoryToolInput): Promise<AddMemoryToolResult>;
   search_memory(input: SearchMemoryToolInput): Promise<SearchMemoryToolResult>;
@@ -380,6 +460,22 @@ export type ToolRegistry = {
   unarchive_memory(
     input: UnarchiveMemoryToolInput,
   ): Promise<UnarchiveMemoryToolResult>;
+  start_goal_run(
+    input: StartGoalRunToolInput,
+  ): Promise<StartGoalRunToolResult>;
+  record_iteration(
+    input: RecordIterationToolInput,
+  ): Promise<RecordIterationToolResult>;
+  get_goal_run(input: GetGoalRunToolInput): Promise<GetGoalRunToolResult>;
+  list_goal_runs(
+    input: ListGoalRunsToolInput,
+  ): Promise<ListGoalRunsToolResult>;
+  complete_goal_run(
+    input: CompleteGoalRunToolInput,
+  ): Promise<CompleteGoalRunToolResult>;
+  abandon_goal_run(
+    input: AbandonGoalRunToolInput,
+  ): Promise<AbandonGoalRunToolResult>;
 };
 
 export type RetrieveMemoryServiceInput = {
@@ -428,6 +524,7 @@ export type CanonicalServices = {
   ingestJobs: IngestJobRepository;
   auditLog: AuditLogRepository;
   archiveRepository: MemoryArchiveRepository;
+  goalRuns: GoalRunRepository;
   embeddings: EmbeddingClient;
   vectorIndex: VectorIndex;
   close?: () => MaybePromise<void>;

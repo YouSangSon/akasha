@@ -15,6 +15,10 @@ import type { Logger } from "../../src/logger.js";
 import { TOOL_DESCRIPTORS } from "../../src/mcp/tool-schemas.js";
 import type { ToolRegistry } from "../../src/mcp/types.js";
 import type { MemoryRepository, SearchMemoryResult } from "../../src/types.js";
+import {
+  goalRunRegistryStubs,
+  goalRunServicesStub,
+} from "../fixtures/goal-run-stubs.js";
 
 async function createInMemoryClient(
   server: McpServer,
@@ -1515,18 +1519,24 @@ describe("createMcpServer", () => {
   it("declares descriptors for service tools and MCP context tools", () => {
     const descriptorNames = TOOL_DESCRIPTORS.map((descriptor) => descriptor.name).sort();
     expect(descriptorNames).toEqual([
+      "abandon_goal_run",
       "add_memory",
       "add_memory_interactive",
       "build_context_pack",
       "classify_memory_candidate",
       "compact_memory",
+      "complete_goal_run",
       "delete_memory",
+      "get_goal_run",
       "inspect_memory_graph",
       "list_audit_log",
+      "list_goal_runs",
       "list_memory",
       "list_workspace_roots",
+      "record_iteration",
       "reindex_memory",
       "search_memory",
+      "start_goal_run",
       "tag_memory",
       "unarchive_memory",
       "update_memory",
@@ -1568,6 +1578,12 @@ describe("createMcpServer", () => {
         "unarchive_memory",
         "list_audit_log",
         "list_workspace_roots",
+        "start_goal_run",
+        "record_iteration",
+        "get_goal_run",
+        "list_goal_runs",
+        "complete_goal_run",
+        "abandon_goal_run",
       ].sort(),
     );
   });
@@ -2331,6 +2347,7 @@ describe("createMcpServer resources and prompts", () => {
 
 function buildRegistryForMcpProtocol(): ToolRegistry {
   return {
+    ...goalRunRegistryStubs(),
     add_memory: vi.fn().mockResolvedValue({
       ok: true,
       memoryId: "101",
@@ -2627,6 +2644,7 @@ function createCanonicalServices() {
       deleteRestoredCanonicalRecord: vi.fn().mockResolvedValue(undefined),
       markUnarchived: vi.fn().mockResolvedValue(undefined),
     },
+    goalRuns: goalRunServicesStub(),
     vectorIndex: {
       upsert: vi.fn().mockResolvedValue(undefined),
       query: vi.fn().mockResolvedValue([]),

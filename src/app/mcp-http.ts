@@ -251,6 +251,12 @@ function withAuthenticatedRegistry(
     tag_memory: wrap("tag_memory", registry.tag_memory),
     list_audit_log: wrap("list_audit_log", registry.list_audit_log),
     unarchive_memory: wrap("unarchive_memory", registry.unarchive_memory),
+    start_goal_run: wrap("start_goal_run", registry.start_goal_run),
+    record_iteration: wrap("record_iteration", registry.record_iteration),
+    get_goal_run: wrap("get_goal_run", registry.get_goal_run),
+    list_goal_runs: wrap("list_goal_runs", registry.list_goal_runs),
+    complete_goal_run: wrap("complete_goal_run", registry.complete_goal_run),
+    abandon_goal_run: wrap("abandon_goal_run", registry.abandon_goal_run),
   };
 }
 

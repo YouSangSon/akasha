@@ -13,6 +13,7 @@ import {
 import type { OAuthProtectedResourceConfig } from "../../src/app/oauth-protected-resource.js";
 import type { OAuthTokenVerifier } from "../../src/app/middleware/bearer-auth.js";
 import type { ToolRegistry } from "../../src/mcp/types.js";
+import { goalRunRegistryStubs } from "../fixtures/goal-run-stubs.js";
 import type { Logger } from "../../src/logger.js";
 import type { PgPool } from "../../src/db/connection.js";
 import type { DependencyProbes } from "../../src/health/check-dependencies.js";
@@ -24,6 +25,7 @@ type ServerHandle = {
 
 function buildRegistry(): ToolRegistry {
   return {
+    ...goalRunRegistryStubs(),
     add_memory: vi.fn().mockResolvedValue({
       ok: true,
       memoryId: "project:p:1",

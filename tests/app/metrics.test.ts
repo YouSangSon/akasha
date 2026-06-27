@@ -5,6 +5,7 @@ import { createOperatorServer } from "../../src/app/server.js";
 import { METRICS_CONTENT_TYPE } from "../../src/app/metrics.js";
 import type { DependencyProbes } from "../../src/health/check-dependencies.js";
 import type { ToolRegistry } from "../../src/mcp/types.js";
+import { goalRunRegistryStubs } from "../fixtures/goal-run-stubs.js";
 
 type ServerHandle = {
   baseUrl: string;
@@ -19,6 +20,7 @@ afterEach(async () => {
 
 function buildRegistry(): ToolRegistry {
   return {
+    ...goalRunRegistryStubs(),
     add_memory: vi.fn().mockResolvedValue({
       ok: true,
       memoryId: "project:p:1",

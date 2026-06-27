@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { parseCliArgs, runCli } from "../src/cli.js";
 import type { ToolRegistry } from "../src/mcp/server.js";
+import { goalRunRegistryStubs } from "./fixtures/goal-run-stubs.js";
 
 describe("parseCliArgs", () => {
   it("can import public MCP server exports after module split", async () => {
@@ -177,6 +178,7 @@ describe("parseCliArgs", () => {
 
   it("runs the reindex command instead of echoing parsed arguments", async () => {
     const registry: ToolRegistry = {
+      ...goalRunRegistryStubs(),
       build_context_pack: vi.fn(),
       search_memory: vi.fn(),
       add_memory: vi.fn(),
@@ -218,6 +220,7 @@ describe("parseCliArgs", () => {
 
   it("passes --organization-id to reindex_memory when provided", async () => {
     const registry: ToolRegistry = {
+      ...goalRunRegistryStubs(),
       build_context_pack: vi.fn(),
       search_memory: vi.fn(),
       add_memory: vi.fn(),
@@ -251,6 +254,7 @@ describe("parseCliArgs", () => {
 
   it("passes --organization-id to build_context_pack for session-start recipes", async () => {
     const registry: ToolRegistry = {
+      ...goalRunRegistryStubs(),
       build_context_pack: vi.fn().mockResolvedValue({
         ok: true,
         projectKey: "project-alpha",
@@ -302,6 +306,7 @@ describe("parseCliArgs", () => {
 
   it("runs remember through the add_memory registry path", async () => {
     const registry: ToolRegistry = {
+      ...goalRunRegistryStubs(),
       build_context_pack: vi.fn(),
       search_memory: vi.fn(),
       add_memory: vi.fn().mockResolvedValue({
@@ -354,6 +359,7 @@ describe("parseCliArgs", () => {
     const contentPath = path.join(tmpDir, "summary.txt");
     fs.writeFileSync(contentPath, "Summary: captured from file.\nNext: verify.");
     const registry: ToolRegistry = {
+      ...goalRunRegistryStubs(),
       build_context_pack: vi.fn(),
       search_memory: vi.fn(),
       add_memory: vi.fn().mockResolvedValue({
