@@ -43,3 +43,27 @@ Verification:
 - `npm audit --audit-level=moderate` (`0` vulnerabilities)
 - `npm test` (`62` files passed, `2` skipped; `605` tests passed, `34` skipped)
 - `git diff --check`
+
+## 2026-06-28
+
+- Implemented Node runtime support update:
+  - `package.json` and root lock metadata now require Node `>=22`.
+  - `@types/node` now targets the Node 22 line so TypeScript cannot silently
+    admit Node 24-only APIs while package support starts at Node 22.
+  - GitHub Actions CI now runs Node 22 and 24.
+  - README badges/quick-start docs, troubleshooting docs, and `install.sh`
+    now state/enforce Node.js >= 22.
+  - Public docs drift tests now guard package metadata, lock metadata, README
+    badges, troubleshooting docs, CI matrix, and installer runtime checks.
+- Review gates:
+  - Spec compliance passed.
+  - Quality review initially caught Node 24 type definitions and missing
+    installer drift coverage; both were fixed and re-review approved.
+
+Verification:
+- `npx vitest run tests/scripts/public-docs-drift.test.ts`
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (`0` vulnerabilities)
+- `npm test` (`62` files passed, `2` skipped; `606` tests passed, `34` skipped)
+- `git diff --check`

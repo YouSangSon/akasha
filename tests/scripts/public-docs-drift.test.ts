@@ -6,6 +6,10 @@ function read(path: string): string {
   return fs.readFileSync(path, "utf8");
 }
 
+function readJson<T>(path: string): T {
+  return JSON.parse(read(path)) as T;
+}
+
 function migrationNumbers(): number[] {
   return fs
     .readdirSync("src/db/migrations")
@@ -36,6 +40,44 @@ function nextMigrationPrefix(): string {
 }
 
 describe("public documentation drift checks", () => {
+  it("documents Node 22 as the minimum supported runtime", () => {
+    const packageJson = readJson<{ engines: { node: string } }>("package.json");
+    const packageLock = readJson<{ packages: Record<string, { engines?: { node?: string } }> }>(
+      "package-lock.json",
+    );
+
+    expect(packageJson.engines.node).toBe(">=22");
+    expect(packageLock.packages[""]?.engines?.node).toBe(">=22");
+
+    const publicDocs = [
+      "README.md",
+      "README.ko.md",
+      "docs/troubleshooting.md",
+      "docs/troubleshooting.ko.md",
+    ];
+    for (const path of publicDocs) {
+      const text = read(path);
+      expect(text).toContain("Node.js ≥ 22");
+      expect(text).not.toContain("Node.js ≥ 20");
+    }
+
+    for (const path of ["README.md", "README.ko.md"]) {
+      const text = read(path);
+      expect(text).toContain("node-%3E%3D22");
+      expect(text).not.toContain("node-%3E%3D20");
+    }
+
+    const ci = read(".github/workflows/ci.yml");
+    expect(ci).toContain('node: ["22", "24"]');
+    expect(ci).not.toContain('"20"');
+
+    const installer = read("install.sh");
+    expect(installer).toContain("Node.js ≥ 22");
+    expect(installer).toContain("NODE_MAJOR\" -lt 22");
+    expect(installer).not.toContain("Node.js ≥ 20");
+    expect(installer).not.toContain("NODE_MAJOR\" -lt 20");
+  });
+
   it("does not describe reindex orphan vectors as an open pgvector follow-up", () => {
     expect(read("src/vector/pgvector-index.ts")).not.toContain(
       "ORPHAN VECTORS ON REINDEX (KNOWN FOLLOW-UP)",

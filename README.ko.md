@@ -5,7 +5,7 @@
 [![CI](https://github.com/YouSangSon/akasha/actions/workflows/ci.yml/badge.svg)](https://github.com/YouSangSon/akasha/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-compatible-blue.svg)](https://modelcontextprotocol.io/)
-[![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org/)
+[![Node](https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg)](https://nodejs.org/)
 
 **AI 코딩 에이전트를 위한 영구 메모리 — 무료, 로컬, 셀프-호스팅.**
 
@@ -124,7 +124,7 @@ org 를 전혀 의식할 필요가 없습니다 —
 ## 빠른 시작
 
 기본 Compose 스택은 Postgres + Qdrant를 시작합니다. pgvector 배포는 Postgres
-만으로 실행할 수 있습니다. Node.js ≥ 20이 필요합니다.
+만으로 실행할 수 있습니다. Node.js ≥ 22가 필요합니다.
 
 ```bash
 git clone https://github.com/YouSangSon/akasha.git

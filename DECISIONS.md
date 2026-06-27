@@ -37,8 +37,8 @@ Sources checked:
 
 ## 2026-06-27 — Keep Node Runtime Support Under Review
 
-Decision: do not change `engines.node` or CI in the worker loop, but add a
-high-priority backlog item to move from Node 20 support to supported LTS lines.
+Decision: move Akasha's minimum supported Node runtime from Node 20 to Node 22,
+and test Node 22 plus Node 24 in CI.
 
 Why:
 - The Node.js release schedule marks Node 20 as End-of-Life on 2026-04-30.
@@ -49,3 +49,9 @@ Sources:
 - Node release schedule: https://github.com/nodejs/release#release-schedule
 - June 2026 Node.js security release:
   https://nodejs.org/en/blog/vulnerability/june-2026-security-releases
+
+Implementation:
+- `package.json` and lockfile root metadata use `engines.node: >=22`.
+- `@types/node` is on the Node 22 line to match the oldest supported runtime.
+- `.github/workflows/ci.yml` tests Node 22 and 24.
+- `install.sh` refuses Node majors below 22.

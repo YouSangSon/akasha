@@ -5,7 +5,7 @@
 [![CI](https://github.com/YouSangSon/akasha/actions/workflows/ci.yml/badge.svg)](https://github.com/YouSangSon/akasha/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-compatible-blue.svg)](https://modelcontextprotocol.io/)
-[![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org/)
+[![Node](https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg)](https://nodejs.org/)
 
 **Persistent memory for AI coding agents — free, local, self-hosted.**
 
@@ -123,7 +123,7 @@ ignore orgs entirely — see
 
 ## Quick start
 
-Requires Docker (for Postgres + Qdrant) and Node.js ≥ 20.
+Requires Docker (for Postgres + Qdrant) and Node.js ≥ 22.
 
 ```bash
 git clone https://github.com/YouSangSon/akasha.git

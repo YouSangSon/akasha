@@ -29,9 +29,9 @@ EMBEDDING_PROVIDER=transformers   # default — free local ONNX (recommended)
 EMBEDDING_PROVIDER=local          # deterministic stub for CI / offline use
 ```
 
-### `Node.js ≥ 20 required`
+### `Node.js ≥ 22 required`
 
-Upgrade Node. `nvm install 20 && nvm use 20` is the fastest path on
+Upgrade Node. `nvm install 22 && nvm use 22` is the fastest path on
 most Unix systems.
 
 ### Migrations fail with `ECONNREFUSED 127.0.0.1:5432`

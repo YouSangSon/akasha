@@ -6,7 +6,7 @@
 # config snippet. Idempotent: re-running it is safe (compose up reuses
 # existing containers; migrations are CREATE … IF NOT EXISTS).
 #
-# Required: Docker, Node.js ≥ 20, npm.
+# Required: Docker, Node.js ≥ 22, npm.
 # Required env: .env file with MEMORY_API_TOKENS set.
 # Optional env: OPENAI_API_KEY (only when EMBEDDING_PROVIDER=openai). The
 # default provider is "transformers" (free local ONNX), which needs no key.
@@ -34,10 +34,10 @@ docker info >/dev/null 2>&1 \
 ok "Docker is running"
 
 command -v node >/dev/null 2>&1 \
-  || fail "Node.js not found. Install Node.js ≥ 20 from https://nodejs.org/"
+  || fail "Node.js not found. Install Node.js ≥ 22 from https://nodejs.org/"
 NODE_MAJOR=$(node -p 'process.versions.node.split(".")[0]')
-if [ "$NODE_MAJOR" -lt 20 ]; then
-  fail "Node.js ≥ 20 required (found $(node -v))"
+if [ "$NODE_MAJOR" -lt 22 ]; then
+  fail "Node.js ≥ 22 required (found $(node -v))"
 fi
 ok "Node.js $(node -v) is available"
 

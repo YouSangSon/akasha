@@ -29,9 +29,9 @@ EMBEDDING_PROVIDER=transformers   # 기본값 — 무료 로컬 ONNX (권장)
 EMBEDDING_PROVIDER=local          # CI / 오프라인 결정론적 stub
 ```
 
-### `Node.js ≥ 20 required`
+### `Node.js ≥ 22 required`
 
-Node 업그레이드. 대부분 Unix에서: `nvm install 20 && nvm use 20`.
+Node 업그레이드. 대부분 Unix에서: `nvm install 22 && nvm use 22`.
 
 ### Migration 실패 with `ECONNREFUSED 127.0.0.1:5432`
 

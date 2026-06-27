@@ -10,12 +10,7 @@ experience, documentation, features.
 
 ## P1
 
-- Finish dedicated worker process documentation and verification.
-  Evidence: `src/app/worker.ts`, `src/app/background-workers.ts`, package
-  scripts, and operations docs should all agree.
-- Move runtime support and CI off Node 20.
-  Evidence: Node 20 is EOL as of 2026-04-30 in the official release schedule;
-  `package.json` currently allows `>=20` and CI still runs Node 20.
+- None currently known.
 
 ## P2
 
@@ -30,3 +25,4 @@ experience, documentation, features.
 - Sweeper tick/duration/row Prometheus metrics.
 - Background queue backlog gauges with partial indexes.
 - Dedicated background worker lifecycle and worker scripts.
+- Node runtime support moved from Node 20 to Node 22+, with CI on Node 22/24.
