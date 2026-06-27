@@ -248,3 +248,84 @@ export type IngestJobRepository = {
     now: Date;
   }): Promise<IngestJob[]>;
 };
+
+export type GoalRunScopeType = "project" | "user";
+
+export type GoalRunStatus = "active" | "completed" | "abandoned";
+
+export type GoalRunIterationOutcome = "success" | "failure" | "partial";
+
+export type GoalRun = {
+  id: number;
+  organizationId: string;
+  scopeType: GoalRunScopeType;
+  scopeId: string;
+  projectKey: string | null;
+  goal: string;
+  terminationCriteria: string | null;
+  status: GoalRunStatus;
+  iterationCount: number;
+  createdAt: string;
+  updatedAt: string;
+  closedAt: string | null;
+};
+
+export type GoalRunIteration = {
+  id: number;
+  goalRunId: number;
+  organizationId: string;
+  iterationIndex: number;
+  attempt: string;
+  outcome: GoalRunIterationOutcome;
+  summary: string | null;
+  error: string | null;
+  createdAt: string;
+};
+
+export type GoalRunWithIterations = GoalRun & {
+  iterations: GoalRunIteration[];
+};
+
+export type StartGoalRunInput = {
+  organizationId: string;
+  scopeType: GoalRunScopeType;
+  scopeId: string;
+  projectKey?: string | null;
+  goal: string;
+  terminationCriteria?: string | null;
+};
+
+export type RecordIterationInput = {
+  organizationId: string;
+  goalRunId: number;
+  attempt: string;
+  outcome: GoalRunIterationOutcome;
+  summary?: string | null;
+  error?: string | null;
+  memoryIds?: number[];
+};
+
+export type ListGoalRunsInput = {
+  organizationId: string;
+  scopeType: GoalRunScopeType;
+  scopeId: string;
+  status?: GoalRunStatus;
+};
+
+export type CloseGoalRunInput = {
+  organizationId: string;
+  goalRunId: number;
+  note?: string | null;
+};
+
+export type GoalRunRepository = {
+  start(input: StartGoalRunInput): Promise<GoalRun>;
+  recordIteration(input: RecordIterationInput): Promise<GoalRunIteration>;
+  get(input: {
+    organizationId: string;
+    goalRunId: number;
+  }): Promise<GoalRunWithIterations | null>;
+  list(input: ListGoalRunsInput): Promise<GoalRun[]>;
+  complete(input: CloseGoalRunInput): Promise<GoalRun>;
+  abandon(input: CloseGoalRunInput): Promise<GoalRun>;
+};

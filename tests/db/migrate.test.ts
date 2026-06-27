@@ -334,5 +334,11 @@ describe("readPostgresMigrationSql", () => {
     expect(sql).toContain("CREATE TABLE IF NOT EXISTS memory_tags");
     expect(sql).toContain("idx_memory_tags_org_tag_record");
     expect(sql).toContain("idx_memory_tags_org_record");
+    // 013_add_goal_runs: the embedded snapshot must mirror the on-disk
+    // migration so bundled-dist deployments get goal-run support.
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS goal_runs");
+    expect(sql).toContain("CREATE TABLE IF NOT EXISTS goal_run_iterations");
+    expect(sql).toContain("idx_goal_runs_org_scope_status");
+    expect(sql).toContain("idx_memory_records_goal_run");
   });
 });
