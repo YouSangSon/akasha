@@ -15,7 +15,6 @@ experience, documentation, features.
 ## P2
 
 - Add CI coverage for docs drift on every public doc surface if gaps remain.
-- Review backup/restore runbooks against current pgvector and Qdrant paths.
 - Add operator guidance for worker metrics exposure if a future dedicated
   worker needs its own scrape endpoint.
 
@@ -27,3 +26,4 @@ experience, documentation, features.
 - Dedicated background worker lifecycle and worker scripts.
 - Node runtime support moved from Node 20 to Node 22+, with CI on Node 22/24.
 - Repo secret hygiene guard for tracked secret-shaped literals.
+- Restore smoke Qdrant collection-name and uploaded-snapshot runbook alignment.

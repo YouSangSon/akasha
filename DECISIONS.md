@@ -90,3 +90,25 @@ Sources:
   https://docs.github.com/en/code-security/concepts/secret-security/push-protection
 - OWASP Secrets Management Cheat Sheet:
   https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html
+
+## 2026-06-28 — Restore Qdrant Snapshots Into The Manifest Collection
+
+Decision: restore smoke commands receive the Qdrant collection name captured in
+the backup manifest as `RESTORE_SMOKE_QDRANT_COLLECTION_NAME`.
+
+Why:
+- `scripts/snapshot-qdrant.sh` already records `manifest.qdrant.collectionName`,
+  so restore smoke should not assume the default `memory_chunks_v1` collection.
+- Operators can set `QDRANT_COLLECTION_NAME` during embedding/model migrations,
+  and a restore drill should validate the exact backed-up collection path.
+
+Implementation:
+- `scripts/restore-smoke.ts` prefers `manifest.qdrant.collectionName`, then
+  falls back to `QDRANT_COLLECTION_NAME`, then `memory_chunks_v1` for older
+  manifests.
+- Self-hosted restore examples call Qdrant's uploaded-snapshot endpoint with
+  `$RESTORE_SMOKE_QDRANT_COLLECTION_NAME` and `priority=snapshot`.
+
+Source:
+- Qdrant uploaded snapshot recovery API:
+  https://api.qdrant.tech/api-reference/snapshots/recover-from-uploaded-snapshot

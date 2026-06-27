@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  type BackupManifest,
+  buildRestoreSmokeCommandEnv,
   buildRestoreSmokeToolInput,
   runRestoreSmoke,
 } from "../../scripts/restore-smoke.js";
@@ -105,6 +107,86 @@ describe("runRestoreSmoke", () => {
       "start-app",
       "stop",
     ]);
+  });
+});
+
+describe("buildRestoreSmokeCommandEnv", () => {
+  const baseManifest: BackupManifest = {
+    createdAt: "2026-06-27T00:00:00Z",
+    vectorBackend: "qdrant" as const,
+    postgres: {
+      fileName: "postgres-20260627-0000.sql.gz",
+      sha256: "pg-sha",
+    },
+    qdrant: {
+      fileName: "qdrant-20260627-0000.snapshot",
+      sha256: "qdrant-sha",
+      metadataFileName: "qdrant-custom_chunks-20260627-0000.json",
+    },
+  };
+
+  function buildQdrantEnv(input: {
+    env?: NodeJS.ProcessEnv;
+    manifest?: BackupManifest;
+  }) {
+    return buildRestoreSmokeCommandEnv({
+      env: input.env,
+      databaseUrl: "postgres://memory:memory@127.0.0.1:15432/memory_os",
+      vectorBackend: "qdrant",
+      qdrantUrl: "http://127.0.0.1:16333",
+      manifest: input.manifest ?? baseManifest,
+      manifestPath: "/backups/manifest-20260627-0000.json",
+      postgresArtifactPath: "/backups/postgres-20260627-0000.sql.gz",
+      qdrantArtifactPath: "/backups/qdrant-20260627-0000.snapshot",
+      qdrantMetadataPath: "/backups/qdrant-custom_chunks-20260627-0000.json",
+    });
+  }
+
+  it("passes the manifest Qdrant collection and artifact paths to restore commands", () => {
+    const env = buildQdrantEnv({
+      env: {
+        QDRANT_COLLECTION_NAME: "env_chunks",
+      },
+      manifest: {
+        ...baseManifest,
+        qdrant: {
+          ...baseManifest.qdrant,
+          fileName: "qdrant-20260627-0000.snapshot",
+          sha256: "qdrant-sha",
+          metadataFileName: "qdrant-custom_chunks-20260627-0000.json",
+          collectionName: "custom_chunks",
+        },
+      },
+    });
+
+    expect(env.RESTORE_SMOKE_QDRANT_COLLECTION_NAME).toBe("custom_chunks");
+    expect(env.QDRANT_COLLECTION_NAME).toBe("custom_chunks");
+    expect(env.RESTORE_SMOKE_QDRANT_ARTIFACT_PATH).toBe(
+      "/backups/qdrant-20260627-0000.snapshot",
+    );
+    expect(env.RESTORE_SMOKE_QDRANT_METADATA_PATH).toBe(
+      "/backups/qdrant-custom_chunks-20260627-0000.json",
+    );
+  });
+
+  it("falls back to QDRANT_COLLECTION_NAME for old manifests", () => {
+    const env = buildQdrantEnv({
+      env: {
+        QDRANT_COLLECTION_NAME: "env_chunks",
+      },
+    });
+
+    expect(env.RESTORE_SMOKE_QDRANT_COLLECTION_NAME).toBe("env_chunks");
+    expect(env.QDRANT_COLLECTION_NAME).toBe("env_chunks");
+  });
+
+  it("falls back to the default collection for old manifests without env", () => {
+    const env = buildQdrantEnv({
+      env: {},
+    });
+
+    expect(env.RESTORE_SMOKE_QDRANT_COLLECTION_NAME).toBe("memory_chunks_v1");
+    expect(env.QDRANT_COLLECTION_NAME).toBe("memory_chunks_v1");
   });
 });
 

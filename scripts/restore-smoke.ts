@@ -7,7 +7,9 @@ import { createToolRegistry } from "../src/mcp/server.js";
 
 const execFileAsync = promisify(execFile);
 
-type BackupManifest = {
+const DEFAULT_QDRANT_COLLECTION_NAME = "memory_chunks_v1";
+
+export type BackupManifest = {
   createdAt: string;
   vectorBackend?: "qdrant" | "pgvector";
   postgres: {
@@ -18,6 +20,7 @@ type BackupManifest = {
     fileName: string;
     sha256: string;
     metadataFileName?: string;
+    collectionName?: string;
   };
 };
 
@@ -37,11 +40,61 @@ export type RestoreSmokeToolInput = {
   organizationId?: string;
 };
 
+export type BuildRestoreSmokeCommandEnvInput = {
+  env?: NodeJS.ProcessEnv;
+  databaseUrl: string;
+  vectorBackend: "qdrant" | "pgvector";
+  qdrantUrl?: string;
+  manifest: BackupManifest;
+  manifestPath: string;
+  postgresArtifactPath: string;
+  qdrantArtifactPath: string;
+  qdrantMetadataPath: string;
+};
+
 export function buildRestoreSmokeToolInput(input: RestoreSmokeToolInput) {
   return {
     projectKey: input.projectKey,
     ...(input.userScopeId ? { userScopeId: input.userScopeId } : {}),
     ...(input.organizationId ? { organizationId: input.organizationId } : {}),
+  };
+}
+
+function resolveQdrantCollectionName(
+  manifest: BackupManifest,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  return (
+    manifest.qdrant?.collectionName?.trim() ||
+    env.QDRANT_COLLECTION_NAME?.trim() ||
+    DEFAULT_QDRANT_COLLECTION_NAME
+  );
+}
+
+export function buildRestoreSmokeCommandEnv(
+  input: BuildRestoreSmokeCommandEnvInput,
+): NodeJS.ProcessEnv {
+  const env = input.env ?? process.env;
+  const qdrantCollectionName =
+    input.vectorBackend === "qdrant"
+      ? resolveQdrantCollectionName(input.manifest, env)
+      : undefined;
+
+  return {
+    ...env,
+    DATABASE_URL: input.databaseUrl,
+    VECTOR_BACKEND: input.vectorBackend,
+    ...(input.qdrantUrl ? { QDRANT_URL: input.qdrantUrl } : {}),
+    ...(qdrantCollectionName
+      ? {
+          QDRANT_COLLECTION_NAME: qdrantCollectionName,
+          RESTORE_SMOKE_QDRANT_COLLECTION_NAME: qdrantCollectionName,
+        }
+      : {}),
+    RESTORE_SMOKE_MANIFEST_PATH: input.manifestPath,
+    RESTORE_SMOKE_POSTGRES_ARTIFACT_PATH: input.postgresArtifactPath,
+    RESTORE_SMOKE_QDRANT_ARTIFACT_PATH: input.qdrantArtifactPath,
+    RESTORE_SMOKE_QDRANT_METADATA_PATH: input.qdrantMetadataPath,
   };
 }
 
@@ -156,11 +209,13 @@ async function withRestoreServiceEnv<T>(
     databaseUrl: string;
     vectorBackend: "qdrant" | "pgvector";
     qdrantUrl?: string;
+    qdrantCollectionName?: string;
   },
   callback: () => Promise<T>,
 ): Promise<T> {
   const previousDatabaseUrl = process.env.DATABASE_URL;
   const previousQdrantUrl = process.env.QDRANT_URL;
+  const previousQdrantCollectionName = process.env.QDRANT_COLLECTION_NAME;
   const previousVectorBackend = process.env.VECTOR_BACKEND;
 
   process.env.DATABASE_URL = restoreEnv.databaseUrl;
@@ -169,6 +224,9 @@ async function withRestoreServiceEnv<T>(
     process.env.QDRANT_URL = restoreEnv.qdrantUrl;
   } else {
     delete process.env.QDRANT_URL;
+  }
+  if (restoreEnv.qdrantCollectionName) {
+    process.env.QDRANT_COLLECTION_NAME = restoreEnv.qdrantCollectionName;
   }
 
   try {
@@ -184,6 +242,12 @@ async function withRestoreServiceEnv<T>(
       delete process.env.QDRANT_URL;
     } else {
       process.env.QDRANT_URL = previousQdrantUrl;
+    }
+
+    if (previousQdrantCollectionName === undefined) {
+      delete process.env.QDRANT_COLLECTION_NAME;
+    } else {
+      process.env.QDRANT_COLLECTION_NAME = previousQdrantCollectionName;
     }
 
     if (previousVectorBackend === undefined) {
@@ -221,6 +285,10 @@ async function main() {
   const qdrantMetadataPath = manifest.qdrant?.metadataFileName
     ? path.join(backupDir, manifest.qdrant.metadataFileName)
     : "";
+  const qdrantCollectionName =
+    vectorBackend === "qdrant"
+      ? resolveQdrantCollectionName(manifest)
+      : undefined;
   const composeArgs = [
     "compose",
     "-f",
@@ -231,16 +299,23 @@ async function main() {
     "-p",
     projectName,
   ];
-  const restoreCommandEnv = {
+  const composeEnv = {
     ...process.env,
-    DATABASE_URL: restorePostgresUrl,
     VECTOR_BACKEND: vectorBackend,
-    ...(restoreQdrantUrl ? { QDRANT_URL: restoreQdrantUrl } : {}),
-    RESTORE_SMOKE_MANIFEST_PATH: manifestPath,
-    RESTORE_SMOKE_POSTGRES_ARTIFACT_PATH: postgresArtifactPath,
-    RESTORE_SMOKE_QDRANT_ARTIFACT_PATH: qdrantArtifactPath,
-    RESTORE_SMOKE_QDRANT_METADATA_PATH: qdrantMetadataPath,
+    ...(qdrantCollectionName
+      ? { QDRANT_COLLECTION_NAME: qdrantCollectionName }
+      : {}),
   };
+  const restoreCommandEnv = buildRestoreSmokeCommandEnv({
+    databaseUrl: restorePostgresUrl,
+    vectorBackend,
+    qdrantUrl: restoreQdrantUrl,
+    manifest,
+    manifestPath,
+    postgresArtifactPath,
+    qdrantArtifactPath,
+    qdrantMetadataPath,
+  });
 
   await runRestoreSmoke({
     startEnvironment() {
@@ -250,7 +325,9 @@ async function main() {
         "-d",
         "postgres",
         ...(vectorBackend === "qdrant" ? ["qdrant"] : []),
-      ]).then(() => undefined);
+      ], {
+        env: composeEnv,
+      }).then(() => undefined);
     },
     restorePostgres() {
       return execShell(restorePostgresCommand, restoreCommandEnv).then(
@@ -268,7 +345,7 @@ async function main() {
       : {}),
     async startApp() {
       await execFileAsync("docker", [...composeArgs, "up", "-d", "app"], {
-        env: { ...process.env, VECTOR_BACKEND: vectorBackend },
+        env: composeEnv,
       });
       await waitForHealth(`http://127.0.0.1:${appPort}/healthz`);
     },
@@ -278,6 +355,7 @@ async function main() {
           databaseUrl: restorePostgresUrl,
           vectorBackend,
           qdrantUrl: restoreQdrantUrl,
+          qdrantCollectionName,
         },
         async () => {
           const registry = createToolRegistry({ cwd: process.cwd() });
@@ -301,6 +379,7 @@ async function main() {
           databaseUrl: restorePostgresUrl,
           vectorBackend,
           qdrantUrl: restoreQdrantUrl,
+          qdrantCollectionName,
         },
         async () => {
           const registry = createToolRegistry({ cwd: process.cwd() });
@@ -320,7 +399,7 @@ async function main() {
     },
     stopEnvironment() {
       return execFileAsync("docker", [...composeArgs, "down", "-v"], {
-        env: process.env,
+        env: composeEnv,
       }).then(() => undefined);
     },
   });

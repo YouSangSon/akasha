@@ -4,19 +4,17 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Repo Secret Hygiene
+## Current Loop — Restore Smoke Qdrant Collection Names
 
-Goal: keep tracked source, docs, and fixtures free of high-confidence
-secret-shaped literals without printing matched values in test failures.
+Goal: keep the backup/restore runbook aligned with custom Qdrant collection
+names and current uploaded-snapshot recovery behavior.
 
 Status:
-- Repo-level Vitest hygiene guard scans tracked text files with Akasha's
-  existing `scanForSecrets` helper.
-- Known scrubber regex/example files stay excluded.
-- Synthetic AWS/GitHub token examples outside scrubber tests are fragmented in
-  tracked source.
-- Database URL exceptions are limited to exact local placeholder pairs and the
-  exact `${POSTGRES_USER:-memory}:${POSTGRES_PASSWORD:-memory}` form.
+- Restore smoke exposes the manifest Qdrant collection as
+  `RESTORE_SMOKE_QDRANT_COLLECTION_NAME`, with env/default fallback for older
+  manifests.
+- Self-hosted restore commands use the manifest-derived collection and Qdrant
+  uploaded-snapshot `priority=snapshot`.
 - Focused and full verification passed; no push was performed.
 
 Loop closeout:

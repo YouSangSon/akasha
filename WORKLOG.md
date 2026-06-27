@@ -94,3 +94,27 @@ Verification:
 - `npm audit --audit-level=moderate` (`0` vulnerabilities)
 - `npm test` (`63` files passed, `2` skipped; `608` tests passed, `34` skipped)
 - `git diff --check`
+
+- Reviewed the backup/restore runbooks against the current Qdrant and pgvector
+  paths.
+  - `scripts/restore-smoke.ts` now passes the backup manifest's
+    `qdrant.collectionName` to restore commands as
+    `RESTORE_SMOKE_QDRANT_COLLECTION_NAME`, falling back to
+    `QDRANT_COLLECTION_NAME` or `memory_chunks_v1` for older manifests.
+  - The self-hosted restore examples now upload Qdrant snapshots to the
+    manifest-derived collection and use `priority=snapshot`.
+  - Public docs drift coverage now pins the restore command away from hardcoded
+    `memory_chunks_v1`.
+- Source rationale:
+  - Qdrant's snapshot API recovers uploaded snapshots through the collection
+    scoped `/collections/{collection_name}/snapshots/upload` endpoint and
+    supports `priority=snapshot` for snapshot-led recovery:
+    https://api.qdrant.tech/api-reference/snapshots/recover-from-uploaded-snapshot
+
+Verification:
+- `npx vitest run tests/scripts/restore-smoke.test.ts tests/scripts/public-docs-drift.test.ts`
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (`0` vulnerabilities)
+- `npm test` (`63` files passed, `2` skipped; `611` tests passed, `34` skipped)
+- `git diff --check`

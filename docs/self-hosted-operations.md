@@ -163,7 +163,7 @@ export RESTORE_SMOKE_ORGANIZATION_ID="default"
 export RESTORE_SMOKE_SEARCH_QUERY="continue work"
 export RESTORE_SMOKE_PACK_TASK="continue work"
 export RESTORE_SMOKE_POSTGRES_RESTORE_CMD='cat "$RESTORE_SMOKE_POSTGRES_ARTIFACT_PATH" | gunzip | psql "$RESTORE_POSTGRES_URL"'
-export RESTORE_SMOKE_QDRANT_RESTORE_CMD='curl -fsS -X POST "$RESTORE_QDRANT_URL/collections/memory_chunks_v1/snapshots/upload" -F "snapshot=@$RESTORE_SMOKE_QDRANT_ARTIFACT_PATH"'
+export RESTORE_SMOKE_QDRANT_RESTORE_CMD='curl -fsS -X POST "$RESTORE_QDRANT_URL/collections/$RESTORE_SMOKE_QDRANT_COLLECTION_NAME/snapshots/upload?priority=snapshot" -F "snapshot=@$RESTORE_SMOKE_QDRANT_ARTIFACT_PATH"'
 npm run restore:smoke
 ```
 

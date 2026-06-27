@@ -409,6 +409,20 @@ describe("public documentation drift checks", () => {
     }
 
     for (const path of [
+      "docs/self-hosted-operations.md",
+      "docs/self-hosted-operations.ko.md",
+    ]) {
+      const text = read(path);
+      expect(text).toContain(
+        "$RESTORE_SMOKE_QDRANT_COLLECTION_NAME/snapshots/upload?priority=snapshot",
+      );
+      expect(text).not.toContain("/collections/memory_chunks_v1/snapshots/upload");
+    }
+    expect(read("scripts/restore-smoke.ts")).toContain(
+      "RESTORE_SMOKE_QDRANT_COLLECTION_NAME",
+    );
+
+    for (const path of [
       ".env.example",
       "docs/self-hosted-operations.md",
       "docs/self-hosted-operations.ko.md",
