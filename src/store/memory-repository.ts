@@ -346,6 +346,13 @@ export function createMemoryRepository(
         orgClause = ` AND mr.organization_id = $${orgIndex}`;
       }
       const limitIndex = params.push(limit);
+      // Compaction pin: drop records tied to an active goal run so an
+      // in-progress goal never loses context to dedup/decay-archive. Only the
+      // compaction candidate load sets this; review paths leave it unset.
+      const goalRunPinClause = options?.excludePinnedGoalRuns
+        ? ` AND (mr.goal_run_id IS NULL
+            OR mr.goal_run_id NOT IN (SELECT id FROM goal_runs WHERE status = 'active'))`
+        : "";
 
       const result = await pool.query<PostgresHydratedRow>(
         `
@@ -355,7 +362,7 @@ export function createMemoryRepository(
           ${TAG_LATERAL_JOIN}
           WHERE mr.scope_type = $1
             AND mr.scope_id = $2${orgClause}
-            AND mr.durability <> 'archived'
+            AND mr.durability <> 'archived'${goalRunPinClause}
           ORDER BY mr.id DESC
           LIMIT $${limitIndex}
         `,

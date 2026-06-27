@@ -425,6 +425,7 @@ export function createToolHandlers(input: {
                 limit: toolInput.limit,
                 organizationId: toolInput.organizationId,
                 allowLegacyAnonymous: process.env.LEGACY_ANONYMOUS_SEARCH === "true",
+                excludePinnedGoalRuns: true,
               });
             },
           )
@@ -433,6 +434,7 @@ export function createToolHandlers(input: {
               limit: toolInput.limit,
               organizationId: toolInput.organizationId,
               allowLegacyAnonymous: process.env.LEGACY_ANONYMOUS_SEARCH === "true",
+              excludePinnedGoalRuns: true,
             }),
           );
       const targetLabel =

@@ -125,6 +125,11 @@ export type ListMemoryOptions = {
   // Production wiring sets this from LEGACY_ANONYMOUS_SEARCH=true only when
   // the operator explicitly opts in.
   allowLegacyAnonymous?: boolean;
+  // Compaction pin. When true, records linked to a goal_run that is still
+  // 'active' are excluded from the result. Used only by the compaction
+  // candidate load so an in-progress goal never loses context to dedup or
+  // decay-archive; list_memory (review) leaves this unset and still sees them.
+  excludePinnedGoalRuns?: boolean;
 };
 
 export type MemoryRepository = {
