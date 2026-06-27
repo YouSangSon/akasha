@@ -437,6 +437,19 @@ export type AbandonGoalRunToolResult = {
   goalRun: GoalRun;
 };
 
+export type BuildGoalContextToolInput = {
+  organizationId?: string;
+  goalRunId: number;
+  limit?: number;
+};
+
+export type BuildGoalContextToolResult = {
+  ok: true;
+  found: boolean;
+  goalRunId: number;
+  packMarkdown: string;
+};
+
 export type ToolRegistry = {
   add_memory(input: AddMemoryToolInput): Promise<AddMemoryToolResult>;
   search_memory(input: SearchMemoryToolInput): Promise<SearchMemoryToolResult>;
@@ -476,6 +489,9 @@ export type ToolRegistry = {
   abandon_goal_run(
     input: AbandonGoalRunToolInput,
   ): Promise<AbandonGoalRunToolResult>;
+  build_goal_context(
+    input: BuildGoalContextToolInput,
+  ): Promise<BuildGoalContextToolResult>;
 };
 
 export type RetrieveMemoryServiceInput = {

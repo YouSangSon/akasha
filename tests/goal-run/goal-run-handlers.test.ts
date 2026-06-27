@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createToolRegistry } from "../../src/mcp/tool-registry.js";
 import type { CanonicalServices } from "../../src/mcp/types.js";
 import { goalRunServicesStub } from "../fixtures/goal-run-stubs.js";
@@ -103,5 +103,59 @@ describe("goal-run handlers", () => {
       goalRunId: 7,
       note: "stuck",
     });
+  });
+
+  it("build_goal_context returns found:false for a missing run", async () => {
+    const goalRuns = goalRunServicesStub();
+    goalRuns.get.mockResolvedValue(null);
+    const listMemory = vi.fn().mockResolvedValue([]);
+    const registry = createToolRegistry({
+      withCanonicalServices: (async (cb: (s: CanonicalServices) => Promise<unknown>) =>
+        cb({ goalRuns, repository: { listMemory } } as unknown as CanonicalServices)) as never,
+    });
+
+    const result = await registry.build_goal_context({ goalRunId: 99 });
+
+    expect(result).toEqual({
+      ok: true,
+      found: false,
+      goalRunId: 99,
+      packMarkdown: "",
+    });
+    expect(listMemory).not.toHaveBeenCalled();
+  });
+
+  it("build_goal_context loads scope memories and renders a pack for an existing run", async () => {
+    const goalRuns = goalRunServicesStub();
+    goalRuns.get.mockResolvedValue({
+      id: 7,
+      organizationId: "default",
+      scopeType: "project",
+      scopeId: "proj-x",
+      projectKey: "proj-x",
+      goal: "ship phase 2",
+      terminationCriteria: null,
+      status: "active",
+      iterationCount: 0,
+      createdAt: "2026-06-27T00:00:00.000Z",
+      updatedAt: "2026-06-27T00:00:00.000Z",
+      closedAt: null,
+      iterations: [],
+    });
+    const listMemory = vi.fn().mockResolvedValue([]);
+    const registry = createToolRegistry({
+      withCanonicalServices: (async (cb: (s: CanonicalServices) => Promise<unknown>) =>
+        cb({ goalRuns, repository: { listMemory } } as unknown as CanonicalServices)) as never,
+    });
+
+    const result = await registry.build_goal_context({ goalRunId: 7 });
+
+    expect(result.found).toBe(true);
+    expect(result.goalRunId).toBe(7);
+    expect(result.packMarkdown).toContain("## Goal");
+    expect(listMemory).toHaveBeenCalledWith(
+      { scopeType: "project", scopeId: "proj-x" },
+      expect.objectContaining({ organizationId: "default" }),
+    );
   });
 });

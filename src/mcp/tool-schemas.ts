@@ -490,6 +490,22 @@ export const SERVICE_TOOL_DESCRIPTORS = [
       goalRun: z.object({}).passthrough(),
     },
   },
+  {
+    name: "build_goal_context",
+    description:
+      "Build a compact, goal-oriented context pack for one goal run: goal, termination criteria, recent iterations, last error, and scope constraints/notes.",
+    inputSchema: {
+      organizationId: z.string().min(1).optional(),
+      goalRunId: z.number().int().positive(),
+      limit: z.number().int().positive().max(200).optional(),
+    },
+    outputSchema: {
+      ok: z.literal(true),
+      found: z.boolean(),
+      goalRunId: z.number(),
+      packMarkdown: z.string(),
+    },
+  },
 ] as const satisfies readonly ToolDescriptor[];
 
 export const MCP_CONTEXT_TOOL_DESCRIPTORS = [
@@ -574,6 +590,7 @@ export const TOOL_ROUTES = [
   { name: "list_goal_runs", method: "POST", path: "/v1/goal-run/list" },
   { name: "complete_goal_run", method: "POST", path: "/v1/goal-run/complete" },
   { name: "abandon_goal_run", method: "POST", path: "/v1/goal-run/abandon" },
+  { name: "build_goal_context", method: "POST", path: "/v1/goal-run/context" },
 ] as const satisfies readonly ToolRoute[];
 
 export function descriptorForTool(name: ToolName): ToolDescriptor {

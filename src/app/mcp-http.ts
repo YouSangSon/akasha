@@ -257,6 +257,7 @@ function withAuthenticatedRegistry(
     list_goal_runs: wrap("list_goal_runs", registry.list_goal_runs),
     complete_goal_run: wrap("complete_goal_run", registry.complete_goal_run),
     abandon_goal_run: wrap("abandon_goal_run", registry.abandon_goal_run),
+    build_goal_context: wrap("build_goal_context", registry.build_goal_context),
   };
 }
 

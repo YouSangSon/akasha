@@ -175,6 +175,7 @@ export function requiredScopeKindForTool(
     case "classify_memory_candidate":
     case "get_goal_run":
     case "list_goal_runs":
+    case "build_goal_context":
       return "read";
   }
 }

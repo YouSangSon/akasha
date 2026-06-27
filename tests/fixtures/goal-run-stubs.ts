@@ -45,6 +45,12 @@ export function goalRunRegistryStubs() {
     abandon_goal_run: vi
       .fn()
       .mockResolvedValue({ ok: true, goalRun: { ...goalRun, status: "abandoned" } }),
+    build_goal_context: vi.fn().mockResolvedValue({
+      ok: true,
+      found: true,
+      goalRunId: 1,
+      packMarkdown: "## Goal\n- g (status: active; iterations: 0)",
+    }),
   };
 }
 

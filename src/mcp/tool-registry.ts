@@ -179,6 +179,10 @@ function instrumentToolRegistry(input: {
       instrument("abandon_goal_run", toolInput, () =>
         handlers.abandon_goal_run(toolInput),
       ),
+    build_goal_context: (toolInput) =>
+      instrument("build_goal_context", toolInput, () =>
+        handlers.build_goal_context(toolInput),
+      ),
   };
 }
 

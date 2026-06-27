@@ -12,6 +12,7 @@ import {
   writeCanonicalMemory,
 } from "../store/canonical-indexing.js";
 import { assertNoSecrets } from "../store/secret-scrub.js";
+import { buildGoalContextPack } from "../goal-run/build-goal-context.js";
 import type {
   AddMemoryInput,
   CanonicalMemoryRepository,
@@ -880,8 +881,45 @@ export function createToolHandlers(input: {
         return { ok: true, goalRun };
       });
     },
+
+    async build_goal_context(toolInput) {
+      ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      return await withCanonicalServices(async (services) => {
+        const organizationId = toolInput.organizationId ?? "default";
+        const goalRun = await services.goalRuns.get({
+          organizationId,
+          goalRunId: toolInput.goalRunId,
+        });
+        if (!goalRun) {
+          return {
+            ok: true,
+            found: false,
+            goalRunId: toolInput.goalRunId,
+            packMarkdown: "",
+          };
+        }
+        const records = await services.repository.listMemory(
+          { scopeType: goalRun.scopeType, scopeId: goalRun.scopeId },
+          {
+            organizationId,
+            limit: toolInput.limit ?? GOAL_CONTEXT_RECORD_LIMIT,
+          },
+        );
+        const pack = buildGoalContextPack({ goalRun, records });
+        return {
+          ok: true,
+          found: true,
+          goalRunId: goalRun.id,
+          packMarkdown: pack.markdown,
+        };
+      });
+    },
   };
 }
+
+// Upper bound on scope memories pulled into a goal context pack. Mirrors the
+// browse/paging intent of listMemory; the pack itself caps each section.
+const GOAL_CONTEXT_RECORD_LIMIT = 50;
 
 // Resolve a goal-run scope into the scopeId the repository stores: the
 // projectKey for project scope, or the resolved user scope id for user scope.
