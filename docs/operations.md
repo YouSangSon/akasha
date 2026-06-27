@@ -148,17 +148,28 @@ Each tick atomically claims pending archive rows and pushes
 `qdrant_next_retry_at` into a short visibility window. If a worker crashes
 after claim, the row becomes due again when that window expires.
 
-Then check pino logs and Prometheus metrics for sweep activity. Sweeper loops
-emit process log events, not audit-log rows. If you run a dedicated worker,
-read that process's logs; HTTP `/metrics` still reports queue backlog gauges.
+Then check the signal that matches where the sweeper runs. Sweeper loops emit
+process log events, not audit-log rows. For an HTTP replica running the sweeper,
+inspect the app logs:
 
 ```bash
 docker compose logs --no-log-prefix --since 10m app \
   | jq 'select(.event=="compact.sweep_tick" or .event=="compact.sweep_tick_failed")'
+```
 
+In-process HTTP sweeper tick metrics are available on the HTTP process's
+`/metrics` endpoint only when that process runs the sweeper:
+
+```bash
 curl -s http://localhost:8787/metrics \
   | grep '^akasha_sweeper_.*worker="compaction"'
 ```
+
+Dedicated worker mode is different: use worker process logs for tick activity
+from `npm run start:worker`, and use HTTP `/metrics` only for backlog gauges
+such as `akasha_background_queue_rows{queue="compaction",...}`. Do not use the
+HTTP `app` service logs as the dedicated-worker source unless that service is
+the worker.
 
 ### Stuck rows
 
@@ -340,6 +351,12 @@ Sweeper metrics are emitted only after a loop tick has run in the HTTP process.
 `worker` is `compaction` or `ingest`; `status` is `success` or `error`;
 `outcome` is a bounded row outcome such as `scanned`, `cleaned`, `completed`,
 `retried`, or `failed`. If both sweepers are disabled, these series stay empty.
+
+The dedicated `npm run start:worker` process currently has no HTTP metrics
+listener. Prometheus scrape configs scrape configured targets; a process without
+an HTTP listener is not a scrape target. Add a worker-local metrics endpoint or
+sidecar only if Prometheus must scrape per-worker tick counters from that
+process.
 
 Background queue gauges are collected on each `/metrics` scrape from Postgres.
 `queue` is `ingest` or `compaction`; `state` is `pending`, `due`, or `failed`.

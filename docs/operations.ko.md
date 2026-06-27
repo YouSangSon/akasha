@@ -144,18 +144,28 @@ worker 프로세스 하나를 선호하고 request-serving replica에서는 이 
 `qdrant_next_retry_at` 을 짧은 visibility window 로 밀어둡니다. claim 이후
 worker 가 크래시되면 window 만료 후 해당 row가 다시 due 상태가 됩니다.
 
-pino log와 Prometheus metrics에서 sweep 활동을 확인합니다. Sweeper loop는
-audit-log row가 아니라 process log event를 남깁니다. 전용 worker를 실행한다면
-그 프로세스의 로그를 읽으세요. HTTP `/metrics` 는 여전히 queue backlog gauge를
-보고합니다:
+pino log와 metrics는 sweeper가 어디서 도는지에 맞춰 확인합니다. Sweeper loop는
+audit-log row가 아니라 process log event를 남깁니다. HTTP replica에서
+sweeper를 실행한다면 app log를 확인하세요:
 
 ```bash
 docker compose logs --no-log-prefix --since 10m app \
   | jq 'select(.event=="compact.sweep_tick" or .event=="compact.sweep_tick_failed")'
+```
 
+HTTP 프로세스 내 sweeper tick metrics는 그 HTTP 프로세스가 sweeper를 실행할 때만
+해당 프로세스의 `/metrics` endpoint에 나타납니다:
+
+```bash
 curl -s http://localhost:8787/metrics \
   | grep '^akasha_sweeper_.*worker="compaction"'
 ```
+
+Dedicated worker mode는 다릅니다. `npm run start:worker`의 tick activity는
+worker process log에서 보고, HTTP `/metrics` 는
+`akasha_background_queue_rows{queue="compaction",...}` 같은 backlog gauge
+확인에만 사용하세요. 해당 service가 worker가 아니라면 HTTP `app` service log를
+dedicated-worker source로 보지 마세요.
 
 ### Stuck rows
 
@@ -336,6 +346,12 @@ Sweeper metrics는 HTTP 프로세스 안에서 loop tick이 실제로 돈 뒤에
 또는 `error`, `outcome` 은 `scanned`, `cleaned`, `completed`, `retried`,
 `failed` 같은 제한된 row 결과입니다. 두 sweeper가 모두 비활성화되어 있으면
 이 series는 비어 있습니다.
+
+전용 `npm run start:worker` 프로세스에는 현재 HTTP metrics listener가 없습니다.
+Prometheus scrape config는 설정된 target만 scrape하므로 HTTP listener가 없는
+프로세스는 scrape target이 아닙니다. Prometheus가 그 프로세스의 per-worker tick
+counter를 scrape해야 할 때만 worker-local metrics endpoint 또는 sidecar를
+추가하세요.
 
 Background queue gauge는 `/metrics` scrape마다 Postgres에서 수집합니다.
 `queue` 는 `ingest` 또는 `compaction`, `state` 는 `pending`, `due`,

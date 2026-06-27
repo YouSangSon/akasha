@@ -898,9 +898,11 @@ Kubernetes readiness probe, Docker `HEALTHCHECK`, 외부 업타임 모니터에 
 - `akasha_sweeper_rows_total{worker,outcome}` — sweeper가 관찰한 row 수를 제한된
   outcome별로 집계 (`scanned`, `cleaned`, `completed`, `retried`, `failed`).
 
-이 tick counter는 in-process 값입니다. sweeper를 전용 `npm run start:worker`
-프로세스로 실행한다면 tick 활동은 worker 로그에서 보고, HTTP `/metrics` 는 backlog
-gauge 확인에 사용하세요.
+이 tick counter는 in-process 값입니다. 전용 `npm run start:worker` 프로세스에는
+현재 HTTP metrics listener가 없습니다. sweeper를 그 프로세스에서 실행한다면 tick
+활동은 worker process log에서 보고, HTTP `/metrics` 는 backlog gauge 확인에 사용하세요.
+Prometheus가 그 프로세스의 per-worker tick counter를 scrape해야 할 때만
+worker-local metrics endpoint 또는 sidecar를 추가하세요.
 
 노출되는 background queue backlog metrics:
 

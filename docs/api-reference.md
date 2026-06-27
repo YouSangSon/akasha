@@ -906,9 +906,11 @@ Emitted background sweeper metrics (only after a loop tick has run):
 - `akasha_sweeper_rows_total{worker,outcome}` — rows observed by sweepers by
   bounded outcome (`scanned`, `cleaned`, `completed`, `retried`, `failed`).
 
-These tick counters are in-process. If sweepers run in a dedicated
-`npm run start:worker` process, use worker logs for tick activity and use HTTP
-`/metrics` for backlog gauges.
+These tick counters are in-process. The dedicated `npm run start:worker`
+process currently has no HTTP metrics listener. If sweepers run there, use
+worker process logs for tick activity and use HTTP `/metrics` for backlog
+gauges. Add a worker-local metrics endpoint or sidecar only if Prometheus must
+scrape per-worker tick counters from that process.
 
 Emitted background queue backlog metrics:
 

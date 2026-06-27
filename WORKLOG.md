@@ -46,6 +46,28 @@ Verification:
 
 ## 2026-06-28
 
+- Clarified dedicated worker metrics guidance:
+  - Operations runbooks now separate in-process HTTP sweeper tick counters from
+    dedicated worker mode.
+  - Dedicated `npm run start:worker` operators should use worker process logs
+    for tick activity and HTTP `/metrics` only for Postgres backlog gauges.
+  - API and operations docs now state that the dedicated worker currently has
+    no HTTP metrics listener.
+  - Public docs drift coverage now guards the English/Korean wording.
+- Source rationale:
+  - Prometheus `scrape_config` entries define the targets Prometheus scrapes;
+    a dedicated worker process without an HTTP listener is not a scrape target:
+    https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config
+
+Verification:
+- `npx vitest run tests/scripts/public-docs-drift.test.ts`
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (613 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Implemented Node runtime support update:
   - `package.json` and root lock metadata now require Node `>=22`.
   - `@types/node` now targets the Node 22 line so TypeScript cannot silently

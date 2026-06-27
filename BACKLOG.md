@@ -14,8 +14,7 @@ experience, documentation, features.
 
 ## P2
 
-- Add operator guidance for worker metrics exposure if a future dedicated
-  worker needs its own scrape endpoint.
+- None currently known.
 
 ## Done In This Branch
 
@@ -23,6 +22,7 @@ experience, documentation, features.
 - Sweeper tick/duration/row Prometheus metrics.
 - Background queue backlog gauges with partial indexes.
 - Dedicated background worker lifecycle and worker scripts.
+- Operator guidance for dedicated worker metrics boundaries.
 - Node runtime support moved from Node 20 to Node 22+, with CI on Node 22/24.
 - Repo secret hygiene guard for tracked secret-shaped literals.
 - Restore smoke Qdrant collection-name and uploaded-snapshot runbook alignment.

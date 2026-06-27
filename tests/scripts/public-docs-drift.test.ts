@@ -520,6 +520,45 @@ describe("public documentation drift checks", () => {
     }
   });
 
+  it("documents the dedicated worker metrics boundary", () => {
+    for (const path of ["docs/api-reference.md", "docs/operations.md"]) {
+      const text = read(path).replace(/\s+/g, " ");
+      expect(text).toContain(
+        "dedicated `npm run start:worker` process currently has no HTTP metrics listener",
+      );
+      expect(text).toContain("worker process logs for tick activity");
+      expect(text).toContain("HTTP `/metrics`");
+      expect(text).toContain("backlog gauges");
+      expect(text).toContain("worker-local metrics endpoint or sidecar");
+      expect(text).toContain("per-worker tick counters");
+    }
+
+    for (const path of ["docs/api-reference.ko.md", "docs/operations.ko.md"]) {
+      const text = read(path).replace(/\s+/g, " ");
+      expect(text).toContain(
+        "전용 `npm run start:worker` 프로세스에는 현재 HTTP metrics listener가 없습니다",
+      );
+      expect(text).toContain("worker process log에서 보고");
+      expect(text).toContain("HTTP `/metrics`");
+      expect(text).toContain("backlog gauge");
+      expect(text).toContain("worker-local metrics endpoint 또는 sidecar");
+      expect(text).toContain("per-worker tick counter");
+    }
+
+    expect(read("docs/operations.md")).toContain(
+      "In-process HTTP sweeper tick metrics",
+    );
+    expect(read("docs/operations.md")).toContain(
+      'akasha_background_queue_rows{queue="compaction",...}',
+    );
+    expect(read("docs/operations.ko.md")).toContain(
+      "HTTP 프로세스 내 sweeper tick metrics",
+    );
+    expect(read("docs/operations.ko.md")).toContain(
+      'akasha_background_queue_rows{queue="compaction",...}',
+    );
+  });
+
   it("documents the dedicated background worker command", () => {
     for (const path of [
       "README.md",

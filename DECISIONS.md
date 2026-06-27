@@ -1,5 +1,29 @@
 # DECISIONS
 
+## 2026-06-28 — Keep Dedicated Worker Metrics As Guidance
+
+Decision: document the current boundary instead of adding an HTTP metrics
+listener to `npm run start:worker`.
+
+Why:
+- The dedicated worker already logs compaction and ingest sweeper ticks.
+- HTTP `/metrics` can still expose Postgres backlog gauges because it scrapes
+  shared database state from the HTTP process.
+- Prometheus scrape configs define configured scrape targets; a dedicated
+  worker process without an HTTP listener is not a target.
+
+Implementation:
+- Operations docs separate in-process HTTP sweeper tick metrics from dedicated
+  worker log/backlog-gauge guidance.
+- API and operations docs state that a worker-local metrics endpoint or sidecar
+  should be added only if operators need Prometheus to scrape per-worker tick
+  counters from that process.
+- `tests/scripts/public-docs-drift.test.ts` guards the English/Korean wording.
+
+Source:
+- Prometheus scrape configuration:
+  https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config
+
 ## 2026-06-28 — Guard Public Docs Index Coverage In Existing Test Suite
 
 Decision: add docs index coverage to `tests/scripts/public-docs-drift.test.ts`
