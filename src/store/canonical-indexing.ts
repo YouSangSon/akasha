@@ -427,6 +427,7 @@ export async function refreshCanonicalMemoryIndex(input: {
   record: SearchMemoryResult;
 }): Promise<{ chunkCount: number }> {
   const organizationId = input.record.organizationId ?? "default";
+  assertNonBlankText(organizationId, "organizationId");
 
   const chunks = chunkText({
     text: input.record.content,

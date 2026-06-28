@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened canonical refresh organization validation:
+  - `refreshCanonicalMemoryIndex` now rejects whitespace-only record
+    organization IDs before embedding, chunk replacement, or vector work.
+  - Canonical indexing coverage verifies invalid organization IDs fail before
+    indexing side effects.
+  - Reviewer skipped after previous reviewer-agent timeouts; self-review found
+    no issues.
+
+Verification:
+- `npx vitest run tests/store/canonical-indexing.test.ts` (24 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (745 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened canonical chunk replacement organization validation:
   - `replaceChunksForRecord` and `replaceChunksForRecordWithPendingIngest` now
     reject whitespace-only record organization IDs before opening transactions.

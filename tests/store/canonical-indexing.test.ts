@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createMemoryChunkRepository,
+  refreshCanonicalMemoryIndex,
   reindexCanonicalMemory,
   writeCanonicalMemory,
 } from "../../src/store/canonical-indexing.js";
@@ -767,6 +768,50 @@ describe("canonical indexing", () => {
       expect.arrayContaining(["aws-access-key", "github-token"]),
     );
     expect(repository.addMemory).not.toHaveBeenCalled();
+  });
+
+  it("refreshCanonicalMemoryIndex rejects whitespace-only record organizationId before indexing side effects", async () => {
+    const record = {
+      ...createRecord({ id: 601, content: "refresh content" }),
+      organizationId: " \n\t ",
+    };
+    const chunkRepository = {
+      replaceChunksForRecord: vi.fn(),
+      updatePointIds: vi.fn(),
+    };
+    const embeddings = {
+      embed: vi.fn(),
+      embedBatch: vi.fn(),
+    };
+    const vectorIndex = {
+      upsert: vi.fn(),
+      query: vi.fn(),
+      delete: vi.fn(),
+      deleteByRecordIds: vi.fn(),
+      ensureCollection: vi.fn(),
+    };
+
+    await expect(
+      refreshCanonicalMemoryIndex({
+        chunkRepository: chunkRepository as never,
+        embeddings,
+        vectorIndex,
+        embedding: {
+          provider: "openai",
+          model: "text-embedding-3-small",
+          dimensions: 1536,
+          version: "v1",
+          targetTokens: 800,
+          overlapTokens: 120,
+        },
+        record,
+      }),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(embeddings.embedBatch).not.toHaveBeenCalled();
+    expect(chunkRepository.replaceChunksForRecord).not.toHaveBeenCalled();
+    expect(vectorIndex.deleteByRecordIds).not.toHaveBeenCalled();
+    expect(vectorIndex.upsert).not.toHaveBeenCalled();
   });
 
   it("reindexes stored chunks in pages without deleting a record after partial upsert", async () => {

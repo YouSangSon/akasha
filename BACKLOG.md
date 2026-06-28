@@ -145,3 +145,5 @@ experience, documentation, features.
   persistence.
 - Whitespace-only canonical chunk replacement organization IDs are rejected
   before transaction side effects.
+- Whitespace-only canonical refresh organization IDs are rejected before
+  indexing side effects.
