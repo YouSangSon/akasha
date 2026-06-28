@@ -46,6 +46,27 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened optional OAuth text environment handling:
+  - `MCP_OAUTH_RESOURCE_NAME`, `MCP_OAUTH_RESOURCE_DOCUMENTATION_URL`,
+    `MCP_OAUTH_ORGANIZATION_CLAIM`, and `MCP_OAUTH_JWT_TYPE` now reject
+    explicit whitespace-only values before protected-resource metadata or JWT
+    verifier config construction.
+  - Unset values still preserve omission/default behavior, and configured
+    nonblank values are trimmed before use.
+  - Configuration docs and `.env.example` now state that optional OAuth text
+    settings must contain non-whitespace text when set.
+  - Reviewer subagent caught missing trim-preservation coverage; updated the
+    happy-path tests with whitespace-surrounded values and re-review found no
+    issues.
+
+Verification:
+- `npx vitest run tests/app/oauth-protected-resource.test.ts tests/app/oauth-token-auth.test.ts tests/scripts/public-docs-drift.test.ts` (50 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (897 passed, 34 skipped across 68 files)
+- `git diff --check`
+
 - Hardened direct memory graph query filtering:
   - Direct `inspectMemoryGraph()` repository calls now reject whitespace-only
     query filters before SQL work instead of widening to an unfiltered graph

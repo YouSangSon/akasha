@@ -38,8 +38,8 @@ describe("loadOAuthTokenVerifierConfig", () => {
         MCP_OAUTH_JWT_ALGORITHMS: "RS256,ES256",
         MCP_OAUTH_JWT_CLOCK_TOLERANCE_SECONDS: "15",
         MCP_OAUTH_JWKS_TIMEOUT_MS: " 2500 ",
-        MCP_OAUTH_ORGANIZATION_CLAIM: "tenant",
-        MCP_OAUTH_JWT_TYPE: "at+jwt",
+        MCP_OAUTH_ORGANIZATION_CLAIM: " tenant ",
+        MCP_OAUTH_JWT_TYPE: " at+jwt ",
       },
       protectedResource,
     );
@@ -113,6 +113,15 @@ describe("loadOAuthTokenVerifierConfig", () => {
       ).toThrow(testCase.message);
     }
   });
+
+  it.each(["MCP_OAUTH_ORGANIZATION_CLAIM", "MCP_OAUTH_JWT_TYPE"])(
+    "rejects whitespace-only %s values",
+    (name) => {
+      expect(() =>
+        loadOAuthTokenVerifierConfig({ [name]: " \n\t " }, protectedResource),
+      ).toThrow(new RegExp(name));
+    },
+  );
 });
 
 describe("OAuth token verifier", () => {

@@ -34,9 +34,13 @@ export function loadOAuthProtectedResourceConfig(
   assertSupportedResourceUrl(resource);
 
   const scopes = parseScopes(env.MCP_OAUTH_SCOPES);
-  const resourceName = parseOptionalString(env.MCP_OAUTH_RESOURCE_NAME);
+  const resourceName = parseOptionalString(
+    env.MCP_OAUTH_RESOURCE_NAME,
+    "MCP_OAUTH_RESOURCE_NAME",
+  );
   const documentationUrl = parseOptionalString(
     env.MCP_OAUTH_RESOURCE_DOCUMENTATION_URL,
+    "MCP_OAUTH_RESOURCE_DOCUMENTATION_URL",
   );
 
   const metadata: OAuthProtectedResourceMetadata = {
@@ -157,9 +161,18 @@ function parseScopes(value: string | undefined): string[] {
   return scopes;
 }
 
-function parseOptionalString(value: string | undefined): string | undefined {
-  const trimmed = value?.trim();
-  return trimmed && trimmed.length > 0 ? trimmed : undefined;
+function parseOptionalString(
+  value: string | undefined,
+  name: string,
+): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    throw new Error(`Invalid ${name}: must contain non-whitespace text`);
+  }
+  return trimmed;
 }
 
 function requireHttpsUrl(value: string | undefined, name: string): string {

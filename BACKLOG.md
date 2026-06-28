@@ -66,6 +66,8 @@ experience, documentation, features.
   rejected before storage or dispatch.
 - Whitespace-only organization IDs are rejected on MCP/direct paths, while
   HTTP rejects malformed non-string organization IDs before enrichment.
+- Whitespace-only optional OAuth text env values are rejected before metadata
+  or verifier config construction.
 - Whitespace-only governance tag entries are rejected before tag update or
   vector refresh.
 - Whitespace-only MCP context optional text is rejected before elicitation or

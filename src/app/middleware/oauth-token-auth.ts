@@ -93,9 +93,15 @@ export function loadOAuthTokenVerifierConfig(
     MAX_TIMER_TIMEOUT_MS,
   );
   const organizationClaim =
-    parseOptionalString(env.MCP_OAUTH_ORGANIZATION_CLAIM) ??
+    parseOptionalString(
+      env.MCP_OAUTH_ORGANIZATION_CLAIM,
+      "MCP_OAUTH_ORGANIZATION_CLAIM",
+    ) ??
     DEFAULT_ORGANIZATION_CLAIM;
-  const requiredType = parseOptionalString(env.MCP_OAUTH_JWT_TYPE);
+  const requiredType = parseOptionalString(
+    env.MCP_OAUTH_JWT_TYPE,
+    "MCP_OAUTH_JWT_TYPE",
+  );
 
   return {
     resource: protectedResource.metadata.resource,
@@ -448,9 +454,18 @@ function parseAlgorithms(value: string | undefined): readonly string[] {
   return parsed;
 }
 
-function parseOptionalString(value: string | undefined): string | undefined {
-  const trimmed = value?.trim();
-  return trimmed && trimmed.length > 0 ? trimmed : undefined;
+function parseOptionalString(
+  value: string | undefined,
+  name: string,
+): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    throw new Error(`Invalid ${name}: must contain non-whitespace text`);
+  }
+  return trimmed;
 }
 
 function parseNonNegativeInt(

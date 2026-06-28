@@ -43,8 +43,9 @@ describe("loadOAuthProtectedResourceConfig", () => {
       MCP_OAUTH_AUTHORIZATION_SERVERS: "https://auth.example.com",
       MCP_OAUTH_RESOURCE_URL: "https://akasha.example.com/mcp",
       MCP_OAUTH_SCOPES: "akasha:memory,akasha:write",
-      MCP_OAUTH_RESOURCE_NAME: "Akasha Memory",
-      MCP_OAUTH_RESOURCE_DOCUMENTATION_URL: "https://docs.example.com/akasha",
+      MCP_OAUTH_RESOURCE_NAME: " Akasha Memory ",
+      MCP_OAUTH_RESOURCE_DOCUMENTATION_URL:
+        " https://docs.example.com/akasha ",
     });
 
     expect(config!.metadata).toMatchObject({
@@ -53,6 +54,19 @@ describe("loadOAuthProtectedResourceConfig", () => {
       resource_documentation: "https://docs.example.com/akasha",
     });
   });
+
+  it.each(["MCP_OAUTH_RESOURCE_NAME", "MCP_OAUTH_RESOURCE_DOCUMENTATION_URL"])(
+    "rejects whitespace-only %s values",
+    (name) => {
+      expect(() =>
+        loadOAuthProtectedResourceConfig({
+          MCP_OAUTH_AUTHORIZATION_SERVERS: "https://auth.example.com",
+          MCP_OAUTH_RESOURCE_URL: "https://akasha.example.com/mcp",
+          [name]: " \n\t ",
+        }),
+      ).toThrow(new RegExp(name));
+    },
+  );
 
   it("requires a resource URL when authorization servers are configured", () => {
     expect(() =>

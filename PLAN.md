@@ -4,14 +4,16 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Direct Graph Query Guard
+## Current Loop — OAuth Optional Text Env Guard
 
 Status:
-- Direct `inspectMemoryGraph()` repository calls now reject whitespace-only
-  query filters before SQL work instead of treating them as no filter.
-- Existing API/MCP validation and nonblank direct query behavior are preserved.
-- Reviewer subagent found no issues.
-- Focused store/MCP/API tests, typecheck, build, audit, full suite, and diff
+- Optional OAuth text env values for resource metadata and JWT verifier config
+  now reject explicit whitespace-only values.
+- Unset values still preserve omission/default behavior, and configured
+  nonblank values are trimmed before use.
+- Reviewer subagent caught missing trim-preservation coverage; the tests were
+  updated and re-review found no issues.
+- Focused OAuth/docs tests, typecheck, build, audit, full suite, and diff
   whitespace checks passed.
 
 Loop closeout:
