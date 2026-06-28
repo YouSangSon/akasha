@@ -3665,9 +3665,28 @@ describe("createMcpServer resources and prompts", () => {
           content: "Decision: keep resource reads side-effect free.",
         },
       }),
-    ).rejects.toThrow(/non-whitespace text/);
+    ).rejects.toThrow(/kind|Invalid/);
 
     expect(registry.build_context_pack).not.toHaveBeenCalled();
+
+    await client.close();
+    await server.close();
+  });
+
+  it("rejects unsupported store-memory prompt kinds before rendering", async () => {
+    const server = createMcpServer({ registry: buildRegistryForMcpProtocol() });
+    const client = await createInMemoryClient(server);
+
+    await expect(
+      client.getPrompt({
+        name: "akasha_store_memory",
+        arguments: {
+          projectKey: "project-alpha",
+          kind: "note",
+          content: "Decision: keep resource reads side-effect free.",
+        },
+      }),
+    ).rejects.toThrow(/kind|Invalid/);
 
     await client.close();
     await server.close();

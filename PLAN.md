@@ -4,14 +4,15 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Direct Add-Memory Kind Validation
+## Current Loop — Store-Memory Prompt Kind Validation
 
 Status:
-- Direct `add_memory.kind` now rejects invalid memory-kind enum values before
-  legacy repository or canonical service dispatch.
-- Coverage exercises both direct legacy and canonical paths before backing
-  stores are resolved.
-- Reviewer `Erdos` timed out twice; self-review found no issues.
+- `akasha_store_memory.kind` now uses the same memory-kind enum as service
+  tools instead of accepting any nonblank text.
+- Prompt protocol coverage rejects unsupported store-memory kinds before
+  rendering instructions.
+- Reviewer skipped after previous reviewer-agent timeouts; self-review found no
+  issues.
 - Focused MCP tests, typecheck, build, audit, full suite, and diff whitespace
   checks passed.
 

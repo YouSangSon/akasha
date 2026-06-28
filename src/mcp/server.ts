@@ -587,7 +587,7 @@ function registerAkashaPrompts(server: McpServer, registry: ToolRegistry): void 
       description: "Template for asking an agent to store durable project memory in Akasha.",
       argsSchema: {
         projectKey: nonBlankTextInputSchema,
-        kind: nonBlankTextInputSchema,
+        kind: z.enum(SUPPORTED_MEMORY_KINDS),
         content: nonBlankTextInputSchema,
       },
     },

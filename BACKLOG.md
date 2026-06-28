@@ -88,3 +88,5 @@ experience, documentation, features.
   dispatch.
 - Invalid direct add-memory kind enum values are rejected before repository
   dispatch.
+- Invalid store-memory prompt kind enum values are rejected before prompt
+  rendering.

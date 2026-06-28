@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened store-memory prompt kind enum validation:
+  - `akasha_store_memory.kind` now uses the supported memory-kind enum instead
+    of accepting arbitrary nonblank text.
+  - Prompt protocol coverage rejects unsupported store-memory kinds before
+    rendering instructions.
+  - Reviewer skipped after previous reviewer-agent timeouts; self-review found
+    no issues.
+
+Verification:
+- `npx vitest run tests/mcp/server.test.ts` (119 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (708 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened direct add-memory kind enum validation:
   - Direct `add_memory.kind` now rejects unsupported memory kinds before
     legacy repository resolution or canonical service dispatch.
