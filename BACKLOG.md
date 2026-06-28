@@ -74,3 +74,4 @@ experience, documentation, features.
 - Invalid direct governance list and graph limits are rejected before repository
   dispatch.
 - Invalid direct goal-context limits are rejected before goal-run lookup.
+- Invalid direct compaction limits are rejected before repository dispatch.

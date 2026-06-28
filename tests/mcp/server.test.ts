@@ -1621,6 +1621,48 @@ describe("createToolRegistry", () => {
     expect(result.summary).toContain("Dry run");
   });
 
+  it("rejects invalid compaction limits before repository dispatch", async () => {
+    const services = createCanonicalServices();
+    const resolveCanonicalServices = vi.fn(async () => services);
+    const registry = createToolRegistry({ resolveCanonicalServices });
+
+    for (const limit of [
+      0,
+      -1,
+      1.5,
+      Number.NaN,
+      5001,
+      Number.MAX_SAFE_INTEGER + 1,
+    ]) {
+      await expect(
+        registry.compact_memory({
+          projectKey: "project-alpha",
+          limit,
+        }),
+      ).rejects.toThrow(/limit/);
+    }
+
+    expect(resolveCanonicalServices).not.toHaveBeenCalled();
+    expect(services.repository.listMemory).not.toHaveBeenCalled();
+  });
+
+  it("accepts the maximum compaction limit through the direct registry path", async () => {
+    const services = createCanonicalServices();
+    const registry = createToolRegistry({
+      resolveCanonicalServices: async () => services,
+    });
+
+    await registry.compact_memory({
+      projectKey: "project-alpha",
+      limit: 5000,
+    });
+
+    expect(services.repository.listMemory).toHaveBeenCalledWith(
+      { scopeType: "project", scopeId: "project-alpha" },
+      expect.objectContaining({ limit: 5000 }),
+    );
+  });
+
   it("applies compaction (dryRun=false) via canonical services and returns archivedIds", async () => {
     const services = createCanonicalServices();
 

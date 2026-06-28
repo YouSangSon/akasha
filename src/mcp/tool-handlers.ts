@@ -423,6 +423,7 @@ export function createToolHandlers(input: {
 
     async compact_memory(toolInput) {
       assertProvidedScopeIdentifiers(toolInput);
+      assertOptionalPositiveInteger(toolInput.limit, "limit", 5000);
       const scope = toolInput.scope ?? "project";
       const dryRun = toolInput.dryRun ?? true;
       const userScopeId = resolveUserScopeId({

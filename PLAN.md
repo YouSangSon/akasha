@@ -4,15 +4,14 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Goal Context Limit Validation
+## Current Loop — Compaction Limit Validation
 
 Status:
-- Direct `build_goal_context.limit` now rejects non-finite, unsafe,
-  non-integer, zero/negative, and over-`200` values before goal-run lookup or
-  memory listing.
+- Direct `compact_memory.limit` now rejects non-finite, unsafe, non-integer,
+  zero/negative, and over-`5000` values before repository dispatch.
 - Direct coverage verifies invalid limits fail before service dispatch and the
-  documented maximum `200` still reaches the repository.
-- Reviewer `Aquinas` reported no findings.
+  documented maximum `5000` still reaches the repository.
+- Reviewer `Huygens` reported no findings.
 - Focused MCP tests, typecheck, build, audit, full suite, and diff whitespace
   checks passed.
 
