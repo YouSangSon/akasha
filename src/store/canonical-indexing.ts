@@ -572,9 +572,12 @@ export async function writeCanonicalMemory(input: {
   }
 
   const record = await input.repository.addMemory(input.memory);
+  const organizationId = record.organizationId ?? "default";
+  assertNonBlankText(organizationId, "organizationId");
+
   const job = await input.ingestJobs.create({
     memoryRecordId: record.id,
-    organizationId: record.organizationId ?? "default",
+    organizationId,
   });
   let upsertedPointIds: string[] = [];
 
@@ -617,7 +620,7 @@ export async function writeCanonicalMemory(input: {
         chunkId: chunk.id,
         vector: embeddings[index] ?? [],
         memoryRecordId: record.id,
-        organizationId: record.organizationId ?? "default",
+        organizationId,
         scopeType: record.scopeType,
         scopeId: record.scopeId,
         projectKey: record.projectKey ?? null,
@@ -656,7 +659,7 @@ export async function writeCanonicalMemory(input: {
     if (upsertedPointIds.length > 0) {
       await input.vectorIndex.delete(upsertedPointIds).catch(() => undefined);
     }
-    await input.repository.deleteMemoryRecord(record.id, record.organizationId ?? "default").catch(() => undefined);
+    await input.repository.deleteMemoryRecord(record.id, organizationId).catch(() => undefined);
     throw error;
   }
 }

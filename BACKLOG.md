@@ -147,3 +147,5 @@ experience, documentation, features.
   before transaction side effects.
 - Whitespace-only canonical refresh organization IDs are rejected before
   indexing side effects.
+- Whitespace-only canonical write-path organization IDs are rejected before
+  ingest and indexing side effects.

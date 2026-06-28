@@ -188,6 +188,75 @@ describe("canonical indexing", () => {
     expect(ingestJobs.markQdrantCompleted).toHaveBeenCalledWith(801);
   });
 
+  it("writeCanonicalMemory rejects whitespace-only returned organizationId before indexing side effects", async () => {
+    const record = {
+      ...createRecord({ id: 504, content: "valid memory content" }),
+      organizationId: " \n\t ",
+    };
+    const repository = {
+      addMemory: vi.fn().mockResolvedValue(record),
+    };
+    const ingestJobs = {
+      create: vi.fn(),
+      markCompleted: vi.fn(),
+      markFailed: vi.fn(),
+      markQdrantPending: vi.fn(),
+      markQdrantCompleted: vi.fn(),
+    };
+    const chunkRepository = {
+      insertChunks: vi.fn(),
+      updatePointIds: vi.fn(),
+    };
+    const embeddings = {
+      embed: vi.fn(),
+      embedBatch: vi.fn(),
+    };
+    const vectorIndex = {
+      upsert: vi.fn(),
+      query: vi.fn(),
+      delete: vi.fn(),
+      deleteByRecordIds: vi.fn(),
+      ensureCollection: vi.fn(),
+    };
+
+    await expect(
+      writeCanonicalMemory({
+        repository: repository as never,
+        chunkRepository: chunkRepository as never,
+        ingestJobs: ingestJobs as never,
+        embeddings,
+        vectorIndex,
+        embedding: {
+          provider: "openai",
+          model: "text-embedding-3-small",
+          dimensions: 1536,
+          version: "v1",
+          targetTokens: 2,
+          overlapTokens: 1,
+        },
+        memory: {
+          scopeType: "project",
+          scopeId: "project-alpha",
+          projectKey: "project-alpha",
+          memoryType: "decision",
+          content: record.content,
+          source: {
+            scopeType: "project",
+            scopeId: "project-alpha",
+            sourceType: "conversation",
+            sourceRef: "manual://session",
+          },
+        },
+      }),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(repository.addMemory).toHaveBeenCalledOnce();
+    expect(ingestJobs.create).not.toHaveBeenCalled();
+    expect(chunkRepository.insertChunks).not.toHaveBeenCalled();
+    expect(embeddings.embedBatch).not.toHaveBeenCalled();
+    expect(vectorIndex.upsert).not.toHaveBeenCalled();
+  });
+
   it("rolls back PG state by deleting the memory record when embedding throws", async () => {
     const record = createRecord({ id: 502, content: "fail path content" });
     const repository = {
