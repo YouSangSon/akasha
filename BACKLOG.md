@@ -86,6 +86,8 @@ experience, documentation, features.
   artifact verification work.
 - Blank restore-smoke manifest artifact metadata is rejected before restore
   path construction.
+- Blank backup-encryption manifest artifact metadata is rejected before
+  idempotent returns or artifact encryption work.
 - Invalid direct repository search/list/graph limits are rejected before SQL
   work.
 - Invalid direct audit repository limits are rejected before SQL work.

@@ -9,7 +9,7 @@ import {
   stat,
   writeFile,
 } from "node:fs/promises";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   decryptFile,
   encryptManifestArtifacts,
@@ -103,6 +103,140 @@ describe("backup encryption", () => {
     expect((await stat(path.join(backupDir, "qdrant-memory_chunks_v1-20260626-1200.json"))).isFile()).toBe(true);
   });
 
+  it("returns already-encrypted manifests without artifact work", async () => {
+    const { backupDir, manifestPath, postgresFileName, qdrantFileName } =
+      await createManifestFixture({
+        postgres: {
+          fileName: "postgres-20260626-1200.sql.gz.enc",
+          sha256: "encrypted-pg-sha",
+        },
+        qdrant: {
+          fileName: "qdrant-20260626-1200.snapshot.enc",
+          sha256: "encrypted-qdrant-sha",
+        },
+        encryption: {
+          algorithm: "AES-256-GCM",
+          keySource: "BACKUP_ENCRYPTION_KEY_FILE",
+          encryptedAt: "2026-06-26T12:30:00.000Z",
+          artifacts: ["postgres", "qdrant"],
+        },
+      });
+    const randomBytes = vi.fn((size: number) => Buffer.alloc(size, 3));
+
+    const manifest = await encryptManifestArtifacts({
+      backupDir,
+      manifestPath,
+      key: Buffer.alloc(32, 7),
+      randomBytes,
+    });
+
+    expect(manifest.encryption).toMatchObject({
+      algorithm: "AES-256-GCM",
+      artifacts: ["postgres", "qdrant"],
+    });
+    expect(randomBytes).not.toHaveBeenCalled();
+    expect(await exists(path.join(backupDir, postgresFileName))).toBe(true);
+    expect(await exists(path.join(backupDir, qdrantFileName))).toBe(true);
+    expect(await exists(path.join(backupDir, `${postgresFileName}.enc`))).toBe(false);
+    expect(await exists(path.join(backupDir, `${qdrantFileName}.enc`))).toBe(false);
+  });
+
+  it.each([
+    ["blank createdAt", "createdAt", { createdAt: " \n\t " }],
+    ["non-string createdAt", "createdAt", { createdAt: 123 }],
+    ["blank postgres.fileName", "postgres.fileName", { postgres: { fileName: " \n\t " } }],
+    ["blank postgres.sha256", "postgres.sha256", { postgres: { sha256: " \n\t " } }],
+    ["blank qdrant.fileName", "qdrant.fileName", { qdrant: { fileName: " \n\t " } }],
+    ["blank qdrant.sha256", "qdrant.sha256", { qdrant: { sha256: " \n\t " } }],
+    ["missing qdrant", "qdrant.fileName", { qdrant: undefined }],
+    [
+      "missing qdrant for explicit qdrant backend",
+      "qdrant.fileName",
+      { vectorBackend: "qdrant", qdrant: undefined },
+    ],
+    [
+      "blank qdrant.metadataFileName",
+      "qdrant.metadataFileName",
+      { qdrant: { metadataFileName: " \n\t " } },
+    ],
+    [
+      "blank qdrant.collectionName",
+      "qdrant.collectionName",
+      { qdrant: { collectionName: " \n\t " } },
+    ],
+  ] satisfies Array<[string, string, TestManifestOverride]>)(
+    "rejects %s before artifact work",
+    async (_case, label, override) => {
+      const { backupDir, manifestPath, postgresFileName, qdrantFileName } =
+        await createManifestFixture(override);
+      const randomBytes = vi.fn((size: number) => Buffer.alloc(size, 3));
+
+      await expect(
+        encryptManifestArtifacts({
+          backupDir,
+          manifestPath,
+          key: Buffer.alloc(32, 7),
+          randomBytes,
+        }),
+      ).rejects.toThrow(
+        `backup manifest ${label} must contain non-whitespace text`,
+      );
+
+      expect(randomBytes).not.toHaveBeenCalled();
+      expect(await exists(path.join(backupDir, postgresFileName))).toBe(true);
+      expect(await exists(path.join(backupDir, qdrantFileName))).toBe(true);
+      expect(await exists(path.join(backupDir, `${postgresFileName}.enc`))).toBe(false);
+      expect(await exists(path.join(backupDir, `${qdrantFileName}.enc`))).toBe(false);
+    },
+  );
+
+  it("allows pgvector manifests without Qdrant metadata", async () => {
+    const { backupDir, manifestPath, postgresFileName, qdrantFileName } =
+      await createManifestFixture({
+        vectorBackend: "pgvector",
+        qdrant: undefined,
+      });
+
+    const manifest = await encryptManifestArtifacts({
+      backupDir,
+      manifestPath,
+      key: Buffer.alloc(32, 7),
+      randomBytes: (size) => Buffer.alloc(size, 3),
+    });
+
+    expect(manifest.vectorBackend).toBe("pgvector");
+    expect(manifest.encryption?.artifacts).toEqual(["postgres"]);
+    expect(manifest.postgres.fileName).toBe(`${postgresFileName}.enc`);
+    expect(manifest.qdrant).toBeUndefined();
+    expect(await exists(path.join(backupDir, qdrantFileName))).toBe(true);
+    expect(await exists(path.join(backupDir, `${qdrantFileName}.enc`))).toBe(false);
+  });
+
+  it("rejects unsupported vector backends before artifact work", async () => {
+    const { backupDir, manifestPath, postgresFileName, qdrantFileName } =
+      await createManifestFixture({
+        vectorBackend: "sqlite" as never,
+      });
+    const randomBytes = vi.fn((size: number) => Buffer.alloc(size, 3));
+
+    await expect(
+      encryptManifestArtifacts({
+        backupDir,
+        manifestPath,
+        key: Buffer.alloc(32, 7),
+        randomBytes,
+      }),
+    ).rejects.toThrow(
+      "backup manifest vectorBackend must be qdrant or pgvector",
+    );
+
+    expect(randomBytes).not.toHaveBeenCalled();
+    expect(await exists(path.join(backupDir, postgresFileName))).toBe(true);
+    expect(await exists(path.join(backupDir, qdrantFileName))).toBe(true);
+    expect(await exists(path.join(backupDir, `${postgresFileName}.enc`))).toBe(false);
+    expect(await exists(path.join(backupDir, `${qdrantFileName}.enc`))).toBe(false);
+  });
+
   it("parses hex, base64, and raw 32-byte data keys", () => {
     const raw = Buffer.alloc(32, 1);
 
@@ -155,4 +289,102 @@ async function sha256File(filePath: string): Promise<string> {
 
 function sha256Text(value: string): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+type TestManifestPayload = {
+  createdAt: unknown;
+  vectorBackend: "qdrant" | "pgvector";
+  postgres: Record<string, unknown>;
+  qdrant?: Record<string, unknown>;
+  encryption?: Record<string, unknown>;
+};
+
+type TestManifestOverride = Partial<
+  Omit<TestManifestPayload, "postgres" | "qdrant">
+> & {
+  postgres?: Record<string, unknown>;
+  qdrant?: Record<string, unknown> | undefined;
+};
+
+async function createManifestFixture(
+  override: TestManifestOverride = {},
+): Promise<{
+  backupDir: string;
+  manifestPath: string;
+  postgresFileName: string;
+  qdrantFileName: string;
+}> {
+  const backupDir = await mkdtemp(path.join(os.tmpdir(), "akasha-backup-encryption-"));
+  tempDirs.push(backupDir);
+  const postgresPlain = "postgres logical dump";
+  const qdrantPlain = "qdrant snapshot bytes";
+  const postgresFileName = "postgres-20260626-1200.sql.gz";
+  const qdrantFileName = "qdrant-20260626-1200.snapshot";
+  const manifestPath = path.join(backupDir, "manifest-20260626-1200.json");
+
+  await writeFile(path.join(backupDir, postgresFileName), postgresPlain);
+  await writeFile(path.join(backupDir, qdrantFileName), qdrantPlain);
+  await writeFile(
+    manifestPath,
+    `${JSON.stringify(
+      mergeManifestPayload(
+        baseManifestPayload(postgresPlain, qdrantPlain),
+        override,
+      ),
+      null,
+      2,
+    )}\n`,
+  );
+
+  return {
+    backupDir,
+    manifestPath,
+    postgresFileName,
+    qdrantFileName,
+  };
+}
+
+function baseManifestPayload(
+  postgresPlain: string,
+  qdrantPlain: string,
+): TestManifestPayload {
+  return {
+    createdAt: "2026-06-26T12:00:00.000Z",
+    vectorBackend: "qdrant",
+    postgres: {
+      fileName: "postgres-20260626-1200.sql.gz",
+      sha256: sha256Text(postgresPlain),
+    },
+    qdrant: {
+      fileName: "qdrant-20260626-1200.snapshot",
+      sha256: sha256Text(qdrantPlain),
+      metadataFileName: "qdrant-memory_chunks_v1-20260626-1200.json",
+      collectionName: "memory_chunks_v1",
+    },
+  };
+}
+
+function mergeManifestPayload(
+  manifest: TestManifestPayload,
+  override: TestManifestOverride,
+): TestManifestPayload {
+  const qdrant =
+    override.qdrant === undefined
+      ? "qdrant" in override
+        ? undefined
+        : manifest.qdrant
+      : {
+          ...(manifest.qdrant ?? {}),
+          ...override.qdrant,
+        };
+
+  return {
+    ...manifest,
+    ...override,
+    postgres: {
+      ...manifest.postgres,
+      ...override.postgres,
+    },
+    qdrant,
+  };
 }

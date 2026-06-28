@@ -43,9 +43,9 @@ export type EncryptManifestArtifactsInput = {
 export async function encryptManifestArtifacts(
   input: EncryptManifestArtifactsInput,
 ): Promise<BackupManifest> {
-  const manifest = JSON.parse(
+  const manifest = parseManifest(
     await fsp.readFile(input.manifestPath, "utf8"),
-  ) as BackupManifest;
+  );
 
   if (manifest.encryption) {
     return manifest;
@@ -86,6 +86,88 @@ export async function encryptManifestArtifacts(
 
   await fsp.writeFile(input.manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   return manifest;
+}
+
+function parseManifest(raw: string): BackupManifest {
+  const parsed = JSON.parse(raw) as Partial<BackupManifest> | null;
+  if (parsed === null || typeof parsed !== "object") {
+    throw new Error("backup manifest must be a JSON object");
+  }
+
+  const vectorBackend = optionalManifestVectorBackend(parsed.vectorBackend);
+  const createdAt = requireManifestText(parsed.createdAt, "createdAt");
+  const postgresFileName = requireManifestText(
+    parsed.postgres?.fileName,
+    "postgres.fileName",
+  );
+  const postgresSha256 = requireManifestText(
+    parsed.postgres?.sha256,
+    "postgres.sha256",
+  );
+
+  let qdrant: BackupManifest["qdrant"];
+  if (parsed.qdrant !== undefined || vectorBackend !== "pgvector") {
+    const metadataFileName = optionalManifestText(
+      parsed.qdrant?.metadataFileName,
+      "qdrant.metadataFileName",
+    );
+    const collectionName = optionalManifestText(
+      parsed.qdrant?.collectionName,
+      "qdrant.collectionName",
+    );
+
+    qdrant = {
+      ...(parsed.qdrant ?? {}),
+      fileName: requireManifestText(
+        parsed.qdrant?.fileName,
+        "qdrant.fileName",
+      ),
+      sha256: requireManifestText(parsed.qdrant?.sha256, "qdrant.sha256"),
+      ...(metadataFileName !== undefined ? { metadataFileName } : {}),
+      ...(collectionName !== undefined ? { collectionName } : {}),
+    };
+  }
+
+  return {
+    ...parsed,
+    ...(vectorBackend !== undefined ? { vectorBackend } : {}),
+    createdAt,
+    postgres: {
+      ...(parsed.postgres ?? {}),
+      fileName: postgresFileName,
+      sha256: postgresSha256,
+    },
+    ...(qdrant !== undefined ? { qdrant } : {}),
+  };
+}
+
+function optionalManifestVectorBackend(
+  value: unknown,
+): BackupManifest["vectorBackend"] {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === "qdrant" || value === "pgvector") {
+    return value;
+  }
+  throw new Error("backup manifest vectorBackend must be qdrant or pgvector");
+}
+
+function requireManifestText(value: unknown, name: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`backup manifest ${name} must contain non-whitespace text`);
+  }
+  return value;
+}
+
+function optionalManifestText(
+  value: unknown,
+  name: string,
+): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  return requireManifestText(value, name);
 }
 
 async function encryptManifestArtifact(input: {

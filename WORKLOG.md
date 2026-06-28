@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened backup-encryption manifest metadata parsing:
+  - Backup encryption now validates manifest metadata before idempotent returns
+    or artifact encryption work.
+  - Qdrant metadata is required unless the manifest explicitly uses `pgvector`,
+    and invalid vector backend values are rejected early.
+  - Worker implementation passed spec review and code-quality re-review after
+    fixing Qdrant-default and vector-backend consistency gaps.
+
+Verification:
+- `npx vitest run tests/scripts/backup-encryption.test.ts` (18 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (971 passed, 34 skipped across 69 files)
+- `git diff --check`
+
 - Hardened restore-smoke manifest metadata parsing:
   - Restore smoke now rejects whitespace-only manifest artifact metadata before
     restore path construction.
