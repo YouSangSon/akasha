@@ -145,6 +145,8 @@ export function createMemoryArchiveRepository(
   return {
     async createCompactionRun(input) {
       assertNonBlankText(input.organizationId, "organizationId");
+      assertNonBlankText(input.scopeType, "scopeType");
+      assertNonBlankText(input.scopeId, "scopeId");
 
       // ON CONFLICT on idempotency_key: replay defense. Returns the existing
       // row (with its outcome counters) if a run with this UUID already

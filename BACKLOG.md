@@ -134,3 +134,4 @@ experience, documentation, features.
   persistence.
 - Whitespace-only scope-lock organization IDs are rejected before persistence.
 - Whitespace-only scope-lock key inputs are rejected before persistence.
+- Whitespace-only compaction run scope inputs are rejected before persistence.

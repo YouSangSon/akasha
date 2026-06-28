@@ -112,6 +112,44 @@ describe("MemoryArchiveRepository.createCompactionRun", () => {
 
     expect(query).not.toHaveBeenCalled();
   });
+
+  it("rejects whitespace-only scopeType before querying", async () => {
+    const { pool, query } = makeMockPool(async () => ({ rows: [RUN_ROW] }));
+    const repo = createMemoryArchiveRepository(pool);
+
+    await expect(
+      repo.createCompactionRun({
+        organizationId: "org-a",
+        actor: "test",
+        scopeType: " \n\t ",
+        scopeId: "alpha",
+        dryRun: false,
+        planGeneratedAt: new Date(),
+        idempotencyKey: "00000000-0000-0000-0000-000000000005",
+      }),
+    ).rejects.toThrow(/scopeType/);
+
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it("rejects whitespace-only scopeId before querying", async () => {
+    const { pool, query } = makeMockPool(async () => ({ rows: [RUN_ROW] }));
+    const repo = createMemoryArchiveRepository(pool);
+
+    await expect(
+      repo.createCompactionRun({
+        organizationId: "org-a",
+        actor: "test",
+        scopeType: "project",
+        scopeId: " \n\t ",
+        dryRun: false,
+        planGeneratedAt: new Date(),
+        idempotencyKey: "00000000-0000-0000-0000-000000000006",
+      }),
+    ).rejects.toThrow(/scopeId/);
+
+    expect(query).not.toHaveBeenCalled();
+  });
 });
 
 describe("MemoryArchiveRepository.applyCompactionRecord", () => {

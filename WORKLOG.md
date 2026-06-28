@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened compaction run scope validation:
+  - `createCompactionRun` now rejects whitespace-only scope type and scope ID
+    values before inserting compaction run rows.
+  - Archive repository coverage verifies invalid compaction run scope inputs
+    fail before `pool.query()`.
+  - Reviewer skipped after previous reviewer-agent timeouts; self-review found
+    no issues.
+
+Verification:
+- `npx vitest run tests/store/memory-archive-repository.test.ts` (33 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (738 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened scope-lock key validation:
   - `acquireScopeLock` now rejects whitespace-only scope type and scope ID
     values before advisory lock queries.

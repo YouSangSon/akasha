@@ -4,12 +4,12 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Scope Lock Key Guard
+## Current Loop — Compaction Run Scope Guard
 
 Status:
-- `acquireScopeLock` now rejects whitespace-only scope type and scope ID values
-  before advisory lock queries.
-- Coverage verifies invalid scope-lock key inputs fail before
+- `createCompactionRun` now rejects whitespace-only scope type and scope ID
+  values before inserting compaction run rows.
+- Coverage verifies invalid compaction run scope inputs fail before
   `pool.query()`.
 - Reviewer skipped after previous reviewer-agent timeouts; self-review found no
   issues.
