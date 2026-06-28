@@ -4,12 +4,12 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Chunk Delete Organization Guard
+## Current Loop — Chunk List Organization Guard
 
 Status:
-- `deleteChunksForRecord` now rejects whitespace-only organization IDs before
-  deleting canonical chunks.
-- Coverage verifies invalid chunk delete organization IDs fail before
+- `listChunks` now rejects whitespace-only organization IDs before listing
+  canonical chunks.
+- Coverage verifies invalid chunk list organization IDs fail before
   `pool.query()`.
 - Reviewer skipped after previous reviewer-agent timeouts; self-review found no
   issues.

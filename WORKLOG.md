@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened canonical chunk list organization validation:
+  - `listChunks` now rejects whitespace-only organization IDs before listing
+    canonical chunks.
+  - Canonical indexing coverage verifies invalid organization IDs fail before
+    `pool.query()`.
+  - Reviewer skipped after previous reviewer-agent timeouts; self-review found
+    no issues.
+
+Verification:
+- `npx vitest run tests/store/canonical-indexing.test.ts` (19 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (740 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened canonical chunk delete organization validation:
   - `deleteChunksForRecord` now rejects whitespace-only organization IDs before
     deleting canonical chunks.

@@ -1177,6 +1177,21 @@ describe("canonical indexing", () => {
     });
   });
 
+  it("listChunks rejects whitespace-only organizationId before querying", async () => {
+    const mockPool = {
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+    };
+    const repo = createMemoryChunkRepository(mockPool as never);
+
+    await expect(
+      repo.listChunks(" \n\t ", [
+        { scopeType: "project" as const, scopeId: "shared-project" },
+      ]),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(mockPool.query).not.toHaveBeenCalled();
+  });
+
   it("listChunks supports cursor pagination by chunk id", async () => {
     const queryCalls: { sql: string; params: unknown[] }[] = [];
     const mockPool = {

@@ -137,3 +137,5 @@ experience, documentation, features.
 - Whitespace-only compaction run scope inputs are rejected before persistence.
 - Whitespace-only canonical chunk delete organization IDs are rejected before
   persistence.
+- Whitespace-only canonical chunk list organization IDs are rejected before
+  persistence.

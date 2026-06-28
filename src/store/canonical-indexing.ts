@@ -223,6 +223,8 @@ export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository
     },
 
     async listChunks(organizationId, scopes, options) {
+      assertNonBlankText(organizationId, "organizationId");
+
       if (scopes.length === 0) {
         return [];
       }
