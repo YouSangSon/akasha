@@ -517,6 +517,57 @@ describe("createOperatorServer", () => {
     });
   });
 
+  it("rejects whitespace-only goal-run text before dispatch", async () => {
+    const start = await fetch(`${handle.baseUrl}/v1/goal-run/start`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        projectKey: "p",
+        goal: " \n\t ",
+      }),
+    });
+    expect(start.status).toBe(400);
+    expect(((await start.json()) as { error: { message: string } }).error.message)
+      .toContain("non-whitespace text");
+    expect(registry.start_goal_run).not.toHaveBeenCalled();
+
+    const iteration = await fetch(`${handle.baseUrl}/v1/goal-run/iteration`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        goalRunId: 7,
+        attempt: " \n\t ",
+        outcome: "failure",
+      }),
+    });
+    expect(iteration.status).toBe(400);
+    expect(((await iteration.json()) as { error: { message: string } }).error.message)
+      .toContain("non-whitespace text");
+    expect(registry.record_iteration).not.toHaveBeenCalled();
+
+    const repeat = await fetch(`${handle.baseUrl}/v1/goal-run/check-repeat`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        goalRunId: 7,
+        attempt: " \n\t ",
+      }),
+    });
+    expect(repeat.status).toBe(400);
+    expect(((await repeat.json()) as { error: { message: string } }).error.message)
+      .toContain("non-whitespace text");
+    expect(registry.check_repeat_attempt).not.toHaveBeenCalled();
+  });
+
   it("validates the token-resolved organizationId through the shared schema", async () => {
     await handle.close();
     registry = buildRegistry();

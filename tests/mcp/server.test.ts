@@ -2214,6 +2214,52 @@ describe("createMcpServer structured outputs", () => {
     await server.close();
   });
 
+  it("rejects whitespace-only goal-run text before registry dispatch", async () => {
+    const registry = buildRegistryForMcpProtocol();
+    const server = createMcpServer({ registry });
+    const client = await createInMemoryClient(server);
+
+    const startResult = await client.callTool({
+      name: "start_goal_run",
+      arguments: {
+        projectKey: "project-alpha",
+        goal: " \n\t ",
+      },
+    });
+    const iterationResult = await client.callTool({
+      name: "record_iteration",
+      arguments: {
+        goalRunId: 7,
+        attempt: " \n\t ",
+        outcome: "failure",
+      },
+    });
+    const repeatResult = await client.callTool({
+      name: "check_repeat_attempt",
+      arguments: {
+        goalRunId: 7,
+        attempt: " \n\t ",
+      },
+    });
+
+    for (const result of [startResult, iterationResult, repeatResult]) {
+      expect(result.isError).toBe(true);
+      const errorContent = result.content as Array<{ type: string; text: string }>;
+      expect(errorContent[0]).toEqual(
+        expect.objectContaining({
+          type: "text",
+          text: expect.stringContaining("non-whitespace text"),
+        }),
+      );
+    }
+    expect(registry.start_goal_run).not.toHaveBeenCalled();
+    expect(registry.record_iteration).not.toHaveBeenCalled();
+    expect(registry.check_repeat_attempt).not.toHaveBeenCalled();
+
+    await client.close();
+    await server.close();
+  });
+
   it("stores accepted elicited memory through add_memory_interactive", async () => {
     const registry = buildRegistryForMcpProtocol();
     const server = createMcpServer({ registry });

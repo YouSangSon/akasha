@@ -414,7 +414,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
       scope: z.enum(["project", "user"]).optional(),
       projectKey: z.string().min(1).optional(),
       userScopeId: z.string().min(1).optional(),
-      goal: z.string().min(1),
+      goal: nonBlankTextInputSchema,
       terminationCriteria: z.string().nullable().optional(),
     },
     outputSchema: {
@@ -429,7 +429,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     inputSchema: {
       organizationId: z.string().min(1).optional(),
       goalRunId: z.number().int().positive(),
-      attempt: z.string().min(1),
+      attempt: nonBlankTextInputSchema,
       outcome: z.enum(["success", "failure", "partial"]),
       summary: z.string().nullable().optional(),
       error: z.string().nullable().optional(),
@@ -519,7 +519,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     inputSchema: {
       organizationId: z.string().min(1).optional(),
       goalRunId: z.number().int().positive(),
-      attempt: z.string().min(1),
+      attempt: nonBlankTextInputSchema,
       threshold: z.number().gt(0).max(1).optional(),
     },
     outputSchema: {

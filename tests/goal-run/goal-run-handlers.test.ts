@@ -80,6 +80,19 @@ describe("goal-run handlers", () => {
     });
   });
 
+  it("rejects whitespace-only goal text before starting a run", async () => {
+    const goalRuns = goalRunServicesStub();
+    const registry = registryWith(goalRuns);
+
+    await expect(
+      registry.start_goal_run({
+        projectKey: "proj-x",
+        goal: " \n\t ",
+      }),
+    ).rejects.toThrow(/non-whitespace text/);
+    expect(goalRuns.start).not.toHaveBeenCalled();
+  });
+
   it("record_iteration forwards outcome, memory links, and org default", async () => {
     const goalRuns = goalRunServicesStub();
     const registry = registryWith(goalRuns);
@@ -101,6 +114,20 @@ describe("goal-run handlers", () => {
       error: "boom",
       memoryIds: [11, 12],
     });
+  });
+
+  it("rejects whitespace-only iteration attempts before recording", async () => {
+    const goalRuns = goalRunServicesStub();
+    const registry = registryWith(goalRuns);
+
+    await expect(
+      registry.record_iteration({
+        goalRunId: 7,
+        attempt: " \n\t ",
+        outcome: "failure",
+      }),
+    ).rejects.toThrow(/non-whitespace text/);
+    expect(goalRuns.recordIteration).not.toHaveBeenCalled();
   });
 
   it("complete_goal_run maps resolution to the close note", async () => {
@@ -251,6 +278,21 @@ describe("goal-run handlers", () => {
     expect(result.repeat).toBe(true);
     expect(result.matches).toHaveLength(1);
     expect(result.matches[0]?.iterationIndex).toBe(1);
+  });
+
+  it("rejects whitespace-only repeat-check attempts before loading the run", async () => {
+    const goalRuns = goalRunServicesStub();
+    const embedBatch = vi.fn();
+    const registry = createToolRegistry({
+      withCanonicalServices: (async (cb: (s: CanonicalServices) => Promise<unknown>) =>
+        cb({ goalRuns, embeddings: { embedBatch } } as unknown as CanonicalServices)) as never,
+    });
+
+    await expect(
+      registry.check_repeat_attempt({ goalRunId: 7, attempt: " \n\t " }),
+    ).rejects.toThrow(/non-whitespace text/);
+    expect(goalRuns.get).not.toHaveBeenCalled();
+    expect(embedBatch).not.toHaveBeenCalled();
   });
 
   it("check_repeat_attempt returns found:false for a missing run without embedding", async () => {

@@ -46,6 +46,24 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened goal-run required text validation:
+  - `start_goal_run.goal`, `record_iteration.attempt`, and
+    `check_repeat_attempt.attempt` now reject whitespace-only text at schema
+    and direct registry handler boundaries.
+  - Tests cover HTTP, MCP protocol, and direct handler paths before goal-run
+    service or embedding dispatch.
+  - Subagent reviewer `Ramanujan` reported no findings.
+
+Verification:
+- `npx vitest run tests/goal-run/goal-run-handlers.test.ts tests/app/server.test.ts tests/mcp/server.test.ts`
+  (161 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (663 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Hardened governance filter validation:
   - `list_memory.tag` and `inspect_memory_graph.query` now reject
     whitespace-only text at schema and direct registry handler boundaries.

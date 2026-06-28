@@ -50,3 +50,5 @@ experience, documentation, features.
   resource dispatch.
 - Whitespace-only governance tag/query filters are rejected before repository
   dispatch.
+- Whitespace-only required goal-run text is rejected before service or
+  embedding dispatch.

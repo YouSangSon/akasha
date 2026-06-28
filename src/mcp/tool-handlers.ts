@@ -808,6 +808,7 @@ export function createToolHandlers(input: {
 
     async start_goal_run(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      assertNonBlankText(toolInput.goal, "goal");
       const scope = toolInput.scope ?? "project";
       const scopeId = resolveGoalRunScopeId(scope, toolInput, {
         cwd,
@@ -832,6 +833,7 @@ export function createToolHandlers(input: {
 
     async record_iteration(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      assertNonBlankText(toolInput.attempt, "attempt");
       assertNoSecrets(toolInput.attempt);
       if (toolInput.summary) {
         assertNoSecrets(toolInput.summary);
@@ -947,6 +949,7 @@ export function createToolHandlers(input: {
 
     async check_repeat_attempt(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      assertNonBlankText(toolInput.attempt, "attempt");
       assertNoSecrets(toolInput.attempt);
       const threshold = toolInput.threshold ?? DEFAULT_REPEAT_THRESHOLD;
       return await withCanonicalServices(async (services) => {

@@ -4,13 +4,14 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Governance Filter Blank Validation
+## Current Loop — Goal-Run Required Text Validation
 
 Status:
-- `list_memory.tag` and `inspect_memory_graph.query` now reject
-  whitespace-only text at schema and direct registry handler boundaries.
-- Tests cover HTTP, MCP protocol, and direct canonical registry paths before
-  repository dispatch.
+- `start_goal_run.goal`, `record_iteration.attempt`, and
+  `check_repeat_attempt.attempt` now reject whitespace-only text at schema and
+  direct registry handler boundaries.
+- Tests cover HTTP, MCP protocol, and direct handler paths before goal-run
+  service or embedding dispatch.
 - Reviewer found no issues.
 - Typecheck, build, audit, full test suite, and diff whitespace checks passed.
 
