@@ -992,6 +992,41 @@ describe("canonical indexing", () => {
     expect(result[1]!.id).toBe(2);
   });
 
+  it("insertChunks rejects whitespace-only record organizationId before querying", async () => {
+    const mockPool = {
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+    };
+    const repo = createMemoryChunkRepository(mockPool as never);
+    const record = {
+      ...createRecord({ id: 10, content: "first chunk" }),
+      organizationId: " \n\t ",
+    };
+
+    await expect(
+      repo.insertChunks({
+        record,
+        chunks: [
+          {
+            chunkIndex: 0,
+            content: "first chunk",
+            startOffset: 0,
+            endOffset: 5,
+          },
+        ],
+        embedding: {
+          provider: "openai",
+          model: "text-embedding-3-small",
+          dimensions: 1536,
+          version: "v1",
+          targetTokens: 800,
+          overlapTokens: 120,
+        },
+      }),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(mockPool.query).not.toHaveBeenCalled();
+  });
+
   it("updatePointIds issues exactly ONE pool.query for N mappings", async () => {
     const mockPool = {
       query: vi.fn().mockResolvedValue({ rows: [] }),

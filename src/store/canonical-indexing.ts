@@ -782,6 +782,9 @@ async function insertPostgresChunks(
     embedding: ChunkEmbeddingConfig;
   },
 ): Promise<StoredMemoryChunk[]> {
+  const orgId = input.record.organizationId ?? "default";
+  assertNonBlankText(orgId, "organizationId");
+
   if (input.chunks.length === 0) {
     return [];
   }
@@ -789,7 +792,6 @@ async function insertPostgresChunks(
   // Build a single multi-row INSERT. Each chunk contributes 10 parameters;
   // the 5 embedding config columns are repeated per row (simpler, no CTE).
   // Constant values shared by every row:
-  const orgId = input.record.organizationId ?? "default";
   const recordId = input.record.id;
   const { provider, model, dimensions, version } = input.embedding;
 

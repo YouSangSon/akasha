@@ -141,3 +141,5 @@ experience, documentation, features.
   persistence.
 - Whitespace-only context-pack run organization IDs are rejected before
   persistence.
+- Whitespace-only canonical chunk insert organization IDs are rejected before
+  persistence.

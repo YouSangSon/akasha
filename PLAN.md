@@ -4,12 +4,12 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Context Pack Run Organization Guard
+## Current Loop — Chunk Insert Organization Guard
 
 Status:
-- `createContextPackRun` now rejects whitespace-only organization IDs before
-  inserting context-pack run rows.
-- Coverage verifies invalid context-pack run organization IDs fail before
+- `insertChunks` now rejects whitespace-only record organization IDs before
+  inserting canonical chunks.
+- Coverage verifies invalid chunk insert organization IDs fail before
   `pool.query()`.
 - Reviewer skipped after previous reviewer-agent timeouts; self-review found no
   issues.
