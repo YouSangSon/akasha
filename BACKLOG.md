@@ -159,3 +159,5 @@ experience, documentation, features.
   query/delete work, while exact empty-string legacy behavior remains covered.
 - Whitespace-only vector point organization IDs are rejected before payload
   construction.
+- Whitespace-only goal-run repository organization IDs are rejected before SQL
+  or transaction side effects.

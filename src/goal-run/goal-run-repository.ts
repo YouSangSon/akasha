@@ -5,6 +5,7 @@ import type {
   GoalRunRepository,
   GoalRunWithIterations,
 } from "../types.js";
+import { assertNonBlankText } from "../store/memory-content.js";
 
 // Thrown when an iteration or close targets a run that does not exist for the
 // caller's organization, or that has already been completed/abandoned. Callers
@@ -79,6 +80,8 @@ const ITERATION_COLUMNS = `
 export function createGoalRunRepository(pool: PgPool): GoalRunRepository {
   return {
     async start(input) {
+      assertNonBlankText(input.organizationId, "organizationId");
+
       const result = await pool.query<GoalRunRow>(
         `
           INSERT INTO goal_runs (
@@ -102,6 +105,8 @@ export function createGoalRunRepository(pool: PgPool): GoalRunRepository {
     },
 
     async recordIteration(input) {
+      assertNonBlankText(input.organizationId, "organizationId");
+
       const client = await pool.connect();
       try {
         await client.query("BEGIN");
@@ -175,6 +180,8 @@ export function createGoalRunRepository(pool: PgPool): GoalRunRepository {
     },
 
     async get(input) {
+      assertNonBlankText(input.organizationId, "organizationId");
+
       const runResult = await pool.query<GoalRunRow>(
         `
           SELECT ${RUN_COLUMNS}
@@ -207,6 +214,8 @@ export function createGoalRunRepository(pool: PgPool): GoalRunRepository {
     },
 
     async list(input) {
+      assertNonBlankText(input.organizationId, "organizationId");
+
       const params: unknown[] = [
         input.organizationId,
         input.scopeType,
@@ -249,6 +258,8 @@ async function closeRun(
   input: { organizationId: string; goalRunId: number; note?: string | null },
   status: "completed" | "abandoned",
 ): Promise<GoalRun> {
+  assertNonBlankText(input.organizationId, "organizationId");
+
   const result = await pool.query<GoalRunRow>(
     `
       UPDATE goal_runs

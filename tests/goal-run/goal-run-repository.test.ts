@@ -26,6 +26,26 @@ function runRow(overrides: Record<string, unknown> = {}) {
 }
 
 describe("createGoalRunRepository", () => {
+  it("start rejects whitespace-only organizationId before querying", async () => {
+    const pool = {
+      query: vi.fn(() => Promise.resolve({ rows: [runRow()] })),
+    };
+    const repo = createGoalRunRepository(pool as never);
+
+    await expect(
+      repo.start({
+        organizationId: " \n\t ",
+        scopeType: "project",
+        scopeId: "proj-x",
+        projectKey: "proj-x",
+        goal: "ship phase 1",
+        terminationCriteria: "tests pass",
+      }),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(pool.query).not.toHaveBeenCalled();
+  });
+
   it("start inserts a run and maps the row to camelCase", async () => {
     const calls: SqlQueryCall[] = [];
     const pool = {
@@ -59,6 +79,22 @@ describe("createGoalRunRepository", () => {
       "ship phase 1",
       "tests pass",
     ]);
+  });
+
+  it("recordIteration rejects whitespace-only organizationId before opening a transaction", async () => {
+    const pool = { connect: vi.fn() };
+    const repo = createGoalRunRepository(pool as never);
+
+    await expect(
+      repo.recordIteration({
+        organizationId: " \n\t ",
+        goalRunId: 7,
+        attempt: "try A",
+        outcome: "failure",
+      }),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(pool.connect).not.toHaveBeenCalled();
   });
 
   it("recordIteration bumps the count, inserts the iteration, and links memories", async () => {
@@ -184,6 +220,19 @@ describe("createGoalRunRepository", () => {
     expect(calls.some((c) => c.sql.includes("UPDATE memory_records"))).toBe(false);
   });
 
+  it("get rejects whitespace-only organizationId before querying", async () => {
+    const pool = {
+      query: vi.fn(() => Promise.resolve({ rows: [] })),
+    };
+    const repo = createGoalRunRepository(pool as never);
+
+    await expect(
+      repo.get({ organizationId: " \n\t ", goalRunId: 7 }),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(pool.query).not.toHaveBeenCalled();
+  });
+
   it("get returns null when the run is not found for the org", async () => {
     const pool = {
       query: vi.fn(() => Promise.resolve({ rows: [] })),
@@ -220,6 +269,36 @@ describe("createGoalRunRepository", () => {
     const result = await repo.get({ organizationId: "org-a", goalRunId: 7 });
     expect(result?.iterations).toHaveLength(1);
     expect(result?.iterations[0]?.outcome).toBe("failure");
+  });
+
+  it("list rejects whitespace-only organizationId before querying", async () => {
+    const pool = {
+      query: vi.fn(() => Promise.resolve({ rows: [] })),
+    };
+    const repo = createGoalRunRepository(pool as never);
+
+    await expect(
+      repo.list({
+        organizationId: " \n\t ",
+        scopeType: "project",
+        scopeId: "proj-x",
+      }),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(pool.query).not.toHaveBeenCalled();
+  });
+
+  it("complete rejects whitespace-only organizationId before querying", async () => {
+    const pool = {
+      query: vi.fn(() => Promise.resolve({ rows: [runRow()] })),
+    };
+    const repo = createGoalRunRepository(pool as never);
+
+    await expect(
+      repo.complete({ organizationId: " \n\t ", goalRunId: 7, note: "done" }),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(pool.query).not.toHaveBeenCalled();
   });
 
   it("complete closes an active run; throws when none matched", async () => {

@@ -46,6 +46,21 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened goal-run repository organization validation:
+  - Repository entry points now reject whitespace-only organization IDs before
+    SQL queries or transaction opens.
+  - Goal-run repository coverage verifies invalid organization IDs fail before
+    `pool.query()` or `pool.connect()`.
+  - Reviewer subagent found no issues.
+
+Verification:
+- `npx vitest run tests/goal-run/goal-run-repository.test.ts tests/goal-run/goal-run-handlers.test.ts tests/goal-run/build-goal-context.test.ts tests/goal-run/find-repeat-attempts.test.ts` (44 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (767 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened vector point organization validation:
   - `buildVectorPoint` now rejects whitespace-only required organization IDs
     before producing vector payload metadata.
