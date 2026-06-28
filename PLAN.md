@@ -4,15 +4,16 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Qdrant Snapshot Name Guard
+## Current Loop — OAuth Comma List Guard
 
 Status:
-- Qdrant snapshot response parsing now rejects missing, non-string, empty, and
-  whitespace-only snapshot names before download URL construction.
-- Valid string snapshot names are preserved unchanged.
+- OAuth comma-separated environment lists now reject explicit blank entries
+  instead of silently dropping them.
+- Unset list values still preserve existing disabled/default behavior.
+- Config docs and `.env.example` now call out blank-entry rejection.
 - Worker implementation passed spec review and code-quality review with no
   findings.
-- Focused backup shell tests, shell syntax check, typecheck, build, audit, full
+- Focused OAuth tests, public docs drift guard, typecheck, build, audit, full
   suite, and diff whitespace checks passed.
 
 Loop closeout:

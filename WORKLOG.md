@@ -46,6 +46,25 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened OAuth comma-separated config parsing:
+  - `MCP_OAUTH_AUTHORIZATION_SERVERS`, `MCP_OAUTH_SCOPES`,
+    `MCP_OAUTH_JWKS_URLS`, and `MCP_OAUTH_JWT_ALGORITHMS` now reject explicit
+    blank entries instead of silently filtering them out.
+  - Unset values still preserve existing disabled/default behavior.
+  - `.env.example`, `docs/configuration.md`, and `docs/configuration.ko.md`
+    document the blank-entry rejection.
+  - Worker implementation passed spec review and code-quality review with no
+    findings.
+
+Verification:
+- `npx vitest run tests/app/oauth-protected-resource.test.ts tests/app/oauth-token-auth.test.ts` (31 passed)
+- `npx vitest run tests/scripts/public-docs-drift.test.ts` (22 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (986 passed, 34 skipped across 69 files)
+- `git diff --check`
+
 - Hardened Qdrant snapshot response parsing:
   - `scripts/snapshot-qdrant.sh` now rejects missing, non-string, empty, and
     whitespace-only snapshot names before constructing the snapshot download

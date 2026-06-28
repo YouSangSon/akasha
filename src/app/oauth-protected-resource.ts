@@ -22,6 +22,7 @@ export function loadOAuthProtectedResourceConfig(
 ): OAuthProtectedResourceConfig | null {
   const authorizationServers = parseCommaList(
     env.MCP_OAUTH_AUTHORIZATION_SERVERS,
+    "MCP_OAUTH_AUTHORIZATION_SERVERS",
   );
   if (authorizationServers.length === 0) {
     return null;
@@ -134,18 +135,19 @@ function parseRequestPath(url: string): string {
   return new URL(url, "http://localhost").pathname;
 }
 
-function parseCommaList(value: string | undefined): string[] {
-  if (!value) {
+function parseCommaList(value: string | undefined, name: string): string[] {
+  if (value === undefined) {
     return [];
   }
-  return value
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
+  const entries = value.split(",").map((entry) => entry.trim());
+  if (entries.some((entry) => entry.length === 0)) {
+    throw new Error(`Invalid ${name}: entries must not be blank`);
+  }
+  return entries;
 }
 
 function parseScopes(value: string | undefined): string[] {
-  const scopes = parseCommaList(value);
+  const scopes = parseCommaList(value, "MCP_OAUTH_SCOPES");
   if (scopes.length === 0) {
     return [...DEFAULT_SCOPES];
   }

@@ -9,17 +9,12 @@ import {
 describe("loadOAuthProtectedResourceConfig", () => {
   it("returns null when authorization servers are not configured", () => {
     expect(loadOAuthProtectedResourceConfig({})).toBeNull();
-    expect(
-      loadOAuthProtectedResourceConfig({
-        MCP_OAUTH_AUTHORIZATION_SERVERS: " , ",
-      }),
-    ).toBeNull();
   });
 
   it("builds protected resource metadata with default scopes", () => {
     const config = loadOAuthProtectedResourceConfig({
       MCP_OAUTH_AUTHORIZATION_SERVERS:
-        "https://auth-a.example.com, https://auth-b.example.com/issuer",
+        " https://auth-a.example.com , https://auth-b.example.com/issuer ",
       MCP_OAUTH_RESOURCE_URL: "https://akasha.example.com/mcp",
     });
 
@@ -42,7 +37,7 @@ describe("loadOAuthProtectedResourceConfig", () => {
     const config = loadOAuthProtectedResourceConfig({
       MCP_OAUTH_AUTHORIZATION_SERVERS: "https://auth.example.com",
       MCP_OAUTH_RESOURCE_URL: "https://akasha.example.com/mcp",
-      MCP_OAUTH_SCOPES: "akasha:memory,akasha:write",
+      MCP_OAUTH_SCOPES: " akasha:memory , akasha:write ",
       MCP_OAUTH_RESOURCE_NAME: " Akasha Memory ",
       MCP_OAUTH_RESOURCE_DOCUMENTATION_URL:
         " https://docs.example.com/akasha ",
@@ -67,6 +62,34 @@ describe("loadOAuthProtectedResourceConfig", () => {
       ).toThrow(new RegExp(name));
     },
   );
+
+  it("rejects blank entries in OAuth comma-separated lists", () => {
+    const cases = [
+      ["MCP_OAUTH_AUTHORIZATION_SERVERS", ""],
+      ["MCP_OAUTH_AUTHORIZATION_SERVERS", " \n\t "],
+      ["MCP_OAUTH_AUTHORIZATION_SERVERS", ",https://auth.example.com"],
+      ["MCP_OAUTH_AUTHORIZATION_SERVERS", "https://auth.example.com,"],
+      [
+        "MCP_OAUTH_AUTHORIZATION_SERVERS",
+        "https://auth-a.example.com,,https://auth-b.example.com",
+      ],
+      ["MCP_OAUTH_SCOPES", ""],
+      ["MCP_OAUTH_SCOPES", " \n\t "],
+      ["MCP_OAUTH_SCOPES", ",akasha:memory"],
+      ["MCP_OAUTH_SCOPES", "akasha:memory,"],
+      ["MCP_OAUTH_SCOPES", "akasha:read,,akasha:write"],
+    ] as const;
+
+    for (const [name, value] of cases) {
+      expect(() =>
+        loadOAuthProtectedResourceConfig({
+          MCP_OAUTH_AUTHORIZATION_SERVERS: "https://auth.example.com",
+          MCP_OAUTH_RESOURCE_URL: "https://akasha.example.com/mcp",
+          [name]: value,
+        }),
+      ).toThrow(new RegExp(name));
+    }
+  });
 
   it("requires a resource URL when authorization servers are configured", () => {
     expect(() =>

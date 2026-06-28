@@ -31,11 +31,29 @@ describe("loadOAuthTokenVerifierConfig", () => {
     expect(loadOAuthTokenVerifierConfig({}, null)).toBeNull();
   });
 
+  it("uses default optional list behavior when list env values are unset", () => {
+    const config = loadOAuthTokenVerifierConfig({}, protectedResource);
+
+    expect(config!.issuers[0]).not.toHaveProperty("jwksUrl");
+    expect(config!.algorithms).toEqual([
+      "RS256",
+      "RS384",
+      "RS512",
+      "PS256",
+      "PS384",
+      "PS512",
+      "ES256",
+      "ES384",
+      "ES512",
+      "EdDSA",
+    ]);
+  });
+
   it("builds verifier config from protected-resource metadata", () => {
     const config = loadOAuthTokenVerifierConfig(
       {
-        MCP_OAUTH_JWKS_URLS: "https://auth.example.com/jwks",
-        MCP_OAUTH_JWT_ALGORITHMS: "RS256,ES256",
+        MCP_OAUTH_JWKS_URLS: " https://auth.example.com/jwks ",
+        MCP_OAUTH_JWT_ALGORITHMS: " RS256 , ES256 ",
         MCP_OAUTH_JWT_CLOCK_TOLERANCE_SECONDS: "15",
         MCP_OAUTH_JWKS_TIMEOUT_MS: " 2500 ",
         MCP_OAUTH_ORGANIZATION_CLAIM: " tenant ",
@@ -73,6 +91,30 @@ describe("loadOAuthTokenVerifierConfig", () => {
         protectedResource,
       ),
     ).toThrow(/one JWKS URL per/);
+  });
+
+  it("rejects blank entries in OAuth comma-separated lists", () => {
+    const cases = [
+      ["MCP_OAUTH_JWKS_URLS", ""],
+      ["MCP_OAUTH_JWKS_URLS", " \n\t "],
+      ["MCP_OAUTH_JWKS_URLS", ",https://auth.example.com/jwks"],
+      ["MCP_OAUTH_JWKS_URLS", "https://auth.example.com/jwks,"],
+      [
+        "MCP_OAUTH_JWKS_URLS",
+        "https://auth-a.example.com/jwks,,https://auth-b.example.com/jwks",
+      ],
+      ["MCP_OAUTH_JWT_ALGORITHMS", ""],
+      ["MCP_OAUTH_JWT_ALGORITHMS", " \n\t "],
+      ["MCP_OAUTH_JWT_ALGORITHMS", ",RS256"],
+      ["MCP_OAUTH_JWT_ALGORITHMS", "RS256,"],
+      ["MCP_OAUTH_JWT_ALGORITHMS", "RS256,,ES256"],
+    ] as const;
+
+    for (const [name, value] of cases) {
+      expect(() =>
+        loadOAuthTokenVerifierConfig({ [name]: value }, protectedResource),
+      ).toThrow(new RegExp(name));
+    }
   });
 
   it("rejects invalid numeric verifier env values", () => {

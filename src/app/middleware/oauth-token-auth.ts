@@ -71,9 +71,10 @@ export function loadOAuthTokenVerifierConfig(
     return null;
   }
 
-  const jwksUrls = parseCommaList(env.MCP_OAUTH_JWKS_URLS).map((value) =>
-    requireHttpsUrl(value, "MCP_OAUTH_JWKS_URLS"),
-  );
+  const jwksUrls = parseCommaList(
+    env.MCP_OAUTH_JWKS_URLS,
+    "MCP_OAUTH_JWKS_URLS",
+  ).map((value) => requireHttpsUrl(value, "MCP_OAUTH_JWKS_URLS"));
   if (jwksUrls.length > 0 && jwksUrls.length !== authorizationServers.length) {
     throw new Error(
       "Invalid MCP_OAUTH_JWKS_URLS: when set, provide one JWKS URL per MCP_OAUTH_AUTHORIZATION_SERVERS entry",
@@ -429,18 +430,19 @@ function buildAuthorizationServerMetadataUrls(
   ];
 }
 
-function parseCommaList(value: string | undefined): string[] {
-  if (!value) {
+function parseCommaList(value: string | undefined, name: string): string[] {
+  if (value === undefined) {
     return [];
   }
-  return value
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
+  const entries = value.split(",").map((entry) => entry.trim());
+  if (entries.some((entry) => entry.length === 0)) {
+    throw new Error(`Invalid ${name}: entries must not be blank`);
+  }
+  return entries;
 }
 
 function parseAlgorithms(value: string | undefined): readonly string[] {
-  const parsed = parseCommaList(value);
+  const parsed = parseCommaList(value, "MCP_OAUTH_JWT_ALGORITHMS");
   if (parsed.length === 0) {
     return [...DEFAULT_JWT_ALGORITHMS];
   }

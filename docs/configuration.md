@@ -222,11 +222,11 @@ org values return 403.
 
 | Variable | Default | Notes |
 |---|---|---|
-| `MCP_OAUTH_AUTHORIZATION_SERVERS` | unset → disabled | Comma-separated HTTPS issuer URLs for authorization servers. |
+| `MCP_OAUTH_AUTHORIZATION_SERVERS` | unset → disabled | Comma-separated HTTPS issuer URLs for authorization servers. Blank entries are rejected when set. |
 | `MCP_OAUTH_RESOURCE_URL` | required when enabled | Public protected resource URL. Use the externally reachable HTTPS URL, normally `https://.../mcp`. |
-| `MCP_OAUTH_SCOPES` | `akasha:memory` | Comma-separated scopes advertised in metadata and space-delimited in the challenge header. |
-| `MCP_OAUTH_JWKS_URLS` | discovered from issuer metadata | Optional comma-separated HTTPS JWKS URLs. When set, provide one URL per authorization server. |
-| `MCP_OAUTH_JWT_ALGORITHMS` | `RS256,RS384,RS512,PS256,PS384,PS512,ES256,ES384,ES512,EdDSA` | Accepted JWS `alg` values. |
+| `MCP_OAUTH_SCOPES` | `akasha:memory` | Comma-separated scopes advertised in metadata and space-delimited in the challenge header. Blank entries are rejected when set. |
+| `MCP_OAUTH_JWKS_URLS` | discovered from issuer metadata | Optional comma-separated HTTPS JWKS URLs. When set, provide one URL per authorization server. Blank entries are rejected. |
+| `MCP_OAUTH_JWT_ALGORITHMS` | `RS256,RS384,RS512,PS256,PS384,PS512,ES256,ES384,ES512,EdDSA` | Accepted JWS `alg` values. Blank entries are rejected when set. |
 | `MCP_OAUTH_JWT_CLOCK_TOLERANCE_SECONDS` | `60` | Clock skew tolerance for `exp` / `nbf`. |
 | `MCP_OAUTH_JWT_TYPE` | unset | Optional required JWT `typ` header, e.g. `at+jwt`. If set, it must contain non-whitespace text. Leave unset for provider compatibility. |
 | `MCP_OAUTH_ORGANIZATION_CLAIM` | `organization_id` | JWT claim used as the org binding when present. If set, it must contain non-whitespace text. |

@@ -92,6 +92,8 @@ experience, documentation, features.
   `scp` invocation.
 - Non-object backup manifest writer inputs are rejected before manifest mutation.
 - Invalid Qdrant snapshot response names are rejected before snapshot download.
+- Blank OAuth comma-separated config list entries are rejected before verifier
+  configuration.
 - Invalid direct repository search/list/graph limits are rejected before SQL
   work.
 - Invalid direct audit repository limits are rejected before SQL work.
