@@ -46,6 +46,20 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened backup manifest metadata parsing:
+  - Backup verification now rejects whitespace-only required manifest metadata
+    before local or remote artifact checks.
+  - Optional Qdrant metadata on pgvector manifests is preserved and verified
+    when present.
+
+Verification:
+- `npx vitest run tests/scripts/backup-verify.test.ts` (34 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (950 passed, 34 skipped across 69 files)
+- `git diff --check`
+
 - Hardened retrieval eval threshold env parsing:
   - `EVAL_RECALL_THRESHOLD` and `EVAL_MRR_THRESHOLD` now use a strict parser
     instead of raw `Number(...)`.

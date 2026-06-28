@@ -11,7 +11,7 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   resolveBackupTargetDir,
   verifyBackups,
@@ -98,6 +98,36 @@ describe("verifyBackups", () => {
     });
   });
 
+  it("preserves optional Qdrant metadata on pgvector manifests", async () => {
+    const { localDir, remoteDir } = await createBackupFixture({
+      vectorBackend: "pgvector",
+      includeQdrantManifestMetadata: true,
+    });
+
+    await expect(
+      verifyBackups({
+        now: new Date("2026-03-29T20:00:00.000Z"),
+        backupDir: localDir,
+        remoteReadTextFile(fileName) {
+          return readFile(path.join(remoteDir, fileName), "utf8");
+        },
+        remoteFileExists(fileName) {
+          return exists(path.join(remoteDir, fileName));
+        },
+        remoteSha256File(fileName) {
+          return sha256(path.join(remoteDir, fileName));
+        },
+      }),
+    ).resolves.toMatchObject({
+      manifest: {
+        vectorBackend: "pgvector",
+        qdrant: {
+          fileName: "qdrant-20260329-1200.snapshot",
+        },
+      },
+    });
+  });
+
   it("fails when the newest manifest is older than 24 hours", async () => {
     const { localDir, remoteDir } = await createBackupFixture({
       createdAt: "2026-03-27T00:00:00.000Z",
@@ -119,6 +149,46 @@ describe("verifyBackups", () => {
       }),
     ).rejects.toThrow("latest successful backup is older than 24 hours");
   });
+
+  it.each([
+    ["createdAt", { createdAt: " \n\t " }],
+    ["postgres.fileName", { postgres: { fileName: " \n\t " } }],
+    ["postgres.sha256", { postgres: { sha256: " \n\t " } }],
+    ["qdrant.fileName", { qdrant: { fileName: " \n\t " } }],
+    ["qdrant.sha256", { qdrant: { sha256: " \n\t " } }],
+  ])(
+    "rejects blank manifest %s before artifact checks",
+    async (label, override) => {
+      const fileExists = vi.fn().mockResolvedValue(true);
+      const sha256File = vi.fn().mockResolvedValue("sha");
+      const remoteReadTextFile = vi.fn().mockResolvedValue("{}");
+      const remoteFileExists = vi.fn().mockResolvedValue(true);
+      const remoteSha256File = vi.fn().mockResolvedValue("sha");
+
+      await expect(
+        verifyBackups({
+          now: new Date("2026-03-29T20:00:00.000Z"),
+          backupDir: "/backups",
+          readDir: async () => ["manifest-20260329-1200.json"],
+          readTextFile: async () =>
+            JSON.stringify(mergeManifest(baseManifest(), override)),
+          fileExists,
+          sha256File,
+          remoteReadTextFile,
+          remoteFileExists,
+          remoteSha256File,
+        }),
+      ).rejects.toThrow(
+        `backup manifest ${label} must contain non-whitespace text`,
+      );
+
+      expect(fileExists).not.toHaveBeenCalled();
+      expect(sha256File).not.toHaveBeenCalled();
+      expect(remoteReadTextFile).not.toHaveBeenCalled();
+      expect(remoteFileExists).not.toHaveBeenCalled();
+      expect(remoteSha256File).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe("resolveBackupTargetDir", () => {
@@ -443,6 +513,7 @@ async function readOptionalText(filePath: string): Promise<string> {
 
 async function createBackupFixture(options: {
   createdAt?: string;
+  includeQdrantManifestMetadata?: boolean;
   vectorBackend?: "qdrant" | "pgvector";
 } = {}) {
   const localDir = await mkdtemp(path.join(os.tmpdir(), "developer-memory-os-backup-local-"));
@@ -454,6 +525,9 @@ async function createBackupFixture(options: {
   const postgresFileName = "postgres-20260329-1200.sql.gz";
   const qdrantFileName = "qdrant-20260329-1200.snapshot";
   const manifestFileName = "manifest-20260329-1200.json";
+  const includeQdrantMetadata =
+    options.vectorBackend !== "pgvector" ||
+    options.includeQdrantManifestMetadata === true;
   const manifestPayload = {
     createdAt: options.createdAt ?? "2026-03-29T12:00:00.000Z",
     ...(options.vectorBackend ? { vectorBackend: options.vectorBackend } : {}),
@@ -461,14 +535,14 @@ async function createBackupFixture(options: {
       fileName: postgresFileName,
       sha256: sha256Text(postgresContent),
     },
-    ...(options.vectorBackend === "pgvector"
-      ? {}
-      : {
+    ...(includeQdrantMetadata
+      ? {
           qdrant: {
             fileName: qdrantFileName,
             sha256: sha256Text(qdrantContent),
           },
-        }),
+        }
+      : {}),
   };
   const manifest = JSON.stringify(manifestPayload, null, 2);
 
@@ -479,7 +553,7 @@ async function createBackupFixture(options: {
     writeFile(path.join(remoteDir, manifestFileName), `${manifest}\n`),
   ];
 
-  if (options.vectorBackend !== "pgvector") {
+  if (includeQdrantMetadata) {
     writes.push(
       writeFile(path.join(localDir, qdrantFileName), qdrantContent),
       writeFile(path.join(remoteDir, qdrantFileName), qdrantContent),
@@ -507,4 +581,61 @@ async function sha256(filePath: string) {
 
 function sha256Text(value: string) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+type TestBackupManifest = {
+  createdAt: string;
+  vectorBackend?: "qdrant" | "pgvector";
+  postgres: {
+    fileName: string;
+    sha256: string;
+  };
+  qdrant?: {
+    fileName: string;
+    sha256: string;
+  };
+};
+
+type TestBackupManifestOverride = Partial<
+  Omit<TestBackupManifest, "postgres" | "qdrant">
+> & {
+  postgres?: Partial<TestBackupManifest["postgres"]>;
+  qdrant?: Partial<NonNullable<TestBackupManifest["qdrant"]>>;
+};
+
+function baseManifest(): TestBackupManifest {
+  return {
+    createdAt: "2026-03-29T12:00:00.000Z",
+    postgres: {
+      fileName: "postgres-20260329-1200.sql.gz",
+      sha256: "postgres-sha",
+    },
+    qdrant: {
+      fileName: "qdrant-20260329-1200.snapshot",
+      sha256: "qdrant-sha",
+    },
+  };
+}
+
+function mergeManifest(
+  manifest: TestBackupManifest,
+  override: TestBackupManifestOverride,
+): TestBackupManifest {
+  const qdrant =
+    override.qdrant === undefined
+      ? manifest.qdrant
+      : {
+          fileName: override.qdrant.fileName ?? manifest.qdrant?.fileName ?? "",
+          sha256: override.qdrant.sha256 ?? manifest.qdrant?.sha256 ?? "",
+        };
+
+  return {
+    ...manifest,
+    ...override,
+    postgres: {
+      ...manifest.postgres,
+      ...override.postgres,
+    },
+    qdrant,
+  };
 }

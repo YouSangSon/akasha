@@ -82,6 +82,8 @@ experience, documentation, features.
   registry, HTTP, MCP resource, and prompt entry points.
 - Invalid retrieval eval threshold environment values are rejected before eval
   assertions are configured.
+- Blank backup manifest artifact metadata is rejected before local or off-box
+  artifact verification work.
 - Invalid direct repository search/list/graph limits are rejected before SQL
   work.
 - Invalid direct audit repository limits are rejected before SQL work.

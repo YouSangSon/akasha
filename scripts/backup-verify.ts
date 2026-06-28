@@ -169,23 +169,41 @@ async function findLatestManifestFile(
 
 function parseManifest(raw: string): BackupManifest {
   const parsed = JSON.parse(raw) as Partial<BackupManifest>;
+  const createdAt = requireManifestText(parsed.createdAt, "createdAt");
+  const postgres = {
+    fileName: requireManifestText(
+      parsed.postgres?.fileName,
+      "postgres.fileName",
+    ),
+    sha256: requireManifestText(parsed.postgres?.sha256, "postgres.sha256"),
+  };
 
-  if (
-    !parsed.createdAt ||
-    !parsed.postgres?.fileName ||
-    !parsed.postgres?.sha256
-  ) {
-    throw new Error("backup manifest is missing required artifact metadata");
+  let qdrant: BackupManifest["qdrant"];
+
+  if (parsed.qdrant !== undefined || parsed.vectorBackend !== "pgvector") {
+    qdrant = {
+      ...(parsed.qdrant ?? {}),
+      fileName: requireManifestText(
+        parsed.qdrant?.fileName,
+        "qdrant.fileName",
+      ),
+      sha256: requireManifestText(parsed.qdrant?.sha256, "qdrant.sha256"),
+    };
   }
 
-  if (
-    parsed.vectorBackend !== "pgvector" &&
-    (!parsed.qdrant?.fileName || !parsed.qdrant?.sha256)
-  ) {
-    throw new Error("backup manifest is missing required Qdrant artifact metadata");
-  }
+  return {
+    ...parsed,
+    createdAt,
+    postgres,
+    ...(qdrant ? { qdrant } : {}),
+  };
+}
 
-  return parsed as BackupManifest;
+function requireManifestText(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`backup manifest ${label} must contain non-whitespace text`);
+  }
+  return value;
 }
 
 function manifestsEqual(left: BackupManifest, right: BackupManifest): boolean {
