@@ -1070,6 +1070,23 @@ describe("createToolRegistry", () => {
     );
   });
 
+  it("rejects invalid graph entity kind values before repository dispatch", async () => {
+    const services = createCanonicalServices();
+    const resolveCanonicalServices = vi.fn(async () => services);
+    const registry = createToolRegistry({ resolveCanonicalServices });
+
+    await expect(
+      registry.inspect_memory_graph({
+        organizationId: "org-a",
+        projectKey: "project-alpha",
+        kind: "tag" as never,
+      }),
+    ).rejects.toThrow(/kind must be one of/);
+
+    expect(resolveCanonicalServices).not.toHaveBeenCalled();
+    expect(services.repository.inspectMemoryGraph).not.toHaveBeenCalled();
+  });
+
   it("rejects invalid governance list and graph limits before repository dispatch", async () => {
     const services = createCanonicalServices();
     const registry = createToolRegistry({

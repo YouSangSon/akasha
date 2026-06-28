@@ -17,6 +17,7 @@ import {
   assertNonBlankText,
 } from "../store/memory-content.js";
 import { buildGoalContextPack } from "../goal-run/build-goal-context.js";
+import { ENTITY_KIND_VALUES } from "../entities/entity-extraction.js";
 import {
   DEFAULT_REPEAT_THRESHOLD,
   findRepeatAttempts,
@@ -597,6 +598,7 @@ export function createToolHandlers(input: {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
       assertProvidedScopeIdentifiers(toolInput);
       assertOptionalAllowedValue(toolInput.scope, "scope", SUPPORTED_SCOPE_TYPES);
+      assertOptionalAllowedValue(toolInput.kind, "kind", ENTITY_KIND_VALUES);
       if (toolInput.query !== undefined) {
         assertNonBlankText(toolInput.query, "graph query");
       }

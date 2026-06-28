@@ -84,3 +84,5 @@ experience, documentation, features.
 - HTTP goal-run enum validation is covered before registry dispatch.
 - Invalid direct memory scope enum values are rejected before repository
   dispatch.
+- Invalid direct graph entity-kind enum values are rejected before repository
+  dispatch.

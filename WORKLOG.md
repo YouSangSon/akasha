@@ -46,6 +46,21 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened direct graph entity-kind enum validation:
+  - `inspect_memory_graph.kind` now rejects unsupported entity kinds before
+    canonical repository dispatch.
+  - MCP schemas reuse the entity module's `ENTITY_KIND_VALUES` tuple so public
+    and direct validation share the same source of truth.
+  - Subagent reviewer `Ptolemy` reported no findings.
+
+Verification:
+- `npx vitest run tests/mcp/server.test.ts` (117 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (706 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened direct memory scope enum validation:
   - Direct `add_memory`, `compact_memory`, `list_memory`, and
     `inspect_memory_graph` now reject unsupported `scope` values before

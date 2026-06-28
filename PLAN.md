@@ -4,14 +4,14 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Direct Memory Scope Enum Validation
+## Current Loop — Direct Graph Kind Enum Validation
 
 Status:
-- Direct memory handlers now reject invalid `scope` enum values before
-  repository or canonical service dispatch.
-- Coverage exercises `add_memory`, `compact_memory`, `list_memory`, and
-  `inspect_memory_graph` direct paths.
-- Reviewer `Einstein` reported no findings.
+- Direct `inspect_memory_graph.kind` now rejects invalid entity-kind enum
+  values before canonical repository dispatch.
+- MCP schemas reuse the entity module's entity-kind tuple instead of carrying a
+  second hardcoded list.
+- Reviewer `Ptolemy` reported no findings.
 - Focused MCP tests, typecheck, build, audit, full suite, and diff whitespace
   checks passed.
 

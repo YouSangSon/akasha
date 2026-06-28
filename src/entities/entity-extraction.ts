@@ -1,9 +1,12 @@
-export type EntityKind =
-  | "code_symbol"
-  | "path"
-  | "url"
-  | "date"
-  | "proper_noun";
+export const ENTITY_KIND_VALUES = [
+  "code_symbol",
+  "path",
+  "url",
+  "date",
+  "proper_noun",
+] as const;
+
+export type EntityKind = (typeof ENTITY_KIND_VALUES)[number];
 
 export type EntityMention = {
   text: string;

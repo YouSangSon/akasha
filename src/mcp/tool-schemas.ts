@@ -1,4 +1,5 @@
 import * as z from "zod/v4";
+import { ENTITY_KIND_VALUES } from "../entities/entity-extraction.js";
 import {
   POSTGRES_INTEGER_MAX,
   POSTGRES_INTEGER_MIN,
@@ -103,13 +104,7 @@ const compactionApplyStatsOutputSchema = z.object({
   durationMs: z.number(),
 });
 
-const entityKindInputSchema = z.enum([
-  "code_symbol",
-  "path",
-  "url",
-  "date",
-  "proper_noun",
-]);
+const entityKindInputSchema = z.enum(ENTITY_KIND_VALUES);
 
 const memoryGraphEntityRefOutputSchema = z.object({
   id: z.number(),
