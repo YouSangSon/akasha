@@ -210,4 +210,29 @@ describe("buildRestoreSmokeToolInput", () => {
       projectKey: "project-alpha",
     });
   });
+
+  it.each([
+    ["projectKey", { projectKey: " \n\t " }],
+    [
+      "userScopeId",
+      {
+        projectKey: "project-alpha",
+        userScopeId: " \n\t ",
+      },
+    ],
+    [
+      "organizationId",
+      {
+        projectKey: "project-alpha",
+        organizationId: " \n\t ",
+      },
+    ],
+  ] satisfies Array<[string, Parameters<typeof buildRestoreSmokeToolInput>[0]]>)(
+    "rejects whitespace-only %s before registry dispatch",
+    (field, input) => {
+      expect(() => buildRestoreSmokeToolInput(input)).toThrow(
+        `${field} must contain non-whitespace text`,
+      );
+    },
+  );
 });

@@ -191,3 +191,5 @@ experience, documentation, features.
   before embedding or vector adapter construction.
 - Invalid log-level environment values are rejected before logger construction
   while preserving case-insensitive supported level names.
+- Whitespace-only restore-smoke tool identifiers are rejected before registry
+  dispatch.

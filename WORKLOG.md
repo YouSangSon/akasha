@@ -46,6 +46,21 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened restore-smoke tool input construction:
+  - `buildRestoreSmokeToolInput()` now rejects whitespace-only `projectKey`,
+    `userScopeId`, and `organizationId` values before search/context-pack
+    registry dispatch.
+  - Undefined optional fields are still omitted for legacy restore-smoke mode.
+  - Reviewer subagent found no issues.
+
+Verification:
+- `npx vitest run tests/scripts/restore-smoke.test.ts` (11 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (834 passed, 34 skipped across 67 files)
+- `git diff --check`
+
 - Hardened logger environment validation:
   - `resolveLogLevel()` now validates `LOG_LEVEL` before Pino initialization
     and returns the existing defaults: `info` in production, `debug` otherwise.

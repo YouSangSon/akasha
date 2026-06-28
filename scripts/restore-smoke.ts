@@ -53,11 +53,35 @@ export type BuildRestoreSmokeCommandEnvInput = {
 };
 
 export function buildRestoreSmokeToolInput(input: RestoreSmokeToolInput) {
+  const projectKey = requireRestoreSmokeText(input.projectKey, "projectKey");
+  const userScopeId = optionalRestoreSmokeText(input.userScopeId, "userScopeId");
+  const organizationId = optionalRestoreSmokeText(
+    input.organizationId,
+    "organizationId",
+  );
+
   return {
-    projectKey: input.projectKey,
-    ...(input.userScopeId ? { userScopeId: input.userScopeId } : {}),
-    ...(input.organizationId ? { organizationId: input.organizationId } : {}),
+    projectKey,
+    ...(userScopeId !== undefined ? { userScopeId } : {}),
+    ...(organizationId !== undefined ? { organizationId } : {}),
   };
+}
+
+function requireRestoreSmokeText(value: string, name: string): string {
+  if (value.trim().length === 0) {
+    throw new Error(`${name} must contain non-whitespace text`);
+  }
+  return value;
+}
+
+function optionalRestoreSmokeText(
+  value: string | undefined,
+  name: string,
+): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  return requireRestoreSmokeText(value, name);
 }
 
 function resolveQdrantCollectionName(
