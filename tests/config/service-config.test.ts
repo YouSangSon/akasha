@@ -70,6 +70,28 @@ describe("resolveServiceConfig", () => {
     ).toThrow("Invalid PORT: not-a-port");
   });
 
+  it.each([
+    ["DATABASE_URL", { DATABASE_URL: " \n\t " }],
+    ["QDRANT_URL", { QDRANT_URL: " \n\t " }],
+    ["QDRANT_API_KEY", { QDRANT_API_KEY: " \n\t " }],
+    [
+      "OPENAI_API_KEY",
+      { EMBEDDING_PROVIDER: "openai", OPENAI_API_KEY: " \n\t " },
+    ],
+  ])(
+    "rejects whitespace-only required %s",
+    (name, overrides) => {
+      expect(() =>
+        resolveServiceConfig({
+          env: {
+            ...BASE_ENV,
+            ...overrides,
+          },
+        }),
+      ).toThrow(`Missing required environment variable: ${name}`);
+    },
+  );
+
   it.each(["1e3", "0x2253", "0b10001001010011", "8787.5", "+8787", " 8787 "])(
     "rejects non-decimal PORT value %s",
     (port) => {
@@ -136,6 +158,28 @@ describe("resolveServiceConfig", () => {
       "postgres://memory:memory@postgres:5432/memory_os",
     );
   });
+
+  it.each([
+    ["POSTGRES_USER", { POSTGRES_USER: " \n\t " }],
+    ["POSTGRES_PASSWORD", { POSTGRES_PASSWORD: " \n\t " }],
+    ["POSTGRES_DB", { POSTGRES_DB: " \n\t " }],
+  ])(
+    "rejects whitespace-only fallback %s when DATABASE_URL is absent",
+    (name, overrides) => {
+      expect(() =>
+        resolveServiceConfig({
+          env: {
+            POSTGRES_USER: "memory",
+            POSTGRES_PASSWORD: "memory",
+            POSTGRES_DB: "memory_os",
+            QDRANT_URL: "http://qdrant:6333",
+            QDRANT_API_KEY: "local-qdrant-key",
+            ...overrides,
+          },
+        }),
+      ).toThrow(`Missing required environment variable: ${name}`);
+    },
+  );
 
   it("does not require a backup target host for runtime services", () => {
     const config = resolveServiceConfig({

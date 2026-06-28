@@ -4,15 +4,15 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — OAuth Organization Claim Guard
+## Current Loop — Required Service Env Guard
 
 Status:
-- OAuth verifier now rejects present blank or non-string organization claims
-  instead of treating them as unbound tokens.
-- Coverage verifies absent organization claims remain unbound while malformed
-  present claims reject the JWT.
-- Reviewer subagent found no issues.
-- Focused auth/HTTP tests, typecheck, build, audit, full suite, and diff
+- Required service environment variables now reject whitespace-only values.
+- Coverage verifies direct required values and fallback Postgres env values fail
+  before config construction.
+- Reviewer subagent found no issues; fallback Postgres regressions were added
+  for residual coverage.
+- Focused config/server tests, typecheck, build, audit, full suite, and diff
   whitespace checks passed.
 
 Loop closeout:

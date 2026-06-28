@@ -46,6 +46,21 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened required service environment validation:
+  - Required service environment variables now reject whitespace-only values.
+  - Config coverage verifies direct required values and fallback Postgres env
+    values fail before config construction.
+  - Reviewer subagent found no issues; added fallback Postgres regressions for
+    residual coverage.
+
+Verification:
+- `npx vitest run tests/config/service-config.test.ts tests/app/server.test.ts tests/health/check-dependencies.test.ts` (101 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (786 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened OAuth organization claim validation:
   - Present blank or non-string organization claims now reject the token instead
     of silently becoming unbound.

@@ -171,3 +171,5 @@ experience, documentation, features.
   or lifecycle file writes.
 - Blank or non-string OAuth organization claims reject the token instead of
   silently becoming unbound.
+- Whitespace-only required service environment variables are rejected before
+  config construction.

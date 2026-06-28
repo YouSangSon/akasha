@@ -130,7 +130,7 @@ export function resolveServiceConfig(
 }
 
 function requireEnv(value: string | undefined, name: string): string {
-  if (!value) {
+  if (!value || value.trim().length === 0) {
     throw new Error(`Missing required environment variable: ${name}`);
   }
 
@@ -179,8 +179,8 @@ function parsePlainDecimalPositiveInt(value: string): number {
 }
 
 function resolveDatabaseUrl(env: NodeJS.ProcessEnv): string {
-  if (env.DATABASE_URL) {
-    return env.DATABASE_URL;
+  if (env.DATABASE_URL !== undefined) {
+    return requireEnv(env.DATABASE_URL, "DATABASE_URL");
   }
 
   return `postgres://${requireEnv(env.POSTGRES_USER, "POSTGRES_USER")}:${requireEnv(env.POSTGRES_PASSWORD, "POSTGRES_PASSWORD")}@postgres:5432/${requireEnv(env.POSTGRES_DB, "POSTGRES_DB")}`;
