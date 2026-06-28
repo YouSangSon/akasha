@@ -46,6 +46,21 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened retrieval eval threshold env parsing:
+  - `EVAL_RECALL_THRESHOLD` and `EVAL_MRR_THRESHOLD` now use a strict parser
+    instead of raw `Number(...)`.
+  - Provided thresholds must be decimal values from `0` to `1`, so whitespace
+    no longer silently lowers thresholds to zero and invalid text cannot become
+    `NaN`.
+
+Verification:
+- `npx vitest run tests/eval/env.test.ts tests/eval/metrics.test.ts tests/eval/fixtures.test.ts tests/eval/retrieval.eval.test.ts` (27 passed, 1 skipped)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (944 passed, 34 skipped across 69 files)
+- `git diff --check`
+
 - Hardened retrieval limit contract:
   - `search_memory` and `build_context_pack` now reject limits above the
     effective `100` cap instead of silently reducing them.

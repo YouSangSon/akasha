@@ -8,6 +8,7 @@ import { runMigrations } from "../../src/db/migrate.js";
 import { createOpenAiEmbeddingClient } from "../../src/embedding/openai-embeddings.js";
 import { mrrAtK, recallAtK } from "../../src/eval/metrics.js";
 import type { EvalQuery, MetricSummary } from "../../src/eval/types.js";
+import { resolveEvalThreshold } from "./env.js";
 import { createIngestJobRepository } from "../../src/jobs/ingest-job-repository.js";
 import { createQdrantClient } from "../../src/qdrant/client.js";
 import { createQdrantVectorIndex } from "../../src/vector/qdrant-index.js";
@@ -24,8 +25,16 @@ import type {
 import { SEED_ENTRIES } from "./fixtures/seed.js";
 
 const RUN_EVAL = process.env.RUN_EVAL === "1";
-const RECALL_THRESHOLD = Number(process.env.EVAL_RECALL_THRESHOLD ?? "0.70");
-const MRR_THRESHOLD = Number(process.env.EVAL_MRR_THRESHOLD ?? "0.50");
+const RECALL_THRESHOLD = resolveEvalThreshold(
+  process.env,
+  "EVAL_RECALL_THRESHOLD",
+  0.70,
+);
+const MRR_THRESHOLD = resolveEvalThreshold(
+  process.env,
+  "EVAL_MRR_THRESHOLD",
+  0.50,
+);
 const TOP_K = 10;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
