@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened direct memory graph query filtering:
+  - Direct `inspectMemoryGraph()` repository calls now reject whitespace-only
+    query filters before SQL work instead of widening to an unfiltered graph
+    read.
+  - Existing API/MCP validation and nonblank direct query behavior are
+    preserved.
+  - Reviewer subagent found no issues.
+
+Verification:
+- `npx vitest run tests/store/memory-repository.test.ts tests/mcp/server.test.ts tests/app/server.test.ts` (233 passed, 7 skipped)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (893 passed, 34 skipped across 68 files)
+- `git diff --check`
+
 - Hardened `DEVELOPER_MEMORY_USER_ID` handling:
   - Explicit empty or whitespace-only values now fail before user-scope fallback
     resolution instead of silently deriving from git/OS identity.

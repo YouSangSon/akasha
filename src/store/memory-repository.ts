@@ -473,6 +473,9 @@ export function createMemoryRepository(
 
     async inspectMemoryGraph(scope, options) {
       assertNonBlankText(options.organizationId, "organizationId");
+      if (options.query !== undefined) {
+        assertNonBlankText(options.query, "graph query");
+      }
       return inspectPostgresMemoryGraph(pool, scope, options);
     },
 

@@ -54,6 +54,8 @@ experience, documentation, features.
   resource dispatch.
 - Whitespace-only governance tag/query filters are rejected before repository
   dispatch.
+- Whitespace-only direct graph query filters are rejected before repository SQL
+  work.
 - Whitespace-only required goal-run text is rejected before service or
   embedding dispatch.
 - Blank optional goal-run notes normalize to `null` before persistence.

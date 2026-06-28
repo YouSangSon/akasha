@@ -829,6 +829,20 @@ describe("createMemoryRepository (unit — no PG required)", () => {
     expect(mockPool.query).not.toHaveBeenCalled();
   });
 
+  it("inspectMemoryGraph rejects whitespace-only query filters before querying", async () => {
+    const mockPool = { query: vi.fn() };
+    const repo = createMemoryRepository(mockPool as never);
+
+    await expect(
+      repo.inspectMemoryGraph(
+        { scopeType: "project", scopeId: "proj-x" },
+        { organizationId: "org-a", query: " \n\t " },
+      ),
+    ).rejects.toThrow("graph query must contain non-whitespace text");
+
+    expect(mockPool.query).not.toHaveBeenCalled();
+  });
+
   it("updateMemoryRecord scopes the update by org and replaces tags in the same transaction", async () => {
     const clientQueryCalls: { sql: string; params: unknown[] }[] = [];
     let hydrationReads = 0;

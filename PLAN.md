@@ -4,16 +4,14 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Developer Memory User Env Guard
+## Current Loop — Direct Graph Query Guard
 
 Status:
-- `DEVELOPER_MEMORY_USER_ID` now rejects explicit empty or whitespace-only
-  values instead of falling through to git/OS fallback.
-- Unset values still derive from `git config user.email`, then OS username, and
-  configured nonblank values are trimmed before use.
-- Reviewer subagent caught missing fallback coverage and `.env.example` drift;
-  both were fixed and re-review found no issues.
-- Focused MCP/docs tests, typecheck, build, audit, full suite, and diff
+- Direct `inspectMemoryGraph()` repository calls now reject whitespace-only
+  query filters before SQL work instead of treating them as no filter.
+- Existing API/MCP validation and nonblank direct query behavior are preserved.
+- Reviewer subagent found no issues.
+- Focused store/MCP/API tests, typecheck, build, audit, full suite, and diff
   whitespace checks passed.
 
 Loop closeout:
