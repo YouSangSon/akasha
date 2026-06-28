@@ -46,6 +46,20 @@ Verification:
 
 ## 2026-06-28
 
+- Removed stale Transformers dynamic-import TypeScript suppression:
+  - `@huggingface/transformers` is a regular dependency and ships declarations.
+  - `src/embedding/transformers-embedding.ts` no longer needs the old
+    `@ts-ignore` before the dynamic import.
+
+Verification:
+- `npx vitest run tests/embedding/transformers-embedding.test.ts tests/scripts/public-docs-drift.test.ts`
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (614 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Aligned Transformers dependency docs/comments with package metadata:
   - `package.json` installs `@huggingface/transformers` as a regular runtime
     dependency because `EMBEDDING_PROVIDER=transformers` is the default.

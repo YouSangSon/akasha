@@ -28,3 +28,4 @@ experience, documentation, features.
 - Restore smoke Qdrant collection-name and uploaded-snapshot runbook alignment.
 - Public docs index drift guard for tracked docs pages and English/Korean pairs.
 - Transformers dependency docs/comments aligned with package metadata.
+- Stale Transformers dynamic-import `@ts-ignore` removed.

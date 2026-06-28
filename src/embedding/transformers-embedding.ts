@@ -75,9 +75,6 @@ function defaultFactory(model: string): () => Promise<FeatureExtractor> {
       modelName: string,
     ) => Promise<FeatureExtractor>;
     try {
-      // @ts-ignore — cast through unknown keeps runtime resolution decoupled
-      // from import-time type resolution. ts-ignore (vs ts-expect-error)
-      // tolerates package type changes that make the suppression unnecessary.
       const mod = (await import("@huggingface/transformers")) as unknown as {
         pipeline: (
           task: string,
