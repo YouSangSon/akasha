@@ -46,6 +46,24 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened repeat-check threshold validation:
+  - Direct `check_repeat_attempt.threshold` rejects `NaN`, values less than or
+    equal to zero, and values greater than one before goal-run lookup or
+    embedding work.
+  - Direct handler coverage verifies invalid thresholds fail without
+    `goalRuns.get` or embedding side effects.
+  - Subagent reviewer `Copernicus` was unavailable due usage limit; self-review
+    covered the small validation change.
+
+Verification:
+- `npx vitest run tests/goal-run/goal-run-handlers.test.ts` (17 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (680 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Hardened MCP context optional text validation:
   - `add_memory_interactive.message` and
     `classify_memory_candidate.instruction` now reuse

@@ -356,6 +356,28 @@ describe("goal-run handlers", () => {
     expect(embedBatch).not.toHaveBeenCalled();
   });
 
+  it("rejects invalid repeat-check thresholds before loading the run", async () => {
+    const goalRuns = goalRunServicesStub();
+    const embedBatch = vi.fn();
+    const registry = createToolRegistry({
+      withCanonicalServices: (async (cb: (s: CanonicalServices) => Promise<unknown>) =>
+        cb({ goalRuns, embeddings: { embedBatch } } as unknown as CanonicalServices)) as never,
+    });
+
+    for (const threshold of [Number.NaN, 0, 1.01]) {
+      await expect(
+        registry.check_repeat_attempt({
+          goalRunId: 7,
+          attempt: "try a new API path",
+          threshold,
+        }),
+      ).rejects.toThrow(/threshold/);
+    }
+
+    expect(goalRuns.get).not.toHaveBeenCalled();
+    expect(embedBatch).not.toHaveBeenCalled();
+  });
+
   it("check_repeat_attempt returns found:false for a missing run without embedding", async () => {
     const goalRuns = goalRunServicesStub();
     goalRuns.get.mockResolvedValue(null);

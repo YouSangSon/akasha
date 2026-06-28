@@ -979,7 +979,7 @@ export function createToolHandlers(input: {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
       assertNonBlankText(toolInput.attempt, "attempt");
       assertNoSecrets(toolInput.attempt);
-      const threshold = toolInput.threshold ?? DEFAULT_REPEAT_THRESHOLD;
+      const threshold = resolveRepeatThreshold(toolInput.threshold);
       return await withCanonicalServices(async (services) => {
         const organizationId = toolInput.organizationId ?? "default";
         const goalRun = await services.goalRuns.get({
@@ -1053,6 +1053,16 @@ function assertNonBlankTags(tags: readonly string[] | undefined): void {
   for (const tag of tags) {
     assertNonBlankText(tag, "tag");
   }
+}
+
+function resolveRepeatThreshold(threshold: number | undefined): number {
+  if (threshold === undefined) {
+    return DEFAULT_REPEAT_THRESHOLD;
+  }
+  if (!Number.isFinite(threshold) || threshold <= 0 || threshold > 1) {
+    throw new Error("threshold must be greater than 0 and at most 1");
+  }
+  return threshold;
 }
 
 function assertProvidedScopeIdentifiers(input: {

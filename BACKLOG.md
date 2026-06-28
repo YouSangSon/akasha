@@ -62,3 +62,5 @@ experience, documentation, features.
   vector refresh.
 - Whitespace-only MCP context optional text is rejected before elicitation or
   sampling side effects.
+- Invalid direct repeat-check thresholds are rejected before goal-run lookup or
+  embedding work.
