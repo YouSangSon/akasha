@@ -55,6 +55,7 @@ import type {
   VectorIndex,
   VectorPoint,
 } from "./vector-index.js";
+import { assertOptionalVectorOrganizationId } from "./organization-id.js";
 
 // Max rows per INSERT batch — 14 params/row × 4000 = 56000 < 65535 cap.
 const UPSERT_BATCH_ROWS = 4000;
@@ -277,6 +278,8 @@ export function createPgVectorIndex(
     },
 
     async query(vector: number[], filter: VectorFilter, limit: number): Promise<VectorHit[]> {
+      assertOptionalVectorOrganizationId(filter.organizationId);
+
       // HIGH 1(b): Run inside a transaction so SET LOCAL is scoped to this query.
       // hnsw.iterative_scan='strict_order' (pgvector 0.8+) makes HNSW keep
       // scanning until `limit` rows pass the WHERE predicate — prevents the
@@ -410,6 +413,8 @@ export function createPgVectorIndex(
     },
 
     async delete(ids: string[], options: VectorDeleteOptions = {}): Promise<void> {
+      assertOptionalVectorOrganizationId(options.organizationId);
+
       if (ids.length === 0) return;
       if (options.organizationId) {
         await pool.query(
@@ -425,6 +430,8 @@ export function createPgVectorIndex(
       recordIds: number[],
       options: VectorDeleteOptions = {},
     ): Promise<void> {
+      assertOptionalVectorOrganizationId(options.organizationId);
+
       if (recordIds.length === 0) return;
       if (options.organizationId) {
         await pool.query(

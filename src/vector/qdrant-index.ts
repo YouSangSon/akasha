@@ -15,6 +15,7 @@ import type {
   VectorIndex,
   VectorPoint,
 } from "./vector-index.js";
+import { assertOptionalVectorOrganizationId } from "./organization-id.js";
 
 type QdrantFilterClause = {
   key: string;
@@ -22,6 +23,8 @@ type QdrantFilterClause = {
 };
 
 function buildQdrantMust(filter: VectorFilter): QdrantFilterClause[] {
+  assertOptionalVectorOrganizationId(filter.organizationId);
+
   const must: QdrantFilterClause[] = [];
 
   if (filter.organizationId) {
@@ -82,6 +85,8 @@ export function createQdrantVectorIndex(
     },
 
     async delete(ids: string[], options: VectorDeleteOptions = {}): Promise<void> {
+      assertOptionalVectorOrganizationId(options.organizationId);
+
       // Guard: Qdrant rejects empty point lists with 400 in some versions.
       if (ids.length === 0) return;
       const selector: Schemas["PointsSelector"] = options.organizationId
@@ -105,6 +110,8 @@ export function createQdrantVectorIndex(
       recordIds: number[],
       options: VectorDeleteOptions = {},
     ): Promise<void> {
+      assertOptionalVectorOrganizationId(options.organizationId);
+
       // Guard: an empty/null filter would delete the entire collection.
       if (recordIds.length === 0) return;
       const recordIdFilter = {

@@ -59,11 +59,81 @@ function makeVec(dims: number, coords: number[]): number[] {
 }
 
 describe("pgvector adapter — deleteByRecordIds SQL shape", () => {
+  it("query treats empty organizationId as legacy unscoped lookup", async () => {
+    const query = vi.fn().mockResolvedValue({ rows: [] });
+    const client = {
+      query,
+      release: vi.fn(),
+    };
+    const pool = {
+      query: vi.fn(),
+      connect: vi.fn().mockResolvedValue(client),
+      end: vi.fn(),
+    } as unknown as PgPool;
+    const index = createPgVectorIndex(pool, { tableName: "memory_vectors_test" });
+
+    await expect(
+      index.query(
+        [0.1, 0.2, 0.3],
+        {
+          organizationId: "",
+          scopes: [{ scopeType: "project", scopeId: "project-alpha" }],
+          projectKey: "project-alpha",
+        },
+        5,
+      ),
+    ).resolves.toEqual([]);
+
+    expect(pool.connect).toHaveBeenCalledOnce();
+
+    const selectCall = query.mock.calls.find(([sql]) =>
+      typeof sql === "string" && sql.includes("FROM memory_vectors_test")
+    );
+    expect(selectCall).toBeDefined();
+
+    const [sql, params] = selectCall as [string, unknown[]];
+    expect(sql).not.toContain("organization_id =");
+    expect(params).toEqual(["[0.1,0.2,0.3]", "project", "project-alpha", 5]);
+  });
+
+  it("query rejects whitespace-only organizationId before opening a client", async () => {
+    const { pool, query } = makeMockPool();
+    const connect = vi.mocked(pool.connect);
+    const index = createPgVectorIndex(pool, { tableName: "memory_vectors_test" });
+
+    await expect(
+      index.query(
+        [0.1, 0.2, 0.3],
+        {
+          organizationId: " \n\t ",
+          scopes: [{ scopeType: "project", scopeId: "project-alpha" }],
+          projectKey: "project-alpha",
+        },
+        5,
+      ),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(connect).not.toHaveBeenCalled();
+    expect(query).not.toHaveBeenCalled();
+  });
+
   it("deletes by record id only when no organizationId is supplied", async () => {
     const { pool, query } = makeMockPool();
     const index = createPgVectorIndex(pool, { tableName: "memory_vectors_test" });
 
     await index.deleteByRecordIds([101, 202]);
+
+    expect(query).toHaveBeenCalledWith(
+      "DELETE FROM memory_vectors_test WHERE memory_record_id = ANY($1)",
+      [[101, 202]],
+    );
+  });
+
+  it("treats empty organizationId as legacy unscoped deleteByRecordIds", async () => {
+    const { pool, query } = makeMockPool();
+    const index = createPgVectorIndex(pool, { tableName: "memory_vectors_test" });
+
+    await index.deleteByRecordIds([101, 202], { organizationId: "" });
 
     expect(query).toHaveBeenCalledWith(
       "DELETE FROM memory_vectors_test WHERE memory_record_id = ANY($1)",
@@ -81,6 +151,17 @@ describe("pgvector adapter — deleteByRecordIds SQL shape", () => {
       "DELETE FROM memory_vectors_test WHERE memory_record_id = ANY($1) AND organization_id = $2",
       [[101, 202], "org-a"],
     );
+  });
+
+  it("deleteByRecordIds rejects whitespace-only organizationId before SQL", async () => {
+    const { pool, query } = makeMockPool();
+    const index = createPgVectorIndex(pool, { tableName: "memory_vectors_test" });
+
+    await expect(
+      index.deleteByRecordIds([101], { organizationId: " \n\t " }),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(query).not.toHaveBeenCalled();
   });
 });
 
@@ -473,6 +554,18 @@ describe("pgvector adapter — delete SQL", () => {
     );
   });
 
+  it("treats empty organizationId as legacy unscoped delete", async () => {
+    const { pool, query } = makeMockPool();
+    const index = createPgVectorIndex(pool, { tableName: "test_memory_vectors" });
+
+    await index.delete(["chunk:1", "chunk:2"], { organizationId: "" });
+
+    expect(query).toHaveBeenCalledWith(
+      "DELETE FROM test_memory_vectors WHERE point_id = ANY($1)",
+      [["chunk:1", "chunk:2"]],
+    );
+  });
+
   it("adds an organization_id predicate when organizationId is provided", async () => {
     const { pool, query } = makeMockPool();
     const index = createPgVectorIndex(pool, { tableName: "test_memory_vectors" });
@@ -483,6 +576,17 @@ describe("pgvector adapter — delete SQL", () => {
       "DELETE FROM test_memory_vectors WHERE point_id = ANY($1) AND organization_id = $2",
       [["chunk:1", "chunk:2"], "org-a"],
     );
+  });
+
+  it("rejects whitespace-only organizationId before SQL", async () => {
+    const { pool, query } = makeMockPool();
+    const index = createPgVectorIndex(pool, { tableName: "test_memory_vectors" });
+
+    await expect(
+      index.delete(["chunk:1"], { organizationId: " \n\t " }),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(query).not.toHaveBeenCalled();
   });
 
   it("skips SQL when ids are empty", async () => {

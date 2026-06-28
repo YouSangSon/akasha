@@ -155,3 +155,5 @@ experience, documentation, features.
   persistence.
 - Whitespace-only ingest job creation organization IDs are rejected before
   persistence.
+- Whitespace-only vector organization filters are rejected before backend
+  query/delete work, while exact empty-string legacy behavior remains covered.

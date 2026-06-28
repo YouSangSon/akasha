@@ -46,6 +46,23 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened vector adapter organization filters:
+  - Qdrant and pgvector adapters now reject whitespace-only optional
+    organization filters before backend query/delete work.
+  - Vector coverage verifies invalid organization filters fail before backend
+    calls.
+  - Exact empty-string legacy behavior is pinned for query and delete paths.
+  - Reviewer subagent found a compatibility coverage gap; added the
+    exact-empty-string regressions in response.
+
+Verification:
+- `npx vitest run tests/vector/qdrant-index.test.ts tests/vector/pgvector-index.integration.test.ts` (33 passed, 12 skipped)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (761 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened ingest job creation organization validation:
   - `create` now rejects whitespace-only organization IDs before inserting
     ingest job rows.

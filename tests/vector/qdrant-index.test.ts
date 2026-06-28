@@ -136,6 +136,25 @@ describe("createQdrantVectorIndex — VectorFilter → {must} translation", () =
     expect(keys).toContain("project_key");
   });
 
+  it("rejects whitespace-only organizationId before Qdrant query", async () => {
+    const client = makeClient();
+    const index = createQdrantVectorIndex(client as never, "memory_chunks_v1");
+
+    await expect(
+      index.query(
+        [0.1, 0.2, 0.3],
+        {
+          organizationId: " \n\t ",
+          scopes: [{ scopeType: "project", scopeId: "project-alpha" }],
+          projectKey: "project-alpha",
+        },
+        5,
+      ),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(client.query).not.toHaveBeenCalled();
+  });
+
   it("returns VectorHit[] with id, score, and payload from Qdrant response", async () => {
     const client = makeClient();
     client.query.mockResolvedValue({
@@ -224,6 +243,21 @@ describe("createQdrantVectorIndex — delete", () => {
     expect(client.delete).toHaveBeenCalledWith("memory_chunks_v1", { points: ["chunk:1", "chunk:2"] });
   });
 
+  it("treats empty organizationId as legacy unscoped Qdrant delete", async () => {
+    const client = {
+      query: vi.fn(),
+      upsert: vi.fn(),
+      delete: vi.fn().mockResolvedValue(undefined),
+      collectionExists: vi.fn(),
+      createCollection: vi.fn(),
+    };
+    const index = createQdrantVectorIndex(client as never, "memory_chunks_v1");
+
+    await index.delete(["chunk:1", "chunk:2"], { organizationId: "" });
+
+    expect(client.delete).toHaveBeenCalledWith("memory_chunks_v1", { points: ["chunk:1", "chunk:2"] });
+  });
+
   it("calls Qdrant delete with id and organization filters when organizationId is provided", async () => {
     const client = {
       query: vi.fn(),
@@ -244,6 +278,23 @@ describe("createQdrantVectorIndex — delete", () => {
         ],
       },
     });
+  });
+
+  it("rejects whitespace-only organizationId before Qdrant delete", async () => {
+    const client = {
+      query: vi.fn(),
+      upsert: vi.fn(),
+      delete: vi.fn(),
+      collectionExists: vi.fn(),
+      createCollection: vi.fn(),
+    };
+    const index = createQdrantVectorIndex(client as never, "memory_chunks_v1");
+
+    await expect(
+      index.delete(["chunk:1"], { organizationId: " \n\t " }),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(client.delete).not.toHaveBeenCalled();
   });
 
   it("skips Qdrant delete call when ids array is empty (guards against Qdrant 400)", async () => {
@@ -284,6 +335,28 @@ describe("createQdrantVectorIndex — deleteByRecordIds", () => {
     });
   });
 
+  it("treats empty organizationId as legacy unscoped Qdrant deleteByRecordIds", async () => {
+    const client = {
+      query: vi.fn(),
+      upsert: vi.fn(),
+      delete: vi.fn().mockResolvedValue(undefined),
+      collectionExists: vi.fn(),
+      createCollection: vi.fn(),
+    };
+    const index = createQdrantVectorIndex(client as never, "memory_chunks_v1");
+
+    await index.deleteByRecordIds([101, 202], { organizationId: "" });
+
+    expect(client.delete).toHaveBeenCalledWith("memory_chunks_v1", {
+      filter: {
+        should: [
+          { key: "memory_record_id", match: { value: 101 } },
+          { key: "memory_record_id", match: { value: 202 } },
+        ],
+      },
+    });
+  });
+
   it("deletes by memory_record_id and organization_id when scoped", async () => {
     const client = {
       query: vi.fn(),
@@ -312,6 +385,23 @@ describe("createQdrantVectorIndex — deleteByRecordIds", () => {
         ],
       },
     });
+  });
+
+  it("rejects whitespace-only organizationId before Qdrant deleteByRecordIds", async () => {
+    const client = {
+      query: vi.fn(),
+      upsert: vi.fn(),
+      delete: vi.fn(),
+      collectionExists: vi.fn(),
+      createCollection: vi.fn(),
+    };
+    const index = createQdrantVectorIndex(client as never, "memory_chunks_v1");
+
+    await expect(
+      index.deleteByRecordIds([101], { organizationId: " \n\t " }),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(client.delete).not.toHaveBeenCalled();
   });
 
   it("skips Qdrant call when recordIds array is empty (data-loss guard)", async () => {
