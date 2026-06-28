@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-28
 
+- Fixed architecture docs embedding module filename drift:
+  - English/Korean architecture docs now reference the real
+    `src/embedding/local-embedding.ts` module instead of the stale pluralized
+    path.
+  - Public docs drift coverage now verifies all documented embedding provider
+    module filenames exist and are listed in both architecture docs.
+
+Verification:
+- `npx vitest run tests/scripts/public-docs-drift.test.ts`
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (615 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Removed stale Transformers dynamic-import TypeScript suppression:
   - `@huggingface/transformers` is a regular dependency and ships declarations.
   - `src/embedding/transformers-embedding.ts` no longer needs the old

@@ -351,7 +351,7 @@ provider 선택 (기본값: `transformers`):
   ~22 MB 다운로드; 이후 완전 오프라인 동작. API 키 불필요.
 - `openai` → `src/embedding/openai-embeddings.ts`,
   `text-embedding-3-small`, 1536-dim. `OPENAI_API_KEY` 필요.
-- `local` → `src/embedding/local-embeddings.ts`, 결정론적 SHA-256 해싱
+- `local` → `src/embedding/local-embedding.ts`, 결정론적 SHA-256 해싱
   → 384-dim 벡터. 외부 호출 없음; 시맨틱 검색이 불필요한 CI /
   air-gapped / 오프라인 환경용.
 

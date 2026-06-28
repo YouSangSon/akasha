@@ -29,3 +29,4 @@ experience, documentation, features.
 - Public docs index drift guard for tracked docs pages and English/Korean pairs.
 - Transformers dependency docs/comments aligned with package metadata.
 - Stale Transformers dynamic-import `@ts-ignore` removed.
+- Architecture docs local embedding module filename drift fixed.

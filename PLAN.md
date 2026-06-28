@@ -4,15 +4,15 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Transformers Import Suppression
+## Current Loop — Embedding Module Doc Drift
 
 Status:
-- `@huggingface/transformers` ships TypeScript declarations and is now a
-  regular dependency.
-- `src/embedding/transformers-embedding.ts` no longer carries the old dynamic
-  import `@ts-ignore` comment.
-- Review, focused Transformers embedding/public docs tests, typecheck, build,
-  audit, full test suite, and diff whitespace checks passed.
+- Architecture docs reference `src/embedding/local-embeddings.ts`, but the
+  actual module is `src/embedding/local-embedding.ts`.
+- English/Korean docs now use the actual filename.
+- Public docs drift coverage now checks embedding provider module filenames.
+- Review, focused public docs drift test, typecheck, build, audit, full test
+  suite, and diff whitespace checks passed.
 
 Loop closeout:
 - Commit locally; do not push.

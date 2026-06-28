@@ -359,7 +359,7 @@ vector dimensions and content topology differ between backends.
   required.
 - `openai` → `src/embedding/openai-embeddings.ts`,
   `text-embedding-3-small`, 1536-dim. Requires `OPENAI_API_KEY`.
-- `local` → `src/embedding/local-embeddings.ts`, deterministic SHA-256
+- `local` → `src/embedding/local-embedding.ts`, deterministic SHA-256
   hashing into 384-dim vectors. No external calls; intended for CI /
   air-gapped / offline use where semantic search is not needed.
 

@@ -192,6 +192,22 @@ describe("public documentation drift checks", () => {
     );
   });
 
+  it("documents current embedding provider module filenames", () => {
+    for (const modulePath of [
+      "src/embedding/transformers-embedding.ts",
+      "src/embedding/openai-embeddings.ts",
+      "src/embedding/local-embedding.ts",
+    ]) {
+      expect(fs.existsSync(modulePath)).toBe(true);
+      expect(read("docs/architecture.md")).toContain(modulePath);
+      expect(read("docs/architecture.ko.md")).toContain(modulePath);
+    }
+
+    for (const path of ["docs/architecture.md", "docs/architecture.ko.md"]) {
+      expect(read(path)).not.toContain("src/embedding/local-embeddings.ts");
+    }
+  });
+
   it("does not describe reindex orphan vectors as an open pgvector follow-up", () => {
     expect(read("src/vector/pgvector-index.ts")).not.toContain(
       "ORPHAN VECTORS ON REINDEX (KNOWN FOLLOW-UP)",
