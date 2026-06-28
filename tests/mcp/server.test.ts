@@ -1663,6 +1663,88 @@ describe("createToolRegistry", () => {
     );
   });
 
+  it("rejects invalid compaction thresholds before repository dispatch", async () => {
+    const services = createCanonicalServices();
+    const resolveCanonicalServices = vi.fn(async () => services);
+    const registry = createToolRegistry({ resolveCanonicalServices });
+
+    for (const decayThreshold of [
+      -1,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+    ]) {
+      await expect(
+        registry.compact_memory({
+          projectKey: "project-alpha",
+          decayThreshold,
+        }),
+      ).rejects.toThrow(/decayThreshold/);
+    }
+    for (const halfLifeDays of [
+      0,
+      -1,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+    ]) {
+      await expect(
+        registry.compact_memory({
+          projectKey: "project-alpha",
+          halfLifeDays,
+        }),
+      ).rejects.toThrow(/halfLifeDays/);
+    }
+    for (const semanticDedupThreshold of [
+      0,
+      -1,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      1.01,
+    ]) {
+      await expect(
+        registry.compact_memory({
+          projectKey: "project-alpha",
+          semanticDedupThreshold,
+        }),
+      ).rejects.toThrow(/semanticDedupThreshold/);
+    }
+
+    expect(resolveCanonicalServices).not.toHaveBeenCalled();
+    expect(services.repository.listMemory).not.toHaveBeenCalled();
+  });
+
+  it("accepts boundary compaction thresholds through the direct registry path", async () => {
+    const services = createCanonicalServices();
+    services.repository.listMemory.mockResolvedValue([
+      createRecord({
+        id: 901,
+        content: "Use Postgres for canonical persistence.",
+        memoryType: "decision",
+        sourceType: "decision",
+        externalId: "p-1",
+      }),
+      createRecord({
+        id: 902,
+        content: "PostgreSQL is the canonical store of record.",
+        memoryType: "decision",
+        sourceType: "decision",
+        externalId: "p-2",
+      }),
+    ]);
+    const registry = createToolRegistry({
+      resolveCanonicalServices: async () => services,
+    });
+
+    await registry.compact_memory({
+      projectKey: "project-alpha",
+      decayThreshold: 0,
+      halfLifeDays: 0.5,
+      semanticDedupThreshold: 1,
+    });
+
+    expect(services.repository.listMemory).toHaveBeenCalledOnce();
+    expect(services.embeddings.embedBatch).toHaveBeenCalledOnce();
+  });
+
   it("applies compaction (dryRun=false) via canonical services and returns archivedIds", async () => {
     const services = createCanonicalServices();
 

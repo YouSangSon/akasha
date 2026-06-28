@@ -424,6 +424,16 @@ export function createToolHandlers(input: {
     async compact_memory(toolInput) {
       assertProvidedScopeIdentifiers(toolInput);
       assertOptionalPositiveInteger(toolInput.limit, "limit", 5000);
+      assertOptionalNonNegativeFiniteNumber(
+        toolInput.decayThreshold,
+        "decayThreshold",
+      );
+      assertOptionalPositiveFiniteNumber(toolInput.halfLifeDays, "halfLifeDays");
+      assertOptionalPositiveFiniteNumber(
+        toolInput.semanticDedupThreshold,
+        "semanticDedupThreshold",
+        1,
+      );
       const scope = toolInput.scope ?? "project";
       const dryRun = toolInput.dryRun ?? true;
       const userScopeId = resolveUserScopeId({
@@ -1106,6 +1116,34 @@ function assertOptionalPositiveInteger(
     return;
   }
   assertPositiveInteger(value, fieldName);
+  if (max !== undefined && value > max) {
+    throw new Error(`${fieldName} must be at most ${max}`);
+  }
+}
+
+function assertOptionalNonNegativeFiniteNumber(
+  value: number | undefined,
+  fieldName: string,
+): void {
+  if (value === undefined) {
+    return;
+  }
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`${fieldName} must be a non-negative finite number`);
+  }
+}
+
+function assertOptionalPositiveFiniteNumber(
+  value: number | undefined,
+  fieldName: string,
+  max?: number,
+): void {
+  if (value === undefined) {
+    return;
+  }
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`${fieldName} must be a positive finite number`);
+  }
   if (max !== undefined && value > max) {
     throw new Error(`${fieldName} must be at most ${max}`);
   }

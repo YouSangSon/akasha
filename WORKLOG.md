@@ -46,6 +46,23 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened direct compaction threshold validation:
+  - Direct `compact_memory.decayThreshold`, `halfLifeDays`, and
+    `semanticDedupThreshold` reject schema-invalid values before repository
+    dispatch.
+  - Direct coverage verifies invalid threshold values fail before service
+    dispatch and documented boundaries still reach the compaction path.
+  - Subagent reviewer `McClintock` reported no findings.
+
+Verification:
+- `npx vitest run tests/mcp/server.test.ts` (110 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (697 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Hardened direct compaction limit validation:
   - Direct `compact_memory.limit` rejects invalid and over-limit values before
     repository dispatch.
