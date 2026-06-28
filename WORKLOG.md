@@ -46,6 +46,24 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened restore-smoke Qdrant collection resolution:
+  - Explicit whitespace-only manifest `qdrant.collectionName` and
+    `QDRANT_COLLECTION_NAME` values now fail instead of falling back to another
+    collection name.
+  - Omitted collection metadata still falls back to env/default for old
+    manifests.
+  - Pgvector mode remains unaffected and now has explicit regression coverage.
+  - Reviewer subagent found no issue and noted the pgvector test gap, which was
+    covered before final verification.
+
+Verification:
+- `npx vitest run tests/scripts/restore-smoke.test.ts` (14 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (837 passed, 34 skipped across 67 files)
+- `git diff --check`
+
 - Hardened restore-smoke tool input construction:
   - `buildRestoreSmokeToolInput()` now rejects whitespace-only `projectKey`,
     `userScopeId`, and `organizationId` values before search/context-pack

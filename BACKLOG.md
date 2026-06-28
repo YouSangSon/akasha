@@ -193,3 +193,5 @@ experience, documentation, features.
   while preserving case-insensitive supported level names.
 - Whitespace-only restore-smoke tool identifiers are rejected before registry
   dispatch.
+- Whitespace-only restore-smoke Qdrant collection identifiers are rejected
+  before restore command environment construction.

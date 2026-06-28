@@ -88,11 +88,33 @@ function resolveQdrantCollectionName(
   manifest: BackupManifest,
   env: NodeJS.ProcessEnv = process.env,
 ): string {
-  return (
-    manifest.qdrant?.collectionName?.trim() ||
-    env.QDRANT_COLLECTION_NAME?.trim() ||
-    DEFAULT_QDRANT_COLLECTION_NAME
+  const manifestCollection = optionalTrimmedRestoreSmokeText(
+    manifest.qdrant?.collectionName,
+    "manifest qdrant.collectionName",
   );
+  if (manifestCollection !== undefined) {
+    return manifestCollection;
+  }
+
+  const envCollection = optionalTrimmedRestoreSmokeText(
+    env.QDRANT_COLLECTION_NAME,
+    "QDRANT_COLLECTION_NAME",
+  );
+  return envCollection ?? DEFAULT_QDRANT_COLLECTION_NAME;
+}
+
+function optionalTrimmedRestoreSmokeText(
+  value: string | undefined,
+  name: string,
+): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    throw new Error(`${name} must contain non-whitespace text`);
+  }
+  return trimmed;
 }
 
 export function buildRestoreSmokeCommandEnv(

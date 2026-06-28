@@ -4,13 +4,16 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Restore Smoke Tool Input Guard
+## Current Loop — Restore Smoke Collection Guard
 
 Status:
-- Restore-smoke tool input construction now rejects whitespace-only
-  `projectKey`, `userScopeId`, and `organizationId` before registry dispatch.
-- Undefined optional fields are still omitted for legacy restore-smoke mode.
-- Reviewer subagent found no issues.
+- Restore-smoke Qdrant collection resolution now rejects explicitly
+  whitespace-only manifest `qdrant.collectionName` and
+  `QDRANT_COLLECTION_NAME` values instead of silently falling back.
+- Omitted collection metadata still falls back to env/default for old manifests.
+- Pgvector mode remains unaffected and now has explicit regression coverage.
+- Reviewer subagent found no issue and noted the pgvector test gap, which was
+  covered before final verification.
 - Focused restore-smoke tests, typecheck, build, audit, full suite, and diff
   whitespace checks passed.
 

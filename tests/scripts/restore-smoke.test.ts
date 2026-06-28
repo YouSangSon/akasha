@@ -188,6 +188,62 @@ describe("buildRestoreSmokeCommandEnv", () => {
     expect(env.RESTORE_SMOKE_QDRANT_COLLECTION_NAME).toBe("memory_chunks_v1");
     expect(env.QDRANT_COLLECTION_NAME).toBe("memory_chunks_v1");
   });
+
+  it("rejects whitespace-only manifest collection names instead of falling back", () => {
+    expect(() =>
+      buildQdrantEnv({
+        env: {
+          QDRANT_COLLECTION_NAME: "env_chunks",
+        },
+        manifest: {
+          ...baseManifest,
+          qdrant: {
+            ...baseManifest.qdrant,
+            fileName: "qdrant-20260627-0000.snapshot",
+            sha256: "qdrant-sha",
+            collectionName: " \n\t ",
+          },
+        },
+      }),
+    ).toThrow("manifest qdrant.collectionName must contain non-whitespace text");
+  });
+
+  it("rejects whitespace-only QDRANT_COLLECTION_NAME instead of using the default", () => {
+    expect(() =>
+      buildQdrantEnv({
+        env: {
+          QDRANT_COLLECTION_NAME: " \n\t ",
+        },
+      }),
+    ).toThrow("QDRANT_COLLECTION_NAME must contain non-whitespace text");
+  });
+
+  it("does not validate Qdrant collection settings in pgvector mode", () => {
+    const env = buildRestoreSmokeCommandEnv({
+      env: {
+        QDRANT_COLLECTION_NAME: " \n\t ",
+      },
+      databaseUrl: "postgres://memory:memory@127.0.0.1:15432/memory_os",
+      vectorBackend: "pgvector",
+      manifest: {
+        ...baseManifest,
+        vectorBackend: "pgvector",
+        qdrant: {
+          ...baseManifest.qdrant,
+          fileName: "qdrant-20260627-0000.snapshot",
+          sha256: "qdrant-sha",
+          collectionName: " \n\t ",
+        },
+      },
+      manifestPath: "/backups/manifest-20260627-0000.json",
+      postgresArtifactPath: "/backups/postgres-20260627-0000.sql.gz",
+      qdrantArtifactPath: "",
+      qdrantMetadataPath: "",
+    });
+
+    expect(env.RESTORE_SMOKE_QDRANT_COLLECTION_NAME).toBeUndefined();
+    expect(env.QDRANT_COLLECTION_NAME).toBe(" \n\t ");
+  });
 });
 
 describe("buildRestoreSmokeToolInput", () => {
