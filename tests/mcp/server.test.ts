@@ -2472,8 +2472,11 @@ describe("createMcpServer resources and prompts", () => {
   });
 
   it.each([
+    "akasha://memory/recent/%20%20?organizationId=org-a",
     "akasha://memory/recent/project-alpha?organizationId=",
+    "akasha://memory/recent/project-alpha?organizationId=%20%20",
     "akasha://memory/recent/project-alpha?query=",
+    "akasha://memory/recent/project-alpha?query=%20%20",
     "akasha://memory/recent/project-alpha?limit=",
     "akasha://memory/recent/project-alpha?limit=0",
     "akasha://memory/recent/project-alpha?limit=-1",
@@ -2519,7 +2522,10 @@ describe("createMcpServer resources and prompts", () => {
   });
 
   it.each([
+    "akasha://context-pack/%20%20/continue%20implementation?organizationId=org-a",
+    "akasha://context-pack/project-alpha/%20%20?organizationId=org-a",
     "akasha://context-pack/project-alpha/continue%20implementation?organizationId=",
+    "akasha://context-pack/project-alpha/continue%20implementation?organizationId=%20%20",
     "akasha://context-pack/project-alpha/continue%20implementation?limit=",
     "akasha://context-pack/project-alpha/continue%20implementation?limit=0",
     "akasha://context-pack/project-alpha/continue%20implementation?limit=-1",

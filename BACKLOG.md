@@ -46,3 +46,5 @@ experience, documentation, features.
   dispatch or retrieval work.
 - Whitespace-only session-start prompt tasks are rejected before context-pack
   dispatch.
+- Whitespace-only MCP resource path/search parameters are rejected before
+  resource dispatch.

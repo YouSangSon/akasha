@@ -46,6 +46,23 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened MCP resource parameter validation:
+  - MCP resource URL parsing now rejects whitespace-only decoded path
+    segments, recent-memory `query`, and optional search params before
+    registry dispatch.
+  - Protocol tests cover invalid recent-memory and context-pack resource URIs
+    before `search_memory` / `build_context_pack` dispatch.
+  - Subagent reviewer `Archimedes` reported no findings.
+
+Verification:
+- `npx vitest run tests/mcp/server.test.ts` (86 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (655 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Hardened session prompt task validation:
   - `akasha_session_start.task` now rejects whitespace-only text through the
     MCP prompt argument schema.

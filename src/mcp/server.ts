@@ -497,7 +497,7 @@ function getPathSegment(resourceUrl: URL, index: number, label: string): string 
     .filter(Boolean)
     .map((segment) => decodeURIComponent(segment));
   const value = segments[index];
-  if (!value) {
+  if (!value || value.trim().length === 0) {
     throw new Error(`Missing required ${label} resource path segment.`);
   }
   return value;
@@ -508,8 +508,8 @@ function parseRecentMemoryQuery(resourceUrl: URL): string {
   if (query === null) {
     return "recent decisions constraints open questions";
   }
-  if (query.length === 0) {
-    throw new Error("Query must be a non-empty string when provided.");
+  if (query.trim().length === 0) {
+    throw new Error("Query must contain non-whitespace text when provided.");
   }
   return query;
 }
@@ -522,8 +522,8 @@ function parseOptionalNonEmptySearchParam(
   if (rawValue === null) {
     return undefined;
   }
-  if (rawValue.length === 0) {
-    throw new Error(`${label} must be a non-empty string when provided.`);
+  if (rawValue.trim().length === 0) {
+    throw new Error(`${label} must contain non-whitespace text when provided.`);
   }
   return rawValue;
 }
