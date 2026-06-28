@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened apply-compaction organization validation:
+  - `applyCompaction` now rejects whitespace-only organization IDs before run ID
+    generation, semantic embedding, rate-limit checks, archive writes, or vector
+    deletes.
+  - Apply-compaction coverage verifies invalid organization IDs fail before
+    those side effects.
+  - Reviewer subagent found no issues.
+
+Verification:
+- `npx vitest run tests/compact/apply-compaction.test.ts tests/compact/compact-memory.test.ts tests/compact/semantic-duplicates.test.ts tests/compact/decay-score.test.ts` (47 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (768 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened goal-run repository organization validation:
   - Repository entry points now reject whitespace-only organization IDs before
     SQL queries or transaction opens.

@@ -138,6 +138,38 @@ function makeDeps(
 }
 
 describe("applyCompaction (dry-run)", () => {
+  it("rejects whitespace-only organizationId before side effects", async () => {
+    const { repo, createCompactionRun, applyCompactionRecord } = makeRepoMocks();
+    const qdrant = makeVectorIndex();
+    const embeddings = {
+      embed: vi.fn(),
+      embedBatch: vi.fn().mockResolvedValue([]),
+    };
+    const generateRunId = vi.fn(() => TEST_RUN_ID);
+
+    await expect(
+      applyCompaction(
+        makeInput({
+          organizationId: " \n\t ",
+          records: [
+            makeRecord({ id: 1, content: "same" }),
+            makeRecord({ id: 2, content: "same" }),
+          ],
+          dryRun: false,
+          semanticDedupThreshold: 0.95,
+        }),
+        makeDeps(repo, qdrant, { embeddings, generateRunId }),
+      ),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(generateRunId).not.toHaveBeenCalled();
+    expect(embeddings.embedBatch).not.toHaveBeenCalled();
+    expect(repo.countRecentApplyRuns).not.toHaveBeenCalled();
+    expect(createCompactionRun).not.toHaveBeenCalled();
+    expect(applyCompactionRecord).not.toHaveBeenCalled();
+    expect(qdrant.delete).not.toHaveBeenCalled();
+  });
+
   it("returns plan + zero stats without calling repo or qdrant", async () => {
     const { repo, createCompactionRun, applyCompactionRecord } = makeRepoMocks();
     const qdrant = makeVectorIndex();

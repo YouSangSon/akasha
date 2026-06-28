@@ -4,15 +4,16 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Goal-Run Repository Organization Guard
+## Current Loop — Apply Compaction Organization Guard
 
 Status:
-- Goal-run repository entry points now reject whitespace-only organization IDs
-  before SQL queries or transaction opens.
-- Coverage verifies invalid goal-run organization IDs fail before `pool.query()`
-  or `pool.connect()`.
+- `applyCompaction` now rejects whitespace-only organization IDs before run ID
+  generation, semantic embedding, rate-limit checks, archive writes, or vector
+  deletes.
+- Coverage verifies invalid apply organization IDs fail before those side
+  effects.
 - Reviewer subagent found no issues.
-- Focused goal-run tests, typecheck, build, audit, full suite, and diff
+- Focused compaction tests, typecheck, build, audit, full suite, and diff
   whitespace checks passed.
 
 Loop closeout:

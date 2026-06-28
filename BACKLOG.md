@@ -161,3 +161,5 @@ experience, documentation, features.
   construction.
 - Whitespace-only goal-run repository organization IDs are rejected before SQL
   or transaction side effects.
+- Whitespace-only apply-compaction organization IDs are rejected before
+  embedding, rate-limit, archive, or vector side effects.

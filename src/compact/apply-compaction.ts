@@ -24,6 +24,7 @@ import type { Logger } from "../logger.js";
 import type { CompactMemoryToolResult, DuplicateGroupView } from "../mcp/types.js";
 import type { SearchMemoryResult } from "../types.js";
 import type { EmbeddingClient } from "../store/canonical-indexing.js";
+import { assertNonBlankText } from "../store/memory-content.js";
 import type { VectorIndex } from "../vector/vector-index.js";
 import type {
   ArchiveReason,
@@ -100,6 +101,8 @@ export async function applyCompaction(
   input: Readonly<ApplyCompactionInput>,
   deps: Readonly<ApplyCompactionDeps>,
 ): Promise<ApplyCompactionResult> {
+  assertNonBlankText(input.organizationId, "organizationId");
+
   const startedAt = (deps.now ?? (() => new Date()))();
   const idempotencyKey = (deps.generateRunId ?? randomUUID)();
 
