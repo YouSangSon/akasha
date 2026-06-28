@@ -46,6 +46,26 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened goal-run ID validation:
+  - Direct goal-run handlers reject invalid `goalRunId` values before
+    `recordIteration`, `get`, `complete`, `abandon`, context, or repeat-check
+    service dispatch.
+  - Public schemas use a shared positive safe integer schema for goal-run IDs,
+    memory governance IDs, and iteration memory links.
+  - HTTP coverage verifies unsafe `goalRunId` rejects before registry dispatch.
+  - Subagent reviewer `Hume` caught the schema/handler mismatch; re-review by
+    `Poincare` reported no findings.
+
+Verification:
+- `npx vitest run tests/goal-run/goal-run-handlers.test.ts tests/app/server.test.ts`
+  (82 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (684 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Hardened direct iteration memory-link validation:
   - Direct `record_iteration.memoryIds` now rejects `NaN`, unsafe, non-integer,
     zero, and negative IDs before `goalRuns.recordIteration`.

@@ -659,6 +659,24 @@ describe("createOperatorServer", () => {
     expect(registry.check_repeat_attempt).not.toHaveBeenCalled();
   });
 
+  it("rejects unsafe goal-run ids before dispatch", async () => {
+    const res = await fetch(`${handle.baseUrl}/v1/goal-run/get`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        goalRunId: Number.MAX_SAFE_INTEGER + 1,
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: { message: string } }).error.message)
+      .toContain("goalRunId");
+    expect(registry.get_goal_run).not.toHaveBeenCalled();
+  });
+
   it("validates the token-resolved organizationId through the shared schema", async () => {
     await handle.close();
     registry = buildRegistry();

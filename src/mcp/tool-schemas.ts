@@ -185,6 +185,13 @@ export const nonBlankTextInputSchema = z
   });
 const organizationIdInputSchema = nonBlankTextInputSchema;
 const tagInputSchema = nonBlankTextInputSchema;
+const positiveSafeIntegerInputSchema = z
+  .number()
+  .int()
+  .positive()
+  .refine((value) => Number.isSafeInteger(value), {
+    message: "must be a safe integer",
+  });
 
 export const SERVICE_TOOL_DESCRIPTORS = [
   {
@@ -334,7 +341,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
       "Update one memory record through governance controls and refresh its vector index state.",
     inputSchema: {
       organizationId: organizationIdInputSchema.optional(),
-      memoryId: z.number().int().positive(),
+      memoryId: positiveSafeIntegerInputSchema,
       kind: z.enum(SUPPORTED_MEMORY_KINDS).optional(),
       title: z.string().nullable().optional(),
       content: nonBlankTextInputSchema.optional(),
@@ -355,7 +362,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
       "Archive one memory record for governance deletion and remove its vector points.",
     inputSchema: {
       organizationId: organizationIdInputSchema.optional(),
-      memoryId: z.number().int().positive(),
+      memoryId: positiveSafeIntegerInputSchema,
     },
     outputSchema: {
       ok: z.literal(true),
@@ -370,7 +377,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
       "Replace normalized governance tags on one memory record and refresh its vector index state.",
     inputSchema: {
       organizationId: organizationIdInputSchema.optional(),
-      memoryId: z.number().int().positive(),
+      memoryId: positiveSafeIntegerInputSchema,
       tags: z.array(tagInputSchema),
     },
     outputSchema: {
@@ -430,12 +437,12 @@ export const SERVICE_TOOL_DESCRIPTORS = [
       "Record one iteration of a goal run (attempt + outcome) and optionally link memories to the run.",
     inputSchema: {
       organizationId: organizationIdInputSchema.optional(),
-      goalRunId: z.number().int().positive(),
+      goalRunId: positiveSafeIntegerInputSchema,
       attempt: nonBlankTextInputSchema,
       outcome: z.enum(["success", "failure", "partial"]),
       summary: z.string().nullable().optional(),
       error: z.string().nullable().optional(),
-      memoryIds: z.array(z.number().int().positive()).optional(),
+      memoryIds: z.array(positiveSafeIntegerInputSchema).optional(),
     },
     outputSchema: {
       ok: z.literal(true),
@@ -448,7 +455,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
       "Fetch a goal run with its ordered iterations, for continuity and termination evidence.",
     inputSchema: {
       organizationId: organizationIdInputSchema.optional(),
-      goalRunId: z.number().int().positive(),
+      goalRunId: positiveSafeIntegerInputSchema,
     },
     outputSchema: {
       ok: z.literal(true),
@@ -476,7 +483,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
       "Mark a goal run completed; its memories become eligible for compaction again.",
     inputSchema: {
       organizationId: organizationIdInputSchema.optional(),
-      goalRunId: z.number().int().positive(),
+      goalRunId: positiveSafeIntegerInputSchema,
       resolution: z.string().nullable().optional(),
     },
     outputSchema: {
@@ -490,7 +497,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
       "Mark a goal run abandoned; its memories become eligible for compaction again.",
     inputSchema: {
       organizationId: organizationIdInputSchema.optional(),
-      goalRunId: z.number().int().positive(),
+      goalRunId: positiveSafeIntegerInputSchema,
       reason: z.string().nullable().optional(),
     },
     outputSchema: {
@@ -504,7 +511,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
       "Build a compact, goal-oriented context pack for one goal run: goal, termination criteria, recent iterations, last error, and scope constraints/notes.",
     inputSchema: {
       organizationId: organizationIdInputSchema.optional(),
-      goalRunId: z.number().int().positive(),
+      goalRunId: positiveSafeIntegerInputSchema,
       limit: z.number().int().positive().max(200).optional(),
     },
     outputSchema: {
@@ -520,7 +527,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
       "Warn if a candidate attempt is semantically close to a prior failed attempt in the goal run (already-tried-and-failed detection).",
     inputSchema: {
       organizationId: organizationIdInputSchema.optional(),
-      goalRunId: z.number().int().positive(),
+      goalRunId: positiveSafeIntegerInputSchema,
       attempt: nonBlankTextInputSchema,
       threshold: z.number().gt(0).max(1).optional(),
     },

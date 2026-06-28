@@ -182,6 +182,47 @@ describe("goal-run handlers", () => {
     expect(goalRuns.recordIteration).not.toHaveBeenCalled();
   });
 
+  it("rejects invalid goal run ids before service dispatch", async () => {
+    const goalRuns = goalRunServicesStub();
+    const registry = registryWith(goalRuns);
+
+    for (const goalRunId of [
+      0,
+      -1,
+      1.5,
+      Number.NaN,
+      Number.MAX_SAFE_INTEGER + 1,
+    ]) {
+      await expect(
+        registry.record_iteration({
+          goalRunId,
+          attempt: "try A",
+          outcome: "failure",
+        }),
+      ).rejects.toThrow(/goalRunId/);
+      await expect(registry.get_goal_run({ goalRunId })).rejects.toThrow(
+        /goalRunId/,
+      );
+      await expect(
+        registry.complete_goal_run({ goalRunId, resolution: "done" }),
+      ).rejects.toThrow(/goalRunId/);
+      await expect(
+        registry.abandon_goal_run({ goalRunId, reason: "stuck" }),
+      ).rejects.toThrow(/goalRunId/);
+      await expect(registry.build_goal_context({ goalRunId })).rejects.toThrow(
+        /goalRunId/,
+      );
+      await expect(
+        registry.check_repeat_attempt({ goalRunId, attempt: "try A" }),
+      ).rejects.toThrow(/goalRunId/);
+    }
+
+    expect(goalRuns.recordIteration).not.toHaveBeenCalled();
+    expect(goalRuns.get).not.toHaveBeenCalled();
+    expect(goalRuns.complete).not.toHaveBeenCalled();
+    expect(goalRuns.abandon).not.toHaveBeenCalled();
+  });
+
   it("complete_goal_run maps resolution to the close note", async () => {
     const goalRuns = goalRunServicesStub();
     const registry = registryWith(goalRuns);

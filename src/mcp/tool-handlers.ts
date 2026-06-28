@@ -857,6 +857,7 @@ export function createToolHandlers(input: {
 
     async record_iteration(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      assertPositiveInteger(toolInput.goalRunId, "goalRunId");
       assertNonBlankText(toolInput.attempt, "attempt");
       assertPositiveIntegerArray(toolInput.memoryIds, "memoryIds");
       const summary = optionalNonBlankText(toolInput.summary);
@@ -884,6 +885,7 @@ export function createToolHandlers(input: {
 
     async get_goal_run(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      assertPositiveInteger(toolInput.goalRunId, "goalRunId");
       return await withCanonicalServices(async (services) => {
         const goalRun = await services.goalRuns.get({
           organizationId: toolInput.organizationId ?? "default",
@@ -913,6 +915,7 @@ export function createToolHandlers(input: {
 
     async complete_goal_run(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      assertPositiveInteger(toolInput.goalRunId, "goalRunId");
       const resolution = optionalNonBlankText(toolInput.resolution);
       if (resolution) {
         assertNoSecrets(resolution);
@@ -929,6 +932,7 @@ export function createToolHandlers(input: {
 
     async abandon_goal_run(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      assertPositiveInteger(toolInput.goalRunId, "goalRunId");
       const reason = optionalNonBlankText(toolInput.reason);
       if (reason) {
         assertNoSecrets(reason);
@@ -945,6 +949,7 @@ export function createToolHandlers(input: {
 
     async build_goal_context(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      assertPositiveInteger(toolInput.goalRunId, "goalRunId");
       return await withCanonicalServices(async (services) => {
         const organizationId = toolInput.organizationId ?? "default";
         const goalRun = await services.goalRuns.get({
@@ -978,6 +983,7 @@ export function createToolHandlers(input: {
 
     async check_repeat_attempt(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      assertPositiveInteger(toolInput.goalRunId, "goalRunId");
       assertNonBlankText(toolInput.attempt, "attempt");
       assertNoSecrets(toolInput.attempt);
       const threshold = resolveRepeatThreshold(toolInput.threshold);
@@ -1064,9 +1070,13 @@ function assertPositiveIntegerArray(
     return;
   }
   for (const value of values) {
-    if (!Number.isSafeInteger(value) || value <= 0) {
-      throw new Error(`${fieldName} must contain only positive integers`);
-    }
+    assertPositiveInteger(value, fieldName);
+  }
+}
+
+function assertPositiveInteger(value: number, fieldName: string): void {
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new Error(`${fieldName} must be a positive safe integer`);
   }
 }
 

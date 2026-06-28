@@ -67,3 +67,4 @@ experience, documentation, features.
 - Invalid direct retrieval limits are rejected before search/context-pack
   retrieval work.
 - Invalid direct iteration memory links are rejected before iteration mutation.
+- Invalid direct/public goal-run IDs are rejected before service dispatch.
