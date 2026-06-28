@@ -37,6 +37,7 @@ describe("loadOAuthTokenVerifierConfig", () => {
         MCP_OAUTH_JWKS_URLS: "https://auth.example.com/jwks",
         MCP_OAUTH_JWT_ALGORITHMS: "RS256,ES256",
         MCP_OAUTH_JWT_CLOCK_TOLERANCE_SECONDS: "15",
+        MCP_OAUTH_JWKS_TIMEOUT_MS: " 2500 ",
         MCP_OAUTH_ORGANIZATION_CLAIM: "tenant",
         MCP_OAUTH_JWT_TYPE: "at+jwt",
       },
@@ -47,6 +48,7 @@ describe("loadOAuthTokenVerifierConfig", () => {
       resource: "https://akasha.example.com/mcp",
       algorithms: ["RS256", "ES256"],
       clockToleranceSeconds: 15,
+      jwksTimeoutMs: 2500,
       organizationClaim: "tenant",
       requiredType: "at+jwt",
       issuers: [
@@ -71,6 +73,45 @@ describe("loadOAuthTokenVerifierConfig", () => {
         protectedResource,
       ),
     ).toThrow(/one JWKS URL per/);
+  });
+
+  it("rejects invalid numeric verifier env values", () => {
+    const cases = [
+      {
+        env: { MCP_OAUTH_JWT_CLOCK_TOLERANCE_SECONDS: " \n\t " },
+        message: /MCP_OAUTH_JWT_CLOCK_TOLERANCE_SECONDS/,
+      },
+      {
+        env: { MCP_OAUTH_JWT_CLOCK_TOLERANCE_SECONDS: "1.5" },
+        message: /MCP_OAUTH_JWT_CLOCK_TOLERANCE_SECONDS/,
+      },
+      {
+        env: { MCP_OAUTH_JWT_CLOCK_TOLERANCE_SECONDS: "-1" },
+        message: /MCP_OAUTH_JWT_CLOCK_TOLERANCE_SECONDS/,
+      },
+      {
+        env: { MCP_OAUTH_JWKS_TIMEOUT_MS: " \n\t " },
+        message: /MCP_OAUTH_JWKS_TIMEOUT_MS/,
+      },
+      {
+        env: { MCP_OAUTH_JWKS_TIMEOUT_MS: "1e3" },
+        message: /MCP_OAUTH_JWKS_TIMEOUT_MS/,
+      },
+      {
+        env: { MCP_OAUTH_JWKS_TIMEOUT_MS: "0" },
+        message: /MCP_OAUTH_JWKS_TIMEOUT_MS/,
+      },
+      {
+        env: { MCP_OAUTH_JWKS_TIMEOUT_MS: "2147483648" },
+        message: /MCP_OAUTH_JWKS_TIMEOUT_MS/,
+      },
+    ] as const;
+
+    for (const testCase of cases) {
+      expect(() =>
+        loadOAuthTokenVerifierConfig(testCase.env, protectedResource),
+      ).toThrow(testCase.message);
+    }
   });
 });
 

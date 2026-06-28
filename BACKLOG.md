@@ -185,3 +185,5 @@ experience, documentation, features.
   and output-directory flags are rejected before dispatch or filesystem reads.
 - Whitespace-only explicit/default user scope resolver inputs are rejected
   before internal callers can receive them.
+- Invalid OAuth verifier numeric environment values are rejected before JWKS
+  verifier construction, including timeout values outside Node timer bounds.

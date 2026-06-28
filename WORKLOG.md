@@ -46,6 +46,24 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened OAuth verifier numeric env parsing:
+  - `MCP_OAUTH_JWT_CLOCK_TOLERANCE_SECONDS` and
+    `MCP_OAUTH_JWKS_TIMEOUT_MS` now require plain decimal integer strings
+    instead of accepting JavaScript coercions such as whitespace, decimals, or
+    exponent notation.
+  - `MCP_OAUTH_JWKS_TIMEOUT_MS` now rejects `0` and values above
+    `2_147_483_647`, matching Node timer bounds used by the JWKS resolver.
+  - Reviewer subagent caught the missing timeout upper bound; fixed before
+    final verification.
+
+Verification:
+- `npx vitest run tests/app/oauth-token-auth.test.ts` (14 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (806 passed, 34 skipped across 66 files)
+- `git diff --check`
+
 - Hardened user-scope resolution:
   - `resolveUserScopeId()` now rejects whitespace-only explicit and default
     user scope IDs instead of returning them to internal callers.

@@ -27,6 +27,7 @@ const DEFAULT_JWT_ALGORITHMS = [
 
 const DEFAULT_CLOCK_TOLERANCE_SECONDS = 60;
 const DEFAULT_ORGANIZATION_CLAIM = "organization_id";
+const MAX_TIMER_TIMEOUT_MS = 2_147_483_647;
 
 type JwksResolver = JWTVerifyGetKey;
 
@@ -89,6 +90,7 @@ export function loadOAuthTokenVerifierConfig(
     env.MCP_OAUTH_JWKS_TIMEOUT_MS,
     5000,
     "MCP_OAUTH_JWKS_TIMEOUT_MS",
+    MAX_TIMER_TIMEOUT_MS,
   );
   const organizationClaim =
     parseOptionalString(env.MCP_OAUTH_ORGANIZATION_CLAIM) ??
@@ -459,8 +461,12 @@ function parseNonNegativeInt(
   if (value === undefined || value === "") {
     return fallback;
   }
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 0) {
+  const normalized = value.trim();
+  if (!/^\d+$/.test(normalized)) {
+    throw new Error(`Invalid ${name}: expected a non-negative integer`);
+  }
+  const parsed = Number(normalized);
+  if (!Number.isSafeInteger(parsed)) {
     throw new Error(`Invalid ${name}: expected a non-negative integer`);
   }
   return parsed;
@@ -470,13 +476,21 @@ function parsePositiveInt(
   value: string | undefined,
   fallback: number,
   name: string,
+  max?: number,
 ): number {
   if (value === undefined || value === "") {
     return fallback;
   }
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed <= 0) {
+  const normalized = value.trim();
+  if (!/^\d+$/.test(normalized)) {
     throw new Error(`Invalid ${name}: expected a positive integer`);
+  }
+  const parsed = Number(normalized);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new Error(`Invalid ${name}: expected a positive integer`);
+  }
+  if (max !== undefined && parsed > max) {
+    throw new Error(`Invalid ${name}: expected a positive integer up to ${max}`);
   }
   return parsed;
 }
