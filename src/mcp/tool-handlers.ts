@@ -617,6 +617,7 @@ export function createToolHandlers(input: {
 
     async update_memory(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      assertPositiveInteger(toolInput.memoryId, "memoryId");
       if (toolInput.content !== undefined) {
         assertNonBlankMemoryContent(toolInput.content);
       }
@@ -664,6 +665,7 @@ export function createToolHandlers(input: {
 
     async delete_memory(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      assertPositiveInteger(toolInput.memoryId, "memoryId");
       return await withCanonicalServices(async (services) => {
         const organizationId = toolInput.organizationId ?? "default";
         const archived = await services.repository.archiveMemoryRecord({
@@ -713,6 +715,7 @@ export function createToolHandlers(input: {
 
     async tag_memory(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      assertPositiveInteger(toolInput.memoryId, "memoryId");
       assertNonBlankTags(toolInput.tags);
       return await withCanonicalServices(async (services) => {
         const organizationId = toolInput.organizationId ?? "default";

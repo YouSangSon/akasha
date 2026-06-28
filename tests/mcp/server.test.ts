@@ -1167,6 +1167,38 @@ describe("createToolRegistry", () => {
     expect(services.vectorIndex.deleteByRecordIds).not.toHaveBeenCalled();
   });
 
+  it("rejects invalid governance memory ids before canonical service dispatch", async () => {
+    const services = createCanonicalServices();
+    const resolveCanonicalServices = vi.fn(async () => services);
+    const registry = createToolRegistry({ resolveCanonicalServices });
+
+    for (const memoryId of [
+      0,
+      -1,
+      1.5,
+      Number.NaN,
+      Number.MAX_SAFE_INTEGER + 1,
+    ]) {
+      await expect(
+        registry.update_memory({
+          organizationId: "org-a",
+          memoryId,
+          title: "ignored",
+        }),
+      ).rejects.toThrow(/memoryId/);
+      await expect(
+        registry.delete_memory({ organizationId: "org-a", memoryId }),
+      ).rejects.toThrow(/memoryId/);
+      await expect(
+        registry.tag_memory({ organizationId: "org-a", memoryId, tags: [] }),
+      ).rejects.toThrow(/memoryId/);
+    }
+
+    expect(resolveCanonicalServices).not.toHaveBeenCalled();
+    expect(services.repository.updateMemoryRecord).not.toHaveBeenCalled();
+    expect(services.repository.archiveMemoryRecord).not.toHaveBeenCalled();
+  });
+
   it("does not delete existing index state when update_memory embedding refresh fails", async () => {
     const services = createCanonicalServices();
     services.repository.updateMemoryRecord.mockResolvedValueOnce(

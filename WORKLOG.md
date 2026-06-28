@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened direct governance memory ID validation:
+  - Direct `update_memory`, `delete_memory`, and `tag_memory` reject invalid
+    `memoryId` values before canonical service dispatch.
+  - Direct coverage verifies invalid memory IDs fail before repository update
+    or archive calls.
+  - Subagent reviewer `Banach` reported no findings.
+
+Verification:
+- `npx vitest run tests/mcp/server.test.ts` (102 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (687 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Hardened unarchive archive ID validation:
   - `unarchive_memory.archiveIds` now uses the shared positive safe integer
     schema and direct handler guard.

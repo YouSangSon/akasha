@@ -4,17 +4,15 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Unarchive Archive ID Validation
+## Current Loop — Governance Memory ID Validation
 
 Status:
-- `unarchive_memory.archiveIds` now uses the shared positive safe integer
-  schema and direct handler guard.
-- Direct coverage verifies invalid archive IDs fail before canonical service
-  resolution or archive lookup.
-- HTTP coverage verifies unsafe archive IDs reject before registry dispatch.
-- Explorer `Aristotle` confirmed this was the next smallest validation gap;
-  reviewer `Lagrange` reported no findings.
-- Focused app/MCP tests, typecheck, build, audit, full suite, and diff
+- Direct `update_memory`, `delete_memory`, and `tag_memory` now reject invalid
+  `memoryId` values before canonical service dispatch.
+- Direct coverage verifies invalid memory IDs fail before repository update or
+  archive calls.
+- Reviewer `Banach` reported no findings.
+- Focused MCP tests, typecheck, build, audit, full suite, and diff
   whitespace checks passed.
 
 Loop closeout:
