@@ -48,3 +48,5 @@ experience, documentation, features.
   dispatch.
 - Whitespace-only MCP resource path/search parameters are rejected before
   resource dispatch.
+- Whitespace-only governance tag/query filters are rejected before repository
+  dispatch.

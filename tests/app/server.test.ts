@@ -869,6 +869,40 @@ describe("createOperatorServer", () => {
     });
   });
 
+  it("rejects whitespace-only governance filters before dispatch", async () => {
+    const list = await fetch(`${handle.baseUrl}/v1/memory/list`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        projectKey: "p",
+        tag: " \n\t ",
+      }),
+    });
+    expect(list.status).toBe(400);
+    expect(((await list.json()) as { error: { message: string } }).error.message)
+      .toContain("non-whitespace text");
+    expect(registry.list_memory).not.toHaveBeenCalled();
+
+    const graph = await fetch(`${handle.baseUrl}/v1/memory/graph`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        projectKey: "p",
+        query: " \n\t ",
+      }),
+    });
+    expect(graph.status).toBe(400);
+    expect(((await graph.json()) as { error: { message: string } }).error.message)
+      .toContain("non-whitespace text");
+    expect(registry.inspect_memory_graph).not.toHaveBeenCalled();
+  });
+
   it("rejects list_memory default/project-scope payloads without projectKey before dispatch", async () => {
     const res = await fetch(`${handle.baseUrl}/v1/memory/list`, {
       method: "POST",

@@ -515,6 +515,9 @@ export function createToolHandlers(input: {
 
     async list_memory(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      if (toolInput.tag !== undefined) {
+        assertNonBlankText(toolInput.tag, "memory tag");
+      }
       const scope = toolInput.scope ?? "project";
       const userScopeId = resolveUserScopeId({
         cwd,
@@ -552,6 +555,9 @@ export function createToolHandlers(input: {
 
     async inspect_memory_graph(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      if (toolInput.query !== undefined) {
+        assertNonBlankText(toolInput.query, "graph query");
+      }
       const scope = toolInput.scope ?? "project";
       const userScopeId = resolveUserScopeId({
         cwd,

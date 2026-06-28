@@ -924,6 +924,31 @@ describe("createToolRegistry", () => {
     );
   });
 
+  it("rejects whitespace-only governance filters through the direct registry path", async () => {
+    const services = createCanonicalServices();
+    const registry = createToolRegistry({
+      resolveCanonicalServices: async () => services,
+    });
+
+    await expect(
+      registry.list_memory({
+        organizationId: "org-a",
+        projectKey: "project-alpha",
+        tag: " \n\t ",
+      }),
+    ).rejects.toThrow(/non-whitespace text/);
+    await expect(
+      registry.inspect_memory_graph({
+        organizationId: "org-a",
+        projectKey: "project-alpha",
+        query: " \n\t ",
+      }),
+    ).rejects.toThrow(/non-whitespace text/);
+
+    expect(services.repository.listMemoryForGovernance).not.toHaveBeenCalled();
+    expect(services.repository.inspectMemoryGraph).not.toHaveBeenCalled();
+  });
+
   it("rejects governance tools in legacy repository override mode", async () => {
     const registry = createToolRegistry({ repository: createRepository() });
 
@@ -2147,6 +2172,43 @@ describe("createMcpServer structured outputs", () => {
     }
     expect(registry.search_memory).not.toHaveBeenCalled();
     expect(registry.build_context_pack).not.toHaveBeenCalled();
+
+    await client.close();
+    await server.close();
+  });
+
+  it("rejects whitespace-only governance filters before registry dispatch", async () => {
+    const registry = buildRegistryForMcpProtocol();
+    const server = createMcpServer({ registry });
+    const client = await createInMemoryClient(server);
+
+    const listResult = await client.callTool({
+      name: "list_memory",
+      arguments: {
+        projectKey: "project-alpha",
+        tag: " \n\t ",
+      },
+    });
+    const graphResult = await client.callTool({
+      name: "inspect_memory_graph",
+      arguments: {
+        projectKey: "project-alpha",
+        query: " \n\t ",
+      },
+    });
+
+    for (const result of [listResult, graphResult]) {
+      expect(result.isError).toBe(true);
+      const errorContent = result.content as Array<{ type: string; text: string }>;
+      expect(errorContent[0]).toEqual(
+        expect.objectContaining({
+          type: "text",
+          text: expect.stringContaining("non-whitespace text"),
+        }),
+      );
+    }
+    expect(registry.list_memory).not.toHaveBeenCalled();
+    expect(registry.inspect_memory_graph).not.toHaveBeenCalled();
 
     await client.close();
     await server.close();

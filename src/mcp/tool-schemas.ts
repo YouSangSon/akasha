@@ -293,7 +293,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
       scope: z.enum(["project", "user"]).optional(),
       userScopeId: z.string().min(1).optional(),
       includeArchived: z.boolean().optional(),
-      tag: z.string().min(1).optional(),
+      tag: nonBlankTextInputSchema.optional(),
       limit: z.number().int().positive().max(5000).optional(),
     },
     outputSchema: {
@@ -313,7 +313,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
       scope: z.enum(["project", "user"]).optional(),
       userScopeId: z.string().min(1).optional(),
       kind: entityKindInputSchema.optional(),
-      query: z.string().min(1).optional(),
+      query: nonBlankTextInputSchema.optional(),
       includeArchived: z.boolean().optional(),
       limit: z.number().int().positive().max(5000).optional(),
       relationshipLimit: z.number().int().positive().max(5000).optional(),

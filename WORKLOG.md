@@ -46,6 +46,23 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened governance filter validation:
+  - `list_memory.tag` and `inspect_memory_graph.query` now reject
+    whitespace-only text at schema and direct registry handler boundaries.
+  - Tests cover HTTP, MCP protocol, and direct canonical registry paths before
+    repository dispatch.
+  - Subagent reviewer `Pauli` reported no findings.
+
+Verification:
+- `npx vitest run tests/app/server.test.ts tests/mcp/server.test.ts`
+  (145 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (658 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Hardened MCP resource parameter validation:
   - MCP resource URL parsing now rejects whitespace-only decoded path
     segments, recent-memory `query`, and optional search params before

@@ -4,13 +4,13 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — MCP Resource Blank Parameter Validation
+## Current Loop — Governance Filter Blank Validation
 
 Status:
-- MCP resource URL parsing now rejects whitespace-only decoded path segments,
-  recent-memory `query`, and optional search params before registry dispatch.
-- Protocol coverage verifies invalid recent-memory and context-pack resource
-  URIs fail before `search_memory` / `build_context_pack` dispatch.
+- `list_memory.tag` and `inspect_memory_graph.query` now reject
+  whitespace-only text at schema and direct registry handler boundaries.
+- Tests cover HTTP, MCP protocol, and direct canonical registry paths before
+  repository dispatch.
 - Reviewer found no issues.
 - Typecheck, build, audit, full test suite, and diff whitespace checks passed.
 
