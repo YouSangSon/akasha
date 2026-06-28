@@ -46,6 +46,23 @@ Verification:
 
 ## 2026-06-28
 
+- Refreshed in-range dependency lockfile/install updates:
+  - `@modelcontextprotocol/sdk` 1.28.0 -> 1.29.0.
+  - `@qdrant/js-client-rest` 1.17.0 -> 1.18.0.
+  - `pg` 8.20.0 -> 8.22.0, including its in-range transitive `pg-*`
+    packages.
+  - Skipped major upgrades reported by `npm outdated` without approval.
+  - Checked package metadata: Node engines remain compatible with the Node 22
+    floor, licenses are MIT or Apache-2.0, and `npm audit` reported 0
+    vulnerabilities after update.
+
+Verification:
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (615 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Updated general operations Qdrant restore examples to use the host-published
   Qdrant port:
   - English/Korean operations docs now call host `curl` against

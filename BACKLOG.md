@@ -14,7 +14,7 @@ experience, documentation, features.
 
 ## P2
 
-- Refresh in-range dependency lockfile/install updates.
+- None currently known.
 
 ## Done In This Branch
 
@@ -32,3 +32,4 @@ experience, documentation, features.
 - Architecture docs local embedding module filename drift fixed.
 - Operations restore examples use Qdrant collection-name variables.
 - Operations restore examples use host Qdrant curl path.
+- In-range dependency lockfile/install updates refreshed.
