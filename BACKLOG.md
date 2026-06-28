@@ -53,3 +53,4 @@ experience, documentation, features.
 - Whitespace-only required goal-run text is rejected before service or
   embedding dispatch.
 - Blank optional goal-run notes normalize to `null` before persistence.
+- Whitespace-only project/user scope identifiers are rejected before dispatch.

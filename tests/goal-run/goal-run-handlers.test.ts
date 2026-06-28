@@ -93,6 +93,34 @@ describe("goal-run handlers", () => {
     expect(goalRuns.start).not.toHaveBeenCalled();
   });
 
+  it("rejects whitespace-only goal-run scope identifiers before service dispatch", async () => {
+    const goalRuns = goalRunServicesStub();
+    const registry = registryWith(goalRuns);
+
+    await expect(
+      registry.start_goal_run({
+        projectKey: " \n\t ",
+        goal: "ship phase 1",
+      }),
+    ).rejects.toThrow(/non-whitespace text/);
+    await expect(
+      registry.list_goal_runs({
+        scope: "user",
+        userScopeId: " \n\t ",
+      }),
+    ).rejects.toThrow(/non-whitespace text/);
+    await expect(
+      registry.start_goal_run({
+        projectKey: "proj-x",
+        userScopeId: " \n\t ",
+        goal: "ship phase 1",
+      }),
+    ).rejects.toThrow(/non-whitespace text/);
+
+    expect(goalRuns.start).not.toHaveBeenCalled();
+    expect(goalRuns.list).not.toHaveBeenCalled();
+  });
+
   it("record_iteration forwards outcome, memory links, and org default", async () => {
     const goalRuns = goalRunServicesStub();
     const registry = registryWith(goalRuns);

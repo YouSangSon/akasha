@@ -46,6 +46,25 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened scope identifier validation:
+  - `projectKey` and `userScopeId` now reject whitespace-only values in public
+    schemas and shared direct-handler scope guards.
+  - Tests cover HTTP, MCP protocol, direct retrieval, `resolveRepository`
+    dispatch, and goal-run scope paths.
+  - Subagent reviewer `Curie` caught direct-registry bypasses for
+    `resolveRepository` and ignored `userScopeId`; the follow-up guard and
+    regression tests closed both. Re-review by `Averroes` reported no issues.
+
+Verification:
+- `npx vitest run tests/goal-run/goal-run-handlers.test.ts tests/app/server.test.ts tests/mcp/server.test.ts`
+  (167 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (669 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Hardened optional goal-run note normalization:
   - `terminationCriteria`, iteration `summary`/`error`, complete
     `resolution`, and abandon `reason` now normalize blank/whitespace strings

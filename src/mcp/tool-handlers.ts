@@ -73,11 +73,14 @@ export function createToolHandlers(input: {
       userScopeId?: string;
     }) => MaybePromise<T>,
   ): Promise<T> {
-    const userScopeId = resolveUserScopeId({
-      cwd,
-      explicitUserScopeId: repositoryInput.userScopeId,
-      defaultUserScopeId: options.defaultUserScopeId,
-    });
+    assertProvidedScopeIdentifiers(repositoryInput);
+    const userScopeId = requireUserScopeId(
+      resolveUserScopeId({
+        cwd,
+        explicitUserScopeId: repositoryInput.userScopeId,
+        defaultUserScopeId: options.defaultUserScopeId,
+      }),
+    );
 
     if (options.projectRepository || options.userRepository) {
       return await callback({
@@ -144,20 +147,24 @@ export function createToolHandlers(input: {
     includeUser?: boolean;
     limit?: number;
   }): Promise<SearchMemoryResult[]> {
+    assertProvidedScopeIdentifiers(input);
     const limit = normalizeLimit(input.limit);
+    const projectKey = requireProjectKey(input.projectKey, "project");
     const userScopeId =
       input.includeUser === false
         ? undefined
-        : resolveUserScopeId({
-            cwd,
-            explicitUserScopeId: input.userScopeId,
-            defaultUserScopeId: options.defaultUserScopeId,
-          });
+        : requireUserScopeId(
+            resolveUserScopeId({
+              cwd,
+              explicitUserScopeId: input.userScopeId,
+              defaultUserScopeId: options.defaultUserScopeId,
+            }),
+          );
 
     if (options.retrieveMemory) {
       return options.retrieveMemory({
         organizationId: input.organizationId,
-        projectKey: input.projectKey,
+        projectKey,
         userScopeId,
         query: input.query,
         limit,
@@ -167,7 +174,7 @@ export function createToolHandlers(input: {
     if (hasOverrides) {
       return withRepositories(
         {
-          projectKey: input.projectKey,
+          projectKey,
           userScopeId,
           includeUser: input.includeUser,
         },
@@ -176,7 +183,7 @@ export function createToolHandlers(input: {
             query: input.query,
             limit,
             organizationId: input.organizationId,
-            projectKey: input.projectKey,
+            projectKey,
             projectRepository,
             userScopeId,
             userRepository:
@@ -188,7 +195,7 @@ export function createToolHandlers(input: {
     return withCanonicalServices((services) =>
       retrieveRecordsWithCanonicalServices(services, {
         organizationId: input.organizationId,
-        projectKey: input.projectKey,
+        projectKey,
         query: input.query,
         userScopeId,
         limit,
@@ -199,6 +206,7 @@ export function createToolHandlers(input: {
   return {
     async add_memory(toolInput) {
       assertNonBlankMemoryContent(toolInput.content);
+      assertProvidedScopeIdentifiers(toolInput);
 
       const scope = toolInput.scope ?? "project";
       const userScopeId = resolveUserScopeId({
@@ -263,10 +271,12 @@ export function createToolHandlers(input: {
 
     async search_memory(toolInput) {
       assertNonBlankText(toolInput.query, "search query");
+      assertProvidedScopeIdentifiers(toolInput);
+      const projectKey = requireProjectKey(toolInput.projectKey, "project");
 
       const results = await resolveRecords({
         organizationId: toolInput.organizationId,
-        projectKey: toolInput.projectKey,
+        projectKey,
         query: toolInput.query,
         userScopeId: toolInput.userScopeId,
         includeUser: toolInput.includeUser,
@@ -275,7 +285,7 @@ export function createToolHandlers(input: {
 
       return {
         ok: true,
-        projectKey: toolInput.projectKey,
+        projectKey,
         query: toolInput.query,
         results,
       };
@@ -283,6 +293,8 @@ export function createToolHandlers(input: {
 
     async build_context_pack(toolInput) {
       assertNonBlankText(toolInput.task, "context-pack task");
+      assertProvidedScopeIdentifiers(toolInput);
+      const projectKey = requireProjectKey(toolInput.projectKey, "project");
 
       const useServiceBackedPack =
         !hasOverrides && !options.retrieveMemory;
@@ -290,16 +302,18 @@ export function createToolHandlers(input: {
         ? await withCanonicalServices(async (services) => {
             const records = await retrieveRecordsWithCanonicalServices(services, {
               organizationId: toolInput.organizationId,
-              projectKey: toolInput.projectKey,
+              projectKey,
               query: toolInput.task,
               userScopeId:
                 toolInput.includeUser === false
                   ? undefined
-                  : resolveUserScopeId({
-                      cwd,
-                      explicitUserScopeId: toolInput.userScopeId,
-                      defaultUserScopeId: options.defaultUserScopeId,
-                    }),
+                  : requireUserScopeId(
+                      resolveUserScopeId({
+                        cwd,
+                        explicitUserScopeId: toolInput.userScopeId,
+                        defaultUserScopeId: options.defaultUserScopeId,
+                      }),
+                    ),
               limit: normalizeLimit(toolInput.limit),
             });
             const pack = buildContextPack({ records });
@@ -313,7 +327,7 @@ export function createToolHandlers(input: {
 
             await services.chunkRepository.createContextPackRun({
               organizationId: toolInput.organizationId ?? "default",
-              projectKey: toolInput.projectKey,
+              projectKey,
               task: toolInput.task,
               selectedMemoryIds,
               packMarkdown,
@@ -328,7 +342,7 @@ export function createToolHandlers(input: {
         : await (async () => {
             const records = await resolveRecords({
               organizationId: toolInput.organizationId,
-              projectKey: toolInput.projectKey,
+              projectKey,
               query: toolInput.task,
               userScopeId: toolInput.userScopeId,
               includeUser: toolInput.includeUser,
@@ -350,7 +364,7 @@ export function createToolHandlers(input: {
 
       return {
         ok: true,
-        projectKey: toolInput.projectKey,
+        projectKey,
         packMarkdown: builtPack.packMarkdown,
         selectedMemoryIds: builtPack.selectedMemoryIds,
         sections: builtPack.pack.sections,
@@ -366,7 +380,9 @@ export function createToolHandlers(input: {
             "Pass the caller's organization identifier.",
         );
       }
+      assertProvidedScopeIdentifiers(toolInput);
       const organizationId: string = toolInput.organizationId;
+      const projectKey = requireProjectKey(toolInput.projectKey, "project");
       const userScopeId = resolveUserScopeId({
         cwd,
         explicitUserScopeId: toolInput.userScopeId,
@@ -375,13 +391,13 @@ export function createToolHandlers(input: {
       const scopes = [
         {
           scopeType: "project" as const,
-          scopeId: toolInput.projectKey,
+          scopeId: projectKey,
         },
         ...(userScopeId
           ? [
               {
                 scopeType: "user" as const,
-                scopeId: userScopeId,
+                scopeId: requireUserScopeId(userScopeId),
               },
             ]
           : []),
@@ -399,13 +415,14 @@ export function createToolHandlers(input: {
 
       return {
         ok: true,
-        projectKey: toolInput.projectKey,
+        projectKey,
         scopes: scopes.map((scope) => `${scope.scopeType}:${scope.scopeId}`),
         chunkCount: result.chunkCount,
       };
     },
 
     async compact_memory(toolInput) {
+      assertProvidedScopeIdentifiers(toolInput);
       const scope = toolInput.scope ?? "project";
       const dryRun = toolInput.dryRun ?? true;
       const userScopeId = resolveUserScopeId({
@@ -515,6 +532,7 @@ export function createToolHandlers(input: {
 
     async list_memory(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      assertProvidedScopeIdentifiers(toolInput);
       if (toolInput.tag !== undefined) {
         assertNonBlankText(toolInput.tag, "memory tag");
       }
@@ -555,6 +573,7 @@ export function createToolHandlers(input: {
 
     async inspect_memory_graph(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      assertProvidedScopeIdentifiers(toolInput);
       if (toolInput.query !== undefined) {
         assertNonBlankText(toolInput.query, "graph query");
       }
@@ -1025,6 +1044,18 @@ function optionalNonBlankText(value: string | null | undefined): string | null {
     : value;
 }
 
+function assertProvidedScopeIdentifiers(input: {
+  projectKey?: string;
+  userScopeId?: string;
+}): void {
+  if (input.projectKey !== undefined) {
+    requireProjectKey(input.projectKey, "project");
+  }
+  if (input.userScopeId !== undefined) {
+    requireUserScopeId(input.userScopeId);
+  }
+}
+
 // Resolve a goal-run scope into the scopeId the repository stores: the
 // projectKey for project scope, or the resolved user scope id for user scope.
 function resolveGoalRunScopeId(
@@ -1032,6 +1063,7 @@ function resolveGoalRunScopeId(
   toolInput: { projectKey?: string; userScopeId?: string },
   resolutionInput: { cwd: string; defaultUserScopeId?: string },
 ): string {
+  assertProvidedScopeIdentifiers(toolInput);
   if (scope === "user") {
     return requireUserScopeId(
       resolveUserScopeId({
@@ -1045,6 +1077,7 @@ function resolveGoalRunScopeId(
 }
 
 function toRepositoryAddMemoryInput(input: AddMemoryToolInput): AddMemoryInput {
+  assertProvidedScopeIdentifiers(input);
   const scope = input.scope ?? "project";
   const scopeId =
     scope === "user"

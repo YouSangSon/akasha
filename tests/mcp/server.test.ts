@@ -339,6 +339,59 @@ describe("createToolRegistry", () => {
     expect(retrieveMemory).not.toHaveBeenCalled();
   });
 
+  it("rejects whitespace-only scope identifiers through direct retrieval paths", async () => {
+    const retrieveMemory = vi.fn();
+    const registry = createToolRegistry({ retrieveMemory });
+
+    await expect(
+      registry.search_memory({
+        projectKey: " \n\t ",
+        query: "Postgres",
+      }),
+    ).rejects.toThrow(/non-whitespace text/);
+    await expect(
+      registry.build_context_pack({
+        projectKey: "project-alpha",
+        userScopeId: " \n\t ",
+        task: "continue work",
+      }),
+    ).rejects.toThrow(/non-whitespace text/);
+    await expect(
+      registry.search_memory({
+        projectKey: "project-alpha",
+        userScopeId: " \n\t ",
+        includeUser: false,
+        query: "Postgres",
+      }),
+    ).rejects.toThrow(/non-whitespace text/);
+
+    expect(retrieveMemory).not.toHaveBeenCalled();
+  });
+
+  it("rejects whitespace-only add_memory scope identifiers before repository resolution", async () => {
+    const resolveRepository = vi.fn(() => createRepository());
+    const registry = createToolRegistry({ resolveRepository });
+
+    await expect(
+      registry.add_memory({
+        projectKey: " \n\t ",
+        kind: "decision",
+        content: "Use Postgres for canonical memory state.",
+      }),
+    ).rejects.toThrow(/non-whitespace text/);
+    await expect(
+      registry.add_memory({
+        projectKey: "project-alpha",
+        scope: "project",
+        userScopeId: " \n\t ",
+        kind: "decision",
+        content: "Use Postgres for canonical memory state.",
+      }),
+    ).rejects.toThrow(/non-whitespace text/);
+
+    expect(resolveRepository).not.toHaveBeenCalled();
+  });
+
   it("builds a context pack using the retrieve-memory service", async () => {
     const retrieveMemory = vi.fn().mockResolvedValue([
       createRecord({
@@ -2209,6 +2262,65 @@ describe("createMcpServer structured outputs", () => {
     }
     expect(registry.list_memory).not.toHaveBeenCalled();
     expect(registry.inspect_memory_graph).not.toHaveBeenCalled();
+
+    await client.close();
+    await server.close();
+  });
+
+  it("rejects whitespace-only scope identifiers before registry dispatch", async () => {
+    const registry = buildRegistryForMcpProtocol();
+    const server = createMcpServer({ registry });
+    const client = await createInMemoryClient(server);
+
+    const searchResult = await client.callTool({
+      name: "search_memory",
+      arguments: {
+        projectKey: " \n\t ",
+        query: "Postgres",
+      },
+    });
+    const contextPackResult = await client.callTool({
+      name: "build_context_pack",
+      arguments: {
+        projectKey: "project-alpha",
+        userScopeId: " \n\t ",
+        task: "continue work",
+      },
+    });
+    const goalRunResult = await client.callTool({
+      name: "start_goal_run",
+      arguments: {
+        projectKey: " \n\t ",
+        goal: "ship phase 1",
+      },
+    });
+    const reindexResult = await client.callTool({
+      name: "reindex_memory",
+      arguments: {
+        organizationId: "org-a",
+        projectKey: " \n\t ",
+      },
+    });
+
+    for (const result of [
+      searchResult,
+      contextPackResult,
+      goalRunResult,
+      reindexResult,
+    ]) {
+      expect(result.isError).toBe(true);
+      const errorContent = result.content as Array<{ type: string; text: string }>;
+      expect(errorContent[0]).toEqual(
+        expect.objectContaining({
+          type: "text",
+          text: expect.stringContaining("non-whitespace text"),
+        }),
+      );
+    }
+    expect(registry.search_memory).not.toHaveBeenCalled();
+    expect(registry.build_context_pack).not.toHaveBeenCalled();
+    expect(registry.start_goal_run).not.toHaveBeenCalled();
+    expect(registry.reindex_memory).not.toHaveBeenCalled();
 
     await client.close();
     await server.close();

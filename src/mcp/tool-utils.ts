@@ -17,16 +17,18 @@ export function requireProjectKey(
   projectKey: string | undefined,
   scope: ScopeType,
 ): string {
-  if (!projectKey) {
-    throw new Error(`projectKey is required for ${scope} scope operations`);
+  if (projectKey === undefined || projectKey.trim().length === 0) {
+    throw new Error(
+      `projectKey is required for ${scope} scope operations and must contain non-whitespace text`,
+    );
   }
 
   return projectKey;
 }
 
 export function requireUserScopeId(userScopeId: string | undefined): string {
-  if (!userScopeId) {
-    throw new Error("userScopeId could not be resolved");
+  if (userScopeId === undefined || userScopeId.trim().length === 0) {
+    throw new Error("userScopeId could not be resolved to non-whitespace text");
   }
 
   return userScopeId;
