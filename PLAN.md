@@ -4,11 +4,11 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Repository Archive Organization Guard
+## Current Loop — Repository Delete Organization Guard
 
 Status:
-- `archiveMemoryRecord` now rejects whitespace-only organization IDs before
-  opening a Postgres transaction.
+- `deleteMemoryRecord` now rejects whitespace-only organization IDs before
+  issuing a Postgres query.
 - Coverage verifies invalid organization IDs fail before `pool.query()`.
 - Reviewer skipped after previous reviewer-agent timeouts; self-review found no
   issues.

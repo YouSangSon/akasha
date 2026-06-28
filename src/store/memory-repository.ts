@@ -661,6 +661,8 @@ export function createMemoryRepository(
     },
 
     async deleteMemoryRecord(id, organizationId) {
+      assertNonBlankText(organizationId, "organizationId");
+
       // Single-statement rollback. ON DELETE CASCADE on memory_chunks,
       // ingest_jobs, and relationships (defined in migrations/001_initial.sql)
       // removes every dependent row in the same transaction Postgres uses

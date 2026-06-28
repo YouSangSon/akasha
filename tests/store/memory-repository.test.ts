@@ -207,6 +207,19 @@ describe("createMemoryRepository (unit — no PG required)", () => {
     });
   });
 
+  it("deleteMemoryRecord rejects whitespace-only organization IDs before querying", async () => {
+    const mockPool = {
+      query: vi.fn(),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    await expect(repo.deleteMemoryRecord(42, " \n\t ")).rejects.toThrow(
+      /organizationId/,
+    );
+
+    expect(mockPool.query).not.toHaveBeenCalled();
+  });
+
   it("addMemory rejects whitespace-only content before opening a transaction", async () => {
     const mockPool = {
       connect: vi.fn(),

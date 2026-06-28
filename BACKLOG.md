@@ -108,3 +108,5 @@ experience, documentation, features.
   persistence.
 - Whitespace-only repository archive organization IDs are rejected before
   persistence.
+- Whitespace-only repository delete organization IDs are rejected before
+  persistence.
