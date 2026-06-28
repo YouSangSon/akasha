@@ -121,6 +121,49 @@ describe("goal-run handlers", () => {
     expect(goalRuns.list).not.toHaveBeenCalled();
   });
 
+  it("rejects invalid goal-run enum values before service dispatch", async () => {
+    const goalRuns = goalRunServicesStub();
+    const registry = registryWith(goalRuns);
+
+    await expect(
+      registry.start_goal_run({
+        scope: "team" as never,
+        projectKey: "proj-x",
+        goal: "ship phase 1",
+      }),
+    ).rejects.toThrow(/scope/);
+    await expect(
+      registry.list_goal_runs({
+        scope: "team" as never,
+        projectKey: "proj-x",
+      }),
+    ).rejects.toThrow(/scope/);
+    await expect(
+      registry.list_goal_runs({
+        projectKey: "proj-x",
+        status: "paused" as never,
+      }),
+    ).rejects.toThrow(/status/);
+    await expect(
+      registry.record_iteration({
+        goalRunId: 7,
+        attempt: "try A",
+        outcome: "skipped" as never,
+      }),
+    ).rejects.toThrow(/outcome/);
+    await expect(
+      registry.record_iteration({
+        goalRunId: 7,
+        attempt: "try A",
+        outcome: undefined as never,
+      }),
+    ).rejects.toThrow(/outcome/);
+
+    expect(goalRuns.start).not.toHaveBeenCalled();
+    expect(goalRuns.list).not.toHaveBeenCalled();
+    expect(goalRuns.recordIteration).not.toHaveBeenCalled();
+  });
+
   it("record_iteration forwards outcome, memory links, and org default", async () => {
     const goalRuns = goalRunServicesStub();
     const registry = registryWith(goalRuns);

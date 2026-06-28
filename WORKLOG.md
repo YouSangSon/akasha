@@ -46,6 +46,23 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened goal-run enum validation:
+  - Public and direct goal-run scope, iteration outcome, and list status
+    validation now share the same allowed-value constants before service
+    dispatch.
+  - Direct coverage rejects invalid enum values before goal-run service
+    dispatch.
+  - Subagent reviewer `Noether` reported no findings.
+
+Verification:
+- `npx vitest run tests/goal-run/goal-run-handlers.test.ts` (22 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (703 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Hardened memory enum validation:
   - Public and direct `update_memory.kind` and `durability` validation now
     share the same allowed-value constants before repository dispatch.

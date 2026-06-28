@@ -9,6 +9,17 @@ export const SUPPORTED_DURABILITY_VALUES = [
   "durable",
   "archived",
 ] as const;
+export const SUPPORTED_SCOPE_TYPES = ["project", "user"] as const;
+export const SUPPORTED_GOAL_RUN_OUTCOMES = [
+  "success",
+  "failure",
+  "partial",
+] as const;
+export const SUPPORTED_GOAL_RUN_STATUSES = [
+  "active",
+  "completed",
+  "abandoned",
+] as const;
 export const POSTGRES_INTEGER_MIN = -2147483648;
 export const POSTGRES_INTEGER_MAX = 2147483647;
 

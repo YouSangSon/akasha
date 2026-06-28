@@ -3,7 +3,10 @@ import {
   POSTGRES_INTEGER_MAX,
   POSTGRES_INTEGER_MIN,
   SUPPORTED_DURABILITY_VALUES,
+  SUPPORTED_GOAL_RUN_OUTCOMES,
+  SUPPORTED_GOAL_RUN_STATUSES,
   SUPPORTED_MEMORY_KINDS,
+  SUPPORTED_SCOPE_TYPES,
 } from "./tool-utils.js";
 
 export type ToolDescriptor = {
@@ -210,7 +213,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     inputSchema: {
       organizationId: organizationIdInputSchema.optional(),
       projectKey: nonBlankTextInputSchema.optional(),
-      scope: z.enum(["project", "user"]).optional(),
+      scope: z.enum(SUPPORTED_SCOPE_TYPES).optional(),
       userScopeId: nonBlankTextInputSchema.optional(),
       kind: z.enum(SUPPORTED_MEMORY_KINDS),
       content: nonBlankTextInputSchema,
@@ -280,7 +283,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     inputSchema: {
       organizationId: organizationIdInputSchema.optional(),
       projectKey: nonBlankTextInputSchema.optional(),
-      scope: z.enum(["project", "user"]).optional(),
+      scope: z.enum(SUPPORTED_SCOPE_TYPES).optional(),
       userScopeId: nonBlankTextInputSchema.optional(),
       dryRun: z.boolean().optional(),
       limit: z.number().int().positive().max(5000).optional(),
@@ -309,7 +312,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     inputSchema: {
       organizationId: organizationIdInputSchema.optional(),
       projectKey: nonBlankTextInputSchema.optional(),
-      scope: z.enum(["project", "user"]).optional(),
+      scope: z.enum(SUPPORTED_SCOPE_TYPES).optional(),
       userScopeId: nonBlankTextInputSchema.optional(),
       includeArchived: z.boolean().optional(),
       tag: nonBlankTextInputSchema.optional(),
@@ -317,7 +320,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     },
     outputSchema: {
       ok: z.literal(true),
-      scopeType: z.enum(["project", "user"]),
+      scopeType: z.enum(SUPPORTED_SCOPE_TYPES),
       scopeId: z.string(),
       memories: z.array(memoryRecordOutputSchema),
     },
@@ -329,7 +332,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     inputSchema: {
       organizationId: organizationIdInputSchema.optional(),
       projectKey: nonBlankTextInputSchema.optional(),
-      scope: z.enum(["project", "user"]).optional(),
+      scope: z.enum(SUPPORTED_SCOPE_TYPES).optional(),
       userScopeId: nonBlankTextInputSchema.optional(),
       kind: entityKindInputSchema.optional(),
       query: nonBlankTextInputSchema.optional(),
@@ -339,7 +342,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     },
     outputSchema: {
       ok: z.literal(true),
-      scopeType: z.enum(["project", "user"]),
+      scopeType: z.enum(SUPPORTED_SCOPE_TYPES),
       scopeId: z.string(),
       entities: z.array(memoryGraphEntityOutputSchema),
       relationships: z.array(memoryGraphRelationshipOutputSchema),
@@ -430,7 +433,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
       "Start a goal run: a persistent objective plus termination criteria the agent iterates toward.",
     inputSchema: {
       organizationId: organizationIdInputSchema.optional(),
-      scope: z.enum(["project", "user"]).optional(),
+      scope: z.enum(SUPPORTED_SCOPE_TYPES).optional(),
       projectKey: nonBlankTextInputSchema.optional(),
       userScopeId: nonBlankTextInputSchema.optional(),
       goal: nonBlankTextInputSchema,
@@ -449,7 +452,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
       organizationId: organizationIdInputSchema.optional(),
       goalRunId: positiveSafeIntegerInputSchema,
       attempt: nonBlankTextInputSchema,
-      outcome: z.enum(["success", "failure", "partial"]),
+      outcome: z.enum(SUPPORTED_GOAL_RUN_OUTCOMES),
       summary: z.string().nullable().optional(),
       error: z.string().nullable().optional(),
       memoryIds: z.array(positiveSafeIntegerInputSchema).optional(),
@@ -477,10 +480,10 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     description: "List goal runs for a scope, optionally filtered by status.",
     inputSchema: {
       organizationId: organizationIdInputSchema.optional(),
-      scope: z.enum(["project", "user"]).optional(),
+      scope: z.enum(SUPPORTED_SCOPE_TYPES).optional(),
       projectKey: nonBlankTextInputSchema.optional(),
       userScopeId: nonBlankTextInputSchema.optional(),
-      status: z.enum(["active", "completed", "abandoned"]).optional(),
+      status: z.enum(SUPPORTED_GOAL_RUN_STATUSES).optional(),
     },
     outputSchema: {
       ok: z.literal(true),
@@ -579,7 +582,7 @@ export const MCP_CONTEXT_TOOL_DESCRIPTORS = [
     inputSchema: {
       organizationId: organizationIdInputSchema.optional(),
       projectKey: nonBlankTextInputSchema.optional(),
-      scope: z.enum(["project", "user"]).optional(),
+      scope: z.enum(SUPPORTED_SCOPE_TYPES).optional(),
       userScopeId: nonBlankTextInputSchema.optional(),
       kind: z.enum(SUPPORTED_MEMORY_KINDS).optional(),
       message: nonBlankTextInputSchema.optional(),

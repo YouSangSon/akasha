@@ -45,7 +45,10 @@ import {
   requireUserScopeId,
   resolveUserScopeId,
   SUPPORTED_DURABILITY_VALUES,
+  SUPPORTED_GOAL_RUN_OUTCOMES,
+  SUPPORTED_GOAL_RUN_STATUSES,
   SUPPORTED_MEMORY_KINDS,
+  SUPPORTED_SCOPE_TYPES,
   summarize,
   toMemoryType,
 } from "./tool-utils.js";
@@ -867,6 +870,7 @@ export function createToolHandlers(input: {
     async start_goal_run(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
       assertNonBlankText(toolInput.goal, "goal");
+      assertOptionalAllowedValue(toolInput.scope, "scope", SUPPORTED_SCOPE_TYPES);
       const scope = toolInput.scope ?? "project";
       const scopeId = resolveGoalRunScopeId(scope, toolInput, {
         cwd,
@@ -896,6 +900,11 @@ export function createToolHandlers(input: {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
       assertPositiveInteger(toolInput.goalRunId, "goalRunId");
       assertNonBlankText(toolInput.attempt, "attempt");
+      assertAllowedValue(
+        toolInput.outcome,
+        "outcome",
+        SUPPORTED_GOAL_RUN_OUTCOMES,
+      );
       assertPositiveIntegerArray(toolInput.memoryIds, "memoryIds");
       const summary = optionalNonBlankText(toolInput.summary);
       const error = optionalNonBlankText(toolInput.error);
@@ -934,6 +943,12 @@ export function createToolHandlers(input: {
 
     async list_goal_runs(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      assertOptionalAllowedValue(toolInput.scope, "scope", SUPPORTED_SCOPE_TYPES);
+      assertOptionalAllowedValue(
+        toolInput.status,
+        "status",
+        SUPPORTED_GOAL_RUN_STATUSES,
+      );
       const scope = toolInput.scope ?? "project";
       const scopeId = resolveGoalRunScopeId(scope, toolInput, {
         cwd,
@@ -1157,6 +1172,18 @@ function assertOptionalAllowedValue(
     return;
   }
   if (!allowedValues.includes(value)) {
+    throw new Error(
+      `${fieldName} must be one of: ${allowedValues.join(", ")}`,
+    );
+  }
+}
+
+function assertAllowedValue(
+  value: string | undefined,
+  fieldName: string,
+  allowedValues: readonly string[],
+): void {
+  if (value === undefined || !allowedValues.includes(value)) {
     throw new Error(
       `${fieldName} must be one of: ${allowedValues.join(", ")}`,
     );
