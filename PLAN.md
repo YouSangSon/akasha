@@ -4,13 +4,12 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Apply Compaction Organization Guard
+## Current Loop — Unarchive Compaction Organization Guard
 
 Status:
-- `applyCompaction` now rejects whitespace-only organization IDs before run ID
-  generation, semantic embedding, rate-limit checks, archive writes, or vector
-  deletes.
-- Coverage verifies invalid apply organization IDs fail before those side
+- `unarchiveCompaction` now rejects whitespace-only organization IDs before
+  archive lookup, restore, chunking, embedding, vector writes, or mark updates.
+- Coverage verifies invalid unarchive organization IDs fail before those side
   effects.
 - Reviewer subagent found no issues.
 - Focused compaction tests, typecheck, build, audit, full suite, and diff

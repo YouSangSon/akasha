@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened unarchive-compaction organization validation:
+  - `unarchiveCompaction` now rejects whitespace-only organization IDs before
+    archive lookup, restore, chunking, embedding, vector writes, or mark
+    updates.
+  - Unarchive-compaction coverage verifies invalid organization IDs fail before
+    those side effects.
+  - Reviewer subagent found no issues.
+
+Verification:
+- `npx vitest run tests/compact/unarchive-compaction.test.ts tests/compact/apply-compaction.test.ts tests/compact/ingest-sweeper.test.ts tests/compact/outbox-sweeper.test.ts` (43 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (769 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened apply-compaction organization validation:
   - `applyCompaction` now rejects whitespace-only organization IDs before run ID
     generation, semantic embedding, rate-limit checks, archive writes, or vector

@@ -129,6 +129,26 @@ function makeDeps(
 }
 
 describe("unarchiveCompaction (empty input)", () => {
+  it("rejects whitespace-only organizationId before side effects", async () => {
+    const repo = makeRepo([makeArchive()]);
+    const deps = makeDeps(repo);
+
+    await expect(
+      unarchiveCompaction(
+        { archiveIds: [50], organizationId: " \n\t ", actor: "test" },
+        deps,
+      ),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(repo.findArchiveByIds).not.toHaveBeenCalled();
+    expect(repo.restoreToCanonical).not.toHaveBeenCalled();
+    expect(deps.chunkRepository.insertChunks).not.toHaveBeenCalled();
+    expect(deps.embeddings.embedBatch).not.toHaveBeenCalled();
+    expect(deps.vectorIndex.upsert).not.toHaveBeenCalled();
+    expect(deps.vectorIndex.delete).not.toHaveBeenCalled();
+    expect(repo.markUnarchived).not.toHaveBeenCalled();
+  });
+
   it("returns zero counts when no archive ids supplied", async () => {
     const repo = makeRepo([]);
     const result = await unarchiveCompaction(

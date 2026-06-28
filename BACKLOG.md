@@ -163,3 +163,5 @@ experience, documentation, features.
   or transaction side effects.
 - Whitespace-only apply-compaction organization IDs are rejected before
   embedding, rate-limit, archive, or vector side effects.
+- Whitespace-only unarchive-compaction organization IDs are rejected before
+  archive, restore, chunk, embedding, vector, or mark side effects.

@@ -30,6 +30,7 @@ import type {
   ArchiveRow,
   MemoryArchiveRepository,
 } from "../store/memory-archive-repository.js";
+import { assertNonBlankText } from "../store/memory-content.js";
 import type {
   ChunkEmbeddingConfig,
   EmbeddingClient,
@@ -85,6 +86,8 @@ export async function unarchiveCompaction(
   input: Readonly<UnarchiveCompactionInput>,
   deps: Readonly<UnarchiveCompactionDeps>,
 ): Promise<UnarchiveResult> {
+  assertNonBlankText(input.organizationId, "organizationId");
+
   const startedAt = (deps.now ?? (() => new Date()))();
 
   if (input.archiveIds.length === 0) {
