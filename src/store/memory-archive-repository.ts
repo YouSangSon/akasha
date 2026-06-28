@@ -561,6 +561,8 @@ export function createMemoryArchiveRepository(
     },
 
     async deleteRestoredCanonicalRecord(recordId, organizationId) {
+      assertNonBlankText(organizationId, "organizationId");
+
       await pool.query(
         `
           DELETE FROM memory_records

@@ -128,3 +128,5 @@ experience, documentation, features.
   persistence.
 - Whitespace-only archive restore organization IDs are rejected before
   persistence.
+- Whitespace-only restored-record cleanup organization IDs are rejected before
+  persistence.

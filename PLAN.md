@@ -4,12 +4,12 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Archive Restore Organization Guard
+## Current Loop — Restored-Record Cleanup Organization Guard
 
 Status:
-- `restoreToCanonical` now rejects whitespace-only organization IDs before
-  restoring archived rows into canonical memory.
-- Coverage verifies invalid restore organization IDs fail before
+- `deleteRestoredCanonicalRecord` now rejects whitespace-only organization IDs
+  before cleanup deletes.
+- Coverage verifies invalid restored-record cleanup organization IDs fail before
   `pool.query()`.
 - Reviewer skipped after previous reviewer-agent timeouts; self-review found no
   issues.

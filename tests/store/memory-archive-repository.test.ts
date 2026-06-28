@@ -477,6 +477,17 @@ describe("MemoryArchiveRepository.deleteRestoredCanonicalRecord (P19.1)", () => 
     expect(sql).toContain("AND organization_id = $2");
     expect(params).toEqual([999, "org-a"]);
   });
+
+  it("rejects whitespace-only organizationId before querying", async () => {
+    const { pool, query } = makeMockPool(async () => ({ rows: [] }));
+    const repo = createMemoryArchiveRepository(pool);
+
+    await expect(
+      repo.deleteRestoredCanonicalRecord(999, " \n\t "),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(query).not.toHaveBeenCalled();
+  });
 });
 
 describe("MemoryArchiveRepository.markUnarchived (P19.1)", () => {
