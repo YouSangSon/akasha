@@ -1020,6 +1020,19 @@ describe("canonical indexing", () => {
     expect(params).toContain("chunk:3");
   });
 
+  it("deleteChunksForRecord rejects whitespace-only organizationId before querying", async () => {
+    const mockPool = {
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+    };
+    const repo = createMemoryChunkRepository(mockPool as never);
+
+    await expect(
+      repo.deleteChunksForRecord(501, " \n\t "),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(mockPool.query).not.toHaveBeenCalled();
+  });
+
   it("replaceChunksForRecordWithPendingIngest replaces chunks and inserts a due retry row in one transaction", async () => {
     const clientQueryCalls: { sql: string; params: unknown[] }[] = [];
     const retryAt = new Date("2026-06-26T00:00:01.000Z");

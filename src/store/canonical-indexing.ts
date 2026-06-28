@@ -1,6 +1,9 @@
 import { chunkText, type TextChunk } from "../chunk/chunk-text.js";
 import type { PgPool, PgQueryable } from "../db/connection.js";
-import { assertNonBlankMemoryContent } from "./memory-content.js";
+import {
+  assertNonBlankMemoryContent,
+  assertNonBlankText,
+} from "./memory-content.js";
 import { scanForSecrets, SecretDetectedError } from "./secret-scrub.js";
 import type { VectorIndex, VectorPoint } from "../vector/vector-index.js";
 import { buildVectorPoint } from "../vector/point-builder.js";
@@ -133,6 +136,8 @@ export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository
     },
 
     async deleteChunksForRecord(recordId, organizationId) {
+      assertNonBlankText(organizationId, "organizationId");
+
       await pool.query(
         `
           DELETE FROM memory_chunks

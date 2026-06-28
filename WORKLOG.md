@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened canonical chunk delete organization validation:
+  - `deleteChunksForRecord` now rejects whitespace-only organization IDs before
+    deleting canonical chunks.
+  - Canonical indexing coverage verifies invalid organization IDs fail before
+    `pool.query()`.
+  - Reviewer skipped after previous reviewer-agent timeouts; self-review found
+    no issues.
+
+Verification:
+- `npx vitest run tests/store/canonical-indexing.test.ts` (18 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (739 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened compaction run scope validation:
   - `createCompactionRun` now rejects whitespace-only scope type and scope ID
     values before inserting compaction run rows.
