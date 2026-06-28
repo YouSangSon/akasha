@@ -14,7 +14,15 @@ if [ -z "${QDRANT_URL:-}" ]; then
   exit 1
 fi
 
-collection="${QDRANT_COLLECTION_NAME:-memory_chunks_v1}"
+if [ "${QDRANT_COLLECTION_NAME+x}" = "x" ]; then
+  if [ -z "$(printf '%s' "${QDRANT_COLLECTION_NAME}" | tr -d '[:space:]')" ]; then
+    echo "QDRANT_COLLECTION_NAME must contain non-whitespace text" >&2
+    exit 1
+  fi
+  collection="${QDRANT_COLLECTION_NAME}"
+else
+  collection="memory_chunks_v1"
+fi
 metadata_file="${BACKUP_DIR}/qdrant-${collection}-${timestamp}.json"
 artifact_file="${BACKUP_DIR}/qdrant-${timestamp}.snapshot"
 checksum_file="${artifact_file}.sha256"

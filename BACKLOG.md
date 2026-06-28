@@ -201,3 +201,5 @@ experience, documentation, features.
   remote path construction.
 - Whitespace-only backup shell-script target directory values are rejected in
   remote-copy branches before SSH/SCP work.
+- Empty or whitespace-only Qdrant snapshot collection names are rejected before
+  metadata or curl snapshot work.

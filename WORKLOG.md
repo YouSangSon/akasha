@@ -46,6 +46,25 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened Qdrant snapshot collection-name handling:
+  - `snapshot-qdrant.sh` now rejects empty or whitespace-only
+    `QDRANT_COLLECTION_NAME` values before metadata or curl snapshot work.
+  - Unset collection names still default to `memory_chunks_v1`, and valid
+    collection names are preserved.
+  - Executable tests log curl/SSH/SCP calls and verify invalid collection names
+    do no snapshot or remote work.
+  - Reviewer subagent found no implementation issues and caught a missing
+    curl-log assertion; fixed before final verification.
+
+Verification:
+- `npx vitest run tests/scripts/backup-verify.test.ts` (22 passed)
+- `sh -n scripts/snapshot-qdrant.sh`
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (859 passed, 34 skipped across 68 files)
+- `git diff --check`
+
 - Hardened backup shell-script target directory handling:
   - `backup-postgres.sh`, `snapshot-qdrant.sh`, and `create-backup.sh` now
     reject whitespace-only `BACKUP_TARGET_DIR` values before remote SSH/SCP

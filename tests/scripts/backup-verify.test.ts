@@ -204,10 +204,48 @@ describe("backup target directory shell guards", () => {
         expect(result.stderr).toContain(
           "BACKUP_TARGET_DIR must contain non-whitespace text",
         );
-        expect(result.log).toBe("");
+        expect(result.log).not.toContain("ssh:");
+        expect(result.log).not.toContain("scp:");
       }
     },
   );
+});
+
+describe("snapshot Qdrant collection shell guard", () => {
+  it("uses the default collection name when QDRANT_COLLECTION_NAME is unset", async () => {
+    const result = await runBackupShellScript("scripts/snapshot-qdrant.sh", {});
+
+    expect(result.ok).toBe(true);
+    await expect(
+      exists(path.join(result.backupDir, "qdrant-memory_chunks_v1-20260329-1200.json")),
+    ).resolves.toBe(true);
+  });
+
+  it("preserves valid QDRANT_COLLECTION_NAME values", async () => {
+    const result = await runBackupShellScript("scripts/snapshot-qdrant.sh", {
+      QDRANT_COLLECTION_NAME: "custom_chunks",
+    });
+
+    expect(result.ok).toBe(true);
+    await expect(
+      exists(path.join(result.backupDir, "qdrant-custom_chunks-20260329-1200.json")),
+    ).resolves.toBe(true);
+  });
+
+  it.each([
+    ["empty", ""],
+    ["whitespace", " \n\t "],
+  ])("rejects %s QDRANT_COLLECTION_NAME before snapshot work", async (_label, collectionName) => {
+    const result = await runBackupShellScript("scripts/snapshot-qdrant.sh", {
+      QDRANT_COLLECTION_NAME: collectionName,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.stderr).toContain(
+      "QDRANT_COLLECTION_NAME must contain non-whitespace text",
+    );
+    expect(result.log).toBe("");
+  });
 });
 
 async function runBackupShellScript(
@@ -277,6 +315,7 @@ async function writeStubCommands(binDir: string): Promise<void> {
     writeExecutable(
       path.join(binDir, "curl"),
       `#!/usr/bin/env sh
+printf 'curl:%s\\n' "$*" >> "$STUB_LOG"
 out=""
 previous=""
 for arg do
