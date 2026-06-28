@@ -287,6 +287,87 @@ describe("createMemoryRepository (unit — no PG required)", () => {
     );
   });
 
+  it("addMemory normalizes whitespace-only title and summary to null", async () => {
+    const sourceRow = {
+      source_id_joined: 9,
+      source_organization_id: "org-a",
+      source_scope_type: "project",
+      source_scope_id: "proj-x",
+      source_type: "document",
+      source_ref: "{\"sourceRef\":\"docs/spec.md\",\"uri\":null}",
+      source_title: null,
+      source_created_at: "2026-06-26T00:00:00.000Z",
+    };
+    const memoryRow = {
+      id: 42,
+      organization_id: "org-a",
+      scope_type: "project",
+      scope_id: "proj-x",
+      project_key: "proj-x",
+      kind: "fact",
+      title: null,
+      content: "plain text only",
+      summary: null,
+      durability: "ephemeral",
+      importance: 0,
+      source_id: 9,
+      created_at: "2026-06-26T00:00:00.000Z",
+      updated_at: "2026-06-26T00:00:00.000Z",
+    };
+    const clientQueryCalls: SqlQueryCall[] = [];
+    const mockClient = {
+      query: vi.fn().mockImplementation((sql: string, params?: unknown[]) => {
+        clientQueryCalls.push({ sql, params: params ?? [] });
+        if (sql === "BEGIN" || sql === "COMMIT") {
+          return Promise.resolve({ rows: [] });
+        }
+        if (sql.includes("SELECT") && sql.includes("FROM sources")) {
+          return Promise.resolve({ rows: [] });
+        }
+        if (sql.includes("INSERT INTO sources")) {
+          return Promise.resolve({ rows: [sourceRow] });
+        }
+        if (sql.includes("INSERT INTO memory_records")) {
+          return Promise.resolve({ rows: [memoryRow] });
+        }
+        return Promise.resolve({ rows: [] });
+      }),
+      release: vi.fn(),
+    };
+    const mockPool = {
+      connect: vi.fn().mockResolvedValue(mockClient),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    const created = await repo.addMemory({
+      organizationId: "org-a",
+      scopeType: "project",
+      scopeId: "proj-x",
+      projectKey: "proj-x",
+      memoryType: "fact",
+      title: " \n\t ",
+      content: "plain text only",
+      summary: " \n\t ",
+      source: {
+        scopeType: "project",
+        scopeId: "proj-x",
+        sourceType: "document",
+        sourceRef: "docs/spec.md",
+      },
+    });
+
+    const insertCall = clientQueryCalls.find(({ sql }) =>
+      sql.includes("INSERT INTO memory_records"),
+    );
+    expect(insertCall?.params[5]).toBeNull();
+    expect(insertCall?.params[7]).toBeNull();
+    expect(created).toMatchObject({
+      id: 42,
+      title: null,
+      summary: null,
+    });
+  });
+
   it("upsertPostgresSource pushes sourceRef filter into SQL WHERE clause (PERF-5)", () => {
     // addMemory calls upsertPostgresSource via a transaction client.
     // The SELECT for an existing source must pass sourceRef as $5 and use

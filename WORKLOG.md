@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-28
 
+- Normalized blank repository add metadata:
+  - `addMemory` now normalizes explicitly supplied blank title and summary
+    values to `null` before persistence.
+  - Repository coverage verifies SQL insert parameters and hydrated output use
+    `null` instead of whitespace-only metadata.
+  - Reviewer skipped after previous reviewer-agent timeouts; self-review found
+    no issues.
+
+Verification:
+- `npx vitest run tests/store/memory-repository.test.ts` (36 passed, 7 skipped)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (716 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened repository add secret scrubbing:
   - `addMemory` now rejects secret-shaped content, titles, and summaries before
     opening a Postgres transaction.

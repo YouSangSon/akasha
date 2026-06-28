@@ -4,13 +4,12 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Repository Add Secret Scrub
+## Current Loop — Repository Add Metadata Normalization
 
 Status:
-- `addMemory` now rejects secret-shaped content, titles, and summaries before
-  opening a Postgres transaction.
-- Coverage verifies content/title/summary detections fail before
-  `pool.connect()`.
+- `addMemory` now normalizes whitespace-only title and summary values to `null`
+  before persistence.
+- Coverage verifies SQL insert parameters and hydrated output use `null`.
 - Reviewer skipped after previous reviewer-agent timeouts; self-review found no
   issues.
 - Focused store tests, typecheck, build, audit, full suite, and diff whitespace

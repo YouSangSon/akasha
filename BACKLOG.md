@@ -100,3 +100,5 @@ experience, documentation, features.
   before persistence.
 - Secret-shaped repository add content, titles, and summaries are rejected
   before persistence.
+- Blank repository add title and summary values normalize to `null` before
+  persistence.

@@ -173,10 +173,15 @@ export function createMemoryRepository(
       const memoryType = normalizeMemoryType(input.memoryType);
       const durability = normalizeDurability(input.durability, "ephemeral");
       const importance = normalizePostgresInteger(input.importance, 0);
+      const title = normalizeNullableText(input.title ?? null);
+      const summary =
+        input.summary === undefined
+          ? summarize(input.content)
+          : normalizeNullableText(input.summary);
       assertNoSecretsInMemoryFields({
-        title: input.title ?? null,
+        title,
         content: input.content,
-        summary: input.summary ?? summarize(input.content),
+        summary,
       });
       const organizationId = input.organizationId ?? DEFAULT_ORG_ID;
       const client = await pool.connect();
@@ -227,9 +232,9 @@ export function createMemoryRepository(
             input.scopeId,
             input.projectKey ?? null,
             memoryType,
-            input.title ?? null,
+            title,
             input.content,
-            input.summary ?? summarize(input.content),
+            summary,
             durability,
             importance,
             sourceRow.source_id_joined,
