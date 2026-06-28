@@ -785,7 +785,11 @@ export function createToolHandlers(input: {
             "legacy repository overrides are not supported.",
         );
       }
-      if (!Array.isArray(toolInput.archiveIds) || toolInput.archiveIds.length === 0) {
+      if (!Array.isArray(toolInput.archiveIds)) {
+        throw new Error("archiveIds must be an array");
+      }
+      assertPositiveIntegerArray(toolInput.archiveIds, "archiveIds");
+      if (toolInput.archiveIds.length === 0) {
         return {
           ok: true,
           outcomes: [],

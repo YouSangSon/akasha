@@ -391,7 +391,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     description: "Restore one or more archived memory records back to active canonical storage.",
     inputSchema: {
       organizationId: organizationIdInputSchema.optional(),
-      archiveIds: z.array(z.number().int()),
+      archiveIds: z.array(positiveSafeIntegerInputSchema),
     },
     outputSchema: {
       ok: z.literal(true),

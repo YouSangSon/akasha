@@ -1114,6 +1114,24 @@ describe("createOperatorServer", () => {
     expect(registry.tag_memory).not.toHaveBeenCalled();
   });
 
+  it("rejects invalid unarchive archive ids before dispatch", async () => {
+    const res = await fetch(`${handle.baseUrl}/v1/memory/unarchive`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        archiveIds: [Number.MAX_SAFE_INTEGER + 1],
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: { message: string } }).error.message)
+      .toContain("archiveIds");
+    expect(registry.unarchive_memory).not.toHaveBeenCalled();
+  });
+
   it("rejects list_memory default/project-scope payloads without projectKey before dispatch", async () => {
     const res = await fetch(`${handle.baseUrl}/v1/memory/list`, {
       method: "POST",

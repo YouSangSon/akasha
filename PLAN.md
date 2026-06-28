@@ -4,17 +4,17 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Goal-Run ID Safe Integer Validation
+## Current Loop — Unarchive Archive ID Validation
 
 Status:
-- Direct goal-run handlers now reject invalid `goalRunId` values before
-  service dispatch.
-- Public schemas now use a shared positive safe integer schema for goal-run
-  IDs, memory governance IDs, and iteration memory links.
-- HTTP coverage verifies unsafe `goalRunId` rejects before registry dispatch.
-- Reviewer `Hume` caught the schema/handler mismatch; re-review by `Poincare`
-  reported no findings.
-- Focused app/goal-run tests, typecheck, build, audit, full suite, and diff
+- `unarchive_memory.archiveIds` now uses the shared positive safe integer
+  schema and direct handler guard.
+- Direct coverage verifies invalid archive IDs fail before canonical service
+  resolution or archive lookup.
+- HTTP coverage verifies unsafe archive IDs reject before registry dispatch.
+- Explorer `Aristotle` confirmed this was the next smallest validation gap;
+  reviewer `Lagrange` reported no findings.
+- Focused app/MCP tests, typecheck, build, audit, full suite, and diff
   whitespace checks passed.
 
 Loop closeout:

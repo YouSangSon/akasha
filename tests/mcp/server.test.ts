@@ -1043,6 +1043,27 @@ describe("createToolRegistry", () => {
     expect(services.repository.inspectMemoryGraph).not.toHaveBeenCalled();
   });
 
+  it("rejects invalid archive ids through the direct unarchive path", async () => {
+    const services = createCanonicalServices();
+    const resolveCanonicalServices = vi.fn(async () => services);
+    const registry = createToolRegistry({ resolveCanonicalServices });
+
+    for (const archiveIds of [
+      [0],
+      [-1],
+      [1.5],
+      [Number.NaN],
+      [Number.MAX_SAFE_INTEGER + 1],
+    ]) {
+      await expect(
+        registry.unarchive_memory({ archiveIds }),
+      ).rejects.toThrow(/archiveIds/);
+    }
+
+    expect(resolveCanonicalServices).not.toHaveBeenCalled();
+    expect(services.archiveRepository.findArchiveByIds).not.toHaveBeenCalled();
+  });
+
   it("rejects governance tools in legacy repository override mode", async () => {
     const registry = createToolRegistry({ repository: createRepository() });
 

@@ -46,6 +46,25 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened unarchive archive ID validation:
+  - `unarchive_memory.archiveIds` now uses the shared positive safe integer
+    schema and direct handler guard.
+  - Direct coverage verifies invalid archive IDs fail before canonical service
+    resolution or archive lookup, while preserving the existing `[]` no-op.
+  - HTTP coverage verifies unsafe archive IDs reject before registry dispatch.
+  - Explorer `Aristotle` confirmed this was the next smallest validation gap;
+    reviewer `Lagrange` reported no findings.
+
+Verification:
+- `npx vitest run tests/mcp/server.test.ts tests/app/server.test.ts`
+  (165 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (686 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Hardened goal-run ID validation:
   - Direct goal-run handlers reject invalid `goalRunId` values before
     `recordIteration`, `get`, `complete`, `abandon`, context, or repeat-check
