@@ -4,14 +4,13 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Goal-Run Required Text Validation
+## Current Loop — Optional Goal-Run Note Normalization
 
 Status:
-- `start_goal_run.goal`, `record_iteration.attempt`, and
-  `check_repeat_attempt.attempt` now reject whitespace-only text at schema and
-  direct registry handler boundaries.
-- Tests cover HTTP, MCP protocol, and direct handler paths before goal-run
-  service or embedding dispatch.
+- Blank optional goal-run notes now normalize to `null` before service
+  dispatch.
+- Direct handler coverage verifies `terminationCriteria`, iteration
+  `summary`/`error`, complete `resolution`, and abandon `reason` payloads.
 - Reviewer found no issues.
 - Typecheck, build, audit, full test suite, and diff whitespace checks passed.
 

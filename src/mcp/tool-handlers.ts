@@ -814,9 +814,12 @@ export function createToolHandlers(input: {
         cwd,
         defaultUserScopeId: options.defaultUserScopeId,
       });
+      const terminationCriteria = optionalNonBlankText(
+        toolInput.terminationCriteria,
+      );
       assertNoSecrets(toolInput.goal);
-      if (toolInput.terminationCriteria) {
-        assertNoSecrets(toolInput.terminationCriteria);
+      if (terminationCriteria) {
+        assertNoSecrets(terminationCriteria);
       }
       return await withCanonicalServices(async (services) => {
         const goalRun = await services.goalRuns.start({
@@ -825,7 +828,7 @@ export function createToolHandlers(input: {
           scopeId,
           projectKey: scope === "project" ? scopeId : null,
           goal: toolInput.goal,
-          terminationCriteria: toolInput.terminationCriteria ?? null,
+          terminationCriteria,
         });
         return { ok: true, goalRun };
       });
@@ -834,12 +837,14 @@ export function createToolHandlers(input: {
     async record_iteration(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
       assertNonBlankText(toolInput.attempt, "attempt");
+      const summary = optionalNonBlankText(toolInput.summary);
+      const error = optionalNonBlankText(toolInput.error);
       assertNoSecrets(toolInput.attempt);
-      if (toolInput.summary) {
-        assertNoSecrets(toolInput.summary);
+      if (summary) {
+        assertNoSecrets(summary);
       }
-      if (toolInput.error) {
-        assertNoSecrets(toolInput.error);
+      if (error) {
+        assertNoSecrets(error);
       }
       return await withCanonicalServices(async (services) => {
         const iteration = await services.goalRuns.recordIteration({
@@ -847,8 +852,8 @@ export function createToolHandlers(input: {
           goalRunId: toolInput.goalRunId,
           attempt: toolInput.attempt,
           outcome: toolInput.outcome,
-          summary: toolInput.summary ?? null,
-          error: toolInput.error ?? null,
+          summary,
+          error,
           memoryIds: toolInput.memoryIds,
         });
         return { ok: true, iteration };
@@ -886,14 +891,15 @@ export function createToolHandlers(input: {
 
     async complete_goal_run(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
-      if (toolInput.resolution) {
-        assertNoSecrets(toolInput.resolution);
+      const resolution = optionalNonBlankText(toolInput.resolution);
+      if (resolution) {
+        assertNoSecrets(resolution);
       }
       return await withCanonicalServices(async (services) => {
         const goalRun = await services.goalRuns.complete({
           organizationId: toolInput.organizationId ?? "default",
           goalRunId: toolInput.goalRunId,
-          note: toolInput.resolution ?? null,
+          note: resolution,
         });
         return { ok: true, goalRun };
       });
@@ -901,14 +907,15 @@ export function createToolHandlers(input: {
 
     async abandon_goal_run(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
-      if (toolInput.reason) {
-        assertNoSecrets(toolInput.reason);
+      const reason = optionalNonBlankText(toolInput.reason);
+      if (reason) {
+        assertNoSecrets(reason);
       }
       return await withCanonicalServices(async (services) => {
         const goalRun = await services.goalRuns.abandon({
           organizationId: toolInput.organizationId ?? "default",
           goalRunId: toolInput.goalRunId,
-          note: toolInput.reason ?? null,
+          note: reason,
         });
         return { ok: true, goalRun };
       });
@@ -1011,6 +1018,12 @@ export function createToolHandlers(input: {
 // Upper bound on scope memories pulled into a goal context pack. Mirrors the
 // browse/paging intent of listMemory; the pack itself caps each section.
 const GOAL_CONTEXT_RECORD_LIMIT = 50;
+
+function optionalNonBlankText(value: string | null | undefined): string | null {
+  return value === undefined || value === null || value.trim().length === 0
+    ? null
+    : value;
+}
 
 // Resolve a goal-run scope into the scopeId the repository stores: the
 // projectKey for project scope, or the resolved user scope id for user scope.

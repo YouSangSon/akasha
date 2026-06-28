@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened optional goal-run note normalization:
+  - `terminationCriteria`, iteration `summary`/`error`, complete
+    `resolution`, and abandon `reason` now normalize blank/whitespace strings
+    to `null` at the handler boundary.
+  - Direct handler coverage verifies service payloads before persistence.
+  - Subagent reviewer `Sagan` reported no findings.
+
+Verification:
+- `npx vitest run tests/goal-run/goal-run-handlers.test.ts` (15 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (664 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Hardened goal-run required text validation:
   - `start_goal_run.goal`, `record_iteration.attempt`, and
     `check_repeat_attempt.attempt` now reject whitespace-only text at schema

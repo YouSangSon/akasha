@@ -52,3 +52,4 @@ experience, documentation, features.
   dispatch.
 - Whitespace-only required goal-run text is rejected before service or
   embedding dispatch.
+- Blank optional goal-run notes normalize to `null` before persistence.

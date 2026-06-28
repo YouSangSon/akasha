@@ -156,6 +156,39 @@ describe("goal-run handlers", () => {
     });
   });
 
+  it("normalizes blank optional goal-run notes to null", async () => {
+    const goalRuns = goalRunServicesStub();
+    const registry = registryWith(goalRuns);
+
+    await registry.start_goal_run({
+      projectKey: "proj-x",
+      goal: "ship phase 1",
+      terminationCriteria: " \n\t ",
+    });
+    await registry.record_iteration({
+      goalRunId: 7,
+      attempt: "try A",
+      outcome: "failure",
+      summary: " \n\t ",
+      error: "",
+    });
+    await registry.complete_goal_run({ goalRunId: 7, resolution: " \n\t " });
+    await registry.abandon_goal_run({ goalRunId: 8, reason: "" });
+
+    expect(goalRuns.start).toHaveBeenCalledWith(
+      expect.objectContaining({ terminationCriteria: null }),
+    );
+    expect(goalRuns.recordIteration).toHaveBeenCalledWith(
+      expect.objectContaining({ summary: null, error: null }),
+    );
+    expect(goalRuns.complete).toHaveBeenCalledWith(
+      expect.objectContaining({ note: null }),
+    );
+    expect(goalRuns.abandon).toHaveBeenCalledWith(
+      expect.objectContaining({ note: null }),
+    );
+  });
+
   it("list_goal_runs resolves default user scope when userScopeId is omitted", async () => {
     const goalRuns = goalRunServicesStub();
     const registry = createToolRegistry({
