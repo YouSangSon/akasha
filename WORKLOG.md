@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened session prompt task validation:
+  - `akasha_session_start.task` now rejects whitespace-only text through the
+    MCP prompt argument schema.
+  - Protocol coverage verifies blank prompt tasks fail before
+    `build_context_pack` dispatch.
+  - Subagent reviewer `Galileo` reported no findings.
+
+Verification:
+- `npx vitest run tests/mcp/server.test.ts` (80 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (649 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Hardened search/context text validation:
   - `search_memory.query` and `build_context_pack.task` now reject
     whitespace-only text at HTTP/MCP schema and direct registry handler

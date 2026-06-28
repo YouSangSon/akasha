@@ -44,3 +44,5 @@ experience, documentation, features.
   positive integer strings.
 - Whitespace-only search queries and context-pack tasks are rejected before
   dispatch or retrieval work.
+- Whitespace-only session-start prompt tasks are rejected before context-pack
+  dispatch.

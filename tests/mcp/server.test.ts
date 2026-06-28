@@ -2579,6 +2579,26 @@ describe("createMcpServer resources and prompts", () => {
     await client.close();
     await server.close();
   });
+
+  it("rejects whitespace-only session prompt tasks before registry dispatch", async () => {
+    const registry = buildRegistryForMcpProtocol();
+    const server = createMcpServer({ registry });
+    const client = await createInMemoryClient(server);
+
+    await expect(
+      client.getPrompt({
+        name: "akasha_session_start",
+        arguments: {
+          projectKey: "project-alpha",
+          task: " \n\t ",
+        },
+      }),
+    ).rejects.toThrow(/non-whitespace text/);
+    expect(registry.build_context_pack).not.toHaveBeenCalled();
+
+    await client.close();
+    await server.close();
+  });
 });
 
 function buildRegistryForMcpProtocol(): ToolRegistry {

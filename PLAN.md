@@ -4,14 +4,13 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Search/Context Non-Blank Text
+## Current Loop — Session Prompt Task Validation
 
 Status:
-- `search_memory.query` and `build_context_pack.task` now reject
-  whitespace-only text at HTTP/MCP schema and direct registry handler
-  boundaries.
-- Tests cover HTTP, MCP protocol, direct retrieveMemory override, and canonical
-  services paths before search/vector/context-pack persistence work.
+- `akasha_session_start.task` now rejects whitespace-only text through the MCP
+  prompt argument schema.
+- Protocol coverage verifies blank prompt tasks fail before
+  `build_context_pack` dispatch.
 - Reviewer found no issues.
 - Typecheck, build, audit, full test suite, and diff whitespace checks passed.
 

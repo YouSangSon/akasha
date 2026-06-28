@@ -554,7 +554,7 @@ function registerAkashaPrompts(server: McpServer, registry: ToolRegistry): void 
       argsSchema: {
         organizationId: z.string().min(1).optional(),
         projectKey: z.string().min(1),
-        task: z.string().min(1),
+        task: nonBlankTextInputSchema,
         limit: z.number().int().positive().optional(),
       },
     },
