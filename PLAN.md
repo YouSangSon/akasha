@@ -4,18 +4,17 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Direct Repository Limit Guard
+## Current Loop — Direct Audit Limit Guard
 
 Status:
-- Direct repository search/list/governance/graph calls now reject invalid
-  numeric limits before SQL instead of defaulting or flooring them.
-- Omitted limits still use existing defaults, and retrieval lexical oversampling
-  is capped before calling repository search.
-- Reviewer subagent caught an API/MCP regression for valid public limits above
-  25; the retrieval cap and regression test fixed it, and re-review found no
-  issues.
-- Focused repository/retrieval/MCP/API tests, typecheck, build, audit, full
-  suite, and diff whitespace checks passed.
+- Direct audit-log listing calls now reject invalid numeric limits before SQL
+  instead of defaulting, flooring, or clamping them.
+- Omitted limits still default to `100`, and valid boundary limits `1` and
+  `1000` pass through unchanged.
+- Reviewer subagent caught missing positive/default coverage; the gap was fixed
+  and re-review found no issues.
+- Focused audit/MCP tests, typecheck, build, audit, full suite, and diff
+  whitespace checks passed.
 
 Loop closeout:
 - Commit locally; do not push.

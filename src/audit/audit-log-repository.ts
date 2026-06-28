@@ -126,8 +126,13 @@ const MAX_AUDIT_LIMIT = 1000;
 const MAX_ERROR_MESSAGE_LENGTH = 1024;
 
 function clampAuditLimit(value: number | undefined): number {
-  if (value === undefined || !Number.isFinite(value) || value <= 0) {
+  if (value === undefined) {
     return DEFAULT_AUDIT_LIMIT;
   }
-  return Math.min(Math.floor(value), MAX_AUDIT_LIMIT);
+  if (!Number.isInteger(value) || value < 1 || value > MAX_AUDIT_LIMIT) {
+    throw new Error(
+      `audit log limit must be a positive integer up to ${MAX_AUDIT_LIMIT}`,
+    );
+  }
+  return value;
 }

@@ -36,6 +36,50 @@ describe("createAuditLogRepository — error_message truncation", () => {
     expect(fakePool.query).not.toHaveBeenCalled();
   });
 
+  it.each([0, -1, 1.5, Number.NaN, 1001])(
+    "listByOrganization rejects invalid direct limits before querying: %s",
+    async (limit) => {
+      const fakePool = {
+        query: vi.fn().mockResolvedValue({ rows: [] }),
+      };
+      const repo = createAuditLogRepository(fakePool as never);
+
+      await expect(
+        repo.listByOrganization("org-1", { limit }),
+      ).rejects.toThrow(
+        "audit log limit must be a positive integer up to 1000",
+      );
+
+      expect(fakePool.query).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ["default", undefined, 100],
+    ["minimum", 1, 1],
+    ["maximum", 1000, 1000],
+  ] as const)(
+    "listByOrganization preserves %s direct limits",
+    async (_label, limit, expectedLimit) => {
+      const fakePool = {
+        query: vi.fn().mockResolvedValue({ rows: [] }),
+      };
+      const repo = createAuditLogRepository(fakePool as never);
+
+      await expect(
+        repo.listByOrganization(
+          "org-1",
+          limit === undefined ? undefined : { limit },
+        ),
+      ).resolves.toEqual([]);
+
+      expect(fakePool.query).toHaveBeenCalledWith(
+        expect.any(String),
+        ["org-1", expectedLimit],
+      );
+    },
+  );
+
   it("truncates error_message to 1024 chars before persistence", async () => {
     let capturedParams: unknown[] | undefined;
 

@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened direct audit-log limits:
+  - Direct `listByOrganization()` audit repository calls now reject invalid
+    numeric limits before SQL instead of defaulting, flooring, or clamping them.
+  - Omitted limits still default to `100`, and valid boundary limits `1` and
+    `1000` pass through unchanged.
+  - Reviewer subagent caught missing positive/default coverage; added tests for
+    omitted/min/max limits and re-review found no issues.
+
+Verification:
+- `npx vitest run tests/audit/audit-truncation.test.ts tests/audit/audit-write.test.ts tests/mcp/server.test.ts` (139 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (927 passed, 34 skipped across 68 files)
+- `git diff --check`
+
 - Hardened direct repository numeric limits:
   - Direct `searchMemory`, `listMemory`, `listMemoryForGovernance`, and
     `inspectMemoryGraph` calls now reject invalid limits before SQL instead of
