@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened repository update value validation:
+  - `updateMemoryRecord` now rejects invalid memory kind, durability, and
+    importance values before issuing SQL updates.
+  - Repository coverage verifies invalid enum values and non-Postgres-integer
+    importance roll back before `UPDATE memory_records`.
+  - Reviewer skipped after previous reviewer-agent timeouts; self-review found
+    no issues.
+
+Verification:
+- `npx vitest run tests/store/memory-repository.test.ts` (31 passed, 7 skipped)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (711 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Normalized blank repository metadata patches:
   - `updateMemoryRecord` now normalizes explicitly supplied blank title and
     summary values to `null` before persistence.

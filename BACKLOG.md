@@ -94,3 +94,5 @@ experience, documentation, features.
   before repository dispatch.
 - Blank repository update title and summary patches normalize to `null` before
   persistence.
+- Invalid repository update kind, durability, and importance values are
+  rejected before persistence.

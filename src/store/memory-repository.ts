@@ -24,6 +24,8 @@ const DEFAULT_ORG_ID = "default";
 const MAX_STORED_ENTITY_MENTIONS = 64;
 const MAX_QUERY_ENTITY_MENTIONS = 16;
 const MAX_ENTITY_RELATIONSHIPS_PER_MEMORY = 96;
+const POSTGRES_INTEGER_MIN = -2147483648;
+const POSTGRES_INTEGER_MAX = 2147483647;
 
 type PostgresMemoryRow = {
   id: number;
@@ -478,6 +480,15 @@ export function createMemoryRepository(
           input.summary === undefined
             ? currentRow.summary
             : normalizeNullableText(input.summary);
+        const nextKind = normalizeMemoryType(input.kind, currentRow.kind);
+        const nextDurability = normalizeDurability(
+          input.durability,
+          currentRow.durability,
+        );
+        const nextImportance = normalizePostgresInteger(
+          input.importance,
+          currentRow.importance,
+        );
         assertNoSecretsInMemoryFields({
           title: nextTitle,
           content: nextContent,
@@ -514,12 +525,12 @@ export function createMemoryRepository(
           [
             input.id,
             input.organizationId,
-            input.kind ?? currentRow.kind,
+            nextKind,
             nextTitle,
             nextContent,
             nextSummary,
-            input.importance ?? currentRow.importance,
-            input.durability ?? currentRow.durability,
+            nextImportance,
+            nextDurability,
           ],
         );
         const updatedRow = requireSingleRow(updateResult.rows[0], "memory");
@@ -943,6 +954,49 @@ function assertNoSecretsInMemoryFields(input: {
 
 function normalizeNullableText(value: string | null): string | null {
   return value === null || value.trim().length === 0 ? null : value;
+}
+
+function normalizeMemoryType(
+  value: SearchMemoryResult["memoryType"] | undefined,
+  fallback: SearchMemoryResult["memoryType"],
+): SearchMemoryResult["memoryType"] {
+  if (value === undefined) {
+    return fallback;
+  }
+  if (value === "decision" || value === "fact" || value === "summary") {
+    return value;
+  }
+  throw new Error("kind must be one of: decision, summary, fact");
+}
+
+function normalizeDurability(
+  value: NonNullable<SearchMemoryResult["durability"]> | undefined,
+  fallback: NonNullable<SearchMemoryResult["durability"]>,
+): NonNullable<SearchMemoryResult["durability"]> {
+  if (value === undefined) {
+    return fallback;
+  }
+  if (value === "ephemeral" || value === "durable" || value === "archived") {
+    return value;
+  }
+  throw new Error("durability must be one of: ephemeral, durable, archived");
+}
+
+function normalizePostgresInteger(
+  value: number | undefined,
+  fallback: number,
+): number {
+  if (value === undefined) {
+    return fallback;
+  }
+  if (
+    !Number.isInteger(value) ||
+    value < POSTGRES_INTEGER_MIN ||
+    value > POSTGRES_INTEGER_MAX
+  ) {
+    throw new Error("importance must be a Postgres integer");
+  }
+  return value;
 }
 
 function orderRecordsByIds(

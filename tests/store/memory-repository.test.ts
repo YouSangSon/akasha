@@ -759,6 +759,54 @@ describe("createMemoryRepository (unit — no PG required)", () => {
     });
   });
 
+  it("updateMemoryRecord rejects invalid enum and integer values before updating the row", async () => {
+    const cases = [
+      { kind: "note" as never, message: /kind/ },
+      { durability: "permanent" as never, message: /durability/ },
+      { importance: 1.5, message: /importance/ },
+      { importance: Number.NaN, message: /importance/ },
+      { importance: 2147483648, message: /importance/ },
+    ];
+
+    for (const patch of cases) {
+      const clientQueryCalls: SqlQueryCall[] = [];
+      const mockClient = {
+        query: vi.fn().mockImplementation((sql: string, params?: unknown[]) => {
+          clientQueryCalls.push({ sql, params: params ?? [] });
+          if (sql === "BEGIN" || sql === "COMMIT" || sql === "ROLLBACK") {
+            return Promise.resolve({ rows: [] });
+          }
+          if (sql.includes("SELECT") && sql.includes("FROM memory_records mr")) {
+            return Promise.resolve({ rows: [hydratedMemoryRow()] });
+          }
+          if (sql.includes("UPDATE memory_records")) {
+            return Promise.reject(new Error("UPDATE should not run"));
+          }
+          return Promise.resolve({ rows: [] });
+        }),
+        release: vi.fn(),
+      };
+      const mockPool = {
+        connect: vi.fn().mockResolvedValue(mockClient),
+      };
+      const repo = createMemoryRepository(mockPool as never);
+
+      await expect(
+        repo.updateMemoryRecord({
+          id: 42,
+          organizationId: "org-a",
+          ...patch,
+        }),
+      ).rejects.toThrow(patch.message);
+
+      expect(
+        clientQueryCalls.some(({ sql }) => sql.includes("UPDATE memory_records")),
+      ).toBe(false);
+      expect(clientQueryCalls.some(({ sql }) => sql === "ROLLBACK")).toBe(true);
+      expect(mockClient.release).toHaveBeenCalledTimes(1);
+    }
+  });
+
   it("updateMemoryRecord rejects secret-shaped content before persistence", async () => {
     await expectUpdateSecretRejection(
       { content: `Rotate AWS key ${exampleAwsAccessKey} immediately.` },
