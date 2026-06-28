@@ -755,6 +755,7 @@ export function createToolHandlers(input: {
           "audit log not configured: pass options.auditLog to enable list_audit_log",
         );
       }
+      assertOptionalPositiveInteger(toolInput.limit, "limit", 1000);
       const organizationId = toolInput.organizationId ?? "default";
       const entries = await auditLogForListing.listByOrganization(
         organizationId,
@@ -1084,6 +1085,20 @@ function assertPositiveIntegerArray(
 function assertPositiveInteger(value: number, fieldName: string): void {
   if (!Number.isSafeInteger(value) || value <= 0) {
     throw new Error(`${fieldName} must be a positive safe integer`);
+  }
+}
+
+function assertOptionalPositiveInteger(
+  value: number | undefined,
+  fieldName: string,
+  max?: number,
+): void {
+  if (value === undefined) {
+    return;
+  }
+  assertPositiveInteger(value, fieldName);
+  if (max !== undefined && value > max) {
+    throw new Error(`${fieldName} must be at most ${max}`);
   }
 }
 

@@ -1199,6 +1199,43 @@ describe("createToolRegistry", () => {
     expect(services.repository.archiveMemoryRecord).not.toHaveBeenCalled();
   });
 
+  it("rejects invalid audit log limits before repository dispatch", async () => {
+    const auditLog = buildAuditLog();
+    const registry = createToolRegistry({ auditLog });
+
+    for (const limit of [
+      0,
+      -1,
+      1.5,
+      Number.NaN,
+      1001,
+      Number.MAX_SAFE_INTEGER + 1,
+    ]) {
+      await expect(registry.list_audit_log({ limit })).rejects.toThrow(
+        /limit/,
+      );
+    }
+
+    expect(auditLog.listByOrganization).not.toHaveBeenCalled();
+  });
+
+  it("accepts the maximum audit log limit through the direct registry path", async () => {
+    const auditLog = buildAuditLog();
+    const registry = createToolRegistry({ auditLog });
+
+    await expect(
+      registry.list_audit_log({ limit: 1000 }),
+    ).resolves.toMatchObject({
+      ok: true,
+      organizationId: "default",
+      entries: [],
+    });
+
+    expect(auditLog.listByOrganization).toHaveBeenCalledWith("default", {
+      limit: 1000,
+    });
+  });
+
   it("does not delete existing index state when update_memory embedding refresh fails", async () => {
     const services = createCanonicalServices();
     services.repository.updateMemoryRecord.mockResolvedValueOnce(

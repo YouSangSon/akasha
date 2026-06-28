@@ -46,6 +46,23 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened direct audit log limit validation:
+  - Direct `list_audit_log.limit` rejects invalid and over-limit values before
+    audit repository dispatch.
+  - Direct coverage verifies invalid limits fail before `listByOrganization`
+    and the documented maximum `1000` still reaches the repository.
+  - Subagent reviewer `Franklin` requested boundary coverage; after the fix,
+    re-review reported no findings.
+
+Verification:
+- `npx vitest run tests/mcp/server.test.ts` (104 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (689 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Hardened direct governance memory ID validation:
   - Direct `update_memory`, `delete_memory`, and `tag_memory` reject invalid
     `memoryId` values before canonical service dispatch.

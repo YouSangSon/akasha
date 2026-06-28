@@ -70,3 +70,4 @@ experience, documentation, features.
 - Invalid direct/public goal-run IDs are rejected before service dispatch.
 - Invalid direct/public unarchive archive IDs are rejected before archive lookup.
 - Invalid direct governance memory IDs are rejected before repository dispatch.
+- Invalid direct audit log limits are rejected before audit repository dispatch.
