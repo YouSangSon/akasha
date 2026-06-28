@@ -11,6 +11,7 @@
 // The builder receives already-resolved primitives and produces the point.
 
 import type { VectorPoint } from "./vector-index.js";
+import { assertVectorOrganizationId } from "./organization-id.js";
 
 export type VectorPointInput = {
   chunkId: number;
@@ -30,6 +31,8 @@ export type VectorPointInput = {
 };
 
 export function buildVectorPoint(input: VectorPointInput): VectorPoint {
+  assertVectorOrganizationId(input.organizationId);
+
   return {
     id: `chunk:${input.chunkId}`,
     vector: input.vector,

@@ -46,6 +46,20 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened vector point organization validation:
+  - `buildVectorPoint` now rejects whitespace-only required organization IDs
+    before producing vector payload metadata.
+  - Point-builder coverage verifies invalid organization IDs fail immediately.
+  - Reviewer subagent found no issues.
+
+Verification:
+- `npx vitest run tests/vector/point-builder.test.ts tests/vector/qdrant-index.test.ts tests/vector/pgvector-index.integration.test.ts` (36 passed, 12 skipped)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (762 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened vector adapter organization filters:
   - Qdrant and pgvector adapters now reject whitespace-only optional
     organization filters before backend query/delete work.

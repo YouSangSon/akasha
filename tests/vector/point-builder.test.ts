@@ -59,4 +59,22 @@ describe("buildVectorPoint", () => {
     expect(point.payload.summary).toBeNull();
     expect(point.payload.tags).toEqual([]);
   });
+
+  it("rejects whitespace-only organizationId before building payload", () => {
+    expect(() =>
+      buildVectorPoint({
+        chunkId: 1,
+        vector: [0.5],
+        memoryRecordId: 2,
+        organizationId: " \n\t ",
+        scopeType: "project",
+        scopeId: "proj-1",
+        projectKey: null,
+        kind: "fact",
+        durability: "ephemeral",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        embeddingVersion: "v2",
+      }),
+    ).toThrow(/organizationId/);
+  });
 });

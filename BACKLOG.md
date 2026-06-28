@@ -157,3 +157,5 @@ experience, documentation, features.
   persistence.
 - Whitespace-only vector organization filters are rejected before backend
   query/delete work, while exact empty-string legacy behavior remains covered.
+- Whitespace-only vector point organization IDs are rejected before payload
+  construction.
