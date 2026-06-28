@@ -672,6 +672,8 @@ export async function reindexCanonicalMemory(input: {
   scopes: ScopeRef[];
   batchSize?: number;
 }): Promise<{ chunkCount: number }> {
+  assertNonBlankText(input.organizationId, "organizationId");
+
   const batchSize = normalizeReindexBatchSize(input.batchSize);
   let foundChunks = false;
 

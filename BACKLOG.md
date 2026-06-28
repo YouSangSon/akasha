@@ -149,3 +149,5 @@ experience, documentation, features.
   indexing side effects.
 - Whitespace-only canonical write-path organization IDs are rejected before
   ingest and indexing side effects.
+- Whitespace-only canonical reindex organization IDs are rejected before
+  indexing side effects.

@@ -883,6 +883,41 @@ describe("canonical indexing", () => {
     expect(vectorIndex.upsert).not.toHaveBeenCalled();
   });
 
+  it("reindexCanonicalMemory rejects whitespace-only organizationId before indexing side effects", async () => {
+    const chunkRepository = {
+      listChunks: vi.fn(),
+      updatePointIds: vi.fn(),
+    };
+    const embeddings = {
+      embed: vi.fn(),
+      embedBatch: vi.fn(),
+    };
+    const vectorIndex = {
+      upsert: vi.fn(),
+      query: vi.fn(),
+      delete: vi.fn(),
+      deleteByRecordIds: vi.fn(),
+      ensureCollection: vi.fn(),
+    };
+
+    await expect(
+      reindexCanonicalMemory({
+        chunkRepository: chunkRepository as never,
+        embeddings,
+        vectorIndex,
+        organizationId: " \n\t ",
+        scopes: [
+          { scopeType: "project" as const, scopeId: "project-alpha" },
+        ],
+      }),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(chunkRepository.listChunks).not.toHaveBeenCalled();
+    expect(embeddings.embedBatch).not.toHaveBeenCalled();
+    expect(vectorIndex.deleteByRecordIds).not.toHaveBeenCalled();
+    expect(vectorIndex.upsert).not.toHaveBeenCalled();
+  });
+
   it("reindexes stored chunks in pages without deleting a record after partial upsert", async () => {
     const chunks = [
       {

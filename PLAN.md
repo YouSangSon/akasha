@@ -4,13 +4,13 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Write Path Organization Guard
+## Current Loop — Reindex Organization Guard
 
 Status:
-- `writeCanonicalMemory` now rejects whitespace-only returned record
-  organization IDs before ingest job creation or indexing side effects.
-- Coverage verifies invalid write-path organization IDs fail before ingest and
-  indexing work.
+- `reindexCanonicalMemory` now rejects whitespace-only organization IDs before
+  chunk listing, embedding, or vector work.
+- Coverage verifies invalid reindex organization IDs fail before indexing side
+  effects.
 - Reviewer skipped after previous reviewer-agent timeouts; self-review found no
   issues.
 - Focused canonical indexing tests, typecheck, build, audit, full suite, and

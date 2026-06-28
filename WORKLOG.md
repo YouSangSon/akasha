@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened canonical reindex organization validation:
+  - `reindexCanonicalMemory` now rejects whitespace-only organization IDs
+    before chunk listing, embedding, or vector work.
+  - Canonical indexing coverage verifies invalid organization IDs fail before
+    indexing side effects.
+  - Reviewer skipped after previous reviewer-agent timeouts; self-review found
+    no issues.
+
+Verification:
+- `npx vitest run tests/store/canonical-indexing.test.ts` (26 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (747 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened canonical write-path organization validation:
   - `writeCanonicalMemory` now rejects whitespace-only returned record
     organization IDs before ingest job creation or indexing side effects.
