@@ -46,6 +46,23 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened Qdrant snapshot response parsing:
+  - `scripts/snapshot-qdrant.sh` now rejects missing, non-string, empty, and
+    whitespace-only snapshot names before constructing the snapshot download
+    URL.
+  - Valid string snapshot names are preserved unchanged.
+  - Worker implementation passed spec review and code-quality review with no
+    findings.
+
+Verification:
+- `npx vitest run tests/scripts/backup-verify.test.ts` (46 passed)
+- `sh -n scripts/snapshot-qdrant.sh`
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (983 passed, 34 skipped across 69 files)
+- `git diff --check`
+
 - Hardened backup manifest writer parsing:
   - `scripts/backup-postgres.sh`, `scripts/snapshot-qdrant.sh`, and
     `scripts/create-backup.sh` now reject existing manifest files that parse to

@@ -45,11 +45,11 @@ extract_snapshot_name() {
     process.stdin.on("end", () => {
       const parsed = JSON.parse(input);
       const name = parsed?.result?.name ?? parsed?.name;
-      if (!name) {
+      if (typeof name !== "string" || name.trim() === "") {
         process.stderr.write("Snapshot name missing in Qdrant response\n");
         process.exit(1);
       }
-      process.stdout.write(String(name));
+      process.stdout.write(name);
     });
   '
 }

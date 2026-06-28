@@ -302,6 +302,38 @@ describe("snapshot Qdrant collection shell guard", () => {
     ).resolves.toBe(true);
   });
 
+  it("uses valid Qdrant snapshot response names unchanged", async () => {
+    const result = await runBackupShellScript("scripts/snapshot-qdrant.sh", {
+      STUB_QDRANT_SNAPSHOT_RESPONSE: JSON.stringify({
+        result: { name: "snapshot-custom" },
+      }),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.log).toContain(
+      "curl:-fsS http://qdrant.local:6333/collections/memory_chunks_v1/snapshots/snapshot-custom --output",
+    );
+  });
+
+  it.each([
+    ["missing", JSON.stringify({ result: {} })],
+    ["null", JSON.stringify({ result: { name: null } })],
+    ["number", JSON.stringify({ result: { name: 42 } })],
+    ["object", JSON.stringify({ result: { name: { file: "snapshot-one" } } })],
+    ["empty", JSON.stringify({ result: { name: "" } })],
+    ["whitespace", JSON.stringify({ result: { name: " \n\t " } })],
+  ])("rejects %s snapshot names before download or scp", async (_label, response) => {
+    const result = await runBackupShellScript("scripts/snapshot-qdrant.sh", {
+      STUB_QDRANT_SNAPSHOT_RESPONSE: response,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.stderr).toContain("Snapshot name missing in Qdrant response");
+    expect(result.log.trim().split("\n")).toEqual([
+      "curl:-fsS -X POST http://qdrant.local:6333/collections/memory_chunks_v1/snapshots",
+    ]);
+  });
+
   it.each([
     ["empty", ""],
     ["whitespace", " \n\t "],
@@ -587,6 +619,8 @@ for arg do
 done
 if [ -n "$out" ]; then
   printf 'snapshot bytes' > "$out"
+elif [ "\${STUB_QDRANT_SNAPSHOT_RESPONSE+x}" = "x" ]; then
+  printf '%s' "$STUB_QDRANT_SNAPSHOT_RESPONSE"
 else
   printf '{"result":{"name":"snapshot-one"}}'
 fi
