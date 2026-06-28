@@ -437,6 +437,54 @@ describe("createToolRegistry", () => {
     expect(resolveRepository).not.toHaveBeenCalled();
   });
 
+  it("rejects invalid memory scope values before repository dispatch", async () => {
+    const invalidScope = "team" as never;
+    const resolveRepository = vi.fn(() => createRepository());
+    const legacyRegistry = createToolRegistry({ resolveRepository });
+
+    await expect(
+      legacyRegistry.add_memory({
+        projectKey: "project-alpha",
+        scope: invalidScope,
+        kind: "decision",
+        content: "Use Postgres for canonical memory state.",
+      }),
+    ).rejects.toThrow(/scope must be one of/);
+
+    expect(resolveRepository).not.toHaveBeenCalled();
+
+    const services = createCanonicalServices();
+    const resolveCanonicalServices = vi.fn(async () => services);
+    const registry = createToolRegistry({ resolveCanonicalServices });
+
+    await expect(
+      registry.compact_memory({
+        organizationId: "org-a",
+        projectKey: "project-alpha",
+        scope: invalidScope,
+      }),
+    ).rejects.toThrow(/scope must be one of/);
+    await expect(
+      registry.list_memory({
+        organizationId: "org-a",
+        projectKey: "project-alpha",
+        scope: invalidScope,
+      }),
+    ).rejects.toThrow(/scope must be one of/);
+    await expect(
+      registry.inspect_memory_graph({
+        organizationId: "org-a",
+        projectKey: "project-alpha",
+        scope: invalidScope,
+      }),
+    ).rejects.toThrow(/scope must be one of/);
+
+    expect(resolveCanonicalServices).not.toHaveBeenCalled();
+    expect(services.repository.listMemory).not.toHaveBeenCalled();
+    expect(services.repository.listMemoryForGovernance).not.toHaveBeenCalled();
+    expect(services.repository.inspectMemoryGraph).not.toHaveBeenCalled();
+  });
+
   it("builds a context pack using the retrieve-memory service", async () => {
     const retrieveMemory = vi.fn().mockResolvedValue([
       createRecord({

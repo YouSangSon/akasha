@@ -82,3 +82,5 @@ experience, documentation, features.
   repository dispatch.
 - Invalid direct goal-run enum values are rejected before service dispatch.
 - HTTP goal-run enum validation is covered before registry dispatch.
+- Invalid direct memory scope enum values are rejected before repository
+  dispatch.

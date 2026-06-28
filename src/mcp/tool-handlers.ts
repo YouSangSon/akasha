@@ -214,6 +214,7 @@ export function createToolHandlers(input: {
     async add_memory(toolInput) {
       assertNonBlankMemoryContent(toolInput.content);
       assertProvidedScopeIdentifiers(toolInput);
+      assertOptionalAllowedValue(toolInput.scope, "scope", SUPPORTED_SCOPE_TYPES);
 
       const scope = toolInput.scope ?? "project";
       const userScopeId = resolveUserScopeId({
@@ -430,6 +431,7 @@ export function createToolHandlers(input: {
 
     async compact_memory(toolInput) {
       assertProvidedScopeIdentifiers(toolInput);
+      assertOptionalAllowedValue(toolInput.scope, "scope", SUPPORTED_SCOPE_TYPES);
       assertOptionalPositiveInteger(toolInput.limit, "limit", 5000);
       assertOptionalNonNegativeFiniteNumber(
         toolInput.decayThreshold,
@@ -551,6 +553,7 @@ export function createToolHandlers(input: {
     async list_memory(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
       assertProvidedScopeIdentifiers(toolInput);
+      assertOptionalAllowedValue(toolInput.scope, "scope", SUPPORTED_SCOPE_TYPES);
       if (toolInput.tag !== undefined) {
         assertNonBlankText(toolInput.tag, "memory tag");
       }
@@ -593,6 +596,7 @@ export function createToolHandlers(input: {
     async inspect_memory_graph(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
       assertProvidedScopeIdentifiers(toolInput);
+      assertOptionalAllowedValue(toolInput.scope, "scope", SUPPORTED_SCOPE_TYPES);
       if (toolInput.query !== undefined) {
         assertNonBlankText(toolInput.query, "graph query");
       }

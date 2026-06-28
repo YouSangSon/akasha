@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened direct memory scope enum validation:
+  - Direct `add_memory`, `compact_memory`, `list_memory`, and
+    `inspect_memory_graph` now reject unsupported `scope` values before
+    repository or canonical service dispatch.
+  - Direct coverage verifies invalid scopes fail before legacy repository
+    resolution or canonical repository calls.
+  - Subagent reviewer `Einstein` reported no findings.
+
+Verification:
+- `npx vitest run tests/mcp/server.test.ts` (116 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (705 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Added HTTP goal-run enum validation coverage:
   - HTTP `/v1/goal-run/*` coverage verifies invalid scope, status, and outcome
     values reject before registry dispatch.
