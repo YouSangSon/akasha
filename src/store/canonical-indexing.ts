@@ -392,6 +392,8 @@ export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository
     },
 
     async createContextPackRun(input) {
+      assertNonBlankText(input.organizationId, "organizationId");
+
       await pool.query(
         `
           INSERT INTO context_pack_runs (

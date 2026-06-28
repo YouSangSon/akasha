@@ -1225,6 +1225,25 @@ describe("canonical indexing", () => {
       250,
     ]);
   });
+
+  it("createContextPackRun rejects whitespace-only organizationId before querying", async () => {
+    const mockPool = {
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+    };
+    const repo = createMemoryChunkRepository(mockPool as never);
+
+    await expect(
+      repo.createContextPackRun({
+        organizationId: " \n\t ",
+        projectKey: "project-alpha",
+        task: "Summarize project risks",
+        selectedMemoryIds: ["project:project-alpha:1"],
+        packMarkdown: "# Context Pack",
+      }),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(mockPool.query).not.toHaveBeenCalled();
+  });
 });
 
 function createRecord(overrides: {

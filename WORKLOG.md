@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened context-pack run organization validation:
+  - `createContextPackRun` now rejects whitespace-only organization IDs before
+    inserting context-pack run rows.
+  - Canonical indexing coverage verifies invalid organization IDs fail before
+    `pool.query()`.
+  - Reviewer skipped after previous reviewer-agent timeouts; self-review found
+    no issues.
+
+Verification:
+- `npx vitest run tests/store/canonical-indexing.test.ts` (20 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (741 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened canonical chunk list organization validation:
   - `listChunks` now rejects whitespace-only organization IDs before listing
     canonical chunks.
