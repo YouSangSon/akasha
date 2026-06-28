@@ -4,15 +4,16 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Rate Limit Integer Config
+## Current Loop — Compaction Candidate ID Parsing
 
 Status:
-- `RATE_LIMIT_PER_MINUTE` now requires a plain positive integer string.
-- Direct token-bucket construction rejects fractional capacities below or above
-  1, preventing buckets that never accumulate a full request token.
-- Focused tests cover fractional and non-decimal env values.
-- Docs state the rate-limit cap is a positive integer.
-- Reviewer agent timed out twice and was closed; local verification passed.
+- `applyCompaction` now validates archive candidate IDs before creating a
+  compaction run.
+- Candidate IDs must be positive safe decimal integers, avoiding `parseInt`
+  truncation such as `12abc` or `12.5` to `12`.
+- Focused test covers fractional IDs failing before run creation, archive
+  application, or vector deletion.
+- Reviewer found no issues.
 - Typecheck, build, audit, full test suite, and diff whitespace checks passed.
 
 Loop closeout:

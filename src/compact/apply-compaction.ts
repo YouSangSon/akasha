@@ -133,6 +133,8 @@ export async function applyCompaction(
     };
   }
 
+  const candidates = collectArchiveCandidates(plan);
+
   // Apply-path rate limit (P17 step 6). Default 1/hour/org; tests and
   // bulk-migration ops can disable via { windowMs: 0 }.
   const limit = deps.applyRateLimit ?? DEFAULT_APPLY_RATE_LIMIT;
@@ -181,8 +183,6 @@ export async function applyCompaction(
       },
     };
   }
-
-  const candidates = collectArchiveCandidates(plan);
 
   let archivedCount = 0;
   let skippedCount = 0;
@@ -345,9 +345,12 @@ function collectArchiveCandidates(
 }
 
 function parseIntStrict(value: string): number {
-  const n = Number.parseInt(value, 10);
-  if (!Number.isFinite(n) || Number.isNaN(n)) {
-    throw new Error(`Expected integer id, got: ${value}`);
+  if (!/^\d+$/.test(value)) {
+    throw new Error(`Expected positive integer id, got: ${value}`);
+  }
+  const n = Number(value);
+  if (!Number.isSafeInteger(n) || n < 1) {
+    throw new Error(`Expected positive integer id, got: ${value}`);
   }
   return n;
 }

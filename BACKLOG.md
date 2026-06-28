@@ -37,3 +37,5 @@ experience, documentation, features.
   tokens.
 - Sweeper interval env parsing requires plain decimal integer strings.
 - Rate-limit env parsing and bucket capacity require positive integers.
+- Compaction apply candidate IDs require positive safe decimal integers before
+  run creation.

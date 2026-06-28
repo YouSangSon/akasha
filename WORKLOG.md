@@ -46,6 +46,24 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened compaction apply candidate ID parsing:
+  - `applyCompaction` now validates archive candidate IDs before creating a
+    compaction run.
+  - Candidate IDs must be positive safe decimal integers, avoiding `parseInt`
+    truncation such as `12abc` or `12.5` to `12`.
+  - Regression coverage verifies fractional IDs fail before run creation,
+    archive application, or vector deletion.
+  - Subagent reviewer `Bacon` reported no findings on the staged patch.
+
+Verification:
+- `npx vitest run tests/compact/apply-compaction.test.ts`
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (618 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Hardened HTTP rate-limit configuration:
   - `RATE_LIMIT_PER_MINUTE` now requires a plain positive integer string.
   - Direct token-bucket construction rejects fractional capacities below or

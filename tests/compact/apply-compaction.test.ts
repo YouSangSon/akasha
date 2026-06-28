@@ -254,6 +254,27 @@ describe("applyCompaction (apply path - happy path)", () => {
     expect(result.applyStats.archived).toBe(1);
     expect(result.applyStats.skipped).toBe(1);
   });
+
+  it("rejects non-integer candidate ids before applying any archive record", async () => {
+    const { repo, createCompactionRun, applyCompactionRecord } = makeRepoMocks();
+    const qdrant = makeVectorIndex();
+
+    const records = [
+      makeRecord({ id: 1, content: "same" }),
+      makeRecord({ id: 2.5, content: "same" }),
+    ];
+
+    await expect(
+      applyCompaction(
+        makeInput({ records, dryRun: false, decayThreshold: 0 }),
+        makeDeps(repo, qdrant),
+      ),
+    ).rejects.toThrow(/Expected positive integer id/);
+
+    expect(createCompactionRun).not.toHaveBeenCalled();
+    expect(applyCompactionRecord).not.toHaveBeenCalled();
+    expect(qdrant.delete).not.toHaveBeenCalled();
+  });
 });
 
 describe("applyCompaction (apply path - replay)", () => {
