@@ -139,6 +139,23 @@ describe("MemoryArchiveRepository.applyCompactionRecord", () => {
     expect(result).toEqual({ archived: false, qdrantPointIds: [] });
   });
 
+  it("rejects whitespace-only organizationId before querying", async () => {
+    const { pool, query } = makeMockPool(async () => ({ rows: [] }));
+    const repo = createMemoryArchiveRepository(pool);
+
+    await expect(
+      repo.applyCompactionRecord({
+        runId: 7,
+        organizationId: " \n\t ",
+        recordId: 100,
+        reason: "decay",
+        planGeneratedAt: new Date(),
+      }),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(query).not.toHaveBeenCalled();
+  });
+
   it("returns archived=true with empty qdrantPointIds when record has no chunks", async () => {
     const { pool } = makeMockPool(async () => ({
       rows: [{ archive_id: 1, qdrant_point_ids: [] }],

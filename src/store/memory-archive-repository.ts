@@ -12,6 +12,7 @@
 //   6. findRunByIdempotencyKey  — replay defense
 
 import type { PgPool } from "../db/connection.js";
+import { assertNonBlankText } from "./memory-content.js";
 
 const QDRANT_CLEANUP_VISIBILITY_TIMEOUT_MS = 60_000;
 
@@ -213,6 +214,8 @@ export function createMemoryArchiveRepository(
     },
 
     async applyCompactionRecord(input) {
+      assertNonBlankText(input.organizationId, "organizationId");
+
       // Single CTE: DELETE canonical row (gated by org + TOCTOU updated_at),
       // INSERT archive row with snapshot of the deleted record + the
       // qdrant_point_ids for cleanup. ON CONFLICT swallows re-runs of the

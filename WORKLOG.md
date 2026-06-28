@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened archive apply organization validation:
+  - `applyCompactionRecord` now rejects whitespace-only organization IDs before
+    issuing the canonical DELETE/archive INSERT query.
+  - Archive repository coverage verifies invalid organization IDs fail before
+    `pool.query()`.
+  - Reviewer skipped after previous reviewer-agent timeouts; self-review found
+    no issues.
+
+Verification:
+- `npx vitest run tests/store/memory-archive-repository.test.ts` (23 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (728 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened repository get-by-id organization validation:
   - `getMemoryRecordById` now rejects whitespace-only organization IDs before
     issuing a Postgres query.
