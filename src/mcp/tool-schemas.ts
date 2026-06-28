@@ -228,7 +228,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
       query: nonBlankTextInputSchema,
       userScopeId: nonBlankTextInputSchema.optional(),
       includeUser: z.boolean().optional(),
-      limit: z.number().int().positive().optional(),
+      limit: z.number().int().positive().max(100).optional(),
     },
     outputSchema: {
       ok: z.literal(true),
@@ -246,7 +246,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
       task: nonBlankTextInputSchema,
       userScopeId: nonBlankTextInputSchema.optional(),
       includeUser: z.boolean().optional(),
-      limit: z.number().int().positive().optional(),
+      limit: z.number().int().positive().max(100).optional(),
     },
     outputSchema: {
       ok: z.literal(true),

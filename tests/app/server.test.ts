@@ -331,6 +331,56 @@ describe("createOperatorServer", () => {
     expect(registry.search_memory).not.toHaveBeenCalled();
   });
 
+  it("rejects retrieval limits above the shared maximum before dispatch", async () => {
+    const search = await fetch(`${handle.baseUrl}/v1/memory/search`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        projectKey: "p",
+        query: "anything",
+        limit: 101,
+      }),
+    });
+
+    expect(search.status).toBe(400);
+    const searchBody = (await search.json()) as {
+      success: boolean;
+      error: { message: string };
+    };
+    expect(searchBody.success).toBe(false);
+    expect(searchBody.error.message).toContain(
+      "invalid request body for search_memory",
+    );
+    expect(registry.search_memory).not.toHaveBeenCalled();
+
+    const contextPack = await fetch(`${handle.baseUrl}/v1/memory/context-pack`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        projectKey: "p",
+        task: "continue work",
+        limit: 101,
+      }),
+    });
+
+    expect(contextPack.status).toBe(400);
+    const contextPackBody = (await contextPack.json()) as {
+      success: boolean;
+      error: { message: string };
+    };
+    expect(contextPackBody.success).toBe(false);
+    expect(contextPackBody.error.message).toContain(
+      "invalid request body for build_context_pack",
+    );
+    expect(registry.build_context_pack).not.toHaveBeenCalled();
+  });
+
   it("rejects whitespace-only body organizationId before dispatch", async () => {
     const res = await fetch(`${handle.baseUrl}/v1/memory/search`, {
       method: "POST",

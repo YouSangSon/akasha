@@ -441,6 +441,7 @@ function registerAkashaResources(server: McpServer, registry: ToolRegistry): voi
       const limit = parseOptionalPositiveInteger(
         resourceUrl.searchParams.get("limit"),
         "limit",
+        100,
       );
       const result = await registry.search_memory({
         ...(organizationId ? { organizationId } : {}),
@@ -480,6 +481,7 @@ function registerAkashaResources(server: McpServer, registry: ToolRegistry): voi
       const limit = parseOptionalPositiveInteger(
         resourceUrl.searchParams.get("limit"),
         "limit",
+        100,
       );
       const result = await registry.build_context_pack({
         ...(organizationId ? { organizationId } : {}),
@@ -545,6 +547,7 @@ function parseOptionalNonEmptySearchParam(
 function parseOptionalPositiveInteger(
   rawValue: string | null,
   label: string,
+  max?: number,
 ): number | undefined {
   if (rawValue === null) {
     return undefined;
@@ -555,6 +558,9 @@ function parseOptionalPositiveInteger(
   const parsedValue = Number(rawValue);
   if (!Number.isSafeInteger(parsedValue) || parsedValue <= 0) {
     throw new Error(`${label} must be a positive integer when provided.`);
+  }
+  if (max !== undefined && parsedValue > max) {
+    throw new Error(`${label} must be a positive integer up to ${max}.`);
   }
   return parsedValue;
 }
@@ -569,7 +575,7 @@ function registerAkashaPrompts(server: McpServer, registry: ToolRegistry): void 
         organizationId: nonBlankTextInputSchema.optional(),
         projectKey: nonBlankTextInputSchema,
         task: nonBlankTextInputSchema,
-        limit: z.number().int().positive().optional(),
+        limit: z.coerce.number().int().positive().max(100).optional(),
       },
     },
     async ({ organizationId, projectKey, task, limit }) => {

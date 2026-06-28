@@ -4,16 +4,16 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Direct Audit Limit Guard
+## Current Loop — Retrieval Limit Contract Guard
 
 Status:
-- Direct audit-log listing calls now reject invalid numeric limits before SQL
-  instead of defaulting, flooring, or clamping them.
-- Omitted limits still default to `100`, and valid boundary limits `1` and
-  `1000` pass through unchanged.
-- Reviewer subagent caught missing positive/default coverage; the gap was fixed
+- `search_memory` and `build_context_pack` now reject limits above the
+  effective `100` cap instead of silently reducing them.
+- The shared tool schemas, HTTP routes, MCP resources, and
+  `akasha_session_start` prompt all enforce the same maximum.
+- Reviewer subagent caught resource and prompt boundary drift; both were fixed
   and re-review found no issues.
-- Focused audit/MCP tests, typecheck, build, audit, full suite, and diff
+- Focused MCP/app tests, typecheck, build, audit, full suite, and diff
   whitespace checks passed.
 
 Loop closeout:

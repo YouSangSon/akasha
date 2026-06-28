@@ -56,10 +56,10 @@ export function normalizeLimit(limit: number | undefined): number {
   if (limit === undefined) {
     return 10;
   }
-  if (!Number.isInteger(limit) || limit <= 0) {
-    throw new Error("limit must be a positive integer");
+  if (!Number.isInteger(limit) || limit <= 0 || limit > 100) {
+    throw new Error("limit must be a positive integer up to 100");
   }
-  return Math.min(limit, 100);
+  return limit;
 }
 
 export function toMemoryType(kind: string): AddMemoryInput["memoryType"] {

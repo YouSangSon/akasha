@@ -78,6 +78,8 @@ experience, documentation, features.
   embedding work.
 - Invalid direct retrieval limits are rejected before search/context-pack
   retrieval work.
+- Retrieval limits above the public `100` cap are rejected consistently across
+  registry, HTTP, MCP resource, and prompt entry points.
 - Invalid direct repository search/list/graph limits are rejected before SQL
   work.
 - Invalid direct audit repository limits are rejected before SQL work.

@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened retrieval limit contract:
+  - `search_memory` and `build_context_pack` now reject limits above the
+    effective `100` cap instead of silently reducing them.
+  - Shared tool schemas, HTTP validation, MCP resource URLs, and the
+    `akasha_session_start` prompt now enforce the same maximum.
+  - Reviewer subagent caught resource and prompt boundary drift; both were fixed
+    and re-review found no issues.
+
+Verification:
+- `npx vitest run tests/mcp/server.test.ts tests/app/server.test.ts` (190 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (931 passed, 34 skipped across 68 files)
+- `git diff --check`
+
 - Hardened direct audit-log limits:
   - Direct `listByOrganization()` audit repository calls now reject invalid
     numeric limits before SQL instead of defaulting, flooring, or clamping them.

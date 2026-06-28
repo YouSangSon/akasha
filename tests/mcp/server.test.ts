@@ -377,21 +377,21 @@ describe("createToolRegistry", () => {
     const retrieveMemory = vi.fn();
     const registry = createToolRegistry({ retrieveMemory });
 
-    for (const limit of [Number.NaN, 0, -1, 1.5]) {
+    for (const limit of [Number.NaN, 0, -1, 1.5, 101]) {
       await expect(
         registry.search_memory({
           projectKey: "project-alpha",
           query: "Postgres",
           limit,
         }),
-      ).rejects.toThrow(/limit/);
+      ).rejects.toThrow(/limit must be a positive integer up to 100/);
       await expect(
         registry.build_context_pack({
           projectKey: "project-alpha",
           task: "continue work",
           limit,
         }),
-      ).rejects.toThrow(/limit/);
+      ).rejects.toThrow(/limit must be a positive integer up to 100/);
     }
 
     expect(retrieveMemory).not.toHaveBeenCalled();
@@ -3521,6 +3521,7 @@ describe("createMcpServer resources and prompts", () => {
     "akasha://memory/recent/project-alpha?limit=-1",
     "akasha://memory/recent/project-alpha?limit=1.5",
     "akasha://memory/recent/project-alpha?limit=NaN",
+    "akasha://memory/recent/project-alpha?limit=101",
   ])("rejects invalid recent memory resource params for %s", async (uri) => {
     const registry = buildRegistryForMcpProtocol();
     const server = createMcpServer({ registry });
@@ -3570,6 +3571,7 @@ describe("createMcpServer resources and prompts", () => {
     "akasha://context-pack/project-alpha/continue%20implementation?limit=-1",
     "akasha://context-pack/project-alpha/continue%20implementation?limit=1.5",
     "akasha://context-pack/project-alpha/continue%20implementation?limit=NaN",
+    "akasha://context-pack/project-alpha/continue%20implementation?limit=101",
   ])("rejects invalid context-pack resource params for %s", async (uri) => {
     const registry = buildRegistryForMcpProtocol();
     const server = createMcpServer({ registry });
@@ -3583,7 +3585,8 @@ describe("createMcpServer resources and prompts", () => {
   });
 
   it("lists and returns Akasha prompts", async () => {
-    const server = createMcpServer({ registry: buildRegistryForMcpProtocol() });
+    const registry = buildRegistryForMcpProtocol();
+    const server = createMcpServer({ registry });
     const client = await createInMemoryClient(server);
 
     const prompts = await client.listPrompts();
@@ -3597,6 +3600,7 @@ describe("createMcpServer resources and prompts", () => {
         projectKey: "project-alpha",
         task: "continue implementation",
         organizationId: "org-a",
+        limit: "3",
       },
     });
     expect(prompt.messages[0]?.content).toEqual(
@@ -3605,6 +3609,12 @@ describe("createMcpServer resources and prompts", () => {
         text: expect.stringContaining("continue implementation"),
       }),
     );
+    expect(registry.build_context_pack).toHaveBeenCalledWith({
+      organizationId: "org-a",
+      projectKey: "project-alpha",
+      task: "continue implementation",
+      limit: 3,
+    });
 
     const storePrompt = await client.getPrompt({
       name: "akasha_store_memory",
@@ -3639,6 +3649,27 @@ describe("createMcpServer resources and prompts", () => {
         },
       }),
     ).rejects.toThrow(/non-whitespace text/);
+    expect(registry.build_context_pack).not.toHaveBeenCalled();
+
+    await client.close();
+    await server.close();
+  });
+
+  it("rejects session prompt limits above the shared maximum before dispatch", async () => {
+    const registry = buildRegistryForMcpProtocol();
+    const server = createMcpServer({ registry });
+    const client = await createInMemoryClient(server);
+
+    await expect(
+      client.getPrompt({
+        name: "akasha_session_start",
+        arguments: {
+          projectKey: "project-alpha",
+          task: "continue implementation",
+          limit: "101",
+        },
+      }),
+    ).rejects.toThrow();
     expect(registry.build_context_pack).not.toHaveBeenCalled();
 
     await client.close();
