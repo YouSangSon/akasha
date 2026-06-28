@@ -46,6 +46,26 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened sweeper interval env parsing:
+  - `COMPACTION_SWEEP_INTERVAL_MS` and `INGEST_SWEEP_INTERVAL_MS` now require
+    plain decimal integer strings before conversion.
+  - Partial numeric strings like `1000abc` fail closed instead of truncating to
+    `1000`.
+  - Scientific, hex, and binary JS numeric literal forms (`1e3`, `0x3e8`,
+    `0b1111101000`) fail closed instead of being accepted by `Number`.
+  - Focused tests cover both compaction and ingest sweeper parsers.
+  - Subagent reviewer `Euler` caught the JS numeric literal compatibility
+    issue; the patch was updated before final verification.
+
+Verification:
+- `npx vitest run tests/compact/sweeper-loop.test.ts tests/compact/ingest-sweeper-loop.test.ts`
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (616 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Hardened static bearer-token comparison:
   - `matchBearer` now hashes provided and configured static tokens to
     fixed-width SHA-256 digests before `timingSafeEqual`.

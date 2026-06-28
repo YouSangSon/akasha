@@ -148,8 +148,14 @@ export function loadIngestSweepEnabled(env: NodeJS.ProcessEnv): boolean {
 export function loadIngestSweepIntervalMs(env: NodeJS.ProcessEnv): number {
   const raw = env.INGEST_SWEEP_INTERVAL_MS;
   if (!raw) return DEFAULT_INTERVAL_MS;
-  const parsed = Number.parseInt(raw, 10);
-  if (!Number.isFinite(parsed) || parsed < 1000) {
+  const normalized = raw.trim();
+  if (!/^\d+$/.test(normalized)) {
+    throw new Error(
+      `INGEST_SWEEP_INTERVAL_MS must be a finite integer ≥ 1000 (got ${raw})`,
+    );
+  }
+  const parsed = Number(normalized);
+  if (!Number.isSafeInteger(parsed) || parsed < 1000) {
     throw new Error(
       `INGEST_SWEEP_INTERVAL_MS must be a finite integer ≥ 1000 (got ${raw})`,
     );

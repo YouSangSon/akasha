@@ -35,3 +35,4 @@ experience, documentation, features.
 - In-range dependency lockfile/install updates refreshed.
 - Static bearer-token comparison scans fixed-width digests across configured
   tokens.
+- Sweeper interval env parsing requires plain decimal integer strings.

@@ -182,5 +182,20 @@ describe("loadSweeperIntervalMs", () => {
     expect(() =>
       loadSweeperIntervalMs({ COMPACTION_SWEEP_INTERVAL_MS: "abc" }),
     ).toThrow(/finite integer/);
+    expect(() =>
+      loadSweeperIntervalMs({ COMPACTION_SWEEP_INTERVAL_MS: "1000abc" }),
+    ).toThrow(/finite integer/);
+    expect(() =>
+      loadSweeperIntervalMs({ COMPACTION_SWEEP_INTERVAL_MS: "1000.5" }),
+    ).toThrow(/finite integer/);
+    expect(() =>
+      loadSweeperIntervalMs({ COMPACTION_SWEEP_INTERVAL_MS: "1e3" }),
+    ).toThrow(/finite integer/);
+    expect(() =>
+      loadSweeperIntervalMs({ COMPACTION_SWEEP_INTERVAL_MS: "0x3e8" }),
+    ).toThrow(/finite integer/);
+    expect(() =>
+      loadSweeperIntervalMs({ COMPACTION_SWEEP_INTERVAL_MS: "0b1111101000" }),
+    ).toThrow(/finite integer/);
   });
 });

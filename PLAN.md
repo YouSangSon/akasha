@@ -4,16 +4,16 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Static Bearer Timing Hardening
+## Current Loop — Sweeper Interval Env Parsing
 
 Status:
-- Static bearer token checks now compare fixed-width SHA-256 digests.
-- `matchBearer` scans the full configured static-token list before returning
-  the first matched binding, avoiding obvious token-length and match-position
-  timing differences.
-- Focused auth tests cover first-token matches, later-token matches, and
-  different-length input.
-- Reviewer found no issues.
+- `COMPACTION_SWEEP_INTERVAL_MS` and `INGEST_SWEEP_INTERVAL_MS` now require
+  plain decimal integer strings.
+- Partial numeric strings (`1000abc`) and JS numeric literal forms (`1e3`,
+  `0x3e8`, `0b1111101000`) fail closed instead of being accepted.
+- Focused loop tests cover partial, decimal, scientific, hex, and binary
+  notation rejection.
+- Reviewer caught the JS numeric literal compatibility issue; patch updated.
 - Typecheck, build, audit, full test suite, and diff whitespace checks passed.
 
 Loop closeout:
