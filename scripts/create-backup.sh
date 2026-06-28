@@ -25,6 +25,13 @@ if [ -z "$(printf '%s' "${BACKUP_DIR:-}" | tr -d '[:space:]')" ]; then
   exit 1
 fi
 
+if [ "${BACKUP_TARGET_HOST+x}" = "x" ]; then
+  if [ -n "${BACKUP_TARGET_HOST}" ] && [ -z "$(printf '%s' "${BACKUP_TARGET_HOST}" | tr -d '[:space:]')" ]; then
+    echo "BACKUP_TARGET_HOST must contain non-whitespace text" >&2
+    exit 1
+  fi
+fi
+
 BACKUP_TIMESTAMP="${timestamp}" ./scripts/backup-postgres.sh
 
 if [ "${vector_backend}" = "qdrant" ]; then

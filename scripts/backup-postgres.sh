@@ -21,6 +21,13 @@ if [ "${BACKUP_ENCRYPTION_KEY_FILE+x}" = "x" ]; then
   fi
 fi
 
+if [ "${BACKUP_TARGET_HOST+x}" = "x" ]; then
+  if [ -n "${BACKUP_TARGET_HOST}" ] && [ -z "$(printf '%s' "${BACKUP_TARGET_HOST}" | tr -d '[:space:]')" ]; then
+    echo "BACKUP_TARGET_HOST must contain non-whitespace text" >&2
+    exit 1
+  fi
+fi
+
 artifact="${BACKUP_DIR}/postgres-${timestamp}.sql.gz"
 checksum="${artifact}.sha256"
 manifest="${BACKUP_DIR}/manifest-${timestamp}.json"

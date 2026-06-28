@@ -339,6 +339,47 @@ describe("backup target directory shell guards", () => {
   );
 });
 
+describe("backup target host shell guards", () => {
+  it.each([
+    "scripts/backup-postgres.sh",
+    "scripts/snapshot-qdrant.sh",
+    "scripts/create-backup.sh",
+  ])("%s rejects whitespace-only BACKUP_TARGET_HOST", async (scriptPath) => {
+    const result = await runBackupShellScript(scriptPath, {
+      BACKUP_TARGET_HOST: " \n\t ",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.stderr).toContain(
+      "BACKUP_TARGET_HOST must contain non-whitespace text",
+    );
+    expect(result.log).not.toContain("ssh:");
+    expect(result.log).not.toContain("scp:");
+  });
+
+  it.each([
+    ["empty", ""],
+    ["unset", undefined],
+  ])(
+    "keeps %s BACKUP_TARGET_HOST local-only",
+    async (_label, targetHost) => {
+      for (const scriptPath of [
+        "scripts/backup-postgres.sh",
+        "scripts/snapshot-qdrant.sh",
+        "scripts/create-backup.sh",
+      ]) {
+        const result = await runBackupShellScript(scriptPath, {
+          BACKUP_TARGET_HOST: targetHost,
+        });
+
+        expect(result.ok).toBe(true);
+        expect(result.log).not.toContain("ssh:");
+        expect(result.log).not.toContain("scp:");
+      }
+    },
+  );
+});
+
 describe("snapshot Qdrant collection shell guard", () => {
   it("uses the default collection name when QDRANT_COLLECTION_NAME is unset", async () => {
     const result = await runBackupShellScript("scripts/snapshot-qdrant.sh", {});

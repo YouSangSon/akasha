@@ -46,6 +46,24 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened backup target host shell handling:
+  - `scripts/backup-postgres.sh`, `scripts/snapshot-qdrant.sh`, and
+    `scripts/create-backup.sh` now reject whitespace-only
+    `BACKUP_TARGET_HOST` values before any SSH/SCP work.
+  - Unset and exact empty `BACKUP_TARGET_HOST` still keep backup creation
+    local-only.
+  - Worker implementation passed spec review and code-quality review with no
+    findings.
+
+Verification:
+- `npx vitest run tests/scripts/backup-verify.test.ts` (60 passed)
+- `sh -n scripts/backup-postgres.sh && sh -n scripts/snapshot-qdrant.sh && sh -n scripts/create-backup.sh`
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (1011 passed, 34 skipped across 69 files)
+- `git diff --check`
+
 - Hardened service config backup environment handling:
   - `resolveServiceConfig()` now rejects whitespace-only `BACKUP_DIR`,
     `BACKUP_TARGET_HOST`, and `BACKUP_ENCRYPTION_KEY_FILE` values before
