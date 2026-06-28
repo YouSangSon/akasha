@@ -2442,6 +2442,56 @@ describe("createMcpServer structured outputs", () => {
     await server.close();
   });
 
+  it("rejects whitespace-only context tool optional text before side effects", async () => {
+    const elicitInput = vi.fn(async () => {
+      throw new Error("elicitation should not run for invalid message");
+    });
+    const createMessage = vi.fn(async () => {
+      throw new Error("sampling should not run for invalid instruction");
+    });
+    const server = createMcpServer({
+      registry: buildRegistryForMcpProtocol(),
+    });
+    const client = await createInMemoryClient(
+      server,
+      { capabilities: { elicitation: { form: {} }, sampling: {} } },
+      (candidate) => {
+        candidate.setRequestHandler(ElicitRequestSchema, elicitInput);
+        candidate.setRequestHandler(CreateMessageRequestSchema, createMessage);
+      },
+    );
+
+    const interactiveResult = await client.callTool({
+      name: "add_memory_interactive",
+      arguments: {
+        message: " \n\t ",
+      },
+    });
+    const classifyResult = await client.callTool({
+      name: "classify_memory_candidate",
+      arguments: {
+        content: "QDRANT_SNAPSHOT_TIMEOUT controls snapshot timeout behavior.",
+        instruction: " \n\t ",
+      },
+    });
+
+    for (const result of [interactiveResult, classifyResult]) {
+      expect(result.isError).toBe(true);
+      const errorContent = result.content as Array<{ type: string; text: string }>;
+      expect(errorContent[0]).toEqual(
+        expect.objectContaining({
+          type: "text",
+          text: expect.stringContaining("non-whitespace text"),
+        }),
+      );
+    }
+    expect(elicitInput).not.toHaveBeenCalled();
+    expect(createMessage).not.toHaveBeenCalled();
+
+    await client.close();
+    await server.close();
+  });
+
   it("rejects whitespace-only goal-run text before registry dispatch", async () => {
     const registry = buildRegistryForMcpProtocol();
     const server = createMcpServer({ registry });

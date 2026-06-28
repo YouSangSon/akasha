@@ -565,7 +565,7 @@ export const MCP_CONTEXT_TOOL_DESCRIPTORS = [
       scope: z.enum(["project", "user"]).optional(),
       userScopeId: nonBlankTextInputSchema.optional(),
       kind: z.enum(SUPPORTED_MEMORY_KINDS).optional(),
-      message: z.string().min(1).optional(),
+      message: nonBlankTextInputSchema.optional(),
     },
     outputSchema: {
       ok: z.literal(true),
@@ -584,7 +584,7 @@ export const MCP_CONTEXT_TOOL_DESCRIPTORS = [
     inputSchema: {
       organizationId: organizationIdInputSchema.optional(),
       content: nonBlankTextInputSchema,
-      instruction: z.string().min(1).optional(),
+      instruction: nonBlankTextInputSchema.optional(),
       maxTokens: z.number().int().positive().max(1000).optional(),
     },
     outputSchema: {

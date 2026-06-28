@@ -60,3 +60,5 @@ experience, documentation, features.
   HTTP rejects malformed non-string organization IDs before enrichment.
 - Whitespace-only governance tag entries are rejected before tag update or
   vector refresh.
+- Whitespace-only MCP context optional text is rejected before elicitation or
+  sampling side effects.

@@ -4,14 +4,13 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Governance Tag Validation
+## Current Loop — MCP Context Optional Text Validation
 
 Status:
-- `update_memory.tags` and `tag_memory.tags` now reject whitespace-only tag
-  entries at schema and direct handler boundaries.
-- Empty tag arrays remain valid for intentional tag clearing.
-- Tests cover direct registry, HTTP, and MCP protocol paths before repository
-  update or vector refresh.
+- `add_memory_interactive.message` and
+  `classify_memory_candidate.instruction` now reject whitespace-only text.
+- Protocol coverage verifies invalid values fail before elicitation or
+  sampling side effects.
 - Reviewer found no issues.
 - Typecheck, build, audit, full test suite, and diff whitespace checks passed.
 

@@ -46,6 +46,23 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened MCP context optional text validation:
+  - `add_memory_interactive.message` and
+    `classify_memory_candidate.instruction` now reuse
+    `nonBlankTextInputSchema`.
+  - Protocol coverage verifies whitespace-only values fail before elicitation
+    or sampling side effects.
+  - Subagent reviewer `Helmholtz` reported no findings.
+
+Verification:
+- `npx vitest run tests/mcp/server.test.ts` (99 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (679 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Hardened governance tag validation:
   - `update_memory.tags` and `tag_memory.tags` now reject whitespace-only tag
     entries in public schemas and direct handlers before repository update or
