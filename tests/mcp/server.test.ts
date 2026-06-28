@@ -2464,6 +2464,43 @@ describe("createMcpServer structured outputs", () => {
     await server.close();
   });
 
+  it("rejects whitespace-only elicited project keys before storage", async () => {
+    const registry = buildRegistryForMcpProtocol();
+    const server = createMcpServer({ registry });
+    const client = await createInMemoryClient(
+      server,
+      { capabilities: { elicitation: { form: {} } } },
+      (candidate) => {
+        candidate.setRequestHandler(ElicitRequestSchema, async () => ({
+          action: "accept",
+          content: {
+            projectKey: " \n\t ",
+            kind: "decision",
+            content: "Decision: reject blank elicited project keys.",
+          },
+        }));
+      },
+    );
+
+    const result = await client.callTool({
+      name: "add_memory_interactive",
+      arguments: {},
+    });
+
+    expect(result.isError).toBe(true);
+    const errorContent = result.content as Array<{ type: string; text: string }>;
+    expect(errorContent[0]).toEqual(
+      expect.objectContaining({
+        type: "text",
+        text: expect.stringContaining("non-whitespace text"),
+      }),
+    );
+    expect(registry.add_memory).not.toHaveBeenCalled();
+
+    await client.close();
+    await server.close();
+  });
+
   it("does not store interactive memory when elicitation is unsupported", async () => {
     const registry = buildRegistryForMcpProtocol();
     const server = createMcpServer({ registry });
@@ -2579,6 +2616,49 @@ describe("createMcpServer structured outputs", () => {
       }),
     );
     expect(createMessage).not.toHaveBeenCalled();
+
+    await client.close();
+    await server.close();
+  });
+
+  it("rejects whitespace-only sampled classification summaries", async () => {
+    const server = createMcpServer({
+      registry: buildRegistryForMcpProtocol(),
+    });
+    const client = await createInMemoryClient(
+      server,
+      { capabilities: { sampling: {} } },
+      (candidate) => {
+        candidate.setRequestHandler(CreateMessageRequestSchema, async () => ({
+          model: "test-sampler",
+          role: "assistant",
+          content: {
+            type: "text",
+            text: JSON.stringify({
+              kind: "fact",
+              summary: " \n\t ",
+              confidence: 0.7,
+            }),
+          },
+        }));
+      },
+    );
+
+    const result = await client.callTool({
+      name: "classify_memory_candidate",
+      arguments: {
+        content: "QDRANT_SNAPSHOT_TIMEOUT controls snapshot timeout behavior.",
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    const errorContent = result.content as Array<{ type: string; text: string }>;
+    expect(errorContent[0]).toEqual(
+      expect.objectContaining({
+        type: "text",
+        text: expect.stringContaining("non-whitespace text"),
+      }),
+    );
 
     await client.close();
     await server.close();
@@ -2820,6 +2900,57 @@ describe("createMcpServer resources and prompts", () => {
         },
       }),
     ).rejects.toThrow(/non-whitespace text/);
+    expect(registry.build_context_pack).not.toHaveBeenCalled();
+
+    await client.close();
+    await server.close();
+  });
+
+  it("rejects whitespace-only prompt identifiers before dispatch", async () => {
+    const registry = buildRegistryForMcpProtocol();
+    const server = createMcpServer({ registry });
+    const client = await createInMemoryClient(server);
+
+    await expect(
+      client.getPrompt({
+        name: "akasha_session_start",
+        arguments: {
+          projectKey: " \n\t ",
+          task: "continue implementation",
+        },
+      }),
+    ).rejects.toThrow(/non-whitespace text/);
+    await expect(
+      client.getPrompt({
+        name: "akasha_session_start",
+        arguments: {
+          projectKey: "project-alpha",
+          organizationId: " \n\t ",
+          task: "continue implementation",
+        },
+      }),
+    ).rejects.toThrow(/non-whitespace text/);
+    await expect(
+      client.getPrompt({
+        name: "akasha_store_memory",
+        arguments: {
+          projectKey: " \n\t ",
+          kind: "decision",
+          content: "Decision: keep resource reads side-effect free.",
+        },
+      }),
+    ).rejects.toThrow(/non-whitespace text/);
+    await expect(
+      client.getPrompt({
+        name: "akasha_store_memory",
+        arguments: {
+          projectKey: "project-alpha",
+          kind: " \n\t ",
+          content: "Decision: keep resource reads side-effect free.",
+        },
+      }),
+    ).rejects.toThrow(/non-whitespace text/);
+
     expect(registry.build_context_pack).not.toHaveBeenCalled();
 
     await client.close();

@@ -4,14 +4,14 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Scope Identifier Validation
+## Current Loop — MCP Context Nonblank Validation
 
 Status:
-- `projectKey` and `userScopeId` now reject whitespace-only values at schema
-  and direct handler boundaries.
-- Tests cover HTTP, MCP protocol, direct retrieval, repository resolution, and
-  goal-run scope paths before dispatch.
-- Initial review found direct-registry gaps; follow-up review found no issues.
+- MCP-local prompt/context schemas now reject whitespace-only identifiers and
+  sampled summaries.
+- Tests cover elicited memory project keys, sampled classification summaries,
+  and Akasha prompt identifiers before storage or dispatch.
+- Reviewer found no issues.
 - Typecheck, build, audit, full test suite, and diff whitespace checks passed.
 
 Loop closeout:

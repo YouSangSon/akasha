@@ -46,6 +46,24 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened MCP context and prompt nonblank validation:
+  - Elicited memory `projectKey`, sampled classification `summary`,
+    `akasha_session_start` `organizationId`/`projectKey`, and
+    `akasha_store_memory` `projectKey`/`kind` now reuse
+    `nonBlankTextInputSchema`.
+  - Protocol tests cover blank elicited project keys, blank sampled summaries,
+    and blank prompt identifiers before storage or dispatch.
+  - Subagent reviewer `Pascal` reported no findings.
+
+Verification:
+- `npx vitest run tests/mcp/server.test.ts` (95 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (672 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Hardened scope identifier validation:
   - `projectKey` and `userScopeId` now reject whitespace-only values in public
     schemas and shared direct-handler scope guards.

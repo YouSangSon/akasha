@@ -52,14 +52,14 @@ export type {
 } from "./types.js";
 
 const ELICITED_MEMORY_SCHEMA = z.object({
-  projectKey: z.string().min(1).optional(),
+  projectKey: nonBlankTextInputSchema.optional(),
   kind: z.enum(SUPPORTED_MEMORY_KINDS).optional(),
   content: nonBlankTextInputSchema,
 });
 
 const MEMORY_CLASSIFICATION_SCHEMA = z.object({
   kind: z.enum(SUPPORTED_MEMORY_KINDS),
-  summary: z.string().min(1),
+  summary: nonBlankTextInputSchema,
   confidence: z.number().min(0).max(1).optional(),
 });
 
@@ -552,8 +552,8 @@ function registerAkashaPrompts(server: McpServer, registry: ToolRegistry): void 
       title: "Akasha Session Start",
       description: "Build a project context pack for the start of an agent session.",
       argsSchema: {
-        organizationId: z.string().min(1).optional(),
-        projectKey: z.string().min(1),
+        organizationId: nonBlankTextInputSchema.optional(),
+        projectKey: nonBlankTextInputSchema,
         task: nonBlankTextInputSchema,
         limit: z.number().int().positive().optional(),
       },
@@ -586,8 +586,8 @@ function registerAkashaPrompts(server: McpServer, registry: ToolRegistry): void 
       title: "Akasha Store Memory",
       description: "Template for asking an agent to store durable project memory in Akasha.",
       argsSchema: {
-        projectKey: z.string().min(1),
-        kind: z.string().min(1),
+        projectKey: nonBlankTextInputSchema,
+        kind: nonBlankTextInputSchema,
         content: nonBlankTextInputSchema,
       },
     },
