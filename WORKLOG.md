@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened direct goal-context limit validation:
+  - Direct `build_goal_context.limit` rejects invalid and over-limit values
+    before goal-run lookup or memory listing.
+  - Direct coverage verifies invalid limits fail before service dispatch and
+    the documented maximum `200` still reaches the repository.
+  - Subagent reviewer `Aquinas` reported no findings.
+
+Verification:
+- `npx vitest run tests/goal-run/goal-run-handlers.test.ts` (21 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (693 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Hardened direct governance list and graph limit validation:
   - Direct `list_memory.limit`, `inspect_memory_graph.limit`, and
     `inspect_memory_graph.relationshipLimit` reject invalid and over-limit

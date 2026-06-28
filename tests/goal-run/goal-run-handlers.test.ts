@@ -359,6 +359,63 @@ describe("goal-run handlers", () => {
     );
   });
 
+  it("rejects invalid build_goal_context limits before service dispatch", async () => {
+    const goalRuns = goalRunServicesStub();
+    const listMemory = vi.fn();
+    const registry = createToolRegistry({
+      withCanonicalServices: (async (cb: (s: CanonicalServices) => Promise<unknown>) =>
+        cb({ goalRuns, repository: { listMemory } } as unknown as CanonicalServices)) as never,
+    });
+
+    for (const limit of [
+      0,
+      -1,
+      1.5,
+      Number.NaN,
+      201,
+      Number.MAX_SAFE_INTEGER + 1,
+    ]) {
+      await expect(
+        registry.build_goal_context({ goalRunId: 7, limit }),
+      ).rejects.toThrow(/limit/);
+    }
+
+    expect(goalRuns.get).not.toHaveBeenCalled();
+    expect(listMemory).not.toHaveBeenCalled();
+  });
+
+  it("accepts the maximum build_goal_context limit", async () => {
+    const goalRuns = goalRunServicesStub();
+    goalRuns.get.mockResolvedValue({
+      id: 7,
+      organizationId: "default",
+      scopeType: "project",
+      scopeId: "proj-x",
+      projectKey: "proj-x",
+      goal: "ship phase 2",
+      terminationCriteria: null,
+      status: "active",
+      iterationCount: 0,
+      createdAt: "2026-06-27T00:00:00.000Z",
+      updatedAt: "2026-06-27T00:00:00.000Z",
+      closedAt: null,
+      closeNote: null,
+      iterations: [],
+    });
+    const listMemory = vi.fn().mockResolvedValue([]);
+    const registry = createToolRegistry({
+      withCanonicalServices: (async (cb: (s: CanonicalServices) => Promise<unknown>) =>
+        cb({ goalRuns, repository: { listMemory } } as unknown as CanonicalServices)) as never,
+    });
+
+    await registry.build_goal_context({ goalRunId: 7, limit: 200 });
+
+    expect(listMemory).toHaveBeenCalledWith(
+      { scopeType: "project", scopeId: "proj-x" },
+      expect.objectContaining({ limit: 200 }),
+    );
+  });
+
   it("check_repeat_attempt flags a candidate matching a prior failed attempt", async () => {
     const goalRuns = goalRunServicesStub();
     goalRuns.get.mockResolvedValue({

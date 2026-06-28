@@ -965,6 +965,7 @@ export function createToolHandlers(input: {
     async build_goal_context(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
       assertPositiveInteger(toolInput.goalRunId, "goalRunId");
+      assertOptionalPositiveInteger(toolInput.limit, "limit", 200);
       return await withCanonicalServices(async (services) => {
         const organizationId = toolInput.organizationId ?? "default";
         const goalRun = await services.goalRuns.get({
