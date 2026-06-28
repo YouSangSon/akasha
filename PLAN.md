@@ -4,12 +4,12 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Recent Apply Count Organization Guard
+## Current Loop — Scope Lock Organization Guard
 
 Status:
-- `countRecentApplyRuns` now rejects whitespace-only organization IDs before
-  rate-limit count queries.
-- Coverage verifies invalid recent-apply count organization IDs fail before
+- `acquireScopeLock` now rejects whitespace-only organization IDs before
+  advisory lock queries.
+- Coverage verifies invalid scope-lock organization IDs fail before
   `pool.query()`.
 - Reviewer skipped after previous reviewer-agent timeouts; self-review found no
   issues.

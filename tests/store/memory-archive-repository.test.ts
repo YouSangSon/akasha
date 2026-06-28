@@ -544,4 +544,21 @@ describe("MemoryArchiveRepository.acquireScopeLock", () => {
 
     expect(acquired).toBe(false);
   });
+
+  it("rejects whitespace-only organizationId before querying", async () => {
+    const { pool, query } = makeMockPool(async () => ({
+      rows: [{ acquired: true }],
+    }));
+    const repo = createMemoryArchiveRepository(pool);
+
+    await expect(
+      repo.acquireScopeLock({
+        organizationId: " \n\t ",
+        scopeType: "project",
+        scopeId: "alpha",
+      }),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(query).not.toHaveBeenCalled();
+  });
 });

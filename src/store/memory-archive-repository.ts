@@ -587,6 +587,8 @@ export function createMemoryArchiveRepository(
     },
 
     async acquireScopeLock(args) {
+      assertNonBlankText(args.organizationId, "organizationId");
+
       // Per-(org, scope) advisory lock. Two simultaneous applies on the same
       // scope race on canonical DELETE; this serializes them. Lock auto-
       // releases on transaction end. We use session-level pg_try_advisory_lock

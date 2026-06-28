@@ -132,3 +132,4 @@ experience, documentation, features.
   persistence.
 - Whitespace-only recent apply-count organization IDs are rejected before
   persistence.
+- Whitespace-only scope-lock organization IDs are rejected before persistence.

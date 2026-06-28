@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened scope-lock organization validation:
+  - `acquireScopeLock` now rejects whitespace-only organization IDs before
+    advisory lock queries.
+  - Archive repository coverage verifies invalid organization IDs fail before
+    `pool.query()`.
+  - Reviewer skipped after previous reviewer-agent timeouts; self-review found
+    no issues.
+
+Verification:
+- `npx vitest run tests/store/memory-archive-repository.test.ts` (29 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (734 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened recent apply-count organization validation:
   - `countRecentApplyRuns` now rejects whitespace-only organization IDs before
     rate-limit count queries.
