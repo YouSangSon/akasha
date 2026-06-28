@@ -1009,6 +1009,25 @@ describe("createOperatorServer", () => {
       memoryId: 42,
       tags: ["security", "ops"],
     });
+
+    const clearTags = await fetch(`${handle.baseUrl}/v1/memory/tag`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        organizationId: "org-a",
+        memoryId: 42,
+        tags: [],
+      }),
+    });
+    expect(clearTags.status).toBe(200);
+    expect(registry.tag_memory).toHaveBeenLastCalledWith({
+      organizationId: "org-a",
+      memoryId: 42,
+      tags: [],
+    });
   });
 
   it("rejects whitespace-only governance filters before dispatch", async () => {
@@ -1043,6 +1062,38 @@ describe("createOperatorServer", () => {
     expect(((await graph.json()) as { error: { message: string } }).error.message)
       .toContain("non-whitespace text");
     expect(registry.inspect_memory_graph).not.toHaveBeenCalled();
+
+    const update = await fetch(`${handle.baseUrl}/v1/memory/update`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        memoryId: 42,
+        tags: ["ops", " \n\t "],
+      }),
+    });
+    expect(update.status).toBe(400);
+    expect(((await update.json()) as { error: { message: string } }).error.message)
+      .toContain("non-whitespace text");
+    expect(registry.update_memory).not.toHaveBeenCalled();
+
+    const tag = await fetch(`${handle.baseUrl}/v1/memory/tag`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        memoryId: 42,
+        tags: [" \n\t "],
+      }),
+    });
+    expect(tag.status).toBe(400);
+    expect(((await tag.json()) as { error: { message: string } }).error.message)
+      .toContain("non-whitespace text");
+    expect(registry.tag_memory).not.toHaveBeenCalled();
   });
 
   it("rejects list_memory default/project-scope payloads without projectKey before dispatch", async () => {

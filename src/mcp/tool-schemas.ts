@@ -184,6 +184,7 @@ export const nonBlankTextInputSchema = z
     message: "must contain non-whitespace text",
   });
 const organizationIdInputSchema = nonBlankTextInputSchema;
+const tagInputSchema = nonBlankTextInputSchema;
 
 export const SERVICE_TOOL_DESCRIPTORS = [
   {
@@ -340,7 +341,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
       summary: z.string().nullable().optional(),
       importance: z.number().int().optional(),
       durability: durabilityInputSchema.optional(),
-      tags: z.array(z.string()).optional(),
+      tags: z.array(tagInputSchema).optional(),
     },
     outputSchema: {
       ok: z.literal(true),
@@ -370,7 +371,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     inputSchema: {
       organizationId: organizationIdInputSchema.optional(),
       memoryId: z.number().int().positive(),
-      tags: z.array(z.string()),
+      tags: z.array(tagInputSchema),
     },
     outputSchema: {
       ok: z.literal(true),

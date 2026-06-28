@@ -1343,16 +1343,17 @@ describe("createToolRegistry", () => {
 
   it("replaces tags through updateMemoryRecord and refreshes vector state", async () => {
     const services = createCanonicalServices();
-    services.repository.updateMemoryRecord.mockResolvedValueOnce(
-      createRecord({
-        id: 501,
-        organizationId: "org-a",
-        memoryType: "decision",
-        content: "Decision: index canonical memory into qdrant on write.",
-        sourceType: "conversation",
-        externalId: "decision:manual",
-      }),
-    );
+    const updatedRecord = createRecord({
+      id: 501,
+      organizationId: "org-a",
+      memoryType: "decision",
+      content: "Decision: index canonical memory into qdrant on write.",
+      sourceType: "conversation",
+      externalId: "decision:manual",
+    });
+    services.repository.updateMemoryRecord
+      .mockResolvedValueOnce(updatedRecord)
+      .mockResolvedValueOnce(updatedRecord);
     const registry = createToolRegistry({
       resolveCanonicalServices: async () => services,
     });
@@ -1380,6 +1381,42 @@ describe("createToolRegistry", () => {
       services.chunkRepository.replaceChunksForRecordWithPendingIngest,
     ).toHaveBeenCalledOnce();
     expect(services.repository.deleteMemoryRecord).not.toHaveBeenCalled();
+
+    await registry.tag_memory({
+      organizationId: "org-a",
+      memoryId: 501,
+      tags: [],
+    });
+    expect(services.repository.updateMemoryRecord).toHaveBeenLastCalledWith({
+      id: 501,
+      organizationId: "org-a",
+      tags: [],
+    });
+  });
+
+  it("rejects whitespace-only tags before updating memory", async () => {
+    const services = createCanonicalServices();
+    const registry = createToolRegistry({
+      resolveCanonicalServices: async () => services,
+    });
+
+    await expect(
+      registry.update_memory({
+        organizationId: "org-a",
+        memoryId: 501,
+        tags: ["ops", " \n\t "],
+      }),
+    ).rejects.toThrow(/non-whitespace text/);
+    await expect(
+      registry.tag_memory({
+        organizationId: "org-a",
+        memoryId: 501,
+        tags: [" \n\t "],
+      }),
+    ).rejects.toThrow(/non-whitespace text/);
+
+    expect(services.repository.updateMemoryRecord).not.toHaveBeenCalled();
+    expect(services.vectorIndex.deleteByRecordIds).not.toHaveBeenCalled();
   });
 
   it("compacts memory using the narrower Task 6 public tool contract", async () => {
@@ -2266,8 +2303,22 @@ describe("createMcpServer structured outputs", () => {
         query: " \n\t ",
       },
     });
+    const updateResult = await client.callTool({
+      name: "update_memory",
+      arguments: {
+        memoryId: 12,
+        tags: ["ops", " \n\t "],
+      },
+    });
+    const tagResult = await client.callTool({
+      name: "tag_memory",
+      arguments: {
+        memoryId: 12,
+        tags: [" \n\t "],
+      },
+    });
 
-    for (const result of [listResult, graphResult]) {
+    for (const result of [listResult, graphResult, updateResult, tagResult]) {
       expect(result.isError).toBe(true);
       const errorContent = result.content as Array<{ type: string; text: string }>;
       expect(errorContent[0]).toEqual(
@@ -2279,6 +2330,8 @@ describe("createMcpServer structured outputs", () => {
     }
     expect(registry.list_memory).not.toHaveBeenCalled();
     expect(registry.inspect_memory_graph).not.toHaveBeenCalled();
+    expect(registry.update_memory).not.toHaveBeenCalled();
+    expect(registry.tag_memory).not.toHaveBeenCalled();
 
     await client.close();
     await server.close();

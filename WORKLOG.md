@@ -46,6 +46,26 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened governance tag validation:
+  - `update_memory.tags` and `tag_memory.tags` now reject whitespace-only tag
+    entries in public schemas and direct handlers before repository update or
+    vector refresh.
+  - Empty tag arrays remain valid for intentional tag clearing.
+  - Direct registry, HTTP, and MCP protocol tests cover blank tag rejection;
+    direct and HTTP tests cover `tags: []`.
+  - Subagent reviewer `Singer` reported no findings and requested the positive
+    `tags: []` guard, which was added before commit.
+
+Verification:
+- `npx vitest run tests/mcp/server.test.ts tests/app/server.test.ts`
+  (160 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (678 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Hardened organization ID validation:
   - MCP service/context input schemas now reject whitespace-only
     `organizationId` values.

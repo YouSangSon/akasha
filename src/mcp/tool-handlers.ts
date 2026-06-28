@@ -620,6 +620,7 @@ export function createToolHandlers(input: {
       if (toolInput.content !== undefined) {
         assertNonBlankMemoryContent(toolInput.content);
       }
+      assertNonBlankTags(toolInput.tags);
 
       return await withCanonicalServices(async (services) => {
         const organizationId = toolInput.organizationId ?? "default";
@@ -712,6 +713,7 @@ export function createToolHandlers(input: {
 
     async tag_memory(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      assertNonBlankTags(toolInput.tags);
       return await withCanonicalServices(async (services) => {
         const organizationId = toolInput.organizationId ?? "default";
         const memory = await services.repository.updateMemoryRecord({
@@ -1042,6 +1044,15 @@ function optionalNonBlankText(value: string | null | undefined): string | null {
   return value === undefined || value === null || value.trim().length === 0
     ? null
     : value;
+}
+
+function assertNonBlankTags(tags: readonly string[] | undefined): void {
+  if (tags === undefined) {
+    return;
+  }
+  for (const tag of tags) {
+    assertNonBlankText(tag, "tag");
+  }
 }
 
 function assertProvidedScopeIdentifiers(input: {
