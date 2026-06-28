@@ -321,6 +321,19 @@ describe("MemoryArchiveRepository.claimPendingQdrantCleanup", () => {
   });
 });
 
+describe("MemoryArchiveRepository.countRecentApplyRuns", () => {
+  it("rejects whitespace-only organizationId before querying", async () => {
+    const { pool, query } = makeMockPool(async () => ({ rows: [{ count: 0 }] }));
+    const repo = createMemoryArchiveRepository(pool);
+
+    await expect(
+      repo.countRecentApplyRuns(" \n\t ", 60_000),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(query).not.toHaveBeenCalled();
+  });
+});
+
 describe("MemoryArchiveRepository.findArchiveByIds (P19.1)", () => {
   it("returns empty array when no ids supplied", async () => {
     const { pool, query } = makeMockPool(async () => ({ rows: [] }));

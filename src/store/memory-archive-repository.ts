@@ -435,6 +435,8 @@ export function createMemoryArchiveRepository(
     },
 
     async countRecentApplyRuns(organizationId, windowMs) {
+      assertNonBlankText(organizationId, "organizationId");
+
       // Postgres INTERVAL doesn't accept parameterized text directly; build
       // it from milliseconds via make_interval. windowMs is server-controlled
       // (caller is the orchestrator, not user input) so concatenation would

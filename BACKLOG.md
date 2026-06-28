@@ -130,3 +130,5 @@ experience, documentation, features.
   persistence.
 - Whitespace-only restored-record cleanup organization IDs are rejected before
   persistence.
+- Whitespace-only recent apply-count organization IDs are rejected before
+  persistence.

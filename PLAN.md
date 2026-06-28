@@ -4,12 +4,12 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Restored-Record Cleanup Organization Guard
+## Current Loop — Recent Apply Count Organization Guard
 
 Status:
-- `deleteRestoredCanonicalRecord` now rejects whitespace-only organization IDs
-  before cleanup deletes.
-- Coverage verifies invalid restored-record cleanup organization IDs fail before
+- `countRecentApplyRuns` now rejects whitespace-only organization IDs before
+  rate-limit count queries.
+- Coverage verifies invalid recent-apply count organization IDs fail before
   `pool.query()`.
 - Reviewer skipped after previous reviewer-agent timeouts; self-review found no
   issues.
