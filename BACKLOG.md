@@ -27,3 +27,4 @@ experience, documentation, features.
 - Repo secret hygiene guard for tracked secret-shaped literals.
 - Restore smoke Qdrant collection-name and uploaded-snapshot runbook alignment.
 - Public docs index drift guard for tracked docs pages and English/Korean pairs.
+- Transformers dependency docs/comments aligned with package metadata.

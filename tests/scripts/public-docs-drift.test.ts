@@ -73,6 +73,18 @@ function markdownLinkTargets(markdown: string): string[] {
   );
 }
 
+function snippetsAround(text: string, needle: string, radius = 120): string[] {
+  const snippets: string[] = [];
+  let index = text.indexOf(needle);
+  while (index !== -1) {
+    snippets.push(
+      text.slice(Math.max(0, index - radius), index + needle.length + radius),
+    );
+    index = text.indexOf(needle, index + needle.length);
+  }
+  return snippets;
+}
+
 describe("public documentation drift checks", () => {
   it("indexes every paired public docs page", () => {
     const publicDocs = publicDocsMarkdownPaths();
@@ -142,6 +154,42 @@ describe("public documentation drift checks", () => {
     expect(installer).toContain("NODE_MAJOR\" -lt 22");
     expect(installer).not.toContain("Node.js ≥ 20");
     expect(installer).not.toContain("NODE_MAJOR\" -lt 20");
+  });
+
+  it("documents transformers as a packaged runtime dependency", () => {
+    const packageJson = readJson<{
+      dependencies?: Record<string, string>;
+      optionalDependencies?: Record<string, string>;
+    }>("package.json");
+
+    expect(packageJson.dependencies).toHaveProperty("@huggingface/transformers");
+    expect(packageJson.optionalDependencies ?? {}).not.toHaveProperty(
+      "@huggingface/transformers",
+    );
+
+    for (const path of [
+      "src/config.ts",
+      "src/embedding/transformers-embedding.ts",
+      "docs/configuration.md",
+      "docs/configuration.ko.md",
+      "docs/architecture.md",
+      "docs/architecture.ko.md",
+    ]) {
+      const text = read(path);
+      expect(text).toContain("@huggingface/transformers");
+      for (const snippet of snippetsAround(text, "@huggingface/transformers")) {
+        expect(snippet).not.toMatch(/optional(?:\s+runtime)?\s+dep/i);
+        expect(snippet).not.toContain("optional dependency");
+        expect(snippet).not.toContain("optionalDependencies");
+      }
+    }
+
+    expect(read("docs/configuration.md")).toContain(
+      "Installed by the project (`@huggingface/transformers`",
+    );
+    expect(read("docs/configuration.ko.md")).toContain(
+      "프로젝트가 설치 (`@huggingface/transformers`",
+    );
   });
 
   it("does not describe reindex orphan vectors as an open pgvector follow-up", () => {

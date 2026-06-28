@@ -346,7 +346,7 @@ docker compose -f compose.yaml -f compose.pgvector.yaml up -d
 provider 선택 (기본값: `transformers`):
 
 - `transformers` **(기본)** → `src/embedding/transformers-embedding.ts`,
-  `@huggingface/transformers` (optional dep) 기반 무료 로컬 ONNX 추론.
+  설치된 `@huggingface/transformers` package 기반 무료 로컬 ONNX 추론.
   기본 모델 `Xenova/all-MiniLM-L6-v2`, 384-dim. 첫 호출 시 HF 캐시에
   ~22 MB 다운로드; 이후 완전 오프라인 동작. API 키 불필요.
 - `openai` → `src/embedding/openai-embeddings.ts`,

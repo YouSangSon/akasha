@@ -46,6 +46,25 @@ Verification:
 
 ## 2026-06-28
 
+- Aligned Transformers dependency docs/comments with package metadata:
+  - `package.json` installs `@huggingface/transformers` as a regular runtime
+    dependency because `EMBEDDING_PROVIDER=transformers` is the default.
+  - Code comments and public docs no longer call it an optional dependency.
+  - The runtime error now points at a missing/pruned runtime install instead of
+    optional dependency installation.
+  - Public docs drift coverage now guards the English/Korean docs and source
+    comments against reintroducing optional-dependency wording while the package
+    remains in `dependencies`.
+
+Verification:
+- `npx vitest run tests/scripts/public-docs-drift.test.ts`
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (614 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Clarified dedicated worker metrics guidance:
   - Operations runbooks now separate in-process HTTP sweeper tick counters from
     dedicated worker mode.

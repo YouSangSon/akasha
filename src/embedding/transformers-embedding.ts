@@ -5,10 +5,10 @@ import type { EmbeddingProvider } from "./embedding-provider.js";
 // 384 dimensions, ~22MB ONNX file downloaded once to ~/.cache/huggingface/hub
 // on first call, then memory-resident. CPU-only inference is sufficient.
 //
-// The transformers package is an OPTIONAL dependency (declared in package.json
-// optionalDependencies). Users who only need EMBEDDING_PROVIDER=openai or
-// =local don't pay the ~50MB onnxruntime-node binary install cost. The dynamic
-// import below surfaces a friendly error when the package is missing.
+// The transformers package is a regular runtime dependency because
+// EMBEDDING_PROVIDER=transformers is the default. The dynamic import below keeps
+// startup cheap for openai/local configs and surfaces a friendly error if a
+// production bundle or install omits the package.
 
 export type FeatureExtractorOptions = {
   pooling: "mean";
@@ -23,8 +23,7 @@ export type FeatureExtractor = (
 export type TransformersEmbeddingClientInput = {
   model: string;
   // Lazy factory called once on first embed(). Allows test injection without
-  // requiring the optional dep. Real default factory loads
-  // @huggingface/transformers and returns a feature-extraction pipeline.
+  // loading @huggingface/transformers and returns a feature-extraction pipeline.
   createExtractor?: () => Promise<FeatureExtractor>;
 };
 
@@ -76,11 +75,9 @@ function defaultFactory(model: string): () => Promise<FeatureExtractor> {
       modelName: string,
     ) => Promise<FeatureExtractor>;
     try {
-      // @ts-ignore — optional dep; types may or may not be present at compile
-      // time depending on whether the user installed it. Cast through unknown
-      // makes runtime resolution fully decoupled from the import-time type
-      // resolution. ts-ignore (vs ts-expect-error) tolerates the case where
-      // the package IS installed and the suppression turns out to be unused.
+      // @ts-ignore — cast through unknown keeps runtime resolution decoupled
+      // from import-time type resolution. ts-ignore (vs ts-expect-error)
+      // tolerates package type changes that make the suppression unnecessary.
       const mod = (await import("@huggingface/transformers")) as unknown as {
         pipeline: (
           task: string,
@@ -91,9 +88,9 @@ function defaultFactory(model: string): () => Promise<FeatureExtractor> {
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
       throw new Error(
-        `EMBEDDING_PROVIDER=transformers requires the optional dependency ` +
-          `@huggingface/transformers. Install it with: ` +
-          `npm install @huggingface/transformers. (Original: ${reason})`,
+        `EMBEDDING_PROVIDER=transformers requires @huggingface/transformers ` +
+          `to be present in the runtime install. Run npm install for this ` +
+          `package and rebuild. (Original: ${reason})`,
       );
     }
     return pipeline("feature-extraction", model);

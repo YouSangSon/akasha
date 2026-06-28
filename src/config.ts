@@ -44,9 +44,10 @@ export function resolveServiceConfig(
   //   "openai"       — historical default, requires OPENAI_API_KEY, paid.
   //   "local"        — deterministic SHA-256 stub for dev/CI/air-gapped use;
   //                    NOT semantically meaningful, plumbing tests only.
-  //   "transformers" — free local ONNX inference via @huggingface/transformers
-  //                    (optional dep). Default model Xenova/all-MiniLM-L6-v2,
-  //                    384-dim. First call downloads ~22MB to HF cache.
+  //   "transformers" — free local ONNX inference via the installed
+  //                    @huggingface/transformers package. Default model
+  //                    Xenova/all-MiniLM-L6-v2, 384-dim. First call downloads
+  //                    ~22MB to HF cache.
   // VECTOR_BACKEND selects the vector-search adapter.
   //   "qdrant"   — default; requires QDRANT_URL + QDRANT_API_KEY.
   //   "pgvector" — Postgres-only deploy; reuses the existing PG pool.

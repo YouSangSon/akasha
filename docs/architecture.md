@@ -352,7 +352,8 @@ vector dimensions and content topology differ between backends.
 `EMBEDDING_PROVIDER` (default: `transformers`):
 
 - `transformers` **(default)** → `src/embedding/transformers-embedding.ts`,
-  free local ONNX inference via `@huggingface/transformers` (optional dep).
+  free local ONNX inference via the installed `@huggingface/transformers`
+  package.
   Default model `Xenova/all-MiniLM-L6-v2`, 384-dim. First call downloads
   ~22 MB to the HF cache; subsequent calls are fully offline. No API key
   required.

@@ -118,7 +118,7 @@ should replace `POSTGRES_PASSWORD`, `QDRANT_API_KEY`, and every
 | Provider | Cost | Semantic quality | Setup |
 |---|---|---|---|
 | `openai` | Paid (~cents/month for personal use; verify on [openai.com/api/pricing](https://openai.com/api/pricing)) | Best | Just set `OPENAI_API_KEY` |
-| `transformers` | **Free** | Good (close to OpenAI for most workloads) | `npm install @huggingface/transformers` (optional dep, ~50MB onnxruntime + ~22MB model on first call) |
+| `transformers` | **Free** | Good (close to OpenAI for most workloads) | Installed by the project (`@huggingface/transformers`, ~50MB onnxruntime + ~22MB model on first call) |
 | `local` | Free | **None — semantically meaningless**, exact-match only | Zero setup, but unsuitable for real retrieval |
 
 The `transformers` provider runs `Xenova/all-MiniLM-L6-v2` locally via ONNX —
