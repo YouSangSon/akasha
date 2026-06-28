@@ -216,6 +216,7 @@ export function createToolHandlers(input: {
       assertNonBlankMemoryContent(toolInput.content);
       assertProvidedScopeIdentifiers(toolInput);
       assertOptionalAllowedValue(toolInput.scope, "scope", SUPPORTED_SCOPE_TYPES);
+      assertAllowedValue(toolInput.kind, "kind", SUPPORTED_MEMORY_KINDS);
 
       const scope = toolInput.scope ?? "project";
       const userScopeId = resolveUserScopeId({

@@ -86,3 +86,5 @@ experience, documentation, features.
   dispatch.
 - Invalid direct graph entity-kind enum values are rejected before repository
   dispatch.
+- Invalid direct add-memory kind enum values are rejected before repository
+  dispatch.

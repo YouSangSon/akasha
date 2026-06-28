@@ -310,6 +310,36 @@ describe("createToolRegistry", () => {
     ).rejects.toThrow(/non-whitespace text/);
   });
 
+  it("rejects invalid add_memory kind values before repository dispatch", async () => {
+    const resolveRepository = vi.fn(() => createRepository());
+    const legacyRegistry = createToolRegistry({ resolveRepository });
+
+    await expect(
+      legacyRegistry.add_memory({
+        projectKey: "project-alpha",
+        kind: "note" as never,
+        content: "Use Postgres for canonical memory state.",
+      }),
+    ).rejects.toThrow(/kind must be one of/);
+
+    expect(resolveRepository).not.toHaveBeenCalled();
+
+    const services = createCanonicalServices();
+    const resolveCanonicalServices = vi.fn(async () => services);
+    const registry = createToolRegistry({ resolveCanonicalServices });
+
+    await expect(
+      registry.add_memory({
+        projectKey: "project-alpha",
+        kind: "note" as never,
+        content: "Use Postgres for canonical memory state.",
+      }),
+    ).rejects.toThrow(/kind must be one of/);
+
+    expect(resolveCanonicalServices).not.toHaveBeenCalled();
+    expect(services.repository.addMemory).not.toHaveBeenCalled();
+  });
+
   it("searches memory using the Task 6 public tool contract", async () => {
     const registry = createToolRegistry({ repository: createRepository() });
 

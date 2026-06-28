@@ -46,6 +46,21 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened direct add-memory kind enum validation:
+  - Direct `add_memory.kind` now rejects unsupported memory kinds before
+    legacy repository resolution or canonical service dispatch.
+  - Direct coverage verifies invalid kinds fail before either backing store
+    path is resolved.
+  - Reviewer `Erdos` timed out twice; self-review found no issues.
+
+Verification:
+- `npx vitest run tests/mcp/server.test.ts` (118 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (707 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened direct graph entity-kind enum validation:
   - `inspect_memory_graph.kind` now rejects unsupported entity kinds before
     canonical repository dispatch.
