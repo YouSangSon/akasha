@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { resolveServiceConfig } from "../../src/config.js";
 
+const BASE_ENV = {
+  DATABASE_URL: "postgres://memory:memory@postgres:5432/memory_os",
+  QDRANT_URL: "http://qdrant:6333",
+  QDRANT_API_KEY: "local-qdrant-key",
+};
+
 describe("resolveServiceConfig", () => {
   it("parses Postgres, Qdrant, OpenAI, and optional backup settings when EMBEDDING_PROVIDER=openai is set explicitly", () => {
     const config = resolveServiceConfig({
@@ -62,6 +68,56 @@ describe("resolveServiceConfig", () => {
         },
       }),
     ).toThrow("Invalid PORT: not-a-port");
+  });
+
+  it.each(["1e3", "0x2253", "0b10001001010011", "8787.5", "+8787", " 8787 "])(
+    "rejects non-decimal PORT value %s",
+    (port) => {
+      expect(() =>
+        resolveServiceConfig({
+          env: {
+            ...BASE_ENV,
+            PORT: port,
+          },
+        }),
+      ).toThrow(`Invalid PORT: ${port}`);
+    },
+  );
+
+  it("rejects out-of-range PORT values", () => {
+    expect(() =>
+      resolveServiceConfig({
+        env: {
+          ...BASE_ENV,
+          PORT: "65536",
+        },
+      }),
+    ).toThrow("Invalid PORT: 65536");
+  });
+
+  it.each(["", "1e3", "0x180", "0b110000000", "384.5", "+384", " 384 "])(
+    "rejects non-decimal EMBEDDING_DIMENSIONS value %s",
+    (dimensions) => {
+      expect(() =>
+        resolveServiceConfig({
+          env: {
+            ...BASE_ENV,
+            EMBEDDING_DIMENSIONS: dimensions,
+          },
+        }),
+      ).toThrow(`expected positive integer, got "${dimensions}"`);
+    },
+  );
+
+  it("accepts plain decimal EMBEDDING_DIMENSIONS values", () => {
+    const config = resolveServiceConfig({
+      env: {
+        ...BASE_ENV,
+        EMBEDDING_DIMENSIONS: "512",
+      },
+    });
+
+    expect(config.embedding.dimensions).toBe(512);
   });
 
   it("derives the database url from Postgres env when DATABASE_URL is absent", () => {

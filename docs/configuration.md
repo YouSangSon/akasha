@@ -100,7 +100,7 @@ should replace `POSTGRES_PASSWORD`, `QDRANT_API_KEY`, and every
 | Variable | Default | Notes |
 |---|---|---|
 | `HOST` | `127.0.0.1` | Bind interface. `0.0.0.0` exposes off-box; pair with `MEMORY_API_TOKENS` or OAuth token validation. |
-| `PORT` | `8787` | |
+| `PORT` | `8787` | Plain decimal integer from 1 to 65535. |
 | `NODE_ENV` | unset | `production` enables connection pooling defaults. |
 
 ## Embeddings
@@ -110,7 +110,7 @@ should replace `POSTGRES_PASSWORD`, `QDRANT_API_KEY`, and every
 | `EMBEDDING_PROVIDER` | `transformers` | `transformers` (free local ONNX, default), `openai` (paid API), or `local` (deterministic stub for CI). |
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | 1536-dim. Bumping requires reindex. |
 | `TRANSFORMERS_EMBEDDING_MODEL` | `Xenova/all-MiniLM-L6-v2` | Hugging Face ONNX model id. 384-dim. Only when `EMBEDDING_PROVIDER=transformers`. |
-| `EMBEDDING_DIMENSIONS` | `384` | Vector size for `transformers` and `local` providers. |
+| `EMBEDDING_DIMENSIONS` | `384` | Plain decimal positive integer vector size for `transformers` and `local` providers. |
 | `EMBEDDING_MODEL` | `local-deterministic-v1` | Only meaningful when `EMBEDDING_PROVIDER=local`. |
 
 ### Choosing a provider — cost vs. quality vs. setup

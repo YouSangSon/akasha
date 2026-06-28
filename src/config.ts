@@ -139,9 +139,14 @@ function requireEnv(value: string | undefined, name: string): string {
 
 function parsePort(value: string | undefined): number {
   const raw = value ?? "8787";
-  const port = Number(raw);
+  let port: number;
+  try {
+    port = parsePlainDecimalPositiveInt(raw);
+  } catch {
+    throw new Error(`Invalid PORT: ${raw}`);
+  }
 
-  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+  if (port > 65_535) {
     throw new Error(`Invalid PORT: ${raw}`);
   }
 
@@ -152,12 +157,23 @@ function parsePositiveInt(
   value: string | undefined,
   fallback: number,
 ): number {
-  if (value === undefined || value === "") {
+  if (value === undefined) {
     return fallback;
   }
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed <= 0) {
+  try {
+    return parsePlainDecimalPositiveInt(value);
+  } catch {
     throw new Error(`expected positive integer, got "${value}"`);
+  }
+}
+
+function parsePlainDecimalPositiveInt(value: string): number {
+  if (!/^\d+$/.test(value)) {
+    throw new Error("expected plain decimal integer");
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new Error("expected positive safe integer");
   }
   return parsed;
 }

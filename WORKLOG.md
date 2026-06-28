@@ -46,6 +46,28 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened service config integer parsing:
+  - `PORT` and `EMBEDDING_DIMENSIONS` now require plain decimal positive
+    integer strings instead of accepting every JavaScript `Number(...)`
+    integer form.
+  - `PORT` still enforces the 1-65535 range.
+  - Focused tests cover scientific, hex, binary, signed, fractional,
+    whitespace, empty dimension, and out-of-range port inputs.
+  - English/Korean configuration docs now state the stricter integer format.
+  - Subagent reviewer `Rawls` caught an empty `EMBEDDING_DIMENSIONS` fallback
+    bypass; the parser now defaults only when the variable is undefined.
+    Re-review reported no findings.
+
+Verification:
+- `npx vitest run tests/config/service-config.test.ts tests/scripts/public-docs-drift.test.ts`
+  (42 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (643 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Hardened memory content validation:
   - Memory writes now reject whitespace-only content at HTTP/MCP schema,
     direct registry handler, canonical write, and repository add/update

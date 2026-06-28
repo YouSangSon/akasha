@@ -40,3 +40,5 @@ experience, documentation, features.
 - Compaction apply candidate IDs require positive safe decimal integers before
   run creation.
 - Whitespace-only memory content is rejected before dispatch or persistence.
+- Service config `PORT` and `EMBEDDING_DIMENSIONS` require plain decimal
+  positive integer strings.

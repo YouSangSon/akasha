@@ -4,17 +4,17 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Whitespace-Only Memory Content Guard
+## Current Loop — Service Config Integer Parsing
 
 Status:
-- Memory writes now reject whitespace-only content at HTTP/MCP schema,
-  direct registry handler, canonical write, and repository add/update
-  boundaries.
-- CLI, HTTP, MCP protocol, direct registry, canonical indexing, and repository
-  tests cover blank content rejection before dispatch or persistence side
-  effects.
-- Review first caught a schema-only enforcement gap; the invariant now lives in
-  shared store-level validation. Final re-review found no issues.
+- `PORT` and `EMBEDDING_DIMENSIONS` now require plain decimal positive integer
+  strings; `PORT` still enforces the 1-65535 range.
+- Config tests cover scientific, hex, binary, signed, fractional, whitespace,
+  empty dimension, and out-of-range port inputs.
+- English/Korean configuration docs now state the stricter integer format.
+- Reviewer caught an empty `EMBEDDING_DIMENSIONS` fallback bypass; the parser
+  now defaults only when the variable is undefined. Final re-review found no
+  issues.
 - Typecheck, build, audit, full test suite, and diff whitespace checks passed.
 
 Loop closeout:
