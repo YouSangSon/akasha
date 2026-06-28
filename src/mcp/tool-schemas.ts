@@ -208,7 +208,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     inputSchema: {
       organizationId: z.string().min(1).optional(),
       projectKey: z.string().min(1),
-      query: z.string().min(1),
+      query: nonBlankTextInputSchema,
       userScopeId: z.string().min(1).optional(),
       includeUser: z.boolean().optional(),
       limit: z.number().int().positive().optional(),
@@ -226,7 +226,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     inputSchema: {
       organizationId: z.string().min(1).optional(),
       projectKey: z.string().min(1),
-      task: z.string().min(1),
+      task: nonBlankTextInputSchema,
       userScopeId: z.string().min(1).optional(),
       includeUser: z.boolean().optional(),
       limit: z.number().int().positive().optional(),

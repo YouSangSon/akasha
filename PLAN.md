@@ -4,17 +4,15 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Service Config Integer Parsing
+## Current Loop — Search/Context Non-Blank Text
 
 Status:
-- `PORT` and `EMBEDDING_DIMENSIONS` now require plain decimal positive integer
-  strings; `PORT` still enforces the 1-65535 range.
-- Config tests cover scientific, hex, binary, signed, fractional, whitespace,
-  empty dimension, and out-of-range port inputs.
-- English/Korean configuration docs now state the stricter integer format.
-- Reviewer caught an empty `EMBEDDING_DIMENSIONS` fallback bypass; the parser
-  now defaults only when the variable is undefined. Final re-review found no
-  issues.
+- `search_memory.query` and `build_context_pack.task` now reject
+  whitespace-only text at HTTP/MCP schema and direct registry handler
+  boundaries.
+- Tests cover HTTP, MCP protocol, direct retrieveMemory override, and canonical
+  services paths before search/vector/context-pack persistence work.
+- Reviewer found no issues.
 - Typecheck, build, audit, full test suite, and diff whitespace checks passed.
 
 Loop closeout:

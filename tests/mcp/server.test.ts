@@ -325,6 +325,20 @@ describe("createToolRegistry", () => {
     });
   });
 
+  it("rejects whitespace-only search queries through the direct registry path", async () => {
+    const retrieveMemory = vi.fn();
+    const registry = createToolRegistry({ retrieveMemory });
+
+    await expect(
+      registry.search_memory({
+        projectKey: "project-alpha",
+        query: " \n\t ",
+      }),
+    ).rejects.toThrow(/non-whitespace text/);
+
+    expect(retrieveMemory).not.toHaveBeenCalled();
+  });
+
   it("builds a context pack using the retrieve-memory service", async () => {
     const retrieveMemory = vi.fn().mockResolvedValue([
       createRecord({
@@ -375,6 +389,46 @@ describe("createToolRegistry", () => {
     expect(result.sections.recent_decisions).toEqual([
       expect.objectContaining({ id: 12 }),
     ]);
+  });
+
+  it("rejects whitespace-only context-pack tasks through the direct registry path", async () => {
+    const retrieveMemory = vi.fn();
+    const registry = createToolRegistry({ retrieveMemory });
+
+    await expect(
+      registry.build_context_pack({
+        projectKey: "project-alpha",
+        task: " \n\t ",
+      }),
+    ).rejects.toThrow(/non-whitespace text/);
+
+    expect(retrieveMemory).not.toHaveBeenCalled();
+  });
+
+  it("rejects whitespace-only search and context-pack text before canonical retrieval", async () => {
+    const services = createCanonicalServices();
+    const registry = createToolRegistry({
+      resolveCanonicalServices: async () => services,
+    });
+
+    await expect(
+      registry.search_memory({
+        organizationId: "org-a",
+        projectKey: "project-alpha",
+        query: " \n\t ",
+      }),
+    ).rejects.toThrow(/non-whitespace text/);
+    await expect(
+      registry.build_context_pack({
+        organizationId: "org-a",
+        projectKey: "project-alpha",
+        task: " \n\t ",
+      }),
+    ).rejects.toThrow(/non-whitespace text/);
+
+    expect(services.embeddings.embed).not.toHaveBeenCalled();
+    expect(services.vectorIndex.query).not.toHaveBeenCalled();
+    expect(services.chunkRepository.createContextPackRun).not.toHaveBeenCalled();
   });
 
   it("reports selected memory ids only for records included after context pack caps", async () => {
@@ -2056,6 +2110,43 @@ describe("createMcpServer structured outputs", () => {
     }
     expect(registry.add_memory).not.toHaveBeenCalled();
     expect(registry.update_memory).not.toHaveBeenCalled();
+
+    await client.close();
+    await server.close();
+  });
+
+  it("rejects whitespace-only search and context-pack text before registry dispatch", async () => {
+    const registry = buildRegistryForMcpProtocol();
+    const server = createMcpServer({ registry });
+    const client = await createInMemoryClient(server);
+
+    const searchResult = await client.callTool({
+      name: "search_memory",
+      arguments: {
+        projectKey: "project-alpha",
+        query: " \n\t ",
+      },
+    });
+    const contextPackResult = await client.callTool({
+      name: "build_context_pack",
+      arguments: {
+        projectKey: "project-alpha",
+        task: " \n\t ",
+      },
+    });
+
+    for (const result of [searchResult, contextPackResult]) {
+      expect(result.isError).toBe(true);
+      const errorContent = result.content as Array<{ type: string; text: string }>;
+      expect(errorContent[0]).toEqual(
+        expect.objectContaining({
+          type: "text",
+          text: expect.stringContaining("non-whitespace text"),
+        }),
+      );
+    }
+    expect(registry.search_memory).not.toHaveBeenCalled();
+    expect(registry.build_context_pack).not.toHaveBeenCalled();
 
     await client.close();
     await server.close();

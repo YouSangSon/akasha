@@ -12,7 +12,10 @@ import {
   writeCanonicalMemory,
 } from "../store/canonical-indexing.js";
 import { assertNoSecrets } from "../store/secret-scrub.js";
-import { assertNonBlankMemoryContent } from "../store/memory-content.js";
+import {
+  assertNonBlankMemoryContent,
+  assertNonBlankText,
+} from "../store/memory-content.js";
 import { buildGoalContextPack } from "../goal-run/build-goal-context.js";
 import {
   DEFAULT_REPEAT_THRESHOLD,
@@ -259,6 +262,8 @@ export function createToolHandlers(input: {
     },
 
     async search_memory(toolInput) {
+      assertNonBlankText(toolInput.query, "search query");
+
       const results = await resolveRecords({
         organizationId: toolInput.organizationId,
         projectKey: toolInput.projectKey,
@@ -277,6 +282,8 @@ export function createToolHandlers(input: {
     },
 
     async build_context_pack(toolInput) {
+      assertNonBlankText(toolInput.task, "context-pack task");
+
       const useServiceBackedPack =
         !hasOverrides && !options.retrieveMemory;
       const builtPack = useServiceBackedPack

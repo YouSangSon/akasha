@@ -46,6 +46,27 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened search/context text validation:
+  - `search_memory.query` and `build_context_pack.task` now reject
+    whitespace-only text at HTTP/MCP schema and direct registry handler
+    boundaries.
+  - Direct registry guards protect both override-backed retrieval and canonical
+    services paths before embedding, vector search, or context-pack run
+    persistence.
+  - Tests cover HTTP, MCP protocol, direct retrieveMemory override, and
+    canonical services paths.
+  - Subagent reviewer `Hubble` reported no findings.
+
+Verification:
+- `npx vitest run tests/app/server.test.ts tests/mcp/server.test.ts`
+  (135 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (648 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Hardened service config integer parsing:
   - `PORT` and `EMBEDDING_DIMENSIONS` now require plain decimal positive
     integer strings instead of accepting every JavaScript `Number(...)`

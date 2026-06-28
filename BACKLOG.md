@@ -42,3 +42,5 @@ experience, documentation, features.
 - Whitespace-only memory content is rejected before dispatch or persistence.
 - Service config `PORT` and `EMBEDDING_DIMENSIONS` require plain decimal
   positive integer strings.
+- Whitespace-only search queries and context-pack tasks are rejected before
+  dispatch or retrieval work.
