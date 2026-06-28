@@ -4,15 +4,15 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Lifecycle Init Input Guard
+## Current Loop — Lifecycle Init Path Guard
 
 Status:
-- Direct lifecycle initialization now rejects whitespace-only optional
-  `organizationId`, `userScopeId`, and `task` values before writing generated
-  hook/config files.
-- CLI-level blank organization flag behavior remains covered; the new coverage
-  verifies direct `writeLifecycleInit()` callers cannot bypass it.
-- Reviewer subagent found no issues.
+- Direct lifecycle initialization now rejects whitespace-only `repoDir` and
+  optional `outDir` values before resolving paths or writing generated files.
+- CLI-level blank `--out-dir` behavior is covered; direct tests also verify
+  whitespace-only path inputs leave the temp repo empty.
+- Reviewer subagent found a weak no-write assertion; it was tightened before
+  final verification.
 - Focused CLI tests, typecheck, build, audit, full suite, and diff whitespace
   checks passed.
 

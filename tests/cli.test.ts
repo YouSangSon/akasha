@@ -8,6 +8,10 @@ import { createToolRegistry, type ToolRegistry } from "../src/mcp/server.js";
 import type { MemoryRepository } from "../src/types.js";
 import { goalRunRegistryStubs } from "./fixtures/goal-run-stubs.js";
 
+function expectDirectoryToBeEmpty(dir: string): void {
+  expect(fs.readdirSync(dir)).toEqual([]);
+}
+
 describe("parseCliArgs", () => {
   it("can import public MCP server exports after module split", async () => {
     const module = await import("../src/mcp/server.js");
@@ -470,10 +474,33 @@ describe("parseCliArgs", () => {
     ).rejects.toThrow(/--organization-id/);
 
     expect(fs.existsSync(path.join(tmpDir, ".akasha"))).toBe(false);
+    expectDirectoryToBeEmpty(tmpDir);
+  });
+
+  it("rejects whitespace-only init outDir before writing lifecycle files", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "akasha-cli-init-"));
+
+    await expect(
+      runCli(
+        [
+          "init",
+          "--project",
+          "project-alpha",
+          "--out-dir",
+          " \n\t ",
+        ],
+        { cwd: tmpDir },
+      ),
+    ).rejects.toThrow(/outDir/);
+
+    expect(fs.existsSync(path.join(tmpDir, ".akasha"))).toBe(false);
+    expectDirectoryToBeEmpty(tmpDir);
   });
 
   it("rejects whitespace-only direct lifecycle init inputs before writing files", async () => {
     const cases = [
+      { field: "repoDir", input: { repoDir: " \n\t " } },
+      { field: "outDir", input: { outDir: " \n\t " } },
       { field: "organizationId", input: { organizationId: " \n\t " } },
       { field: "userScopeId", input: { userScopeId: " \n\t " } },
       { field: "task", input: { task: " \n\t " } },
@@ -491,6 +518,7 @@ describe("parseCliArgs", () => {
       ).rejects.toThrow(testCase.field);
 
       expect(fs.existsSync(path.join(tmpDir, ".akasha"))).toBe(false);
+      expectDirectoryToBeEmpty(tmpDir);
     }
   });
 

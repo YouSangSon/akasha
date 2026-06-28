@@ -124,8 +124,12 @@ export function buildLifecycleFiles(
 }
 
 function normalizeLifecycleInput(input: LifecycleInitInput) {
+  assertNonBlankText(input.repoDir, "repoDir");
   if (!input.projectKey.trim()) {
     throw new Error("projectKey is required for lifecycle init.");
+  }
+  if (input.outDir !== undefined) {
+    assertNonBlankText(input.outDir, "outDir");
   }
   if (input.organizationId !== undefined) {
     assertNonBlankText(input.organizationId, "organizationId");

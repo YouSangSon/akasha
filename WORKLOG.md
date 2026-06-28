@@ -46,6 +46,23 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened direct lifecycle init path inputs:
+  - `writeLifecycleInit()` now rejects whitespace-only `repoDir` and optional
+    `outDir` values before resolving paths or writing generated files.
+  - CLI coverage verifies blank `--out-dir` fails before file writes.
+  - Direct coverage verifies whitespace-only `repoDir` and `outDir` fail and
+    leave the temp repo empty.
+  - Reviewer subagent caught weak no-write assertions; tests now assert the
+    temp repo stays empty for invalid lifecycle inputs.
+
+Verification:
+- `npx vitest run tests/cli.test.ts` (21 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (800 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened direct lifecycle initialization:
   - `writeLifecycleInit()` now rejects whitespace-only optional
     `organizationId`, `userScopeId`, and `task` values before creating the

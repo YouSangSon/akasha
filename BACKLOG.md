@@ -179,3 +179,5 @@ experience, documentation, features.
   are rejected before registry dispatch.
 - Whitespace-only direct lifecycle init organization, user scope, and task
   inputs are rejected before writing generated files.
+- Whitespace-only direct lifecycle init repo/output path inputs are rejected
+  before resolving paths or writing generated files.
