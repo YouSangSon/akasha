@@ -46,6 +46,26 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened backup plaintext retention flag parsing:
+  - `BACKUP_ENCRYPTION_KEEP_PLAINTEXT` now accepts only trimmed,
+    case-insensitive `true` or `false` values when configured.
+  - Unset still defaults to `false`, so plaintext artifacts are removed after
+    encrypted artifacts and manifest checksums are written.
+  - Invalid values such as empty, whitespace-only, `yes`, `1`, `0`, and
+    `maybe` fail before encryption work starts.
+  - English/Korean configuration docs state the accepted values and
+    fail-closed behavior.
+  - Worker implementation passed spec review and code-quality review with no
+    findings.
+
+Verification:
+- `npx vitest run tests/scripts/backup-encryption.test.ts tests/scripts/public-docs-drift.test.ts` (51 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (1022 passed, 34 skipped across 69 files)
+- `git diff --check`
+
 - Hardened backup target host shell handling:
   - `scripts/backup-postgres.sh`, `scripts/snapshot-qdrant.sh`, and
     `scripts/create-backup.sh` now reject whitespace-only

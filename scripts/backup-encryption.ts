@@ -284,6 +284,25 @@ export async function loadBackupEncryptionKeyFromEnv(
   return parseEncryptionKey(await fsp.readFile(trimmedKeyFile));
 }
 
+export function loadBackupEncryptionKeepPlaintextFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  const value = env.BACKUP_ENCRYPTION_KEEP_PLAINTEXT;
+  if (value === undefined) {
+    return false;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "true") {
+    return true;
+  }
+  if (normalized === "false") {
+    return false;
+  }
+
+  throw new Error("BACKUP_ENCRYPTION_KEEP_PLAINTEXT must be true or false when set");
+}
+
 export function parseEncryptionKey(raw: Buffer): Buffer {
   const text = raw.toString("utf8").trim();
   const key =
@@ -334,7 +353,7 @@ async function main() {
       backupDir,
       manifestPath,
       key,
-      keepPlaintext: process.env.BACKUP_ENCRYPTION_KEEP_PLAINTEXT === "true",
+      keepPlaintext: loadBackupEncryptionKeepPlaintextFromEnv(),
     });
     return;
   }

@@ -4,16 +4,17 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Backup Target Host Guard
+## Current Loop — Backup Plaintext Flag Guard
 
 Status:
-- Backup shell entrypoints now reject whitespace-only `BACKUP_TARGET_HOST`
-  values before any SSH/SCP work.
-- Unset and exact empty `BACKUP_TARGET_HOST` still mean local-only.
+- `BACKUP_ENCRYPTION_KEEP_PLAINTEXT` now accepts only trimmed,
+  case-insensitive `true` or `false` values when configured.
+- Unset still defaults to removing plaintext artifacts after encrypted backup
+  artifacts are written.
 - Worker implementation passed spec review and code-quality review with no
   findings.
-- Focused backup shell tests, shell syntax checks, typecheck, build, audit,
-  full suite, and diff whitespace checks passed.
+- Focused backup encryption/docs tests, typecheck, build, audit, full suite,
+  and diff whitespace checks passed.
 
 Loop closeout:
 - Commit locally; do not push.

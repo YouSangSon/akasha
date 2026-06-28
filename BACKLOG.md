@@ -101,6 +101,8 @@ experience, documentation, features.
 - Whitespace-only service-config backup env values are rejected before runtime
   config construction.
 - Whitespace-only backup shell target hosts are rejected before SSH/SCP work.
+- Malformed backup plaintext retention flags are rejected before encryption
+  work.
 - Invalid direct repository search/list/graph limits are rejected before SQL
   work.
 - Invalid direct audit repository limits are rejected before SQL work.

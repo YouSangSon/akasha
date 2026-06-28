@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   decryptFile,
   encryptManifestArtifacts,
+  loadBackupEncryptionKeepPlaintextFromEnv,
   loadBackupEncryptionKeyFromEnv,
   parseEncryptionKey,
 } from "../../scripts/backup-encryption.js";
@@ -272,6 +273,39 @@ describe("backup encryption", () => {
       "BACKUP_ENCRYPTION_KEY_FILE must contain non-whitespace text",
     );
   });
+
+  it("defaults unset BACKUP_ENCRYPTION_KEEP_PLAINTEXT to false", () => {
+    expect(loadBackupEncryptionKeepPlaintextFromEnv({})).toBe(false);
+  });
+
+  it.each([
+    ["true", true],
+    ["false", false],
+    [" TRUE ", true],
+    [" False ", false],
+  ] satisfies Array<[string, boolean]>)(
+    "parses BACKUP_ENCRYPTION_KEEP_PLAINTEXT=%s",
+    (value, expected) => {
+      expect(
+        loadBackupEncryptionKeepPlaintextFromEnv({
+          BACKUP_ENCRYPTION_KEEP_PLAINTEXT: value,
+        }),
+      ).toBe(expected);
+    },
+  );
+
+  it.each(["", " \n\t ", "yes", "1", "0", "maybe"])(
+    "rejects malformed BACKUP_ENCRYPTION_KEEP_PLAINTEXT=%j",
+    (value) => {
+      expect(() =>
+        loadBackupEncryptionKeepPlaintextFromEnv({
+          BACKUP_ENCRYPTION_KEEP_PLAINTEXT: value,
+        }),
+      ).toThrow(
+        "BACKUP_ENCRYPTION_KEEP_PLAINTEXT must be true or false when set",
+      );
+    },
+  );
 });
 
 async function exists(filePath: string): Promise<boolean> {
