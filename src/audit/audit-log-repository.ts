@@ -1,4 +1,5 @@
 import type { PgPool } from "../db/connection.js";
+import { assertNonBlankText } from "../store/memory-content.js";
 
 export type AuditOutcome = "ok" | "error";
 
@@ -42,6 +43,8 @@ type AuditLogRow = {
 export function createAuditLogRepository(pool: PgPool): AuditLogRepository {
   return {
     async record(entry) {
+      assertNonBlankText(entry.organizationId, "organizationId");
+
       await pool.query(
         `
           INSERT INTO audit_log (
@@ -71,6 +74,8 @@ export function createAuditLogRepository(pool: PgPool): AuditLogRepository {
     },
 
     async listByOrganization(organizationId, options) {
+      assertNonBlankText(organizationId, "organizationId");
+
       const limit = clampAuditLimit(options?.limit);
       const result = await pool.query<AuditLogRow>(
         `

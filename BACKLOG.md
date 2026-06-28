@@ -151,3 +151,5 @@ experience, documentation, features.
   ingest and indexing side effects.
 - Whitespace-only canonical reindex organization IDs are rejected before
   indexing side effects.
+- Whitespace-only audit repository organization IDs are rejected before
+  persistence.

@@ -4,6 +4,38 @@ import { createAuditLogRepository } from "../../src/audit/audit-log-repository.j
 const MAX_ERROR_MESSAGE_LENGTH = 1024;
 
 describe("createAuditLogRepository — error_message truncation", () => {
+  it("record rejects whitespace-only organizationId before querying", async () => {
+    const fakePool = {
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+    };
+    const repo = createAuditLogRepository(fakePool as never);
+
+    await expect(
+      repo.record({
+        organizationId: " \n\t ",
+        actor: "alice",
+        tool: "add_memory",
+        outcome: "ok",
+        durationMs: 5,
+      }),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(fakePool.query).not.toHaveBeenCalled();
+  });
+
+  it("listByOrganization rejects whitespace-only organizationId before querying", async () => {
+    const fakePool = {
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+    };
+    const repo = createAuditLogRepository(fakePool as never);
+
+    await expect(
+      repo.listByOrganization(" \n\t ", { limit: 10 }),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(fakePool.query).not.toHaveBeenCalled();
+  });
+
   it("truncates error_message to 1024 chars before persistence", async () => {
     let capturedParams: unknown[] | undefined;
 

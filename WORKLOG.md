@@ -44,6 +44,23 @@ Verification:
 - `npm test` (`62` files passed, `2` skipped; `605` tests passed, `34` skipped)
 - `git diff --check`
 
+## 2026-06-29
+
+- Hardened audit repository organization validation:
+  - `record` and `listByOrganization` now reject whitespace-only organization
+    IDs before writing or reading audit rows.
+  - Audit repository coverage verifies invalid organization IDs fail before
+    `pool.query()`.
+  - Reviewer subagent found no issues.
+
+Verification:
+- `npx vitest run tests/audit/audit-truncation.test.ts tests/audit/audit-write.test.ts` (11 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (749 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 ## 2026-06-28
 
 - Hardened canonical reindex organization validation:
