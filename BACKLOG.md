@@ -71,3 +71,5 @@ experience, documentation, features.
 - Invalid direct/public unarchive archive IDs are rejected before archive lookup.
 - Invalid direct governance memory IDs are rejected before repository dispatch.
 - Invalid direct audit log limits are rejected before audit repository dispatch.
+- Invalid direct governance list and graph limits are rejected before repository
+  dispatch.

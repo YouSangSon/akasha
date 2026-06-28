@@ -536,6 +536,7 @@ export function createToolHandlers(input: {
       if (toolInput.tag !== undefined) {
         assertNonBlankText(toolInput.tag, "memory tag");
       }
+      assertOptionalPositiveInteger(toolInput.limit, "limit", 5000);
       const scope = toolInput.scope ?? "project";
       const userScopeId = resolveUserScopeId({
         cwd,
@@ -577,6 +578,12 @@ export function createToolHandlers(input: {
       if (toolInput.query !== undefined) {
         assertNonBlankText(toolInput.query, "graph query");
       }
+      assertOptionalPositiveInteger(toolInput.limit, "limit", 5000);
+      assertOptionalPositiveInteger(
+        toolInput.relationshipLimit,
+        "relationshipLimit",
+        5000,
+      );
       const scope = toolInput.scope ?? "project";
       const userScopeId = resolveUserScopeId({
         cwd,

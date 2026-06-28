@@ -46,6 +46,23 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened direct governance list and graph limit validation:
+  - Direct `list_memory.limit`, `inspect_memory_graph.limit`, and
+    `inspect_memory_graph.relationshipLimit` reject invalid and over-limit
+    values before governance repository dispatch.
+  - Direct coverage verifies invalid limits fail before repository calls and
+    the documented maximum `5000` still reaches the repository.
+  - Subagent reviewer `Arendt` reported no findings.
+
+Verification:
+- `npx vitest run tests/mcp/server.test.ts` (106 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (691 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Hardened direct audit log limit validation:
   - Direct `list_audit_log.limit` rejects invalid and over-limit values before
     audit repository dispatch.

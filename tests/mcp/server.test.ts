@@ -1018,6 +1018,78 @@ describe("createToolRegistry", () => {
     );
   });
 
+  it("rejects invalid governance list and graph limits before repository dispatch", async () => {
+    const services = createCanonicalServices();
+    const registry = createToolRegistry({
+      resolveCanonicalServices: async () => services,
+    });
+
+    for (const limit of [
+      0,
+      -1,
+      1.5,
+      Number.NaN,
+      5001,
+      Number.MAX_SAFE_INTEGER + 1,
+    ]) {
+      await expect(
+        registry.list_memory({
+          organizationId: "org-a",
+          projectKey: "project-alpha",
+          limit,
+        }),
+      ).rejects.toThrow(/limit/);
+      await expect(
+        registry.inspect_memory_graph({
+          organizationId: "org-a",
+          projectKey: "project-alpha",
+          limit,
+        }),
+      ).rejects.toThrow(/limit/);
+      await expect(
+        registry.inspect_memory_graph({
+          organizationId: "org-a",
+          projectKey: "project-alpha",
+          relationshipLimit: limit,
+        }),
+      ).rejects.toThrow(/relationshipLimit/);
+    }
+
+    expect(services.repository.listMemoryForGovernance).not.toHaveBeenCalled();
+    expect(services.repository.inspectMemoryGraph).not.toHaveBeenCalled();
+  });
+
+  it("accepts maximum governance list and graph limits through the direct registry path", async () => {
+    const services = createCanonicalServices();
+    const registry = createToolRegistry({
+      resolveCanonicalServices: async () => services,
+    });
+
+    await registry.list_memory({
+      organizationId: "org-a",
+      projectKey: "project-alpha",
+      limit: 5000,
+    });
+    await registry.inspect_memory_graph({
+      organizationId: "org-a",
+      projectKey: "project-alpha",
+      limit: 5000,
+      relationshipLimit: 5000,
+    });
+
+    expect(services.repository.listMemoryForGovernance).toHaveBeenCalledWith(
+      { scopeType: "project", scopeId: "project-alpha" },
+      expect.objectContaining({ limit: 5000 }),
+    );
+    expect(services.repository.inspectMemoryGraph).toHaveBeenCalledWith(
+      { scopeType: "project", scopeId: "project-alpha" },
+      expect.objectContaining({
+        limit: 5000,
+        relationshipLimit: 5000,
+      }),
+    );
+  });
+
   it("rejects whitespace-only governance filters through the direct registry path", async () => {
     const services = createCanonicalServices();
     const registry = createToolRegistry({
