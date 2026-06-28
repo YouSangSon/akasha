@@ -4,11 +4,11 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Repository Add Organization Guard
+## Current Loop — Repository Update Organization Guard
 
 Status:
-- `addMemory` now rejects whitespace-only organization IDs before opening a
-  Postgres transaction.
+- `updateMemoryRecord` now rejects whitespace-only organization IDs before
+  opening a Postgres transaction.
 - Coverage verifies invalid organization IDs fail before `pool.connect()`.
 - Reviewer skipped after previous reviewer-agent timeouts; self-review found no
   issues.

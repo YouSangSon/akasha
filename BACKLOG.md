@@ -104,3 +104,5 @@ experience, documentation, features.
   persistence.
 - Whitespace-only repository add organization IDs are rejected before
   persistence.
+- Whitespace-only repository update organization IDs are rejected before
+  persistence.

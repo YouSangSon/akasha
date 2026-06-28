@@ -17,7 +17,10 @@ import type {
   SearchMemoryResult,
 } from "../types.js";
 import { assertOrganizationId } from "./assert-organization-id.js";
-import { assertNonBlankMemoryContent } from "./memory-content.js";
+import {
+  assertNonBlankMemoryContent,
+  assertNonBlankText,
+} from "./memory-content.js";
 import { scanForSecrets, SecretDetectedError } from "./secret-scrub.js";
 
 const DEFAULT_ORG_ID = "default";
@@ -184,9 +187,7 @@ export function createMemoryRepository(
         summary,
       });
       const organizationId = input.organizationId ?? DEFAULT_ORG_ID;
-      if (organizationId.trim().length === 0) {
-        throw new Error("organizationId must contain non-whitespace text");
-      }
+      assertNonBlankText(organizationId, "organizationId");
       const client = await pool.connect();
 
       try {
@@ -469,6 +470,8 @@ export function createMemoryRepository(
     },
 
     async updateMemoryRecord(input) {
+      assertNonBlankText(input.organizationId, "organizationId");
+
       const client = await pool.connect();
 
       try {

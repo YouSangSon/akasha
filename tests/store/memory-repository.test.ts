@@ -866,6 +866,22 @@ describe("createMemoryRepository (unit — no PG required)", () => {
     });
   });
 
+  it("updateMemoryRecord rejects whitespace-only organization IDs before opening a transaction", async () => {
+    const mockPool = {
+      connect: vi.fn(),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    await expect(
+      repo.updateMemoryRecord({
+        id: 42,
+        organizationId: " \n\t ",
+      }),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(mockPool.connect).not.toHaveBeenCalled();
+  });
+
   it("updateMemoryRecord rejects whitespace-only content before updating the row", async () => {
     const clientQueryCalls: SqlQueryCall[] = [];
     const mockClient = {
