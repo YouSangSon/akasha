@@ -170,6 +170,9 @@ export function createMemoryRepository(
     async addMemory(input) {
       assertNonBlankMemoryContent(input.content);
 
+      const memoryType = normalizeMemoryType(input.memoryType);
+      const durability = normalizeDurability(input.durability, "ephemeral");
+      const importance = normalizePostgresInteger(input.importance, 0);
       const organizationId = input.organizationId ?? DEFAULT_ORG_ID;
       const client = await pool.connect();
 
@@ -218,14 +221,14 @@ export function createMemoryRepository(
             input.scopeType,
             input.scopeId,
             input.projectKey ?? null,
-            input.memoryType,
+            memoryType,
             input.title ?? null,
             input.content,
             input.summary ?? summarize(input.content),
-            input.durability ?? "ephemeral",
-            input.importance ?? 0,
+            durability,
+            importance,
             sourceRow.source_id_joined,
-            ],
+          ],
         );
 
         const memoryRow = requireSingleRow(memoryResult.rows[0], "memory");
@@ -958,13 +961,15 @@ function normalizeNullableText(value: string | null): string | null {
 
 function normalizeMemoryType(
   value: SearchMemoryResult["memoryType"] | undefined,
-  fallback: SearchMemoryResult["memoryType"],
+  fallback?: SearchMemoryResult["memoryType"],
 ): SearchMemoryResult["memoryType"] {
-  if (value === undefined) {
-    return fallback;
-  }
-  if (value === "decision" || value === "fact" || value === "summary") {
-    return value;
+  const nextValue = value ?? fallback;
+  if (
+    nextValue === "decision" ||
+    nextValue === "fact" ||
+    nextValue === "summary"
+  ) {
+    return nextValue;
   }
   throw new Error("kind must be one of: decision, summary, fact");
 }

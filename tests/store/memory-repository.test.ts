@@ -196,6 +196,41 @@ describe("createMemoryRepository (unit — no PG required)", () => {
     expect(mockPool.connect).not.toHaveBeenCalled();
   });
 
+  it("addMemory rejects invalid enum and integer values before opening a transaction", async () => {
+    const cases = [
+      { memoryType: "note" as never, message: /kind/ },
+      { durability: "permanent" as never, message: /durability/ },
+      { importance: 1.5, message: /importance/ },
+      { importance: Number.NaN, message: /importance/ },
+      { importance: 2147483648, message: /importance/ },
+    ];
+
+    for (const patch of cases) {
+      const mockPool = {
+        connect: vi.fn(),
+      };
+      const repo = createMemoryRepository(mockPool as never);
+
+      await expect(
+        repo.addMemory({
+          scopeType: "project",
+          scopeId: "proj-x",
+          memoryType: "fact",
+          content: "test content",
+          source: {
+            scopeType: "project",
+            scopeId: "proj-x",
+            sourceType: "document",
+            sourceRef: "docs/spec.md",
+          },
+          ...patch,
+        }),
+      ).rejects.toThrow(patch.message);
+
+      expect(mockPool.connect).not.toHaveBeenCalled();
+    }
+  });
+
   it("upsertPostgresSource pushes sourceRef filter into SQL WHERE clause (PERF-5)", () => {
     // addMemory calls upsertPostgresSource via a transaction client.
     // The SELECT for an existing source must pass sourceRef as $5 and use

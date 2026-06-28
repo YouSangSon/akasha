@@ -96,3 +96,5 @@ experience, documentation, features.
   persistence.
 - Invalid repository update kind, durability, and importance values are
   rejected before persistence.
+- Invalid repository add kind, durability, and importance values are rejected
+  before persistence.

@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened repository add value validation:
+  - `addMemory` now rejects invalid memory kind, durability, and importance
+    values before opening a Postgres transaction.
+  - Repository coverage verifies invalid enum values and non-Postgres-integer
+    importance fail before `pool.connect()`.
+  - Reviewer skipped after previous reviewer-agent timeouts; self-review found
+    no issues.
+
+Verification:
+- `npx vitest run tests/store/memory-repository.test.ts` (32 passed, 7 skipped)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (712 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened repository update value validation:
   - `updateMemoryRecord` now rejects invalid memory kind, durability, and
     importance values before issuing SQL updates.
