@@ -472,6 +472,7 @@ export function createMemoryRepository(
     },
 
     async inspectMemoryGraph(scope, options) {
+      assertNonBlankText(options.organizationId, "organizationId");
       return inspectPostgresMemoryGraph(pool, scope, options);
     },
 

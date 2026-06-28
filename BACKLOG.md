@@ -116,3 +116,5 @@ experience, documentation, features.
   persistence.
 - Whitespace-only governance list organization IDs are rejected before
   persistence.
+- Whitespace-only graph inspect organization IDs are rejected before
+  persistence.

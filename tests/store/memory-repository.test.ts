@@ -802,6 +802,20 @@ describe("createMemoryRepository (unit — no PG required)", () => {
     ]);
   });
 
+  it("inspectMemoryGraph rejects whitespace-only organization IDs before querying", async () => {
+    const mockPool = { query: vi.fn() };
+    const repo = createMemoryRepository(mockPool as never);
+
+    await expect(
+      repo.inspectMemoryGraph(
+        { scopeType: "project", scopeId: "proj-x" },
+        { organizationId: " \n\t " },
+      ),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(mockPool.query).not.toHaveBeenCalled();
+  });
+
   it("updateMemoryRecord scopes the update by org and replaces tags in the same transaction", async () => {
     const clientQueryCalls: { sql: string; params: unknown[] }[] = [];
     let hydrationReads = 0;
