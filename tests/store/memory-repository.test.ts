@@ -483,6 +483,20 @@ describe("createMemoryRepository (unit — no PG required)", () => {
     ).rejects.toThrow(/organizationId/i);
   });
 
+  it("listMemory rejects whitespace-only organizationId before querying", async () => {
+    const mockPool = { query: vi.fn() };
+    const repo = createMemoryRepository(mockPool as never);
+
+    await expect(
+      repo.listMemory(
+        { scopeType: "project", scopeId: "proj-x" },
+        { organizationId: " \n\t ", allowLegacyAnonymous: true },
+      ),
+    ).rejects.toThrow(/organizationId/i);
+
+    expect(mockPool.query).not.toHaveBeenCalled();
+  });
+
   it("listMemory does not throw when allowLegacyAnonymous is true (SEC-read)", () => {
     const mockPool = {
       query: vi.fn().mockResolvedValue({ rows: [] }),
@@ -518,6 +532,17 @@ describe("createMemoryRepository (unit — no PG required)", () => {
     return expect(
       repo.getMemoryRecordsByIds([1, 2]),
     ).rejects.toThrow(/organizationId/i);
+  });
+
+  it("getMemoryRecordsByIds rejects whitespace-only organizationId before querying", async () => {
+    const mockPool = { query: vi.fn() };
+    const repo = createMemoryRepository(mockPool as never);
+
+    await expect(
+      repo.getMemoryRecordsByIds([42], " \n\t ", true),
+    ).rejects.toThrow(/organizationId/i);
+
+    expect(mockPool.query).not.toHaveBeenCalled();
   });
 
   it("getMemoryRecordsByIds does not throw when allowLegacyAnonymous is true (SEC-read)", () => {

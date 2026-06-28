@@ -46,6 +46,23 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened shared read organization validation:
+  - `assertOrganizationId` now rejects whitespace-only organization IDs even
+    when the legacy anonymous read flag is enabled.
+  - Store and retrieval coverage verifies `listMemory`,
+    `getMemoryRecordsByIds`, and `retrieveMemory` fail before query/vector
+    work.
+  - Reviewer skipped after previous reviewer-agent timeouts; self-review found
+    no issues.
+
+Verification:
+- `npx vitest run tests/store/memory-repository.test.ts tests/search/retrieve-memory.test.ts` (52 passed, 7 skipped)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (723 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened repository delete organization validation:
   - `deleteMemoryRecord` now rejects whitespace-only organization IDs before
     issuing a Postgres query.

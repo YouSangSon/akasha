@@ -110,3 +110,5 @@ experience, documentation, features.
   persistence.
 - Whitespace-only repository delete organization IDs are rejected before
   persistence.
+- Whitespace-only read organization IDs are rejected before repository or vector
+  work, even with the legacy anonymous read flag enabled.

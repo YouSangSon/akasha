@@ -242,6 +242,26 @@ describe("retrieveMemory", () => {
     expect(repository.getMemoryRecordsByIds).not.toHaveBeenCalled();
   });
 
+  it("throws when organizationId is whitespace-only before vector lookup", async () => {
+    const vectorIndex = { query: vi.fn(), upsert: vi.fn(), delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), ensureCollection: vi.fn() };
+    const repository = { getMemoryRecordsByIds: vi.fn() };
+
+    await expect(
+      retrieveMemory({
+        vectorIndex: vectorIndex as never,
+        repository: repository as never,
+        vector: [0.1, 0.2, 0.3],
+        organizationId: " \n\t ",
+        allowLegacyAnonymous: true,
+        projectKey: "project-alpha",
+        limit: 5,
+      }),
+    ).rejects.toThrow(/organizationId/i);
+
+    expect(vectorIndex.query).not.toHaveBeenCalled();
+    expect(repository.getMemoryRecordsByIds).not.toHaveBeenCalled();
+  });
+
   it("includes operational guidance in the strict-mode error message", async () => {
     const vectorIndex = { query: vi.fn(), upsert: vi.fn(), delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), ensureCollection: vi.fn() };
     const repository = { getMemoryRecordsByIds: vi.fn() };
