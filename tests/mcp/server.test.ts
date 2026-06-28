@@ -1338,6 +1338,29 @@ describe("createToolRegistry", () => {
     expect(services.vectorIndex.deleteByRecordIds).not.toHaveBeenCalled();
   });
 
+  it("normalizes blank update_memory title and summary to null", async () => {
+    const services = createCanonicalServices();
+    const registry = createToolRegistry({
+      resolveCanonicalServices: async () => services,
+    });
+
+    await registry.update_memory({
+      organizationId: "org-a",
+      memoryId: 501,
+      title: " \n\t ",
+      summary: " \n\t ",
+    });
+
+    expect(services.repository.updateMemoryRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 501,
+        organizationId: "org-a",
+        title: null,
+        summary: null,
+      }),
+    );
+  });
+
   it("rejects invalid update_memory importance before repository dispatch", async () => {
     const services = createCanonicalServices();
     const resolveCanonicalServices = vi.fn(async () => services);

@@ -90,3 +90,5 @@ experience, documentation, features.
   dispatch.
 - Invalid store-memory prompt kind enum values are rejected before prompt
   rendering.
+- Blank direct update-memory title and summary patches normalize to `null`
+  before repository dispatch.

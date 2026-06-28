@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-28
 
+- Normalized blank update-memory metadata patches:
+  - Direct `update_memory.title` and `summary` preserve omitted fields but
+    normalize blank or null patches to `null`.
+  - Direct coverage verifies whitespace-only metadata clears before repository
+    dispatch instead of persisting whitespace-only strings.
+  - Reviewer skipped after previous reviewer-agent timeouts; self-review found
+    no issues.
+
+Verification:
+- `npx vitest run tests/mcp/server.test.ts` (120 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (709 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened store-memory prompt kind enum validation:
   - `akasha_store_memory.kind` now uses the supported memory-kind enum instead
     of accepting arbitrary nonblank text.

@@ -661,6 +661,14 @@ export function createToolHandlers(input: {
       );
       assertOptionalPostgresInteger(toolInput.importance, "importance");
       assertNonBlankTags(toolInput.tags);
+      const title =
+        toolInput.title === undefined
+          ? undefined
+          : optionalNonBlankText(toolInput.title);
+      const summary =
+        toolInput.summary === undefined
+          ? undefined
+          : optionalNonBlankText(toolInput.summary);
 
       return await withCanonicalServices(async (services) => {
         const organizationId = toolInput.organizationId ?? "default";
@@ -668,9 +676,9 @@ export function createToolHandlers(input: {
           id: toolInput.memoryId,
           organizationId,
           kind: toolInput.kind,
-          title: toolInput.title,
+          title,
           content: toolInput.content,
-          summary: toolInput.summary,
+          summary,
           importance: toolInput.importance,
           durability: toolInput.durability,
           tags: toolInput.tags,
