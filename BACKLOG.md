@@ -167,3 +167,5 @@ experience, documentation, features.
   archive, restore, chunk, embedding, vector, or mark side effects.
 - Missing, non-string, or whitespace-only vector upsert point organization
   payloads are rejected before backend calls.
+- Whitespace-only CLI organization flags are rejected before registry dispatch
+  or lifecycle file writes.

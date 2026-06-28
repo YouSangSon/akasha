@@ -171,6 +171,44 @@ describe("parseCliArgs", () => {
     });
   });
 
+  it("rejects whitespace-only organizationId flags before command dispatch", async () => {
+    expect(() =>
+      parseCliArgs([
+        "pack",
+        "--project",
+        "project-alpha",
+        "--organization-id",
+        " \n\t ",
+        "--task",
+        "continue work",
+      ]),
+    ).toThrow(/--organization-id/);
+
+    expect(() =>
+      parseCliArgs([
+        "remember",
+        "--project",
+        "project-alpha",
+        "--organization-id",
+        " \n\t ",
+        "--kind",
+        "summary",
+        "--content",
+        "Remember this",
+      ]),
+    ).toThrow(/--organization-id/);
+
+    expect(() =>
+      parseCliArgs([
+        "init",
+        "--project",
+        "project-alpha",
+        "--organization-id",
+        " \n\t ",
+      ]),
+    ).toThrow(/--organization-id/);
+  });
+
   it("rejects missing project arguments", () => {
     expect(() =>
       parseCliArgs(["pack", "--task", "continue work"]),
@@ -379,6 +417,58 @@ describe("parseCliArgs", () => {
     ).rejects.toThrow(/non-whitespace text/);
 
     expect(addMemory).not.toHaveBeenCalled();
+  });
+
+  it("rejects whitespace-only organizationId before registry calls", async () => {
+    const registry: ToolRegistry = {
+      ...goalRunRegistryStubs(),
+      build_context_pack: vi.fn(),
+      search_memory: vi.fn(),
+      add_memory: vi.fn(),
+      compact_memory: vi.fn(),
+      list_memory: vi.fn(),
+      inspect_memory_graph: vi.fn(),
+      update_memory: vi.fn(),
+      delete_memory: vi.fn(),
+      tag_memory: vi.fn(),
+      list_audit_log: vi.fn(),
+      unarchive_memory: vi.fn(),
+      reindex_memory: vi.fn(),
+    };
+
+    await expect(
+      runCli(
+        [
+          "reindex",
+          "--project",
+          "project-alpha",
+          "--organization-id",
+          " \n\t ",
+        ],
+        { registry },
+      ),
+    ).rejects.toThrow(/--organization-id/);
+
+    expect(registry.reindex_memory).not.toHaveBeenCalled();
+  });
+
+  it("rejects whitespace-only init organizationId before writing lifecycle files", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "akasha-cli-init-"));
+
+    await expect(
+      runCli(
+        [
+          "init",
+          "--project",
+          "project-alpha",
+          "--organization-id",
+          " \n\t ",
+        ],
+        { cwd: tmpDir },
+      ),
+    ).rejects.toThrow(/--organization-id/);
+
+    expect(fs.existsSync(path.join(tmpDir, ".akasha"))).toBe(false);
   });
 
   it("runs remember with --content-file without putting content in argv", async () => {

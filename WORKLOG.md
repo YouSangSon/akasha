@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened CLI organization flag validation:
+  - `--organization-id` now rejects whitespace-only values before registry
+    dispatch or lifecycle file writes.
+  - CLI coverage verifies parse rejection, no registry dispatch, and no
+    lifecycle output directory creation for invalid organization IDs.
+  - Reviewer subagent found no issues; added an init no-write regression for
+    residual coverage.
+
+Verification:
+- `npx vitest run tests/cli.test.ts` (19 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (776 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened vector upsert point organization validation:
   - Qdrant and pgvector adapters now reject missing, non-string, or
     whitespace-only `payload.organization_id` values before backend upsert

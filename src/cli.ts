@@ -94,7 +94,7 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
     }
 
     if (token === "--organization-id") {
-      organizationId = requireFlagValue(token, value);
+      organizationId = requireNonBlankFlagValue(token, value);
       index += 1;
       continue;
     }
@@ -223,7 +223,7 @@ function parseRememberArgs(rest: string[]): ParsedCliArgs {
     }
 
     if (token === "--organization-id") {
-      organizationId = requireFlagValue(token, value);
+      organizationId = requireNonBlankFlagValue(token, value);
       index += 1;
       continue;
     }
@@ -298,7 +298,7 @@ function parseInitArgs(rest: string[]): ParsedCliArgs {
     }
 
     if (token === "--organization-id") {
-      organizationId = requireFlagValue(token, value);
+      organizationId = requireNonBlankFlagValue(token, value);
       index += 1;
       continue;
     }
@@ -348,6 +348,14 @@ function requireFlagValue(
   }
 
   return value;
+}
+
+function requireNonBlankFlagValue(flag: string, value: string | undefined): string {
+  const resolved = requireFlagValue(flag, value);
+  if (resolved.trim().length === 0) {
+    throw new Error(`${flag} must contain non-whitespace text`);
+  }
+  return resolved;
 }
 
 async function readContentFile(filePath: string, cwd: string): Promise<string> {
