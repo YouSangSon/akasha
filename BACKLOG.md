@@ -189,3 +189,5 @@ experience, documentation, features.
   verifier construction, including timeout values outside Node timer bounds.
 - Whitespace-only optional service configuration identifiers are rejected
   before embedding or vector adapter construction.
+- Invalid log-level environment values are rejected before logger construction
+  while preserving case-insensitive supported level names.

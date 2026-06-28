@@ -4,16 +4,19 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Optional Service Env Guard
+## Current Loop — Log Level Env Guard
 
 Status:
-- Service config now rejects whitespace-only optional embedding model names and
-  `QDRANT_COLLECTION_NAME` instead of passing blank identifiers to embedding or
-  vector adapters.
-- Defaults remain unchanged when those optional variables are unset.
-- Focused config tests, typecheck, build, audit, full suite, and diff whitespace
-  checks passed.
-- Reviewer subagent attempt timed out and was closed with no findings returned.
+- `LOG_LEVEL` resolution is now explicit and testable before Pino
+  initialization.
+- Whitespace-only and unsupported log levels fail with an Akasha-owned startup
+  message instead of Pino internals.
+- Case-insensitive supported levels preserve common existing env values such as
+  `INFO` and `DEBUG`.
+- Reviewer subagent caught the uppercase compatibility risk; fixed before final
+  verification.
+- Focused logger/docs tests, typecheck, build, audit, full suite, and diff
+  whitespace checks passed.
 
 Loop closeout:
 - Commit locally; do not push.

@@ -304,7 +304,7 @@ ingest sweeper 는 write-ahead `markQdrantPending` 과 `markQdrantCompleted`
 
 | 변수 | 기본값 | 메모 |
 |---|---|---|
-| `LOG_LEVEL` | production은 `info`, 그 외는 `debug` | pino 로그 레벨. MCP stdio JSON-RPC를 깨지 않도록 로그는 stderr로 출력. |
+| `LOG_LEVEL` | production은 `info`, 그 외는 `debug` | 대소문자를 구분하지 않는 pino 로그 레벨: `trace`, `debug`, `info`, `warn`, `error`, `fatal`, `silent`. MCP stdio JSON-RPC를 깨지 않도록 로그는 stderr로 출력. |
 | `DEVELOPER_MEMORY_USER_ID` | `git config user.email` 기반 해시, 없으면 OS username | 도구가 user memory를 필요로 하고 `userScopeId`가 명시되지 않았을 때 쓰는 안정적인 user-scope id. |
 | `DMO_CWD` | `process.cwd()` | MCP stdio 시작 작업 디렉토리 override. 빌드된 CLI를 다른 디렉토리에서 실행할 때 유용. |
 

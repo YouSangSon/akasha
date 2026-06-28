@@ -46,6 +46,25 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened logger environment validation:
+  - `resolveLogLevel()` now validates `LOG_LEVEL` before Pino initialization
+    and returns the existing defaults: `info` in production, `debug` otherwise.
+  - Supported levels are explicit: `trace`, `debug`, `info`, `warn`, `error`,
+    `fatal`, and `silent`.
+  - Whitespace-only and unsupported values fail with an Akasha-owned error.
+  - Case-insensitive inputs such as `INFO` and `DEBUG` normalize to lowercase
+    so existing deployments keep working.
+  - Reviewer subagent caught the uppercase compatibility risk; fixed before
+    final verification.
+
+Verification:
+- `npx vitest run tests/logger.test.ts tests/scripts/public-docs-drift.test.ts` (42 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (831 passed, 34 skipped across 67 files)
+- `git diff --check`
+
 - Hardened optional service configuration identifiers:
   - `resolveServiceConfig()` now rejects whitespace-only
     `OPENAI_EMBEDDING_MODEL`, `TRANSFORMERS_EMBEDDING_MODEL`,
