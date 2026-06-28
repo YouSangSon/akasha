@@ -70,6 +70,8 @@ experience, documentation, features.
   or verifier config construction.
 - Whitespace-only governance tag entries are rejected before tag update or
   vector refresh.
+- Whitespace-only direct repository tag entries are rejected before opening an
+  update transaction.
 - Whitespace-only MCP context optional text is rejected before elicitation or
   sampling side effects.
 - Invalid direct repeat-check thresholds are rejected before goal-run lookup or

@@ -481,6 +481,8 @@ export function createMemoryRepository(
 
     async updateMemoryRecord(input) {
       assertNonBlankText(input.organizationId, "organizationId");
+      const nextTags =
+        input.tags === undefined ? undefined : normalizeTags(input.tags);
 
       const client = await pool.connect();
 
@@ -568,7 +570,7 @@ export function createMemoryRepository(
           await replacePostgresMemoryTags(client, {
             memoryRecordId: input.id,
             organizationId: input.organizationId,
-            tags: input.tags,
+            tags: nextTags ?? [],
           });
         }
 
@@ -1475,7 +1477,14 @@ function buildEntityRelationships(
 }
 
 function normalizeTags(tags: readonly string[]): string[] {
-  return [...new Set(tags.map((tag) => tag.trim()).filter((tag) => tag.length > 0))]
+  const trimmedTags = tags.map((tag) => {
+    const trimmed = tag.trim();
+    if (trimmed.length === 0) {
+      throw new Error("tag must contain non-whitespace text");
+    }
+    return trimmed;
+  });
+  return [...new Set(trimmedTags)]
     .sort((left, right) => left.localeCompare(right));
 }
 

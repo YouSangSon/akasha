@@ -4,16 +4,15 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — OAuth Optional Text Env Guard
+## Current Loop — Direct Tag Update Guard
 
 Status:
-- Optional OAuth text env values for resource metadata and JWT verifier config
-  now reject explicit whitespace-only values.
-- Unset values still preserve omission/default behavior, and configured
-  nonblank values are trimmed before use.
-- Reviewer subagent caught missing trim-preservation coverage; the tests were
-  updated and re-review found no issues.
-- Focused OAuth/docs tests, typecheck, build, audit, full suite, and diff
+- Direct repository `updateMemoryRecord({ tags })` calls now reject
+  whitespace-only tag entries before opening a transaction.
+- Empty tag arrays still clear tags, and valid tags are still trimmed,
+  deduplicated, and sorted.
+- Reviewer subagent found no issues.
+- Focused repository/MCP tests, typecheck, build, audit, full suite, and diff
   whitespace checks passed.
 
 Loop closeout:

@@ -46,6 +46,21 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened direct repository tag updates:
+  - Direct `updateMemoryRecord({ tags })` calls now reject whitespace-only tag
+    entries before opening a transaction instead of silently dropping them.
+  - Empty tag arrays still clear tags, and valid tags are still trimmed,
+    deduplicated, and sorted.
+  - Reviewer subagent found no issues.
+
+Verification:
+- `npx vitest run tests/store/memory-repository.test.ts tests/mcp/server.test.ts` (168 passed, 7 skipped)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (898 passed, 34 skipped across 68 files)
+- `git diff --check`
+
 - Hardened optional OAuth text environment handling:
   - `MCP_OAUTH_RESOURCE_NAME`, `MCP_OAUTH_RESOURCE_DOCUMENTATION_URL`,
     `MCP_OAUTH_ORGANIZATION_CLAIM`, and `MCP_OAUTH_JWT_TYPE` now reject
