@@ -561,4 +561,38 @@ describe("MemoryArchiveRepository.acquireScopeLock", () => {
 
     expect(query).not.toHaveBeenCalled();
   });
+
+  it("rejects whitespace-only scopeType before querying", async () => {
+    const { pool, query } = makeMockPool(async () => ({
+      rows: [{ acquired: true }],
+    }));
+    const repo = createMemoryArchiveRepository(pool);
+
+    await expect(
+      repo.acquireScopeLock({
+        organizationId: "org-a",
+        scopeType: " \n\t ",
+        scopeId: "alpha",
+      }),
+    ).rejects.toThrow(/scopeType/);
+
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it("rejects whitespace-only scopeId before querying", async () => {
+    const { pool, query } = makeMockPool(async () => ({
+      rows: [{ acquired: true }],
+    }));
+    const repo = createMemoryArchiveRepository(pool);
+
+    await expect(
+      repo.acquireScopeLock({
+        organizationId: "org-a",
+        scopeType: "project",
+        scopeId: " \n\t ",
+      }),
+    ).rejects.toThrow(/scopeId/);
+
+    expect(query).not.toHaveBeenCalled();
+  });
 });

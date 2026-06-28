@@ -4,12 +4,12 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Scope Lock Organization Guard
+## Current Loop — Scope Lock Key Guard
 
 Status:
-- `acquireScopeLock` now rejects whitespace-only organization IDs before
-  advisory lock queries.
-- Coverage verifies invalid scope-lock organization IDs fail before
+- `acquireScopeLock` now rejects whitespace-only scope type and scope ID values
+  before advisory lock queries.
+- Coverage verifies invalid scope-lock key inputs fail before
   `pool.query()`.
 - Reviewer skipped after previous reviewer-agent timeouts; self-review found no
   issues.

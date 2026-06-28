@@ -588,6 +588,8 @@ export function createMemoryArchiveRepository(
 
     async acquireScopeLock(args) {
       assertNonBlankText(args.organizationId, "organizationId");
+      assertNonBlankText(args.scopeType, "scopeType");
+      assertNonBlankText(args.scopeId, "scopeId");
 
       // Per-(org, scope) advisory lock. Two simultaneous applies on the same
       // scope race on canonical DELETE; this serializes them. Lock auto-
