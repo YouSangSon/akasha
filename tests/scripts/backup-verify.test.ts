@@ -453,6 +453,29 @@ describe("backup encryption key file shell guards", () => {
   });
 });
 
+describe("backup manifest writer shell guards", () => {
+  it.each([
+    ["array", "[]\n"],
+    ["null", "null\n"],
+  ])("rejects existing %s manifests before mutation", async (_label, manifestJson) => {
+    for (const scriptPath of [
+      "scripts/backup-postgres.sh",
+      "scripts/snapshot-qdrant.sh",
+      "scripts/create-backup.sh",
+    ]) {
+      const result = await runBackupShellScript(scriptPath, {
+        STUB_EXISTING_MANIFEST: manifestJson,
+        ...(scriptPath === "scripts/create-backup.sh"
+          ? { STUB_CORRUPT_MANIFEST_AFTER_POSTGRES: "1" }
+          : {}),
+      });
+
+      expect(result.ok).toBe(false);
+      expect(result.stderr).toContain("backup manifest must be a JSON object");
+    }
+  });
+});
+
 async function runBackupShellScript(
   scriptPath: string,
   envOverrides: Record<string, string>,
@@ -478,8 +501,18 @@ async function runBackupShellScript(
     QDRANT_URL: "http://qdrant.local:6333",
     VECTOR_BACKEND: "pgvector",
     STUB_LOG: logPath,
+    STUB_REAL_NODE: process.execPath,
     ...envOverrides,
   };
+  if (
+    envOverrides.STUB_EXISTING_MANIFEST !== undefined &&
+    envOverrides.STUB_CORRUPT_MANIFEST_AFTER_POSTGRES !== "1"
+  ) {
+    await writeFile(
+      path.join(backupDir, "manifest-20260329-1200.json"),
+      envOverrides.STUB_EXISTING_MANIFEST,
+    );
+  }
 
   try {
     const result = await execFileAsync("sh", [scriptPath], {
@@ -508,6 +541,25 @@ async function runBackupShellScript(
 
 async function writeStubCommands(binDir: string): Promise<void> {
   await Promise.all([
+    writeExecutable(
+      path.join(binDir, "node"),
+      `#!/usr/bin/env sh
+if [ "$#" -gt 0 ]; then
+  exec "$STUB_REAL_NODE" "$@"
+fi
+script_file="$(mktemp)"
+cat > "$script_file"
+"$STUB_REAL_NODE" < "$script_file"
+status="$?"
+if [ "$status" -eq 0 ] &&
+  [ "\${STUB_CORRUPT_MANIFEST_AFTER_POSTGRES:-}" = "1" ] &&
+  grep -q 'manifest.postgres =' "$script_file"; then
+  printf '%s' "\${STUB_EXISTING_MANIFEST:-[]}" > "\${BACKUP_DIR}/manifest-\${BACKUP_TIMESTAMP}.json"
+fi
+rm -f "$script_file"
+exit "$status"
+`,
+    ),
     writeExecutable(
       path.join(binDir, "pg_dump"),
       "#!/usr/bin/env sh\nprintf 'postgres dump bytes'\n",

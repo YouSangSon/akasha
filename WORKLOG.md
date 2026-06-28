@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened backup manifest writer parsing:
+  - `scripts/backup-postgres.sh`, `scripts/snapshot-qdrant.sh`, and
+    `scripts/create-backup.sh` now reject existing manifest files that parse to
+    `null`, arrays, or other non-object JSON before mutation.
+  - Missing manifest files still start from `{}`.
+  - Worker implementation passed spec review and code-quality review with no
+    findings.
+
+Verification:
+- `npx vitest run tests/scripts/backup-verify.test.ts` (39 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (976 passed, 34 skipped across 69 files)
+- `git diff --check`
+
 - Hardened encrypted off-box backup copy manifest parsing:
   - `scripts/create-backup.sh` now validates manifest artifact filenames before
     building the encrypted off-box `scp` list.

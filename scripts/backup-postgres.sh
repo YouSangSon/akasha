@@ -51,6 +51,9 @@ const postgresSha256 = process.env.POSTGRES_SHA256;
 const manifest = fs.existsSync(manifestPath)
   ? JSON.parse(fs.readFileSync(manifestPath, "utf8"))
   : {};
+if (manifest === null || typeof manifest !== "object" || Array.isArray(manifest)) {
+  throw new Error("backup manifest must be a JSON object");
+}
 
 manifest.createdAt ??= createdAt;
 manifest.postgres = {

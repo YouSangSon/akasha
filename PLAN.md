@@ -4,15 +4,14 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Backup Off-Box Copy Manifest Guard
+## Current Loop — Backup Manifest Writer Object Guard
 
 Status:
-- Encrypted off-box backup copy list construction now validates manifest
-  artifact filenames before invoking `scp`.
-- Qdrant artifact names are required whenever a Qdrant manifest block is present
-  or the backend is not `pgvector`.
-- Worker implementation passed spec review and code-quality re-review after
-  fixing Qdrant fail-closed consistency gaps.
+- Backup manifest writer snippets now reject existing non-object manifest JSON
+  before mutation.
+- Missing manifest files still start from `{}`.
+- Worker implementation passed spec review and code-quality review with no
+  findings.
 - Focused backup shell tests, typecheck, build, audit, full suite, and diff
   whitespace checks passed.
 

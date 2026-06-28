@@ -106,6 +106,9 @@ const collectionName = process.env.QDRANT_COLLECTION;
 const manifest = fs.existsSync(manifestPath)
   ? JSON.parse(fs.readFileSync(manifestPath, "utf8"))
   : {};
+if (manifest === null || typeof manifest !== "object" || Array.isArray(manifest)) {
+  throw new Error("backup manifest must be a JSON object");
+}
 
 manifest.createdAt ??= createdAt;
 manifest.qdrant = {
