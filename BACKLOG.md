@@ -76,3 +76,5 @@ experience, documentation, features.
 - Invalid direct goal-context limits are rejected before goal-run lookup.
 - Invalid direct compaction limits are rejected before repository dispatch.
 - Invalid direct compaction thresholds are rejected before repository dispatch.
+- Invalid public/direct memory importance values are rejected before repository
+  dispatch.

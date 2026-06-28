@@ -39,6 +39,8 @@ import type {
 } from "./types.js";
 import {
   normalizeLimit,
+  POSTGRES_INTEGER_MAX,
+  POSTGRES_INTEGER_MIN,
   requireProjectKey,
   requireUserScopeId,
   resolveUserScopeId,
@@ -639,6 +641,7 @@ export function createToolHandlers(input: {
       if (toolInput.content !== undefined) {
         assertNonBlankMemoryContent(toolInput.content);
       }
+      assertOptionalPostgresInteger(toolInput.importance, "importance");
       assertNonBlankTags(toolInput.tags);
 
       return await withCanonicalServices(async (services) => {
@@ -1118,6 +1121,22 @@ function assertOptionalPositiveInteger(
   assertPositiveInteger(value, fieldName);
   if (max !== undefined && value > max) {
     throw new Error(`${fieldName} must be at most ${max}`);
+  }
+}
+
+function assertOptionalPostgresInteger(
+  value: number | undefined,
+  fieldName: string,
+): void {
+  if (value === undefined) {
+    return;
+  }
+  if (
+    !Number.isInteger(value) ||
+    value < POSTGRES_INTEGER_MIN ||
+    value > POSTGRES_INTEGER_MAX
+  ) {
+    throw new Error(`${fieldName} must be a Postgres integer`);
   }
 }
 

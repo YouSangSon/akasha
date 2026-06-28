@@ -13,6 +13,10 @@ import { createToolRegistry as createToolRegistryDirect } from "../../src/mcp/to
 import type { AuditLogRepository } from "../../src/audit/audit-log-repository.js";
 import type { Logger } from "../../src/logger.js";
 import { TOOL_DESCRIPTORS } from "../../src/mcp/tool-schemas.js";
+import {
+  POSTGRES_INTEGER_MAX,
+  POSTGRES_INTEGER_MIN,
+} from "../../src/mcp/tool-utils.js";
 import type { ToolRegistry } from "../../src/mcp/types.js";
 import type { MemoryRepository, SearchMemoryResult } from "../../src/types.js";
 import {
@@ -1239,6 +1243,54 @@ describe("createToolRegistry", () => {
     expect(services.vectorIndex.deleteByRecordIds).not.toHaveBeenCalled();
   });
 
+  it("rejects invalid update_memory importance before repository dispatch", async () => {
+    const services = createCanonicalServices();
+    const resolveCanonicalServices = vi.fn(async () => services);
+    const registry = createToolRegistry({ resolveCanonicalServices });
+
+    for (const importance of [
+      1.5,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      POSTGRES_INTEGER_MAX + 1,
+      POSTGRES_INTEGER_MIN - 1,
+      Number.MAX_SAFE_INTEGER + 1,
+    ]) {
+      await expect(
+        registry.update_memory({
+          organizationId: "org-a",
+          memoryId: 501,
+          importance,
+        }),
+      ).rejects.toThrow(/importance/);
+    }
+
+    expect(resolveCanonicalServices).not.toHaveBeenCalled();
+    expect(services.repository.updateMemoryRecord).not.toHaveBeenCalled();
+  });
+
+  it("accepts Postgres integer update_memory importance through the direct registry path", async () => {
+    const services = createCanonicalServices();
+    const registry = createToolRegistry({
+      resolveCanonicalServices: async () => services,
+    });
+
+    await registry.update_memory({
+      organizationId: "org-a",
+      memoryId: 501,
+      importance: POSTGRES_INTEGER_MAX,
+    });
+
+    expect(services.repository.updateMemoryRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 501,
+        organizationId: "org-a",
+        importance: POSTGRES_INTEGER_MAX,
+      }),
+    );
+    expect(services.vectorIndex.deleteByRecordIds).not.toHaveBeenCalled();
+  });
+
   it("rejects invalid governance memory ids before canonical service dispatch", async () => {
     const services = createCanonicalServices();
     const resolveCanonicalServices = vi.fn(async () => services);
@@ -2349,6 +2401,38 @@ describe("createMcpServer", () => {
       organizationId: "org-a",
       projectKey: "p",
     });
+  });
+
+  it("bounds update_memory importance to the Postgres integer range in the public schema", async () => {
+    const schema = z.object(
+      TOOL_DESCRIPTORS.find((descriptor) => descriptor.name === "update_memory")!
+        .inputSchema,
+    );
+
+    expect(() =>
+      schema.parse({
+        memoryId: 501,
+        importance: POSTGRES_INTEGER_MAX + 1,
+      }),
+    ).toThrow();
+    expect(() =>
+      schema.parse({
+        memoryId: 501,
+        importance: POSTGRES_INTEGER_MIN - 1,
+      }),
+    ).toThrow();
+    expect(
+      schema.parse({
+        memoryId: 501,
+        importance: POSTGRES_INTEGER_MAX,
+      }),
+    ).toMatchObject({ importance: POSTGRES_INTEGER_MAX });
+    expect(
+      schema.parse({
+        memoryId: 501,
+        importance: POSTGRES_INTEGER_MIN,
+      }),
+    ).toMatchObject({ importance: POSTGRES_INTEGER_MIN });
   });
 });
 

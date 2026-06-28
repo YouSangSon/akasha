@@ -46,6 +46,23 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened memory importance bounds:
+  - Public and direct `update_memory.importance` validation now matches the
+    Postgres `INTEGER` range before repository dispatch.
+  - Direct coverage rejects non-integers, non-finite values, and out-of-range
+    integers; public schema coverage accepts/rejects the int32 boundaries.
+  - Subagent reviewer `Bohr` caught JavaScript-safe integer drift; after the
+    fix, re-review reported no findings.
+
+Verification:
+- `npx vitest run tests/mcp/server.test.ts` (113 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (700 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Hardened direct compaction threshold validation:
   - Direct `compact_memory.decayThreshold`, `halfLifeDays`, and
     `semanticDedupThreshold` reject schema-invalid values before repository

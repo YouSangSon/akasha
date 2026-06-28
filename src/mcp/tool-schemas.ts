@@ -1,5 +1,9 @@
 import * as z from "zod/v4";
-import { SUPPORTED_MEMORY_KINDS } from "./tool-utils.js";
+import {
+  POSTGRES_INTEGER_MAX,
+  POSTGRES_INTEGER_MIN,
+  SUPPORTED_MEMORY_KINDS,
+} from "./tool-utils.js";
 
 export type ToolDescriptor = {
   readonly name: string;
@@ -192,6 +196,11 @@ const positiveSafeIntegerInputSchema = z
   .refine((value) => Number.isSafeInteger(value), {
     message: "must be a safe integer",
   });
+const postgresIntegerInputSchema = z
+  .number()
+  .int()
+  .min(POSTGRES_INTEGER_MIN)
+  .max(POSTGRES_INTEGER_MAX);
 
 export const SERVICE_TOOL_DESCRIPTORS = [
   {
@@ -346,7 +355,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
       title: z.string().nullable().optional(),
       content: nonBlankTextInputSchema.optional(),
       summary: z.string().nullable().optional(),
-      importance: z.number().int().optional(),
+      importance: postgresIntegerInputSchema.optional(),
       durability: durabilityInputSchema.optional(),
       tags: z.array(tagInputSchema).optional(),
     },
