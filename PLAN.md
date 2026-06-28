@@ -4,16 +4,15 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — CLI Organization Flag Guard
+## Current Loop — OAuth Organization Claim Guard
 
 Status:
-- CLI `--organization-id` parsing now rejects whitespace-only values before
-  registry dispatch or lifecycle file writes.
-- Coverage verifies parse rejection, no registry dispatch, and no lifecycle
-  output directory creation for invalid CLI organization IDs.
-- Reviewer subagent found no issues; an init no-write regression was added for
-  residual coverage.
-- Focused CLI tests, typecheck, build, audit, full suite, and diff
+- OAuth verifier now rejects present blank or non-string organization claims
+  instead of treating them as unbound tokens.
+- Coverage verifies absent organization claims remain unbound while malformed
+  present claims reject the JWT.
+- Reviewer subagent found no issues.
+- Focused auth/HTTP tests, typecheck, build, audit, full suite, and diff
   whitespace checks passed.
 
 Loop closeout:

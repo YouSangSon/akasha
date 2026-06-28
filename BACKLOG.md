@@ -169,3 +169,5 @@ experience, documentation, features.
   payloads are rejected before backend calls.
 - Whitespace-only CLI organization flags are rejected before registry dispatch
   or lifecycle file writes.
+- Blank or non-string OAuth organization claims reject the token instead of
+  silently becoming unbound.

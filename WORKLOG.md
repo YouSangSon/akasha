@@ -46,6 +46,21 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened OAuth organization claim validation:
+  - Present blank or non-string organization claims now reject the token instead
+    of silently becoming unbound.
+  - OAuth verifier coverage verifies absent organization claims remain unbound
+    while malformed present claims reject the JWT.
+  - Reviewer subagent found no issues.
+
+Verification:
+- `npx vitest run tests/app/oauth-token-auth.test.ts tests/app/bearer-auth.test.ts tests/app/mcp-http.test.ts` (53 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (779 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened CLI organization flag validation:
   - `--organization-id` now rejects whitespace-only values before registry
     dispatch or lifecycle file writes.

@@ -133,6 +133,60 @@ describe("OAuth token verifier", () => {
 
     expect(result!.scopes).toEqual(["akasha:read", "akasha:admin"]);
   });
+
+  it("allows OAuth tokens without an organization claim to remain unbound", async () => {
+    const fixture = await createJwtFixture({
+      scope: "akasha:read",
+    });
+    const verifier = createOAuthTokenVerifier(
+      loadOAuthTokenVerifierConfig(
+        { MCP_OAUTH_JWKS_URLS: "https://auth.example.com/jwks" },
+        protectedResource,
+      ),
+      { fetch: fixture.fetch },
+    );
+
+    const result = await verifier!.verify(fixture.jwt);
+
+    expect(result).toMatchObject({
+      token: fixture.jwt,
+      authType: "oauth",
+      scopes: ["akasha:read"],
+    });
+    expect(result!.organizationId).toBeUndefined();
+  });
+
+  it("rejects OAuth tokens with blank organization claims", async () => {
+    const fixture = await createJwtFixture({
+      scope: "akasha:read",
+      organization_id: " \n\t ",
+    });
+    const verifier = createOAuthTokenVerifier(
+      loadOAuthTokenVerifierConfig(
+        { MCP_OAUTH_JWKS_URLS: "https://auth.example.com/jwks" },
+        protectedResource,
+      ),
+      { fetch: fixture.fetch },
+    );
+
+    await expect(verifier!.verify(fixture.jwt)).resolves.toBeNull();
+  });
+
+  it("rejects OAuth tokens with non-string organization claims", async () => {
+    const fixture = await createJwtFixture({
+      scope: "akasha:read",
+      organization_id: 123,
+    });
+    const verifier = createOAuthTokenVerifier(
+      loadOAuthTokenVerifierConfig(
+        { MCP_OAUTH_JWKS_URLS: "https://auth.example.com/jwks" },
+        protectedResource,
+      ),
+      { fetch: fixture.fetch },
+    );
+
+    await expect(verifier!.verify(fixture.jwt)).resolves.toBeNull();
+  });
 });
 
 describe("OAuth scope enforcement", () => {

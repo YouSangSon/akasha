@@ -374,10 +374,20 @@ function extractOrganizationId(
   if (!claim) {
     return undefined;
   }
+  if (!Object.hasOwn(payload, claim)) {
+    return undefined;
+  }
+
   const value = payload[claim];
-  return typeof value === "string" && value.trim().length > 0
-    ? value.trim()
-    : undefined;
+  if (typeof value !== "string") {
+    throw new Error(`OAuth organization claim "${claim}" must be a string`);
+  }
+
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    throw new Error(`OAuth organization claim "${claim}" must not be blank`);
+  }
+  return trimmed;
 }
 
 function buildIssuerCandidates(authorizationServer: string): string[] {
