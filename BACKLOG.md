@@ -203,3 +203,5 @@ experience, documentation, features.
   remote-copy branches before SSH/SCP work.
 - Empty or whitespace-only Qdrant snapshot collection names are rejected before
   metadata or curl snapshot work.
+- Invalid restore-smoke app ports are rejected before Docker startup or health
+  checks.

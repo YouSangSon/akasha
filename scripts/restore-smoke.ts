@@ -8,6 +8,7 @@ import { createToolRegistry } from "../src/mcp/server.js";
 const execFileAsync = promisify(execFile);
 
 const DEFAULT_QDRANT_COLLECTION_NAME = "memory_chunks_v1";
+const DEFAULT_RESTORE_APP_PORT = "18787";
 
 export type BackupManifest = {
   createdAt: string;
@@ -65,6 +66,20 @@ export function buildRestoreSmokeToolInput(input: RestoreSmokeToolInput) {
     ...(userScopeId !== undefined ? { userScopeId } : {}),
     ...(organizationId !== undefined ? { organizationId } : {}),
   };
+}
+
+export function resolveRestoreAppPort(
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const raw = env.RESTORE_APP_PORT ?? DEFAULT_RESTORE_APP_PORT;
+  if (!/^\d+$/.test(raw)) {
+    throw new Error(`Invalid RESTORE_APP_PORT: ${raw}`);
+  }
+  const parsed = Number(raw);
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > 65_535) {
+    throw new Error(`Invalid RESTORE_APP_PORT: ${raw}`);
+  }
+  return raw;
 }
 
 function requireRestoreSmokeText(value: string, name: string): string {
@@ -314,7 +329,7 @@ async function main() {
   const organizationId = process.env.RESTORE_SMOKE_ORGANIZATION_ID?.trim();
   const searchQuery = process.env.RESTORE_SMOKE_SEARCH_QUERY ?? "continue work";
   const packTask = process.env.RESTORE_SMOKE_PACK_TASK ?? "continue work";
-  const appPort = process.env.RESTORE_APP_PORT ?? "18787";
+  const appPort = resolveRestoreAppPort();
   const { fileName: manifestFileName, manifest } = await findLatestManifest(backupDir);
   const vectorBackend = manifest.vectorBackend ?? "qdrant";
   const restoreQdrantUrl =

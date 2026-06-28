@@ -3,6 +3,7 @@ import {
   type BackupManifest,
   buildRestoreSmokeCommandEnv,
   buildRestoreSmokeToolInput,
+  resolveRestoreAppPort,
   runRestoreSmoke,
 } from "../../scripts/restore-smoke.js";
 
@@ -288,6 +289,34 @@ describe("buildRestoreSmokeToolInput", () => {
     (field, input) => {
       expect(() => buildRestoreSmokeToolInput(input)).toThrow(
         `${field} must contain non-whitespace text`,
+      );
+    },
+  );
+});
+
+describe("resolveRestoreAppPort", () => {
+  it("defaults to the isolated app port when RESTORE_APP_PORT is unset", () => {
+    expect(resolveRestoreAppPort({})).toBe("18787");
+  });
+
+  it("accepts plain decimal app port values", () => {
+    expect(resolveRestoreAppPort({ RESTORE_APP_PORT: "18080" })).toBe("18080");
+  });
+
+  it.each(["", " \n\t ", "18787.5", "+18787", "1e4", "0x49c3"])(
+    "rejects non-decimal RESTORE_APP_PORT value %s",
+    (port) => {
+      expect(() => resolveRestoreAppPort({ RESTORE_APP_PORT: port })).toThrow(
+        `Invalid RESTORE_APP_PORT: ${port}`,
+      );
+    },
+  );
+
+  it.each(["0", "65536", "999999999999999999999"])(
+    "rejects out-of-range RESTORE_APP_PORT value %s",
+    (port) => {
+      expect(() => resolveRestoreAppPort({ RESTORE_APP_PORT: port })).toThrow(
+        `Invalid RESTORE_APP_PORT: ${port}`,
       );
     },
   );

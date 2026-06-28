@@ -339,7 +339,7 @@ isolated compose project and validates search/context-pack behavior.
 | `RESTORE_SMOKE_USER_SCOPE_ID` | unset | Optional user scope included in restore checks. |
 | `RESTORE_SMOKE_SEARCH_QUERY` | `continue work` | Query used by the restored search check. |
 | `RESTORE_SMOKE_PACK_TASK` | `continue work` | Task text used by the restored context-pack check. |
-| `RESTORE_APP_PORT` | `18787` | Host port expected for the isolated app service. |
+| `RESTORE_APP_PORT` | `18787` | Host port expected for the isolated app service. Plain decimal integer from 1 to 65535. |
 
 ## Common configurations
 

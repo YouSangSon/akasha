@@ -46,6 +46,21 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened restore-smoke app port handling:
+  - `resolveRestoreAppPort()` now validates `RESTORE_APP_PORT` before Docker
+    startup and health checks.
+  - Unset values still default to `18787`; configured values must be plain
+    decimal integers in `1..65535`.
+  - Reviewer subagent found no issues.
+
+Verification:
+- `npx vitest run tests/scripts/restore-smoke.test.ts tests/scripts/public-docs-drift.test.ts` (47 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (870 passed, 34 skipped across 68 files)
+- `git diff --check`
+
 - Hardened Qdrant snapshot collection-name handling:
   - `snapshot-qdrant.sh` now rejects empty or whitespace-only
     `QDRANT_COLLECTION_NAME` values before metadata or curl snapshot work.

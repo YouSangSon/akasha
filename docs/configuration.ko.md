@@ -326,7 +326,7 @@ context-pack 동작을 검증합니다.
 | `RESTORE_SMOKE_USER_SCOPE_ID` | unset | restore check에 포함할 선택적 user scope. |
 | `RESTORE_SMOKE_SEARCH_QUERY` | `continue work` | 복원된 search check에 쓰는 query. |
 | `RESTORE_SMOKE_PACK_TASK` | `continue work` | 복원된 context-pack check에 쓰는 task text. |
-| `RESTORE_APP_PORT` | `18787` | 격리 app 서비스에 기대하는 host port. |
+| `RESTORE_APP_PORT` | `18787` | 격리 app 서비스에 기대하는 host port. 1부터 65535까지의 plain decimal integer. |
 
 ## 흔한 설정
 
