@@ -607,6 +607,8 @@ export function createMemoryRepository(
     },
 
     async archiveMemoryRecord(input) {
+      assertNonBlankText(input.organizationId, "organizationId");
+
       const result = await pool.query<{
         archived: boolean;
         found: boolean;

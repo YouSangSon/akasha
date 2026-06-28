@@ -1086,6 +1086,22 @@ describe("createMemoryRepository (unit — no PG required)", () => {
     });
   });
 
+  it("archiveMemoryRecord rejects whitespace-only organization IDs before querying", async () => {
+    const mockPool = {
+      query: vi.fn(),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    await expect(
+      repo.archiveMemoryRecord({
+        id: 55,
+        organizationId: " \n\t ",
+      }),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(mockPool.query).not.toHaveBeenCalled();
+  });
+
   it("archiveMemoryRecord returns point ids with archived false when the row is already archived", async () => {
     const mockPool = {
       query: vi.fn().mockResolvedValue({

@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened repository archive organization validation:
+  - `archiveMemoryRecord` now rejects whitespace-only organization IDs before
+    issuing a Postgres query.
+  - Repository coverage verifies invalid organization IDs fail before
+    `pool.query()`.
+  - Reviewer skipped after previous reviewer-agent timeouts; self-review found
+    no issues.
+
+Verification:
+- `npx vitest run tests/store/memory-repository.test.ts` (39 passed, 7 skipped)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (719 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened repository update organization validation:
   - `updateMemoryRecord` now rejects whitespace-only organization IDs before
     opening a Postgres transaction.
