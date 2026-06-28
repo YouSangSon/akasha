@@ -4,16 +4,18 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Direct Tag Update Guard
+## Current Loop — Direct Repository Limit Guard
 
 Status:
-- Direct repository `updateMemoryRecord({ tags })` calls now reject
-  whitespace-only tag entries before opening a transaction.
-- Empty tag arrays still clear tags, and valid tags are still trimmed,
-  deduplicated, and sorted.
-- Reviewer subagent found no issues.
-- Focused repository/MCP tests, typecheck, build, audit, full suite, and diff
-  whitespace checks passed.
+- Direct repository search/list/governance/graph calls now reject invalid
+  numeric limits before SQL instead of defaulting or flooring them.
+- Omitted limits still use existing defaults, and retrieval lexical oversampling
+  is capped before calling repository search.
+- Reviewer subagent caught an API/MCP regression for valid public limits above
+  25; the retrieval cap and regression test fixed it, and re-review found no
+  issues.
+- Focused repository/retrieval/MCP/API tests, typecheck, build, audit, full
+  suite, and diff whitespace checks passed.
 
 Loop closeout:
 - Commit locally; do not push.

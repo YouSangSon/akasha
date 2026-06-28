@@ -46,6 +46,24 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened direct repository numeric limits:
+  - Direct `searchMemory`, `listMemory`, `listMemoryForGovernance`, and
+    `inspectMemoryGraph` calls now reject invalid limits before SQL instead of
+    defaulting, flooring, or clamping them.
+  - Omitted limits still use existing defaults.
+  - `retrieveMemory` now caps lexical oversampling before calling repository
+    search, preserving valid public/API limits above 25.
+  - Reviewer subagent caught the public-limit regression; added coverage for
+    `limit: 26` and re-review found no issues.
+
+Verification:
+- `npx vitest run tests/store/memory-repository.test.ts tests/search/retrieve-memory.test.ts tests/mcp/server.test.ts tests/app/server.test.ts` (265 passed, 7 skipped)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (919 passed, 34 skipped across 68 files)
+- `git diff --check`
+
 - Hardened direct repository tag updates:
   - Direct `updateMemoryRecord({ tags })` calls now reject whitespace-only tag
     entries before opening a transaction instead of silently dropping them.

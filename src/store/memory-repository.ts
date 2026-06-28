@@ -282,7 +282,7 @@ export function createMemoryRepository(
         return [];
       }
 
-      const limit = Math.max(1, Math.min(input.limit ?? 10, 100));
+      const limit = normalizeLimit(input.limit, 10, 100, "limit");
       const params: unknown[] = [];
       const tsQueryIndex = params.push(trimmedQuery);
       const searchText = `
@@ -757,6 +757,10 @@ async function inspectPostgresMemoryGraph(
   },
 ): Promise<MemoryGraphView> {
   const limit = clampListLimit(options.limit);
+  const relationshipLimit = clampListLimit(
+    options.relationshipLimit ?? options.limit,
+    options.relationshipLimit === undefined ? "limit" : "relationshipLimit",
+  );
   const params: unknown[] = [
     options.organizationId,
     scope.scopeType,
@@ -825,9 +829,6 @@ async function inspectPostgresMemoryGraph(
     return { entities, relationships: [] };
   }
 
-  const relationshipLimit = clampListLimit(
-    options.relationshipLimit ?? options.limit,
-  );
   const relationshipParams: unknown[] = [
     options.organizationId,
     scope.scopeType,
@@ -1597,10 +1598,24 @@ export function parseStoredPostgresSourceRef(
 const DEFAULT_LIST_LIMIT = 1000;
 const MAX_LIST_LIMIT = 5000;
 
-function clampListLimit(value: number | undefined): number {
-  if (value === undefined || !Number.isFinite(value) || value <= 0) {
-    return DEFAULT_LIST_LIMIT;
-  }
+function clampListLimit(
+  value: number | undefined,
+  label: string = "limit",
+): number {
+  return normalizeLimit(value, DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT, label);
+}
 
-  return Math.min(Math.floor(value), MAX_LIST_LIMIT);
+function normalizeLimit(
+  value: number | undefined,
+  fallback: number,
+  max: number,
+  label: string,
+): number {
+  if (value === undefined) {
+    return fallback;
+  }
+  if (!Number.isInteger(value) || value < 1 || value > max) {
+    throw new Error(`${label} must be a positive integer up to ${max}`);
+  }
+  return value;
 }

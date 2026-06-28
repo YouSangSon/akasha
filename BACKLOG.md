@@ -78,6 +78,8 @@ experience, documentation, features.
   embedding work.
 - Invalid direct retrieval limits are rejected before search/context-pack
   retrieval work.
+- Invalid direct repository search/list/graph limits are rejected before SQL
+  work.
 - Invalid direct iteration memory links are rejected before iteration mutation.
 - Invalid direct/public goal-run IDs are rejected before service dispatch.
 - Invalid direct/public unarchive archive IDs are rejected before archive lookup.

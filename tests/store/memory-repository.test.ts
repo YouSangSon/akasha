@@ -609,6 +609,23 @@ describe("createMemoryRepository (unit — no PG required)", () => {
       });
   });
 
+  it.each([0, -1, 1.5, Number.NaN, 5001])(
+    "listMemory rejects invalid direct limits before querying: %s",
+    async (limit) => {
+      const mockPool = { query: vi.fn() };
+      const repo = createMemoryRepository(mockPool as never);
+
+      await expect(
+        repo.listMemory(
+          { scopeType: "project", scopeId: "proj-x" },
+          { allowLegacyAnonymous: true, limit },
+        ),
+      ).rejects.toThrow("limit must be a positive integer up to 5000");
+
+      expect(mockPool.query).not.toHaveBeenCalled();
+    },
+  );
+
   it("listMemory excludes archived rows by default", async () => {
     const queryCalls: SqlQueryCall[] = [];
     const mockPool = {
@@ -709,6 +726,23 @@ describe("createMemoryRepository (unit — no PG required)", () => {
 
     expect(mockPool.query).not.toHaveBeenCalled();
   });
+
+  it.each([0, -1, 1.5, Number.NaN, 5001])(
+    "listMemoryForGovernance rejects invalid direct limits before querying: %s",
+    async (limit) => {
+      const mockPool = { query: vi.fn() };
+      const repo = createMemoryRepository(mockPool as never);
+
+      await expect(
+        repo.listMemoryForGovernance(
+          { scopeType: "project", scopeId: "proj-x" },
+          { organizationId: "org-a", limit },
+        ),
+      ).rejects.toThrow("limit must be a positive integer up to 5000");
+
+      expect(mockPool.query).not.toHaveBeenCalled();
+    },
+  );
 
   it("inspectMemoryGraph scopes entity and relationship reads by org and memory scope", async () => {
     const queryCalls: SqlQueryCall[] = [];
@@ -842,6 +876,32 @@ describe("createMemoryRepository (unit — no PG required)", () => {
 
     expect(mockPool.query).not.toHaveBeenCalled();
   });
+
+  it.each([0, -1, 1.5, Number.NaN, 5001])(
+    "inspectMemoryGraph rejects invalid direct limits before querying: %s",
+    async (limit) => {
+      const mockPool = { query: vi.fn() };
+      const repo = createMemoryRepository(mockPool as never);
+
+      await expect(
+        repo.inspectMemoryGraph(
+          { scopeType: "project", scopeId: "proj-x" },
+          { organizationId: "org-a", limit },
+        ),
+      ).rejects.toThrow("limit must be a positive integer up to 5000");
+
+      await expect(
+        repo.inspectMemoryGraph(
+          { scopeType: "project", scopeId: "proj-x" },
+          { organizationId: "org-a", relationshipLimit: limit },
+        ),
+      ).rejects.toThrow(
+        "relationshipLimit must be a positive integer up to 5000",
+      );
+
+      expect(mockPool.query).not.toHaveBeenCalled();
+    },
+  );
 
   it("updateMemoryRecord scopes the update by org and replaces tags in the same transaction", async () => {
     const clientQueryCalls: { sql: string; params: unknown[] }[] = [];
@@ -1329,6 +1389,25 @@ describe("createMemoryRepository (unit — no PG required)", () => {
 
     expect(mockPool.query).not.toHaveBeenCalled();
   });
+
+  it.each([0, -1, 1.5, Number.NaN, 101])(
+    "searchMemory rejects invalid direct limits before querying: %s",
+    async (limit) => {
+      const mockPool = { query: vi.fn() };
+      const repo = createMemoryRepository(mockPool as never);
+
+      await expect(
+        repo.searchMemory({
+          query: "timeout retry",
+          scopes: [{ scopeType: "project", scopeId: "proj-x" }],
+          organizationId: "org-a",
+          limit,
+        }),
+      ).rejects.toThrow("limit must be a positive integer up to 100");
+
+      expect(mockPool.query).not.toHaveBeenCalled();
+    },
+  );
 
   it("searchMemory adds entity graph rescue clauses for deterministic mentions", async () => {
     const queryCalls: { sql: string; params: unknown[] }[] = [];

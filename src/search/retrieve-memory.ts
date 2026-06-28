@@ -8,6 +8,8 @@ import type { ScopeRef, SearchMemoryInput, SearchMemoryResult } from "../types.j
 import { assertOrganizationId } from "../store/assert-organization-id.js";
 import type { VectorFilter, VectorHit, VectorIndex } from "../vector/vector-index.js";
 
+const MAX_REPOSITORY_LEXICAL_LIMIT = 100;
+
 export type RetrieveMemoryInput = {
   vectorIndex: VectorIndex;
   repository: {
@@ -40,7 +42,10 @@ export async function retrieveMemory(
 
   const organizationId = input.organizationId ?? "";
   const scopes = retrievalScopes(input);
-  const lexicalLimit = Math.max(input.limit * 4, input.limit);
+  const lexicalLimit = Math.min(
+    Math.max(input.limit * 4, input.limit),
+    MAX_REPOSITORY_LEXICAL_LIMIT,
+  );
 
   const [projectVectorHits, userVectorHits, lexicalRecords] = await Promise.all([
     queryScope(input, organizationId, scopes[0]!, input.projectKey),

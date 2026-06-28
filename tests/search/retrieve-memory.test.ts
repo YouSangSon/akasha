@@ -452,6 +452,37 @@ describe("retrieveMemory", () => {
     expect(results.map((result) => result.id)).toEqual([44]);
   });
 
+  it("caps lexical oversampling before calling the repository", async () => {
+    const vectorIndex = {
+      query: vi.fn().mockResolvedValue([]),
+      upsert: vi.fn(),
+      delete: vi.fn(),
+      deleteByRecordIds: vi.fn().mockResolvedValue(undefined),
+      ensureCollection: vi.fn(),
+    };
+    const repository = {
+      searchMemory: vi.fn().mockResolvedValue([]),
+      getMemoryRecordsByIds: vi.fn(),
+    };
+
+    await retrieveMemory({
+      vectorIndex: vectorIndex as never,
+      repository: repository as never,
+      vector: [0.1, 0.2, 0.3],
+      query: "timeout retry backoff",
+      organizationId: "dev-team",
+      projectKey: "project-alpha",
+      limit: 26,
+    });
+
+    expect(repository.searchMemory).toHaveBeenCalledWith({
+      query: "timeout retry backoff",
+      scopes: [{ scopeType: "project", scopeId: "project-alpha" }],
+      organizationId: "dev-team",
+      limit: 100,
+    });
+  });
+
   it("fuses vector and lexical evidence for the same record", async () => {
     const vectorIndex = {
       query: vi.fn().mockResolvedValue([
