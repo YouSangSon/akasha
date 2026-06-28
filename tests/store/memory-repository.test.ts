@@ -96,6 +96,41 @@ function hydratedMemoryRow() {
   };
 }
 
+async function expectAddSecretRejection(
+  patch: { title?: string; content?: string; summary?: string },
+  expectedCategories: string[],
+): Promise<void> {
+  const mockPool = {
+    connect: vi.fn(),
+  };
+  const repo = createMemoryRepository(mockPool as never);
+
+  let caught: unknown;
+  try {
+    await repo.addMemory({
+      scopeType: "project",
+      scopeId: "proj-x",
+      memoryType: "fact",
+      content: "plain text only",
+      source: {
+        scopeType: "project",
+        scopeId: "proj-x",
+        sourceType: "document",
+        sourceRef: "docs/spec.md",
+      },
+      ...patch,
+    });
+  } catch (error: unknown) {
+    caught = error;
+  }
+
+  expect(caught).toBeInstanceOf(SecretDetectedError);
+  expect((caught as SecretDetectedError).categories).toEqual(
+    expect.arrayContaining(expectedCategories),
+  );
+  expect(mockPool.connect).not.toHaveBeenCalled();
+}
+
 async function expectUpdateSecretRejection(
   patch: { title?: string | null; content?: string; summary?: string | null },
   expectedCategories: string[],
@@ -229,6 +264,27 @@ describe("createMemoryRepository (unit — no PG required)", () => {
 
       expect(mockPool.connect).not.toHaveBeenCalled();
     }
+  });
+
+  it("addMemory rejects secret-shaped content before opening a transaction", async () => {
+    await expectAddSecretRejection(
+      { content: `Rotate AWS key ${exampleAwsAccessKey} immediately.` },
+      ["aws-access-key"],
+    );
+  });
+
+  it("addMemory rejects secret-shaped titles before opening a transaction", async () => {
+    await expectAddSecretRejection(
+      { title: `Leaked token ${exampleGitHubToken}` },
+      ["github-token"],
+    );
+  });
+
+  it("addMemory rejects secret-shaped summaries before opening a transaction", async () => {
+    await expectAddSecretRejection(
+      { summary: "Stripe key " + ["sk", "live", "bbbbbbbbbbbbbbbbbbbbbbbb"].join("_") },
+      ["stripe-key"],
+    );
   });
 
   it("upsertPostgresSource pushes sourceRef filter into SQL WHERE clause (PERF-5)", () => {

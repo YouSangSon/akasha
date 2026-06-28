@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened repository add secret scrubbing:
+  - `addMemory` now rejects secret-shaped content, titles, and summaries before
+    opening a Postgres transaction.
+  - Repository coverage verifies AWS key, GitHub token, and Stripe key
+    detections fail before `pool.connect()`.
+  - Reviewer skipped after previous reviewer-agent timeouts; self-review found
+    no issues.
+
+Verification:
+- `npx vitest run tests/store/memory-repository.test.ts` (35 passed, 7 skipped)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (715 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened repository add value validation:
   - `addMemory` now rejects invalid memory kind, durability, and importance
     values before opening a Postgres transaction.

@@ -98,3 +98,5 @@ experience, documentation, features.
   rejected before persistence.
 - Invalid repository add kind, durability, and importance values are rejected
   before persistence.
+- Secret-shaped repository add content, titles, and summaries are rejected
+  before persistence.
