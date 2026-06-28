@@ -105,6 +105,10 @@ function buildHandler<K extends ServiceToolName>(toolName: K, ctx: RouteContext)
       }
 
       const bodyRecord = body as Record<string, unknown>;
+      if (hasMalformedOrganizationId(bodyRecord)) {
+        sendError(res, 400, "organizationId must be a string");
+        return;
+      }
 
       const resolved = resolveOrganizationId(
         req,
@@ -124,7 +128,7 @@ function buildHandler<K extends ServiceToolName>(toolName: K, ctx: RouteContext)
       const enrichedInput =
         resolved.organizationId !== undefined
           ? { ...bodyRecord, organizationId: resolved.organizationId }
-          : bodyRecord;
+          : normalizeUnresolvedOrganizationId(bodyRecord);
 
       const scopeCheck = checkOAuthScopes(
         auth,
@@ -176,6 +180,30 @@ function buildHandler<K extends ServiceToolName>(toolName: K, ctx: RouteContext)
       sendError(res, 500, "internal server error");
     }
   };
+}
+
+function hasMalformedOrganizationId(input: Record<string, unknown>): boolean {
+  return (
+    Object.hasOwn(input, "organizationId") &&
+    input.organizationId !== undefined &&
+    typeof input.organizationId !== "string"
+  );
+}
+
+function normalizeUnresolvedOrganizationId(
+  input: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!Object.hasOwn(input, "organizationId")) {
+    return input;
+  }
+  if (
+    typeof input.organizationId !== "string" ||
+    input.organizationId.trim().length > 0
+  ) {
+    return input;
+  }
+  const { organizationId: _organizationId, ...rest } = input;
+  return rest;
 }
 
 export function createMemoryRoutes(ctx: RouteContext): Route[] {

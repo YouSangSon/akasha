@@ -46,6 +46,28 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened organization ID validation:
+  - MCP service/context input schemas now reject whitespace-only
+    `organizationId` values.
+  - Direct registry calls reject whitespace-only `organizationId` before
+    handler dispatch or audit writes.
+  - HTTP routes keep blank string body `organizationId` as absent, but reject
+    present non-string body values before token/header organization enrichment.
+  - Subagent reviewer `Godel` caught the blank-body HTTP regression;
+    `Heisenberg` caught non-string values being omitted; `Cicero` caught the
+    token-bound overwrite case. Follow-up review by `Newton` reported no
+    issues.
+
+Verification:
+- `npx vitest run tests/app/server.test.ts tests/mcp/server.test.ts tests/mcp/resolve-org.test.ts`
+  (173 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (677 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Hardened MCP context and prompt nonblank validation:
   - Elicited memory `projectKey`, sampled classification `summary`,
     `akasha_session_start` `organizationId`/`projectKey`, and

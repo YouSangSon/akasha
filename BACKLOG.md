@@ -56,3 +56,5 @@ experience, documentation, features.
 - Whitespace-only project/user scope identifiers are rejected before dispatch.
 - Whitespace-only MCP prompt/context identifiers and sampled summaries are
   rejected before storage or dispatch.
+- Whitespace-only organization IDs are rejected on MCP/direct paths, while
+  HTTP rejects malformed non-string organization IDs before enrichment.

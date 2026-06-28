@@ -9,6 +9,7 @@ import type {
   WithCanonicalServices,
 } from "./types.js";
 import { rootLogger } from "../logger.js";
+import { assertNonBlankText } from "../store/memory-content.js";
 
 export function createToolRegistry(
   options: CreateToolRegistryOptions = {},
@@ -52,6 +53,10 @@ function instrumentToolRegistry(input: {
     },
     run: () => Promise<T>,
   ): Promise<T> {
+    if (toolInput.organizationId !== undefined) {
+      assertNonBlankText(toolInput.organizationId, "organizationId");
+    }
+
     const start = Date.now();
     const requestId = globalThis.crypto.randomUUID();
     const log = baseLogger.child({

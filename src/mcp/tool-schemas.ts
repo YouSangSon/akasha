@@ -183,13 +183,14 @@ export const nonBlankTextInputSchema = z
   .refine((value) => value.trim().length > 0, {
     message: "must contain non-whitespace text",
   });
+const organizationIdInputSchema = nonBlankTextInputSchema;
 
 export const SERVICE_TOOL_DESCRIPTORS = [
   {
     name: "add_memory",
     description: "Persist a memory record for a project or user scope.",
     inputSchema: {
-      organizationId: z.string().min(1).optional(),
+      organizationId: organizationIdInputSchema.optional(),
       projectKey: nonBlankTextInputSchema.optional(),
       scope: z.enum(["project", "user"]).optional(),
       userScopeId: nonBlankTextInputSchema.optional(),
@@ -206,7 +207,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     name: "search_memory",
     description: "Search persisted memory records across one or more scopes.",
     inputSchema: {
-      organizationId: z.string().min(1).optional(),
+      organizationId: organizationIdInputSchema.optional(),
       projectKey: nonBlankTextInputSchema,
       query: nonBlankTextInputSchema,
       userScopeId: nonBlankTextInputSchema.optional(),
@@ -224,7 +225,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     name: "build_context_pack",
     description: "Search memory and assemble a markdown context pack.",
     inputSchema: {
-      organizationId: z.string().min(1).optional(),
+      organizationId: organizationIdInputSchema.optional(),
       projectKey: nonBlankTextInputSchema,
       task: nonBlankTextInputSchema,
       userScopeId: nonBlankTextInputSchema.optional(),
@@ -244,7 +245,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     name: "reindex_memory",
     description: "Reindex all memory chunks for a project and optional user scope into the active vector backend.",
     inputSchema: {
-      organizationId: z.string().min(1),
+      organizationId: organizationIdInputSchema,
       projectKey: nonBlankTextInputSchema,
       userScopeId: nonBlankTextInputSchema.optional(),
     },
@@ -259,7 +260,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     name: "compact_memory",
     description: "Preview or apply conservative memory compaction heuristics.",
     inputSchema: {
-      organizationId: z.string().min(1).optional(),
+      organizationId: organizationIdInputSchema.optional(),
       projectKey: nonBlankTextInputSchema.optional(),
       scope: z.enum(["project", "user"]).optional(),
       userScopeId: nonBlankTextInputSchema.optional(),
@@ -288,7 +289,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     description:
       "List memory records for governance review with optional tag and archived filters.",
     inputSchema: {
-      organizationId: z.string().min(1).optional(),
+      organizationId: organizationIdInputSchema.optional(),
       projectKey: nonBlankTextInputSchema.optional(),
       scope: z.enum(["project", "user"]).optional(),
       userScopeId: nonBlankTextInputSchema.optional(),
@@ -308,7 +309,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     description:
       "Inspect persisted entity mentions and relationships for one scoped memory graph.",
     inputSchema: {
-      organizationId: z.string().min(1).optional(),
+      organizationId: organizationIdInputSchema.optional(),
       projectKey: nonBlankTextInputSchema.optional(),
       scope: z.enum(["project", "user"]).optional(),
       userScopeId: nonBlankTextInputSchema.optional(),
@@ -331,7 +332,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     description:
       "Update one memory record through governance controls and refresh its vector index state.",
     inputSchema: {
-      organizationId: z.string().min(1).optional(),
+      organizationId: organizationIdInputSchema.optional(),
       memoryId: z.number().int().positive(),
       kind: z.enum(SUPPORTED_MEMORY_KINDS).optional(),
       title: z.string().nullable().optional(),
@@ -352,7 +353,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     description:
       "Archive one memory record for governance deletion and remove its vector points.",
     inputSchema: {
-      organizationId: z.string().min(1).optional(),
+      organizationId: organizationIdInputSchema.optional(),
       memoryId: z.number().int().positive(),
     },
     outputSchema: {
@@ -367,7 +368,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     description:
       "Replace normalized governance tags on one memory record and refresh its vector index state.",
     inputSchema: {
-      organizationId: z.string().min(1).optional(),
+      organizationId: organizationIdInputSchema.optional(),
       memoryId: z.number().int().positive(),
       tags: z.array(z.string()),
     },
@@ -381,7 +382,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     name: "unarchive_memory",
     description: "Restore one or more archived memory records back to active canonical storage.",
     inputSchema: {
-      organizationId: z.string().min(1).optional(),
+      organizationId: organizationIdInputSchema.optional(),
       archiveIds: z.array(z.number().int()),
     },
     outputSchema: {
@@ -396,7 +397,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     name: "list_audit_log",
     description: "Return recent audit log entries scoped to a single organization.",
     inputSchema: {
-      organizationId: z.string().min(1).optional(),
+      organizationId: organizationIdInputSchema.optional(),
       limit: z.number().int().positive().max(1000).optional(),
     },
     outputSchema: {
@@ -410,7 +411,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     description:
       "Start a goal run: a persistent objective plus termination criteria the agent iterates toward.",
     inputSchema: {
-      organizationId: z.string().min(1).optional(),
+      organizationId: organizationIdInputSchema.optional(),
       scope: z.enum(["project", "user"]).optional(),
       projectKey: nonBlankTextInputSchema.optional(),
       userScopeId: nonBlankTextInputSchema.optional(),
@@ -427,7 +428,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     description:
       "Record one iteration of a goal run (attempt + outcome) and optionally link memories to the run.",
     inputSchema: {
-      organizationId: z.string().min(1).optional(),
+      organizationId: organizationIdInputSchema.optional(),
       goalRunId: z.number().int().positive(),
       attempt: nonBlankTextInputSchema,
       outcome: z.enum(["success", "failure", "partial"]),
@@ -445,7 +446,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     description:
       "Fetch a goal run with its ordered iterations, for continuity and termination evidence.",
     inputSchema: {
-      organizationId: z.string().min(1).optional(),
+      organizationId: organizationIdInputSchema.optional(),
       goalRunId: z.number().int().positive(),
     },
     outputSchema: {
@@ -457,7 +458,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     name: "list_goal_runs",
     description: "List goal runs for a scope, optionally filtered by status.",
     inputSchema: {
-      organizationId: z.string().min(1).optional(),
+      organizationId: organizationIdInputSchema.optional(),
       scope: z.enum(["project", "user"]).optional(),
       projectKey: nonBlankTextInputSchema.optional(),
       userScopeId: nonBlankTextInputSchema.optional(),
@@ -473,7 +474,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     description:
       "Mark a goal run completed; its memories become eligible for compaction again.",
     inputSchema: {
-      organizationId: z.string().min(1).optional(),
+      organizationId: organizationIdInputSchema.optional(),
       goalRunId: z.number().int().positive(),
       resolution: z.string().nullable().optional(),
     },
@@ -487,7 +488,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     description:
       "Mark a goal run abandoned; its memories become eligible for compaction again.",
     inputSchema: {
-      organizationId: z.string().min(1).optional(),
+      organizationId: organizationIdInputSchema.optional(),
       goalRunId: z.number().int().positive(),
       reason: z.string().nullable().optional(),
     },
@@ -501,7 +502,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     description:
       "Build a compact, goal-oriented context pack for one goal run: goal, termination criteria, recent iterations, last error, and scope constraints/notes.",
     inputSchema: {
-      organizationId: z.string().min(1).optional(),
+      organizationId: organizationIdInputSchema.optional(),
       goalRunId: z.number().int().positive(),
       limit: z.number().int().positive().max(200).optional(),
     },
@@ -517,7 +518,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
     description:
       "Warn if a candidate attempt is semantically close to a prior failed attempt in the goal run (already-tried-and-failed detection).",
     inputSchema: {
-      organizationId: z.string().min(1).optional(),
+      organizationId: organizationIdInputSchema.optional(),
       goalRunId: z.number().int().positive(),
       attempt: nonBlankTextInputSchema,
       threshold: z.number().gt(0).max(1).optional(),
@@ -544,7 +545,7 @@ export const MCP_CONTEXT_TOOL_DESCRIPTORS = [
     description:
       "List workspace roots advertised by the connected MCP client, when supported.",
     inputSchema: {
-      organizationId: z.string().min(1).optional(),
+      organizationId: organizationIdInputSchema.optional(),
     },
     outputSchema: {
       ok: z.literal(true),
@@ -558,7 +559,7 @@ export const MCP_CONTEXT_TOOL_DESCRIPTORS = [
     description:
       "Use MCP elicitation to ask the user for memory details, then store the accepted memory.",
     inputSchema: {
-      organizationId: z.string().min(1).optional(),
+      organizationId: organizationIdInputSchema.optional(),
       projectKey: nonBlankTextInputSchema.optional(),
       scope: z.enum(["project", "user"]).optional(),
       userScopeId: nonBlankTextInputSchema.optional(),
@@ -580,7 +581,7 @@ export const MCP_CONTEXT_TOOL_DESCRIPTORS = [
     description:
       "Use MCP sampling to suggest a memory kind and concise summary for candidate memory text.",
     inputSchema: {
-      organizationId: z.string().min(1).optional(),
+      organizationId: organizationIdInputSchema.optional(),
       content: nonBlankTextInputSchema,
       instruction: z.string().min(1).optional(),
       maxTokens: z.number().int().positive().max(1000).optional(),

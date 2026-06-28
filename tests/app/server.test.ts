@@ -295,6 +295,52 @@ describe("createOperatorServer", () => {
     expect(registry.search_memory).not.toHaveBeenCalled();
   });
 
+  it("treats whitespace-only body organizationId as absent before validation", async () => {
+    const res = await fetch(`${handle.baseUrl}/v1/memory/search`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        organizationId: " \n\t ",
+        projectKey: "p",
+        query: "anything",
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(registry.search_memory).toHaveBeenCalledWith({
+      projectKey: "p",
+      query: "anything",
+    });
+  });
+
+  it("rejects non-string body organizationId before write dispatch", async () => {
+    const res = await fetch(`${handle.baseUrl}/v1/memory`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        organizationId: 123,
+        projectKey: "p",
+        kind: "decision",
+        content: "first decision",
+      }),
+    });
+
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as {
+      success: boolean;
+      error: { message: string };
+    };
+    expect(body.success).toBe(false);
+    expect(body.error.message).toContain("organizationId");
+    expect(registry.add_memory).not.toHaveBeenCalled();
+  });
+
   it("rejects whitespace-only search and context-pack text before dispatch", async () => {
     const search = await fetch(`${handle.baseUrl}/v1/memory/search`, {
       method: "POST",
@@ -1367,6 +1413,34 @@ describe("createOperatorServer (token-org binding)", () => {
     expect(registry.add_memory).toHaveBeenCalledWith(
       expect.objectContaining({ organizationId: "dev-team" }),
     );
+  });
+
+  it("rejects non-string body organizationId before bound-token injection", async () => {
+    for (const organizationId of [123, null]) {
+      const res = await fetch(`${handle.baseUrl}/v1/memory`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: "Bearer dev-token",
+        },
+        body: JSON.stringify({
+          organizationId,
+          projectKey: "p",
+          kind: "decision",
+          content: "x",
+        }),
+      });
+
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as {
+        success: boolean;
+        error: { message: string };
+      };
+      expect(body.success).toBe(false);
+      expect(body.error.message).toContain("organizationId");
+    }
+
+    expect(registry.add_memory).not.toHaveBeenCalled();
   });
 
   it("rejects 403 when the bound token's org disagrees with body.organizationId", async () => {

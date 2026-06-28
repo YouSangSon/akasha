@@ -339,6 +339,23 @@ describe("createToolRegistry", () => {
     expect(retrieveMemory).not.toHaveBeenCalled();
   });
 
+  it("rejects whitespace-only organization IDs through the direct registry path", async () => {
+    const retrieveMemory = vi.fn();
+    const auditLog = buildAuditLog();
+    const registry = createToolRegistry({ retrieveMemory, auditLog });
+
+    await expect(
+      registry.search_memory({
+        organizationId: " \n\t ",
+        projectKey: "project-alpha",
+        query: "Postgres",
+      }),
+    ).rejects.toThrow(/non-whitespace text/);
+
+    expect(retrieveMemory).not.toHaveBeenCalled();
+    expect(auditLog.record).not.toHaveBeenCalled();
+  });
+
   it("rejects whitespace-only scope identifiers through direct retrieval paths", async () => {
     const retrieveMemory = vi.fn();
     const registry = createToolRegistry({ retrieveMemory });
@@ -2301,12 +2318,21 @@ describe("createMcpServer structured outputs", () => {
         projectKey: " \n\t ",
       },
     });
+    const organizationResult = await client.callTool({
+      name: "search_memory",
+      arguments: {
+        organizationId: " \n\t ",
+        projectKey: "project-alpha",
+        query: "Postgres",
+      },
+    });
 
     for (const result of [
       searchResult,
       contextPackResult,
       goalRunResult,
       reindexResult,
+      organizationResult,
     ]) {
       expect(result.isError).toBe(true);
       const errorContent = result.content as Array<{ type: string; text: string }>;
@@ -2321,6 +2347,43 @@ describe("createMcpServer structured outputs", () => {
     expect(registry.build_context_pack).not.toHaveBeenCalled();
     expect(registry.start_goal_run).not.toHaveBeenCalled();
     expect(registry.reindex_memory).not.toHaveBeenCalled();
+
+    await client.close();
+    await server.close();
+  });
+
+  it("rejects whitespace-only context tool organization IDs before side effects", async () => {
+    const createMessage = vi.fn(async () => {
+      throw new Error("sampling should not run for invalid organizationId");
+    });
+    const server = createMcpServer({
+      registry: buildRegistryForMcpProtocol(),
+    });
+    const client = await createInMemoryClient(
+      server,
+      { capabilities: { sampling: {} } },
+      (candidate) => {
+        candidate.setRequestHandler(CreateMessageRequestSchema, createMessage);
+      },
+    );
+
+    const result = await client.callTool({
+      name: "classify_memory_candidate",
+      arguments: {
+        organizationId: " \n\t ",
+        content: "QDRANT_SNAPSHOT_TIMEOUT controls snapshot timeout behavior.",
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    const errorContent = result.content as Array<{ type: string; text: string }>;
+    expect(errorContent[0]).toEqual(
+      expect.objectContaining({
+        type: "text",
+        text: expect.stringContaining("non-whitespace text"),
+      }),
+    );
+    expect(createMessage).not.toHaveBeenCalled();
 
     await client.close();
     await server.close();
