@@ -4,16 +4,16 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — CLI Semantic Flag Guard
+## Current Loop — User Scope Resolver Guard
 
 Status:
-- CLI parsing now rejects whitespace-only semantic flags for project, task,
-  user scope, kind, content, content-file, and output directory before registry
-  dispatch or filesystem reads.
-- Existing `--content` values that start with a dash remain supported.
+- `resolveUserScopeId()` now rejects whitespace-only explicit and default user
+  scope IDs at the utility boundary instead of returning them to callers.
+- Coverage verifies explicit/default rejection and the existing trimmed
+  `DEVELOPER_MEMORY_USER_ID` fallback behavior.
 - Reviewer subagent found no issues.
-- Focused CLI tests, typecheck, build, audit, full suite, and diff whitespace
-  checks passed.
+- Focused MCP utility/server/goal-run tests, typecheck, build, audit, full
+  suite, and diff whitespace checks passed.
 
 Loop closeout:
 - Commit locally; do not push.

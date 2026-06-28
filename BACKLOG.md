@@ -183,3 +183,5 @@ experience, documentation, features.
   before resolving paths or writing generated files.
 - Whitespace-only CLI project, task, user scope, kind, content, content-file,
   and output-directory flags are rejected before dispatch or filesystem reads.
+- Whitespace-only explicit/default user scope resolver inputs are rejected
+  before internal callers can receive them.

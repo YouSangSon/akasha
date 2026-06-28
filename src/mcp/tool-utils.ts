@@ -82,12 +82,12 @@ export function resolveUserScopeId(input: {
   explicitUserScopeId?: string;
   defaultUserScopeId?: string;
 }): string {
-  if (input.explicitUserScopeId) {
-    return input.explicitUserScopeId;
+  if (input.explicitUserScopeId !== undefined) {
+    return requireUserScopeId(input.explicitUserScopeId);
   }
 
-  if (input.defaultUserScopeId) {
-    return input.defaultUserScopeId;
+  if (input.defaultUserScopeId !== undefined) {
+    return requireUserScopeId(input.defaultUserScopeId);
   }
 
   const configuredUserId = process.env.DEVELOPER_MEMORY_USER_ID?.trim();

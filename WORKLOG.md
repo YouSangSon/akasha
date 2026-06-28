@@ -46,6 +46,21 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened user-scope resolution:
+  - `resolveUserScopeId()` now rejects whitespace-only explicit and default
+    user scope IDs instead of returning them to internal callers.
+  - New focused coverage verifies explicit/default rejection and preserves the
+    trimmed `DEVELOPER_MEMORY_USER_ID` environment fallback.
+  - Reviewer subagent found no issues.
+
+Verification:
+- `npx vitest run tests/mcp/tool-utils.test.ts tests/mcp/server.test.ts tests/goal-run/goal-run-handlers.test.ts` (145 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (805 passed, 34 skipped across 66 files)
+- `git diff --check`
+
 - Hardened CLI semantic flag parsing:
   - `pack`, `reindex`, `remember`, and `init` now reject whitespace-only
     project, task, user scope, kind, content, content-file, and out-dir flag
