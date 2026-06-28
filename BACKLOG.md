@@ -92,3 +92,5 @@ experience, documentation, features.
   rendering.
 - Blank direct update-memory title and summary patches normalize to `null`
   before repository dispatch.
+- Blank repository update title and summary patches normalize to `null` before
+  persistence.

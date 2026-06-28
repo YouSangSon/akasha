@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-28
 
+- Normalized blank repository metadata patches:
+  - `updateMemoryRecord` now normalizes explicitly supplied blank title and
+    summary values to `null` before persistence.
+  - Repository coverage verifies SQL update parameters and hydrated output use
+    `null` instead of whitespace-only metadata.
+  - Reviewer skipped after previous reviewer-agent timeouts; self-review found
+    no issues.
+
+Verification:
+- `npx vitest run tests/store/memory-repository.test.ts` (30 passed, 7 skipped)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (710 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Normalized blank update-memory metadata patches:
   - Direct `update_memory.title` and `summary` preserve omitted fields but
     normalize blank or null patches to `null`.

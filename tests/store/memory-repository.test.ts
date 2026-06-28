@@ -707,6 +707,58 @@ describe("createMemoryRepository (unit — no PG required)", () => {
     expect(mockClient.release).toHaveBeenCalledTimes(1);
   });
 
+  it("updateMemoryRecord normalizes whitespace-only title and summary to null", async () => {
+    const clientQueryCalls: SqlQueryCall[] = [];
+    let hydrationReads = 0;
+    const updatedRow = {
+      ...hydratedMemoryRow(),
+      title: null,
+      summary: null,
+      updated_at: "2026-06-26T00:00:01.000Z",
+    };
+    const mockClient = {
+      query: vi.fn().mockImplementation((sql: string, params?: unknown[]) => {
+        clientQueryCalls.push({ sql, params: params ?? [] });
+        if (sql === "BEGIN" || sql === "COMMIT" || sql === "ROLLBACK") {
+          return Promise.resolve({ rows: [] });
+        }
+        if (sql.includes("SELECT") && sql.includes("FROM memory_records mr")) {
+          hydrationReads += 1;
+          return Promise.resolve({
+            rows: [hydrationReads === 1 ? hydratedMemoryRow() : updatedRow],
+          });
+        }
+        if (sql.includes("UPDATE memory_records")) {
+          return Promise.resolve({ rows: [updatedRow] });
+        }
+        return Promise.resolve({ rows: [] });
+      }),
+      release: vi.fn(),
+    };
+    const mockPool = {
+      connect: vi.fn().mockResolvedValue(mockClient),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    const updated = await repo.updateMemoryRecord({
+      id: 42,
+      organizationId: "org-a",
+      title: " \n\t ",
+      summary: " \n\t ",
+    });
+
+    const updateCall = clientQueryCalls.find(({ sql }) =>
+      sql.includes("UPDATE memory_records"),
+    );
+    expect(updateCall?.params[3]).toBeNull();
+    expect(updateCall?.params[5]).toBeNull();
+    expect(updated).toMatchObject({
+      id: 42,
+      title: null,
+      summary: null,
+    });
+  });
+
   it("updateMemoryRecord rejects secret-shaped content before persistence", async () => {
     await expectUpdateSecretRejection(
       { content: `Rotate AWS key ${exampleAwsAccessKey} immediately.` },

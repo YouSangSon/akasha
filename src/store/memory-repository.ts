@@ -466,13 +466,18 @@ export function createMemoryRepository(
           return null;
         }
 
-        const nextTitle = input.title === undefined ? currentRow.title : input.title;
+        const nextTitle =
+          input.title === undefined
+            ? currentRow.title
+            : normalizeNullableText(input.title);
         const nextContent = input.content ?? currentRow.content;
         if (input.content !== undefined) {
           assertNonBlankMemoryContent(nextContent);
         }
         const nextSummary =
-          input.summary === undefined ? currentRow.summary : input.summary;
+          input.summary === undefined
+            ? currentRow.summary
+            : normalizeNullableText(input.summary);
         assertNoSecretsInMemoryFields({
           title: nextTitle,
           content: nextContent,
@@ -934,6 +939,10 @@ function assertNoSecretsInMemoryFields(input: {
       detections.map((detection) => detection.category),
     );
   }
+}
+
+function normalizeNullableText(value: string | null): string | null {
+  return value === null || value.trim().length === 0 ? null : value;
 }
 
 function orderRecordsByIds(
