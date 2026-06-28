@@ -266,6 +266,31 @@ describe("createMemoryRepository (unit — no PG required)", () => {
     }
   });
 
+  it("addMemory rejects whitespace-only organization IDs before opening a transaction", async () => {
+    const mockPool = {
+      connect: vi.fn(),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    await expect(
+      repo.addMemory({
+        organizationId: " \n\t ",
+        scopeType: "project",
+        scopeId: "proj-x",
+        memoryType: "fact",
+        content: "test content",
+        source: {
+          scopeType: "project",
+          scopeId: "proj-x",
+          sourceType: "document",
+          sourceRef: "docs/spec.md",
+        },
+      }),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(mockPool.connect).not.toHaveBeenCalled();
+  });
+
   it("addMemory rejects secret-shaped content before opening a transaction", async () => {
     await expectAddSecretRejection(
       { content: `Rotate AWS key ${exampleAwsAccessKey} immediately.` },

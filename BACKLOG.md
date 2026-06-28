@@ -102,3 +102,5 @@ experience, documentation, features.
   before persistence.
 - Blank repository add title and summary values normalize to `null` before
   persistence.
+- Whitespace-only repository add organization IDs are rejected before
+  persistence.

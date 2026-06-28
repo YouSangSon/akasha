@@ -184,6 +184,9 @@ export function createMemoryRepository(
         summary,
       });
       const organizationId = input.organizationId ?? DEFAULT_ORG_ID;
+      if (organizationId.trim().length === 0) {
+        throw new Error("organizationId must contain non-whitespace text");
+      }
       const client = await pool.connect();
 
       try {
