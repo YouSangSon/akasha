@@ -222,7 +222,7 @@ async function runRemote(host: string, command: string): Promise<string> {
 async function main() {
   const backupDir = requireEnv("BACKUP_DIR");
   const targetHost = requireEnv("BACKUP_TARGET_HOST");
-  const targetDir = process.env.BACKUP_TARGET_DIR ?? backupDir;
+  const targetDir = resolveBackupTargetDir(process.env, backupDir);
   const remotePath = (fileName: string) => path.posix.join(targetDir, fileName);
 
   await verifyBackups({
@@ -251,6 +251,20 @@ async function main() {
   });
 
   console.log("backup verification passed");
+}
+
+export function resolveBackupTargetDir(
+  env: NodeJS.ProcessEnv,
+  backupDir: string,
+): string {
+  const targetDir = env.BACKUP_TARGET_DIR;
+  if (targetDir === undefined) {
+    return backupDir;
+  }
+  if (targetDir.trim().length === 0) {
+    throw new Error("BACKUP_TARGET_DIR must contain non-whitespace text");
+  }
+  return targetDir;
 }
 
 function requireEnv(name: string): string {

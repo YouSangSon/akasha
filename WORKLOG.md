@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened backup verification target directory resolution:
+  - `backup:verify` now rejects whitespace-only `BACKUP_TARGET_DIR` values
+    before remote path construction.
+  - Unset `BACKUP_TARGET_DIR` still falls back to `BACKUP_DIR`, and valid
+    configured remote paths are returned unchanged.
+  - Reviewer subagent found no issue and noted the remaining shell-script
+    follow-up for `backup:create` path expansion.
+
+Verification:
+- `npx vitest run tests/scripts/backup-verify.test.ts tests/scripts/public-docs-drift.test.ts` (29 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (844 passed, 34 skipped across 68 files)
+- `git diff --check`
+
 - Hardened MCP stdio cwd resolution:
   - `resolveStdioCwd()` now rejects whitespace-only `DMO_CWD` values before
     stdio server startup.

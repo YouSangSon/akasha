@@ -294,7 +294,7 @@ ingest sweeper 는 write-ahead `markQdrantPending` 과 `markQdrantCompleted`
 |---|---|---|
 | `BACKUP_DIR` | `./.developer-memory-os/backups` | `npm run backup:create` 의 출력 디렉토리. |
 | `BACKUP_TARGET_HOST` | unset | 옵션. 오프-호스트 복제용 SSH/scp 대상. 비워두면 `backup:create` 는 로컬에만 저장; `backup:verify` 는 비어 있지 않은 원격 대상 필요. |
-| `BACKUP_TARGET_DIR` | `BACKUP_DIR` | 옵션. 백업 복사와 검증 스크립트가 사용하는 원격 디렉토리. |
+| `BACKUP_TARGET_DIR` | `BACKUP_DIR` | 옵션. 백업 복사와 검증 스크립트가 사용하는 원격 디렉토리. 설정한다면 non-whitespace text가 필요합니다. |
 | `BACKUP_ENCRYPTION_KEY_FILE` | unset | 32-byte AES key(hex, base64, raw bytes)를 담은 선택적 파일. 설정하면 off-host copy 전에 backup artifact를 AES-256-GCM으로 암호화. |
 | `BACKUP_ENCRYPTION_KEEP_PLAINTEXT` | `false` | 로컬 디버깅 때만 `true`; 기본값은 encrypted `.enc` artifact와 manifest checksum 작성 후 plaintext artifact 제거. |
 

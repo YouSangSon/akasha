@@ -307,7 +307,7 @@ exponential: 1 s, 2 s, 4 s, 8 s, capped at 5 min.
 |---|---|---|
 | `BACKUP_DIR` | `./.developer-memory-os/backups` | Where `npm run backup:create` writes. |
 | `BACKUP_TARGET_HOST` | unset | Optional SSH/scp target for off-host replication. Leave empty to keep `backup:create` local-only; `backup:verify` requires a non-empty remote target. |
-| `BACKUP_TARGET_DIR` | `BACKUP_DIR` | Optional remote directory used by backup copy and verification scripts. |
+| `BACKUP_TARGET_DIR` | `BACKUP_DIR` | Optional remote directory used by backup copy and verification scripts. If set, it must contain non-whitespace text. |
 | `BACKUP_ENCRYPTION_KEY_FILE` | unset | Optional file containing a 32-byte AES key (hex, base64, or raw bytes). When set, backup artifacts are encrypted with AES-256-GCM before off-host copy. |
 | `BACKUP_ENCRYPTION_KEEP_PLAINTEXT` | `false` | Set `true` only for local debugging; by default plaintext artifacts are removed after encrypted `.enc` artifacts and manifest checksums are written. |
 

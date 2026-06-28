@@ -3,7 +3,10 @@ import os from "node:os";
 import path from "node:path";
 import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { afterEach, describe, expect, it } from "vitest";
-import { verifyBackups } from "../../scripts/backup-verify.js";
+import {
+  resolveBackupTargetDir,
+  verifyBackups,
+} from "../../scripts/backup-verify.js";
 
 const tempDirs: string[] = [];
 
@@ -105,6 +108,30 @@ describe("verifyBackups", () => {
         },
       }),
     ).rejects.toThrow("latest successful backup is older than 24 hours");
+  });
+});
+
+describe("resolveBackupTargetDir", () => {
+  it("defaults to BACKUP_DIR when BACKUP_TARGET_DIR is unset", () => {
+    expect(resolveBackupTargetDir({}, "/backups/local")).toBe("/backups/local");
+  });
+
+  it("returns configured target directories unchanged", () => {
+    expect(
+      resolveBackupTargetDir(
+        { BACKUP_TARGET_DIR: "/remote/backups with spaces" },
+        "/backups/local",
+      ),
+    ).toBe("/remote/backups with spaces");
+  });
+
+  it("rejects whitespace-only BACKUP_TARGET_DIR before remote path construction", () => {
+    expect(() =>
+      resolveBackupTargetDir(
+        { BACKUP_TARGET_DIR: " \n\t " },
+        "/backups/local",
+      ),
+    ).toThrow("BACKUP_TARGET_DIR must contain non-whitespace text");
   });
 });
 

@@ -4,16 +4,16 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — MCP Stdio CWD Guard
+## Current Loop — Backup Verify Target Dir Guard
 
 Status:
-- MCP stdio startup now rejects whitespace-only `DMO_CWD` values before
-  registry/server creation.
-- Valid configured paths are returned unchanged, and fallback `process.cwd()`
-  resolution remains lazy when `DMO_CWD` is set.
-- Reviewer subagent caught an eager fallback regression; fixed before final
-  verification.
-- Focused stdio-cwd/docs tests, typecheck, build, audit, full suite, and diff
+- `backup:verify` now rejects whitespace-only `BACKUP_TARGET_DIR` values before
+  remote path construction.
+- Unset `BACKUP_TARGET_DIR` still falls back to `BACKUP_DIR`, and valid
+  configured remote paths are unchanged.
+- Reviewer subagent found no issue and noted that backup shell scripts retain
+  their existing `${BACKUP_TARGET_DIR:-${BACKUP_DIR}}` behavior.
+- Focused backup/docs tests, typecheck, build, audit, full suite, and diff
   whitespace checks passed.
 
 Loop closeout:

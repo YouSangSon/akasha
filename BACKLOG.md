@@ -14,7 +14,8 @@ experience, documentation, features.
 
 ## P2
 
-- None currently known.
+- Align backup shell scripts with `backup:verify` by rejecting whitespace-only
+  `BACKUP_TARGET_DIR` values instead of relying on shell default expansion.
 
 ## Done In This Branch
 
@@ -197,3 +198,5 @@ experience, documentation, features.
   before restore command environment construction.
 - Whitespace-only MCP stdio `DMO_CWD` values are rejected before server
   startup while preserving lazy fallback cwd resolution.
+- Whitespace-only `backup:verify` target directory values are rejected before
+  remote path construction.
