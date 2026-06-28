@@ -46,6 +46,24 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened direct iteration memory-link validation:
+  - Direct `record_iteration.memoryIds` now rejects `NaN`, unsafe, non-integer,
+    zero, and negative IDs before `goalRuns.recordIteration`.
+  - Direct handler coverage verifies invalid memory links fail before iteration
+    mutation.
+  - Subagent reviewer `Kant` caught unsafe integer acceptance; the guard now
+    uses `Number.isSafeInteger()`.
+
+Verification:
+- `npx vitest run tests/goal-run/goal-run-handlers.test.ts tests/goal-run/goal-run-repository.test.ts`
+  (25 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (682 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Hardened direct retrieval limit validation:
   - `normalizeLimit()` now rejects `NaN`, non-integer, zero, and negative
     limits before retrieval work while preserving the default `10` and cap

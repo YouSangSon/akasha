@@ -10,7 +10,7 @@ experience, documentation, features.
 
 ## P1
 
-- Direct `record_iteration.memoryIds` validation before iteration mutation.
+- None currently known.
 
 ## P2
 
@@ -66,3 +66,4 @@ experience, documentation, features.
   embedding work.
 - Invalid direct retrieval limits are rejected before search/context-pack
   retrieval work.
+- Invalid direct iteration memory links are rejected before iteration mutation.

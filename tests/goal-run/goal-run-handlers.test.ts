@@ -158,6 +158,30 @@ describe("goal-run handlers", () => {
     expect(goalRuns.recordIteration).not.toHaveBeenCalled();
   });
 
+  it("rejects invalid iteration memory links before recording", async () => {
+    const goalRuns = goalRunServicesStub();
+    const registry = registryWith(goalRuns);
+
+    for (const memoryIds of [
+      [0],
+      [-1],
+      [1.5],
+      [Number.NaN],
+      [Number.MAX_SAFE_INTEGER + 1],
+    ]) {
+      await expect(
+        registry.record_iteration({
+          goalRunId: 7,
+          attempt: "try A",
+          outcome: "failure",
+          memoryIds,
+        }),
+      ).rejects.toThrow(/memoryIds/);
+    }
+
+    expect(goalRuns.recordIteration).not.toHaveBeenCalled();
+  });
+
   it("complete_goal_run maps resolution to the close note", async () => {
     const goalRuns = goalRunServicesStub();
     const registry = registryWith(goalRuns);

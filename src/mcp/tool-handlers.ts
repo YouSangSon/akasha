@@ -858,6 +858,7 @@ export function createToolHandlers(input: {
     async record_iteration(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
       assertNonBlankText(toolInput.attempt, "attempt");
+      assertPositiveIntegerArray(toolInput.memoryIds, "memoryIds");
       const summary = optionalNonBlankText(toolInput.summary);
       const error = optionalNonBlankText(toolInput.error);
       assertNoSecrets(toolInput.attempt);
@@ -1052,6 +1053,20 @@ function assertNonBlankTags(tags: readonly string[] | undefined): void {
   }
   for (const tag of tags) {
     assertNonBlankText(tag, "tag");
+  }
+}
+
+function assertPositiveIntegerArray(
+  values: readonly number[] | undefined,
+  fieldName: string,
+): void {
+  if (values === undefined) {
+    return;
+  }
+  for (const value of values) {
+    if (!Number.isSafeInteger(value) || value <= 0) {
+      throw new Error(`${fieldName} must contain only positive integers`);
+    }
   }
 }
 
