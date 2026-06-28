@@ -4,13 +4,13 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Chunk Insert Organization Guard
+## Current Loop — Chunk Replacement Organization Guard
 
 Status:
-- `insertChunks` now rejects whitespace-only record organization IDs before
-  inserting canonical chunks.
-- Coverage verifies invalid chunk insert organization IDs fail before
-  `pool.query()`.
+- `replaceChunksForRecord` and `replaceChunksForRecordWithPendingIngest` now
+  reject whitespace-only record organization IDs before opening transactions.
+- Coverage verifies invalid chunk replacement organization IDs fail before
+  `pool.connect()`.
 - Reviewer skipped after previous reviewer-agent timeouts; self-review found no
   issues.
 - Focused canonical indexing tests, typecheck, build, audit, full suite, and

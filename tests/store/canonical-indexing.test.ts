@@ -1068,6 +1068,77 @@ describe("canonical indexing", () => {
     expect(mockPool.query).not.toHaveBeenCalled();
   });
 
+  it("replaceChunksForRecord rejects whitespace-only record organizationId before connecting", async () => {
+    const mockPool = {
+      connect: vi.fn(),
+    };
+    const repo = createMemoryChunkRepository(mockPool as never);
+    const record = {
+      ...createRecord({ id: 501, content: "replacement chunk" }),
+      organizationId: " \n\t ",
+    };
+
+    await expect(
+      repo.replaceChunksForRecord!({
+        record,
+        chunks: [
+          {
+            chunkIndex: 0,
+            content: "replacement chunk",
+            startOffset: 0,
+            endOffset: 17,
+          },
+        ],
+        embedding: {
+          provider: "openai",
+          model: "text-embedding-3-small",
+          dimensions: 1536,
+          version: "v1",
+          targetTokens: 800,
+          overlapTokens: 120,
+        },
+      }),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(mockPool.connect).not.toHaveBeenCalled();
+  });
+
+  it("replaceChunksForRecordWithPendingIngest rejects whitespace-only record organizationId before connecting", async () => {
+    const mockPool = {
+      connect: vi.fn(),
+    };
+    const repo = createMemoryChunkRepository(mockPool as never);
+    const record = {
+      ...createRecord({ id: 501, content: "replacement chunk" }),
+      organizationId: " \n\t ",
+    };
+
+    await expect(
+      repo.replaceChunksForRecordWithPendingIngest!({
+        record,
+        chunks: [
+          {
+            chunkIndex: 0,
+            content: "replacement chunk",
+            startOffset: 0,
+            endOffset: 17,
+          },
+        ],
+        embedding: {
+          provider: "openai",
+          model: "text-embedding-3-small",
+          dimensions: 1536,
+          version: "v1",
+          targetTokens: 800,
+          overlapTokens: 120,
+        },
+        nextRetryAt: new Date("2026-06-26T00:00:01.000Z"),
+      }),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(mockPool.connect).not.toHaveBeenCalled();
+  });
+
   it("replaceChunksForRecordWithPendingIngest replaces chunks and inserts a due retry row in one transaction", async () => {
     const clientQueryCalls: { sql: string; params: unknown[] }[] = [];
     const retryAt = new Date("2026-06-26T00:00:01.000Z");

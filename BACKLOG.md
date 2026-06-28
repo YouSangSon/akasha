@@ -143,3 +143,5 @@ experience, documentation, features.
   persistence.
 - Whitespace-only canonical chunk insert organization IDs are rejected before
   persistence.
+- Whitespace-only canonical chunk replacement organization IDs are rejected
+  before transaction side effects.
