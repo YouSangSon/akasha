@@ -4,14 +4,14 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Goal-Run Enum Validation
+## Current Loop — HTTP Goal-Run Enum Coverage
 
 Status:
-- Public and direct goal-run scope, iteration outcome, and list status
-  validation now share the same allowed-value constants before service
-  dispatch.
-- Direct coverage rejects invalid enum values before goal-run service dispatch.
-- Reviewer `Noether` reported no findings.
+- HTTP `/v1/goal-run/*` coverage now verifies invalid scope, status, and
+  outcome values reject before registry dispatch.
+- Coverage exercises valid auth/body shape so failures prove route schema
+  validation, not auth or body parsing.
+- Reviewer `Dirac` reported no findings.
 - Focused MCP tests, typecheck, build, audit, full suite, and diff whitespace
   checks passed.
 

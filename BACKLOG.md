@@ -81,3 +81,4 @@ experience, documentation, features.
 - Invalid direct memory kind and durability updates are rejected before
   repository dispatch.
 - Invalid direct goal-run enum values are rejected before service dispatch.
+- HTTP goal-run enum validation is covered before registry dispatch.

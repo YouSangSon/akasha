@@ -659,6 +659,58 @@ describe("createOperatorServer", () => {
     expect(registry.check_repeat_attempt).not.toHaveBeenCalled();
   });
 
+  it("rejects invalid goal-run enum values before dispatch", async () => {
+    const start = await fetch(`${handle.baseUrl}/v1/goal-run/start`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        scope: "team",
+        projectKey: "p",
+        goal: "ship phase 1",
+      }),
+    });
+    expect(start.status).toBe(400);
+    expect(((await start.json()) as { error: { message: string } }).error.message)
+      .toContain("scope");
+    expect(registry.start_goal_run).not.toHaveBeenCalled();
+
+    const list = await fetch(`${handle.baseUrl}/v1/goal-run/list`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        projectKey: "p",
+        status: "paused",
+      }),
+    });
+    expect(list.status).toBe(400);
+    expect(((await list.json()) as { error: { message: string } }).error.message)
+      .toContain("status");
+    expect(registry.list_goal_runs).not.toHaveBeenCalled();
+
+    const iteration = await fetch(`${handle.baseUrl}/v1/goal-run/iteration`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        goalRunId: 7,
+        attempt: "try A",
+        outcome: "skipped",
+      }),
+    });
+    expect(iteration.status).toBe(400);
+    expect(((await iteration.json()) as { error: { message: string } }).error.message)
+      .toContain("outcome");
+    expect(registry.record_iteration).not.toHaveBeenCalled();
+  });
+
   it("rejects unsafe goal-run ids before dispatch", async () => {
     const res = await fetch(`${handle.baseUrl}/v1/goal-run/get`, {
       method: "POST",

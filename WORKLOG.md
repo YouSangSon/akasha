@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-28
 
+- Added HTTP goal-run enum validation coverage:
+  - HTTP `/v1/goal-run/*` coverage verifies invalid scope, status, and outcome
+    values reject before registry dispatch.
+  - Coverage exercises valid auth/body shape so failures prove route schema
+    validation, not auth or body parsing.
+  - Subagent reviewer `Dirac` reported no findings.
+
+Verification:
+- `npx vitest run tests/app/server.test.ts` (65 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (704 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Hardened goal-run enum validation:
   - Public and direct goal-run scope, iteration outcome, and list status
     validation now share the same allowed-value constants before service
