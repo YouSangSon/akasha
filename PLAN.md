@@ -4,16 +4,19 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Migration Database Env Guard
+## Current Loop — HTTP Organization Header Guard
 
 Status:
-- Migration database URL resolution now rejects whitespace-only
-  `DATABASE_URL` and `POSTGRES_*` values.
-- Coverage verifies explicit database URLs, default fallback behavior, and
-  invalid whitespace env values without requiring a live Postgres instance.
-- Reviewer subagent found no issues.
-- Focused migration/config tests, typecheck, build, audit, full suite, and diff
-  whitespace checks passed.
+- HTTP memory routes now reject explicitly blank body `organizationId` values
+  and blank or repeated `x-organization-id` headers before registry dispatch.
+- Absent organization IDs remain a legacy path, and valid single header/body
+  organization IDs still preserve the existing precedence rules.
+- Coverage includes resolver unit cases and a raw HTTP duplicate-header
+  integration test that exercises Node's real header normalization behavior.
+- Reviewer subagent caught the duplicate raw-header gap; it was fixed before
+  final verification.
+- Focused route tests, typecheck, build, audit, full suite, and diff whitespace
+  checks passed.
 
 Loop closeout:
 - Commit locally; do not push.

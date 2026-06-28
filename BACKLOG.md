@@ -175,3 +175,5 @@ experience, documentation, features.
   config construction.
 - Whitespace-only migration database environment variables are rejected before
   pool construction.
+- Blank or repeated HTTP organization headers and blank body organization IDs
+  are rejected before registry dispatch.

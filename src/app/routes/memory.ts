@@ -72,14 +72,59 @@ export function resolveOrganizationId(
   req: IncomingMessage,
   bodyOrgRaw: unknown,
   auth: BearerToken | null | undefined,
-): { organizationId: string | undefined; conflict: boolean } {
+): {
+  organizationId: string | undefined;
+  conflict: boolean;
+  validationError?: string;
+} {
   const headerValue = req.headers["x-organization-id"];
-  const headerOrg = typeof headerValue === "string" ? headerValue.trim() : "";
-  const bodyOrg =
-    typeof bodyOrgRaw === "string" && bodyOrgRaw.trim().length > 0
-      ? bodyOrgRaw.trim()
-      : undefined;
-  const callerOrg = headerOrg.length > 0 ? headerOrg : bodyOrg;
+  if (countRawHeader(req, "x-organization-id") > 1) {
+    return {
+      organizationId: undefined,
+      conflict: false,
+      validationError: "x-organization-id must be provided at most once",
+    };
+  }
+
+  if (headerValue !== undefined && typeof headerValue !== "string") {
+    return {
+      organizationId: undefined,
+      conflict: false,
+      validationError: "x-organization-id must be a string",
+    };
+  }
+
+  const headerOrg =
+    typeof headerValue === "string" ? headerValue.trim() : undefined;
+  if (headerValue !== undefined && headerOrg?.length === 0) {
+    return {
+      organizationId: undefined,
+      conflict: false,
+      validationError: "x-organization-id must contain non-whitespace text",
+    };
+  }
+
+  if (bodyOrgRaw !== undefined && typeof bodyOrgRaw !== "string") {
+    return {
+      organizationId: undefined,
+      conflict: false,
+      validationError: "organizationId must be a string",
+    };
+  }
+
+  let bodyOrg: string | undefined;
+  if (typeof bodyOrgRaw === "string") {
+    bodyOrg = bodyOrgRaw.trim();
+    if (bodyOrg.length === 0) {
+      return {
+        organizationId: undefined,
+        conflict: false,
+        validationError: "organizationId must contain non-whitespace text",
+      };
+    }
+  }
+
+  const callerOrg = headerOrg ?? bodyOrg;
 
   if (auth?.organizationId) {
     if (callerOrg !== undefined && callerOrg !== auth.organizationId) {
@@ -89,6 +134,17 @@ export function resolveOrganizationId(
   }
 
   return { organizationId: callerOrg, conflict: false };
+}
+
+function countRawHeader(req: IncomingMessage, headerName: string): number {
+  const rawHeaders = req.rawHeaders ?? [];
+  let count = 0;
+  for (let i = 0; i < rawHeaders.length; i += 2) {
+    if (rawHeaders[i]?.toLowerCase() === headerName) {
+      count += 1;
+    }
+  }
+  return count;
 }
 
 function buildHandler<K extends ServiceToolName>(toolName: K, ctx: RouteContext) {
@@ -105,16 +161,16 @@ function buildHandler<K extends ServiceToolName>(toolName: K, ctx: RouteContext)
       }
 
       const bodyRecord = body as Record<string, unknown>;
-      if (hasMalformedOrganizationId(bodyRecord)) {
-        sendError(res, 400, "organizationId must be a string");
-        return;
-      }
-
       const resolved = resolveOrganizationId(
         req,
         bodyRecord.organizationId,
         auth,
       );
+
+      if (resolved.validationError) {
+        sendError(res, 400, resolved.validationError);
+        return;
+      }
 
       if (resolved.conflict) {
         sendError(
@@ -180,14 +236,6 @@ function buildHandler<K extends ServiceToolName>(toolName: K, ctx: RouteContext)
       sendError(res, 500, "internal server error");
     }
   };
-}
-
-function hasMalformedOrganizationId(input: Record<string, unknown>): boolean {
-  return (
-    Object.hasOwn(input, "organizationId") &&
-    input.organizationId !== undefined &&
-    typeof input.organizationId !== "string"
-  );
 }
 
 function normalizeUnresolvedOrganizationId(

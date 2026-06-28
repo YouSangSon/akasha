@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AddressInfo } from "node:net";
+import { createConnection, type AddressInfo } from "node:net";
 import {
   assertSafeAuthConfig,
   createOperatorServer,
@@ -21,6 +21,11 @@ import type { DependencyProbes } from "../../src/health/check-dependencies.js";
 type ServerHandle = {
   baseUrl: string;
   close: () => Promise<void>;
+};
+
+type RawHttpResponse = {
+  statusCode: number;
+  body: string;
 };
 
 function buildRegistry(): ToolRegistry {
@@ -150,6 +155,37 @@ async function startTestServer(
     close: () =>
       new Promise<void>((resolve) => server.close(() => resolve())),
   };
+}
+
+function sendRawHttpRequest(
+  baseUrl: string,
+  headLines: readonly string[],
+  body = "",
+): Promise<RawHttpResponse> {
+  const url = new URL(baseUrl);
+  return new Promise((resolve, reject) => {
+    const socket = createConnection(
+      { host: url.hostname, port: Number(url.port) },
+      () => {
+        socket.write(`${headLines.join("\r\n")}\r\n\r\n${body}`);
+      },
+    );
+    let rawResponse = "";
+
+    socket.setEncoding("utf8");
+    socket.on("data", (chunk) => {
+      rawResponse += chunk;
+    });
+    socket.on("error", reject);
+    socket.on("end", () => {
+      const [rawHead = "", ...bodyParts] = rawResponse.split("\r\n\r\n");
+      const statusLine = rawHead.split("\r\n")[0] ?? "";
+      const statusCode = Number(
+        /^HTTP\/\d(?:\.\d)?\s+(\d+)/.exec(statusLine)?.[1],
+      );
+      resolve({ statusCode, body: bodyParts.join("\r\n\r\n") });
+    });
+  });
 }
 
 describe("createOperatorServer", () => {
@@ -295,7 +331,7 @@ describe("createOperatorServer", () => {
     expect(registry.search_memory).not.toHaveBeenCalled();
   });
 
-  it("treats whitespace-only body organizationId as absent before validation", async () => {
+  it("rejects whitespace-only body organizationId before dispatch", async () => {
     const res = await fetch(`${handle.baseUrl}/v1/memory/search`, {
       method: "POST",
       headers: {
@@ -309,11 +345,42 @@ describe("createOperatorServer", () => {
       }),
     });
 
-    expect(res.status).toBe(200);
-    expect(registry.search_memory).toHaveBeenCalledWith({
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as {
+      success: boolean;
+      error: { message: string };
+    };
+    expect(body.success).toBe(false);
+    expect(body.error.message).toContain("non-whitespace");
+    expect(registry.search_memory).not.toHaveBeenCalled();
+  });
+
+  it("rejects duplicate x-organization-id headers before dispatch", async () => {
+    const body = JSON.stringify({
       projectKey: "p",
       query: "anything",
     });
+    const url = new URL(handle.baseUrl);
+
+    const res = await sendRawHttpRequest(
+      handle.baseUrl,
+      [
+        "POST /v1/memory/search HTTP/1.1",
+        `Host: ${url.host}`,
+        "Connection: close",
+        `Authorization: Bearer ${tokens[0]}`,
+        "Content-Type: application/json",
+        `Content-Length: ${Buffer.byteLength(body, "utf8")}`,
+        "X-Organization-Id: org-a",
+        "X-Organization-Id: org-b",
+      ],
+      body,
+    );
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain("x-organization-id");
+    expect(res.body).toContain("at most once");
+    expect(registry.search_memory).not.toHaveBeenCalled();
   });
 
   it("rejects non-string body organizationId before write dispatch", async () => {

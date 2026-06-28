@@ -46,6 +46,30 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened HTTP organization ID resolution:
+  - Memory HTTP routes now reject explicitly blank body `organizationId` values
+    before dispatch instead of silently treating them as absent.
+  - Blank `x-organization-id` headers and duplicate raw `x-organization-id`
+    headers now fail before registry dispatch.
+  - Existing valid precedence remains unchanged: token-bound org, then single
+    header org, then body org; truly absent org values remain legacy-compatible.
+  - Resolver coverage now models blank body/header values, repeated normalized
+    header arrays, and Node's comma-joined duplicate-header behavior via
+    `rawHeaders`.
+  - HTTP integration coverage sends duplicate raw headers over a socket to
+    exercise Node's real request parser behavior.
+  - Reviewer subagent caught the initial duplicate raw-header gap; fixed with
+    `rawHeaders` counting and raw HTTP coverage.
+
+Verification:
+- `npx vitest run tests/mcp/resolve-org.test.ts tests/app/server.test.ts` (83 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (798 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Hardened migration database environment validation:
   - Migration database URL resolution now rejects whitespace-only `DATABASE_URL`
     and `POSTGRES_*` values.

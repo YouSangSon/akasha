@@ -6,9 +6,14 @@ import { resolveOrganizationId } from "../../src/app/routes/memory.js";
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeReq(orgHeader?: string): IncomingMessage {
+function makeReq(
+  orgHeader?: string | string[],
+  rawHeaders: string[] = [],
+): IncomingMessage {
   return {
-    headers: orgHeader ? { "x-organization-id": orgHeader } : {},
+    headers:
+      orgHeader === undefined ? {} : { "x-organization-id": orgHeader },
+    rawHeaders,
   } as unknown as IncomingMessage;
 }
 
@@ -179,8 +184,8 @@ describe("resolveOrganizationId", () => {
     });
   });
 
-  describe("edge cases: empty or whitespace org values are ignored", () => {
-    it("treats an empty-string body.organizationId as absent", () => {
+  describe("edge cases: explicit blank org values are invalid", () => {
+    it("rejects an empty-string body.organizationId", () => {
       // Arrange
       const req = makeReq();
       const auth = { token: "t" };
@@ -190,9 +195,11 @@ describe("resolveOrganizationId", () => {
 
       // Assert
       expect(result.organizationId).toBeUndefined();
+      expect(result.conflict).toBe(false);
+      expect(result.validationError).toContain("organizationId");
     });
 
-    it("treats a whitespace-only body.organizationId as absent", () => {
+    it("rejects a whitespace-only body.organizationId", () => {
       // Arrange
       const req = makeReq();
       const auth = { token: "t" };
@@ -202,6 +209,55 @@ describe("resolveOrganizationId", () => {
 
       // Assert
       expect(result.organizationId).toBeUndefined();
+      expect(result.conflict).toBe(false);
+      expect(result.validationError).toContain("non-whitespace");
+    });
+
+    it("rejects a whitespace-only x-organization-id header", () => {
+      // Arrange
+      const req = makeReq("   ");
+      const auth = { token: "t" };
+
+      // Act
+      const result = resolveOrganizationId(req, undefined, auth);
+
+      // Assert
+      expect(result.organizationId).toBeUndefined();
+      expect(result.conflict).toBe(false);
+      expect(result.validationError).toContain("x-organization-id");
+    });
+
+    it("rejects repeated x-organization-id header values", () => {
+      // Arrange
+      const req = makeReq(["org-a", "org-b"]);
+      const auth = { token: "t" };
+
+      // Act
+      const result = resolveOrganizationId(req, undefined, auth);
+
+      // Assert
+      expect(result.organizationId).toBeUndefined();
+      expect(result.conflict).toBe(false);
+      expect(result.validationError).toContain("x-organization-id");
+    });
+
+    it("rejects repeated raw x-organization-id headers after Node joins them", () => {
+      // Arrange
+      const req = makeReq("org-a, org-b", [
+        "X-Organization-Id",
+        "org-a",
+        "x-organization-id",
+        "org-b",
+      ]);
+      const auth = { token: "t" };
+
+      // Act
+      const result = resolveOrganizationId(req, undefined, auth);
+
+      // Assert
+      expect(result.organizationId).toBeUndefined();
+      expect(result.conflict).toBe(false);
+      expect(result.validationError).toContain("at most once");
     });
   });
 });
