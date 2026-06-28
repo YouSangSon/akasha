@@ -392,6 +392,65 @@ describe("backup encryption key file shell guards", () => {
     ).resolves.toBe(false);
     expect(result.log).toContain(`remote.example:${result.backupDir}/`);
   });
+
+  it("rejects blank encrypted manifest artifact metadata before scp", async () => {
+    const keyDir = await mkdtemp(path.join(os.tmpdir(), "akasha-backup-key-"));
+    tempDirs.push(keyDir);
+    const keyPath = path.join(keyDir, "data-key");
+    await writeFile(keyPath, Buffer.alloc(32, 8));
+
+    const result = await runBackupShellScript("scripts/create-backup.sh", {
+      BACKUP_ENCRYPTION_KEY_FILE: keyPath,
+      STUB_BLANK_POSTGRES_FILE_NAME: "1",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.stderr).toContain(
+      "backup manifest postgres.fileName must contain non-whitespace text",
+    );
+    expect(result.log).toContain("ssh:");
+    expect(result.log).not.toContain("scp:");
+  });
+
+  it("rejects missing encrypted Qdrant manifest artifacts before scp", async () => {
+    const keyDir = await mkdtemp(path.join(os.tmpdir(), "akasha-backup-key-"));
+    tempDirs.push(keyDir);
+    const keyPath = path.join(keyDir, "data-key");
+    await writeFile(keyPath, Buffer.alloc(32, 8));
+
+    const result = await runBackupShellScript("scripts/create-backup.sh", {
+      BACKUP_ENCRYPTION_KEY_FILE: keyPath,
+      STUB_DROP_QDRANT: "1",
+      VECTOR_BACKEND: "qdrant",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.stderr).toContain(
+      "backup manifest qdrant.fileName must contain non-whitespace text",
+    );
+    expect(result.log).toContain("ssh:");
+    expect(result.log).not.toContain("scp:");
+  });
+
+  it("rejects present-but-empty pgvector Qdrant manifest artifacts before scp", async () => {
+    const keyDir = await mkdtemp(path.join(os.tmpdir(), "akasha-backup-key-"));
+    tempDirs.push(keyDir);
+    const keyPath = path.join(keyDir, "data-key");
+    await writeFile(keyPath, Buffer.alloc(32, 8));
+
+    const result = await runBackupShellScript("scripts/create-backup.sh", {
+      BACKUP_ENCRYPTION_KEY_FILE: keyPath,
+      STUB_EMPTY_QDRANT: "1",
+      VECTOR_BACKEND: "pgvector",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.stderr).toContain(
+      "backup manifest qdrant.fileName must contain non-whitespace text",
+    );
+    expect(result.log).toContain("ssh:");
+    expect(result.log).not.toContain("scp:");
+  });
 });
 
 async function runBackupShellScript(
@@ -483,7 +542,36 @@ fi
     ),
     writeExecutable(
       path.join(binDir, "ssh"),
-      "#!/usr/bin/env sh\nprintf 'ssh:%s\\n' \"$*\" >> \"$STUB_LOG\"\n",
+      `#!/usr/bin/env sh
+printf 'ssh:%s\\n' "$*" >> "$STUB_LOG"
+if [ "\${STUB_BLANK_POSTGRES_FILE_NAME:-}" = "1" ]; then
+  node - "\${BACKUP_DIR}/manifest-\${BACKUP_TIMESTAMP}.json" <<'NODE'
+const fs = require("node:fs");
+const manifestPath = process.argv[2];
+const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+manifest.postgres.fileName = " \\n\\t ";
+fs.writeFileSync(manifestPath, \`\${JSON.stringify(manifest, null, 2)}\\n\`);
+NODE
+fi
+if [ "\${STUB_DROP_QDRANT:-}" = "1" ]; then
+  node - "\${BACKUP_DIR}/manifest-\${BACKUP_TIMESTAMP}.json" <<'NODE'
+const fs = require("node:fs");
+const manifestPath = process.argv[2];
+const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+delete manifest.qdrant;
+fs.writeFileSync(manifestPath, \`\${JSON.stringify(manifest, null, 2)}\\n\`);
+NODE
+fi
+if [ "\${STUB_EMPTY_QDRANT:-}" = "1" ]; then
+  node - "\${BACKUP_DIR}/manifest-\${BACKUP_TIMESTAMP}.json" <<'NODE'
+const fs = require("node:fs");
+const manifestPath = process.argv[2];
+const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+manifest.qdrant = {};
+fs.writeFileSync(manifestPath, \`\${JSON.stringify(manifest, null, 2)}\\n\`);
+NODE
+fi
+`,
     ),
     writeExecutable(
       path.join(binDir, "scp"),

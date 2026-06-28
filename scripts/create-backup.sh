@@ -80,10 +80,19 @@ if [ -n "${BACKUP_TARGET_HOST:-}" ]; then
 const fs = require("node:fs");
 const path = require("node:path");
 const manifest = JSON.parse(fs.readFileSync(process.env.MANIFEST_PATH, "utf8"));
+if (manifest === null || typeof manifest !== "object" || Array.isArray(manifest)) {
+  throw new Error("backup manifest must be a JSON object");
+}
+function requireManifestText(value, label) {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`backup manifest ${label} must contain non-whitespace text`);
+  }
+  return value;
+}
 const files = [path.join(process.env.BACKUP_DIR, path.basename(process.env.MANIFEST_PATH))];
-files.push(path.join(process.env.BACKUP_DIR, manifest.postgres.fileName));
-if (manifest.qdrant?.fileName) files.push(path.join(process.env.BACKUP_DIR, manifest.qdrant.fileName));
-if (manifest.qdrant?.metadataFileName) files.push(path.join(process.env.BACKUP_DIR, manifest.qdrant.metadataFileName));
+files.push(path.join(process.env.BACKUP_DIR, requireManifestText(manifest.postgres?.fileName, "postgres.fileName")));
+if (manifest.qdrant !== undefined || manifest.vectorBackend !== "pgvector") files.push(path.join(process.env.BACKUP_DIR, requireManifestText(manifest.qdrant?.fileName, "qdrant.fileName")));
+if (manifest.qdrant?.metadataFileName !== undefined) files.push(path.join(process.env.BACKUP_DIR, requireManifestText(manifest.qdrant.metadataFileName, "qdrant.metadataFileName")));
 process.stdout.write(files.join("\n"));
 NODE
 )"

@@ -88,6 +88,8 @@ experience, documentation, features.
   path construction.
 - Blank backup-encryption manifest artifact metadata is rejected before
   idempotent returns or artifact encryption work.
+- Blank encrypted off-box backup manifest copy metadata is rejected before
+  `scp` invocation.
 - Invalid direct repository search/list/graph limits are rejected before SQL
   work.
 - Invalid direct audit repository limits are rejected before SQL work.

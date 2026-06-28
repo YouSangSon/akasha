@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened encrypted off-box backup copy manifest parsing:
+  - `scripts/create-backup.sh` now validates manifest artifact filenames before
+    building the encrypted off-box `scp` list.
+  - Qdrant artifact names are required whenever a Qdrant manifest block is
+    present or the backend is not `pgvector`.
+  - Worker implementation passed spec review and code-quality re-review after
+    fixing Qdrant fail-closed consistency gaps.
+
+Verification:
+- `npx vitest run tests/scripts/backup-verify.test.ts` (37 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (974 passed, 34 skipped across 69 files)
+- `git diff --check`
+
 - Hardened backup-encryption manifest metadata parsing:
   - Backup encryption now validates manifest metadata before idempotent returns
     or artifact encryption work.
