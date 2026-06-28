@@ -30,3 +30,4 @@ experience, documentation, features.
 - Transformers dependency docs/comments aligned with package metadata.
 - Stale Transformers dynamic-import `@ts-ignore` removed.
 - Architecture docs local embedding module filename drift fixed.
+- Operations restore examples use Qdrant collection-name variables.

@@ -87,8 +87,9 @@ gunzip -c /var/lib/developer-memory-os/backups/postgres-YYYYMMDD-HHMM.sql.gz \
   | docker compose exec -T postgres psql -U memory -d memory_os
 
 # 3. VECTOR_BACKEND=qdrant 인 경우 Qdrant 스냅샷 복원.
+QDRANT_COLLECTION_NAME=${QDRANT_COLLECTION_NAME:-memory_chunks_v1}
 docker compose exec qdrant curl -X POST \
-  http://localhost:6333/collections/memory_chunks_v1/snapshots/upload \
+  "http://localhost:6333/collections/${QDRANT_COLLECTION_NAME}/snapshots/upload?priority=snapshot" \
   -F snapshot=@/var/lib/developer-memory-os/backups/qdrant-YYYYMMDD-HHMM.snapshot
 
 #    VECTOR_BACKEND=pgvector 에서는 벡터가 Postgres dump 안에 있으므로 이 단계 생략.

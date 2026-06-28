@@ -4,13 +4,15 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Embedding Module Doc Drift
+## Current Loop — Operations Restore Collection Drift
 
 Status:
-- Architecture docs reference `src/embedding/local-embeddings.ts`, but the
-  actual module is `src/embedding/local-embedding.ts`.
-- English/Korean docs now use the actual filename.
-- Public docs drift coverage now checks embedding provider module filenames.
+- General operations restore examples now use `QDRANT_COLLECTION_NAME` instead
+  of a hardcoded `memory_chunks_v1` snapshot upload path.
+- Upload examples now use `priority=snapshot`, matching the self-hosted
+  restore-smoke guidance.
+- Public docs drift coverage now guards both operations and self-hosted restore
+  upload paths.
 - Review, focused public docs drift test, typecheck, build, audit, full test
   suite, and diff whitespace checks passed.
 

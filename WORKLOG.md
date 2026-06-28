@@ -46,6 +46,24 @@ Verification:
 
 ## 2026-06-28
 
+- Aligned general operations Qdrant restore examples with collection-name
+  configuration:
+  - English/Korean operations docs now use `QDRANT_COLLECTION_NAME` for the
+    snapshot upload collection instead of hardcoding `memory_chunks_v1`.
+  - The upload examples include `priority=snapshot`, matching the self-hosted
+    restore-smoke command.
+  - Public docs drift coverage now guards both operations and self-hosted
+    restore upload paths.
+
+Verification:
+- `npx vitest run tests/scripts/public-docs-drift.test.ts`
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (615 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Fixed architecture docs embedding module filename drift:
   - English/Korean architecture docs now reference the real
     `src/embedding/local-embedding.ts` module instead of the stale pluralized
