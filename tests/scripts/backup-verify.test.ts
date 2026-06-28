@@ -215,6 +215,64 @@ describe("resolveBackupTargetDir", () => {
   });
 });
 
+describe("required backup shell environment guards", () => {
+  const sideEffectMarkers = ["pg_dump:", "curl:", "ssh:", "scp:"];
+
+  it.each([
+    ["unset", undefined],
+    ["empty", ""],
+    ["whitespace", " \n\t "],
+  ])("rejects %s BACKUP_DIR before command side effects", async (_label, backupDir) => {
+    for (const scriptPath of [
+      "scripts/backup-postgres.sh",
+      "scripts/snapshot-qdrant.sh",
+      "scripts/create-backup.sh",
+    ]) {
+      const result = await runBackupShellScript(scriptPath, {
+        BACKUP_DIR: backupDir,
+      });
+
+      expect(result.ok).toBe(false);
+      expect(result.stderr).toContain("BACKUP_DIR is required");
+      for (const marker of sideEffectMarkers) {
+        expect(result.log).not.toContain(marker);
+      }
+    }
+  });
+
+  it.each([
+    ["unset", undefined],
+    ["empty", ""],
+    ["whitespace", " \n\t "],
+  ])("rejects %s DATABASE_URL before pg_dump or remote side effects", async (_label, databaseUrl) => {
+    const result = await runBackupShellScript("scripts/backup-postgres.sh", {
+      DATABASE_URL: databaseUrl,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.stderr).toContain("DATABASE_URL is required");
+    for (const marker of sideEffectMarkers) {
+      expect(result.log).not.toContain(marker);
+    }
+  });
+
+  it.each([
+    ["unset", undefined],
+    ["empty", ""],
+    ["whitespace", " \n\t "],
+  ])("rejects %s QDRANT_URL before curl or remote side effects", async (_label, qdrantUrl) => {
+    const result = await runBackupShellScript("scripts/snapshot-qdrant.sh", {
+      QDRANT_URL: qdrantUrl,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.stderr).toContain("QDRANT_URL is required");
+    for (const marker of sideEffectMarkers) {
+      expect(result.log).not.toContain(marker);
+    }
+  });
+});
+
 describe("backup target directory shell guards", () => {
   it.each([
     "scripts/backup-postgres.sh",
@@ -510,7 +568,7 @@ describe("backup manifest writer shell guards", () => {
 
 async function runBackupShellScript(
   scriptPath: string,
-  envOverrides: Record<string, string>,
+  envOverrides: Record<string, string | undefined>,
 ): Promise<{
   ok: boolean;
   stdout: string;
@@ -536,6 +594,11 @@ async function runBackupShellScript(
     STUB_REAL_NODE: process.execPath,
     ...envOverrides,
   };
+  for (const [key, value] of Object.entries(env)) {
+    if (value === undefined) {
+      delete env[key];
+    }
+  }
   if (
     envOverrides.STUB_EXISTING_MANIFEST !== undefined &&
     envOverrides.STUB_CORRUPT_MANIFEST_AFTER_POSTGRES !== "1"
@@ -594,7 +657,7 @@ exit "$status"
     ),
     writeExecutable(
       path.join(binDir, "pg_dump"),
-      "#!/usr/bin/env sh\nprintf 'postgres dump bytes'\n",
+      "#!/usr/bin/env sh\nprintf 'pg_dump:%s\\n' \"$*\" >> \"$STUB_LOG\"\nprintf 'postgres dump bytes'\n",
     ),
     writeExecutable(path.join(binDir, "gzip"), "#!/usr/bin/env sh\ncat\n"),
     writeExecutable(

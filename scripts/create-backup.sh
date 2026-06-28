@@ -20,15 +20,15 @@ if [ "${BACKUP_ENCRYPTION_KEY_FILE+x}" = "x" ]; then
   fi
 fi
 
+if [ -z "$(printf '%s' "${BACKUP_DIR:-}" | tr -d '[:space:]')" ]; then
+  echo "BACKUP_DIR is required" >&2
+  exit 1
+fi
+
 BACKUP_TIMESTAMP="${timestamp}" ./scripts/backup-postgres.sh
 
 if [ "${vector_backend}" = "qdrant" ]; then
   BACKUP_TIMESTAMP="${timestamp}" ./scripts/snapshot-qdrant.sh
-fi
-
-if [ -z "${BACKUP_DIR:-}" ]; then
-  echo "BACKUP_DIR is required" >&2
-  exit 1
 fi
 
 manifest="${BACKUP_DIR}/manifest-${timestamp}.json"

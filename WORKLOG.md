@@ -46,6 +46,24 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened required backup shell env guards:
+  - `scripts/backup-postgres.sh`, `scripts/snapshot-qdrant.sh`, and
+    `scripts/create-backup.sh` now reject unset, empty, and whitespace-only
+    required env values before filesystem, database, curl, SSH, or scp work.
+  - `create-backup.sh` validates `BACKUP_DIR` before invoking child backup
+    scripts.
+  - Worker implementation passed spec review and code-quality review with no
+    findings.
+
+Verification:
+- `npx vitest run tests/scripts/backup-verify.test.ts` (55 passed)
+- `sh -n scripts/backup-postgres.sh && sh -n scripts/snapshot-qdrant.sh && sh -n scripts/create-backup.sh`
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (1000 passed, 34 skipped across 69 files)
+- `git diff --check`
+
 - Hardened bearer token comma-separated config parsing:
   - `MEMORY_API_TOKENS` now rejects leading commas, trailing commas, repeated
     commas, whitespace-only whole values, and whitespace-only list entries

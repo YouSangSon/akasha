@@ -96,6 +96,8 @@ experience, documentation, features.
   configuration.
 - Blank `MEMORY_API_TOKENS` comma-list entries are rejected before server auth
   configuration.
+- Blank required backup shell env values are rejected before backup side
+  effects.
 - Invalid direct repository search/list/graph limits are rejected before SQL
   work.
 - Invalid direct audit repository limits are rejected before SQL work.

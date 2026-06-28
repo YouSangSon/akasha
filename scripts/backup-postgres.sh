@@ -4,12 +4,12 @@ set -eu
 timestamp="${BACKUP_TIMESTAMP:-$(date -u +%Y%m%d-%H%M)}"
 created_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-if [ -z "${BACKUP_DIR:-}" ]; then
+if [ -z "$(printf '%s' "${BACKUP_DIR:-}" | tr -d '[:space:]')" ]; then
   echo "BACKUP_DIR is required" >&2
   exit 1
 fi
 
-if [ -z "${DATABASE_URL:-}" ]; then
+if [ -z "$(printf '%s' "${DATABASE_URL:-}" | tr -d '[:space:]')" ]; then
   echo "DATABASE_URL is required" >&2
   exit 1
 fi
