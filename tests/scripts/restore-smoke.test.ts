@@ -3,6 +3,7 @@ import {
   type BackupManifest,
   buildRestoreSmokeCommandEnv,
   buildRestoreSmokeToolInput,
+  parseRestoreBackupManifest,
   resolveOptionalRestoreSmokeTextEnv,
   resolveRestoreAppPort,
   resolveRestoreSmokeTextEnv,
@@ -249,6 +250,66 @@ describe("buildRestoreSmokeCommandEnv", () => {
   });
 });
 
+describe("parseRestoreBackupManifest", () => {
+  const baseManifest: BackupManifest = {
+    createdAt: "2026-06-27T00:00:00Z",
+    vectorBackend: "qdrant",
+    postgres: {
+      fileName: "postgres-20260627-0000.sql.gz",
+      sha256: "pg-sha",
+    },
+    qdrant: {
+      fileName: "qdrant-20260627-0000.snapshot",
+      sha256: "qdrant-sha",
+      metadataFileName: "qdrant-custom_chunks-20260627-0000.json",
+    },
+  };
+
+  it("parses pgvector manifests without Qdrant metadata", () => {
+    const manifest = parseRestoreBackupManifest(
+      JSON.stringify({
+        ...baseManifest,
+        vectorBackend: "pgvector",
+        qdrant: undefined,
+      }),
+    );
+
+    expect(manifest).toMatchObject({
+      vectorBackend: "pgvector",
+      postgres: {
+        fileName: "postgres-20260627-0000.sql.gz",
+      },
+    });
+    expect(manifest.qdrant).toBeUndefined();
+  });
+
+  it.each([
+    ["createdAt", { createdAt: " \n\t " }],
+    ["postgres.fileName", { postgres: { fileName: " \n\t " } }],
+    ["postgres.sha256", { postgres: { sha256: " \n\t " } }],
+    ["qdrant.fileName", { qdrant: { fileName: " \n\t " } }],
+    ["qdrant.sha256", { qdrant: { sha256: " \n\t " } }],
+    ["qdrant.metadataFileName", { qdrant: { metadataFileName: " \n\t " } }],
+  ])("rejects blank manifest %s", (label, override) => {
+    expect(() =>
+      parseRestoreBackupManifest(
+        JSON.stringify(mergeManifest(baseManifest, override)),
+      ),
+    ).toThrow(`backup manifest ${label} must contain non-whitespace text`);
+  });
+
+  it("rejects unsupported vector backends", () => {
+    expect(() =>
+      parseRestoreBackupManifest(
+        JSON.stringify({
+          ...baseManifest,
+          vectorBackend: "sqlite",
+        }),
+      ),
+    ).toThrow("backup manifest vectorBackend must be qdrant or pgvector");
+  });
+});
+
 describe("buildRestoreSmokeToolInput", () => {
   it("passes organizationId through to strict restore-smoke read calls", () => {
     expect(
@@ -382,3 +443,49 @@ describe("resolveOptionalRestoreSmokeTextEnv", () => {
     },
   );
 });
+
+type TestBackupManifestOverride = Partial<
+  Omit<BackupManifest, "postgres" | "qdrant">
+> & {
+  postgres?: Partial<BackupManifest["postgres"]>;
+  qdrant?: Partial<NonNullable<BackupManifest["qdrant"]>>;
+};
+
+function mergeManifest(
+  manifest: BackupManifest,
+  override: TestBackupManifestOverride,
+): BackupManifest {
+  const qdrant =
+    override.qdrant === undefined
+      ? manifest.qdrant
+      : {
+          fileName: override.qdrant.fileName ?? manifest.qdrant?.fileName ?? "",
+          sha256: override.qdrant.sha256 ?? manifest.qdrant?.sha256 ?? "",
+          ...(override.qdrant.metadataFileName !== undefined ||
+          manifest.qdrant?.metadataFileName !== undefined
+            ? {
+                metadataFileName:
+                  override.qdrant.metadataFileName ??
+                  manifest.qdrant?.metadataFileName,
+              }
+            : {}),
+          ...(override.qdrant.collectionName !== undefined ||
+          manifest.qdrant?.collectionName !== undefined
+            ? {
+                collectionName:
+                  override.qdrant.collectionName ??
+                  manifest.qdrant?.collectionName,
+              }
+            : {}),
+        };
+
+  return {
+    ...manifest,
+    ...override,
+    postgres: {
+      ...manifest.postgres,
+      ...override.postgres,
+    },
+    qdrant,
+  };
+}

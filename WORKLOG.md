@@ -46,6 +46,19 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened restore-smoke manifest metadata parsing:
+  - Restore smoke now rejects whitespace-only manifest artifact metadata before
+    restore path construction.
+  - Unsupported manifest vector backend values are rejected explicitly.
+
+Verification:
+- `npx vitest run tests/scripts/restore-smoke.test.ts` (43 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (958 passed, 34 skipped across 69 files)
+- `git diff --check`
+
 - Hardened backup manifest metadata parsing:
   - Backup verification now rejects whitespace-only required manifest metadata
     before local or remote artifact checks.

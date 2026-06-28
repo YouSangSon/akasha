@@ -84,6 +84,8 @@ experience, documentation, features.
   assertions are configured.
 - Blank backup manifest artifact metadata is rejected before local or off-box
   artifact verification work.
+- Blank restore-smoke manifest artifact metadata is rejected before restore
+  path construction.
 - Invalid direct repository search/list/graph limits are rejected before SQL
   work.
 - Invalid direct audit repository limits are rejected before SQL work.
