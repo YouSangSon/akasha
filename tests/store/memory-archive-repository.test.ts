@@ -439,6 +439,20 @@ describe("MemoryArchiveRepository.restoreToCanonical (P19.1)", () => {
     ).rejects.toThrow(/org mismatch/);
   });
 
+  it("rejects whitespace-only organizationId before querying", async () => {
+    const { pool, query } = makeMockPool(async () => ({ rows: [{ id: 1 }] }));
+    const repo = createMemoryArchiveRepository(pool);
+
+    await expect(
+      repo.restoreToCanonical(
+        makeArchive({ organizationId: " \n\t " }),
+        " \n\t ",
+      ),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(query).not.toHaveBeenCalled();
+  });
+
   it("rejects when archive predates P19.1 (sourceId is null)", async () => {
     const { pool } = makeMockPool(async () => ({ rows: [{ id: 1 }] }));
     const repo = createMemoryArchiveRepository(pool);

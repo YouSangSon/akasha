@@ -126,3 +126,5 @@ experience, documentation, features.
   persistence.
 - Whitespace-only archive lookup organization IDs are rejected before
   persistence.
+- Whitespace-only archive restore organization IDs are rejected before
+  persistence.

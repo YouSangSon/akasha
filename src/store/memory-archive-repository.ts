@@ -508,6 +508,8 @@ export function createMemoryArchiveRepository(
     },
 
     async restoreToCanonical(archive, organizationId) {
+      assertNonBlankText(organizationId, "organizationId");
+
       // Insert preserves original_created_at / original_updated_at so
       // forensic queries see the actual age of the resurrected record. The
       // source_id is restored verbatim — caller is expected to verify the

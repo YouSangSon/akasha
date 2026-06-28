@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened archive restore organization validation:
+  - `restoreToCanonical` now rejects whitespace-only organization IDs before
+    restoring archived rows into canonical memory.
+  - Archive repository coverage verifies invalid organization IDs fail before
+    `pool.query()`.
+  - Reviewer skipped after previous reviewer-agent timeouts; self-review found
+    no issues.
+
+Verification:
+- `npx vitest run tests/store/memory-archive-repository.test.ts` (26 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (731 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened archive lookup organization validation:
   - `findArchiveByIds` now rejects whitespace-only organization IDs before
     archive lookup.
