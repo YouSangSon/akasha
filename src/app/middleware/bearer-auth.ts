@@ -1,4 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 
 // Each configured token may bind to a single organization. Format:
@@ -67,10 +67,9 @@ function parseBearerEntry(entry: string): BearerToken {
   return { token, organizationId };
 }
 
-// Constant-time check against the configured token list. timingSafeEqual
-// requires equal-length buffers, so length mismatch short-circuits before
-// the compare to avoid a length-leak side channel. Returns the matched
-// BearerToken (with optional org binding) so callers can enforce tenant scope.
+// Compare fixed-width token digests and scan the whole configured token list.
+// This avoids leaking configured token length or match position through obvious
+// early-exit timing differences while still returning the matched binding.
 export function matchBearer(
   authHeader: string | undefined,
   tokens: readonly BearerToken[],
@@ -83,19 +82,17 @@ export function matchBearer(
     return null;
   }
 
-  const providedBuf = Buffer.from(provided);
+  const providedDigest = tokenDigest(provided);
+  let matched: BearerToken | null = null;
 
   for (const entry of tokens) {
-    const tokenBuf = Buffer.from(entry.token);
-    if (
-      tokenBuf.length === providedBuf.length &&
-      timingSafeEqual(tokenBuf, providedBuf)
-    ) {
-      return entry;
+    const entryDigest = tokenDigest(entry.token);
+    if (timingSafeEqual(entryDigest, providedDigest) && matched === null) {
+      matched = entry;
     }
   }
 
-  return null;
+  return matched;
 }
 
 export async function authenticateBearer(
@@ -150,4 +147,8 @@ function extractBearerValue(authHeader: string | undefined): string | null {
 
   const provided = authHeader.slice("Bearer ".length).trim();
   return provided.length > 0 ? provided : null;
+}
+
+function tokenDigest(token: string): Buffer {
+  return createHash("sha256").update(token, "utf8").digest();
 }

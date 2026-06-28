@@ -126,7 +126,7 @@ describe("matchBearer", () => {
   });
 
   describe("timing-safe comparison: timingSafeEqual is invoked", () => {
-    it("calls timingSafeEqual (not string equality) for a same-length matching token", () => {
+    it("checks every configured token before returning a first-entry match", () => {
       // Arrange — reset the hoisted spy so prior test calls don't bleed in.
       timingSafeEqualSpy.mockClear();
 
@@ -135,19 +135,32 @@ describe("matchBearer", () => {
 
       // Assert — the match must succeed (spy passes through to real impl)
       expect(result).not.toBeNull();
-      // The spy must have been called at least once — proving the
-      // implementation does not fall back to a plain string comparison.
-      expect(timingSafeEqualSpy).toHaveBeenCalled();
+      // One fixed-width digest comparison per configured token keeps match
+      // position from deciding how early the loop exits.
+      expect(timingSafeEqualSpy).toHaveBeenCalledTimes(TOKENS.length);
     });
 
-    it("does not throw when header length differs from configured token length (length guard prevents timingSafeEqual buffer mismatch)", () => {
-      // Arrange — different-length input; the SUT must guard against calling
-      // timingSafeEqual with mismatched buffers (which would throw).
+    it("compares different-length input without skipping configured tokens", () => {
+      // Arrange — different-length input; digest comparison keeps
+      // timingSafeEqual buffers fixed-width.
+      timingSafeEqualSpy.mockClear();
       const shortHeader = "Bearer x";
 
-      // Act & Assert — must not throw
-      expect(() => matchBearer(shortHeader, TOKENS)).not.toThrow();
-      expect(matchBearer(shortHeader, TOKENS)).toBeNull();
+      // Act
+      const result = matchBearer(shortHeader, TOKENS);
+
+      // Assert
+      expect(result).toBeNull();
+      expect(timingSafeEqualSpy).toHaveBeenCalledTimes(TOKENS.length);
+    });
+
+    it("checks every configured token before returning a later match", () => {
+      timingSafeEqualSpy.mockClear();
+
+      const result = matchBearer("Bearer legacy-token", TOKENS);
+
+      expect(result).toEqual({ token: "legacy-token" });
+      expect(timingSafeEqualSpy).toHaveBeenCalledTimes(TOKENS.length);
     });
   });
 });

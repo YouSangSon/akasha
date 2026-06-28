@@ -46,6 +46,25 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened static bearer-token comparison:
+  - `matchBearer` now hashes provided and configured static tokens to
+    fixed-width SHA-256 digests before `timingSafeEqual`.
+  - The matcher scans every configured static token and returns the first
+    matched binding after the scan, avoiding obvious token-length and
+    match-position timing differences.
+  - Focused tests cover first-token matches, later-token matches, and
+    different-length input.
+  - Subagent reviewer `Raman` reported no findings on the staged patch.
+
+Verification:
+- `npx vitest run tests/app/bearer-auth.test.ts`
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (616 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Refreshed in-range dependency lockfile/install updates:
   - `@modelcontextprotocol/sdk` 1.28.0 -> 1.29.0.
   - `@qdrant/js-client-rest` 1.17.0 -> 1.18.0.

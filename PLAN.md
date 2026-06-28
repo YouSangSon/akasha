@@ -4,16 +4,17 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — In-Range Dependency Refresh
+## Current Loop — Static Bearer Timing Hardening
 
 Status:
-- `npm outdated` reports in-range updates for `@modelcontextprotocol/sdk`,
-  `@qdrant/js-client-rest`, and `pg`.
-- Lockfile now resolves `@modelcontextprotocol/sdk` 1.29.0,
-  `@qdrant/js-client-rest` 1.18.0, and `pg` 8.22.0.
-- Major upgrades are intentionally skipped without approval.
-- Package metadata checked: compatible Node engines and MIT/Apache licenses.
-- Review, build, audit, full test suite, and diff whitespace checks passed.
+- Static bearer token checks now compare fixed-width SHA-256 digests.
+- `matchBearer` scans the full configured static-token list before returning
+  the first matched binding, avoiding obvious token-length and match-position
+  timing differences.
+- Focused auth tests cover first-token matches, later-token matches, and
+  different-length input.
+- Reviewer found no issues.
+- Typecheck, build, audit, full test suite, and diff whitespace checks passed.
 
 Loop closeout:
 - Commit locally; do not push.

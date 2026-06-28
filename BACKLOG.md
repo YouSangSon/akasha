@@ -33,3 +33,5 @@ experience, documentation, features.
 - Operations restore examples use Qdrant collection-name variables.
 - Operations restore examples use host Qdrant curl path.
 - In-range dependency lockfile/install updates refreshed.
+- Static bearer-token comparison scans fixed-width digests across configured
+  tokens.
