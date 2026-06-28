@@ -683,6 +683,20 @@ describe("createMemoryRepository (unit — no PG required)", () => {
     expect(queryCalls[0]?.sql).not.toContain("mr.durability <> 'archived'");
   });
 
+  it("listMemoryForGovernance rejects whitespace-only organization IDs before querying", async () => {
+    const mockPool = { query: vi.fn() };
+    const repo = createMemoryRepository(mockPool as never);
+
+    await expect(
+      repo.listMemoryForGovernance(
+        { scopeType: "project", scopeId: "proj-x" },
+        { organizationId: " \n\t " },
+      ),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(mockPool.query).not.toHaveBeenCalled();
+  });
+
   it("inspectMemoryGraph scopes entity and relationship reads by org and memory scope", async () => {
     const queryCalls: SqlQueryCall[] = [];
     const mockPool = {

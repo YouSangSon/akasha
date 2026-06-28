@@ -114,3 +114,5 @@ experience, documentation, features.
   work, even with the legacy anonymous read flag enabled.
 - Whitespace-only repository search organization IDs are rejected before
   persistence.
+- Whitespace-only governance list organization IDs are rejected before
+  persistence.

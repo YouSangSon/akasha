@@ -4,12 +4,13 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Repository Search Organization Guard
+## Current Loop — Governance List Organization Guard
 
 Status:
-- `searchMemory` now rejects whitespace-only organization IDs before issuing a
-  Postgres query.
-- Coverage verifies invalid search organization IDs fail before `pool.query()`.
+- `listMemoryForGovernance` now rejects whitespace-only organization IDs before
+  issuing a Postgres query.
+- Coverage verifies invalid governance-list organization IDs fail before
+  `pool.query()`.
 - Reviewer skipped after previous reviewer-agent timeouts; self-review found no
   issues.
 - Focused store tests, typecheck, build, audit, full suite, and diff whitespace

@@ -427,6 +427,8 @@ export function createMemoryRepository(
     },
 
     async listMemoryForGovernance(scope, options) {
+      assertNonBlankText(options.organizationId, "organizationId");
+
       const limit = clampListLimit(options.limit);
       const params: unknown[] = [
         scope.scopeType,
