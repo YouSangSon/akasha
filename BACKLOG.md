@@ -181,3 +181,5 @@ experience, documentation, features.
   inputs are rejected before writing generated files.
 - Whitespace-only direct lifecycle init repo/output path inputs are rejected
   before resolving paths or writing generated files.
+- Whitespace-only CLI project, task, user scope, kind, content, content-file,
+  and output-directory flags are rejected before dispatch or filesystem reads.

@@ -4,8 +4,7 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { parseCliArgs, runCli } from "../src/cli.js";
 import { writeLifecycleInit } from "../src/lifecycle/init.js";
-import { createToolRegistry, type ToolRegistry } from "../src/mcp/server.js";
-import type { MemoryRepository } from "../src/types.js";
+import type { ToolRegistry } from "../src/mcp/server.js";
 import { goalRunRegistryStubs } from "./fixtures/goal-run-stubs.js";
 
 function expectDirectoryToBeEmpty(dir: string): void {
@@ -214,6 +213,59 @@ describe("parseCliArgs", () => {
     ).toThrow(/--organization-id/);
   });
 
+  it("rejects whitespace-only semantic CLI flags during parsing", () => {
+    const cases = [
+      {
+        argv: ["pack", "--project", " \n\t ", "--task", "continue work"],
+        flag: "--project",
+      },
+      {
+        argv: ["pack", "--project", "project-alpha", "--task", " \n\t "],
+        flag: "--task",
+      },
+      {
+        argv: [
+          "pack",
+          "--project",
+          "project-alpha",
+          "--user",
+          " \n\t ",
+          "--task",
+          "continue work",
+        ],
+        flag: "--user",
+      },
+      {
+        argv: ["remember", "--project", "project-alpha", "--kind", " \n\t ", "--content", "x"],
+        flag: "--kind",
+      },
+      {
+        argv: ["remember", "--project", "project-alpha", "--kind", "summary", "--content", " \n\t "],
+        flag: "--content",
+      },
+      {
+        argv: [
+          "remember",
+          "--project",
+          "project-alpha",
+          "--kind",
+          "summary",
+          "--content-file",
+          " \n\t ",
+        ],
+        flag: "--content-file",
+      },
+      {
+        argv: ["init", "--project", "project-alpha", "--out-dir", " \n\t "],
+        flag: "--out-dir",
+      },
+    ] as const;
+
+    for (const testCase of cases) {
+      expect(() => parseCliArgs([...testCase.argv])).toThrow(testCase.flag);
+    }
+  });
+
   it("rejects missing project arguments", () => {
     expect(() =>
       parseCliArgs(["pack", "--task", "continue work"]),
@@ -398,13 +450,22 @@ describe("parseCliArgs", () => {
     });
   });
 
-  it("rejects whitespace-only remember content through the real registry path", async () => {
-    const addMemory = vi.fn();
-    const repository = { addMemory } as unknown as MemoryRepository;
-    const registry = createToolRegistry({
-      repository,
-      defaultUserScopeId: "user-a",
-    });
+  it("rejects whitespace-only remember content before registry dispatch", async () => {
+    const registry: ToolRegistry = {
+      ...goalRunRegistryStubs(),
+      build_context_pack: vi.fn(),
+      search_memory: vi.fn(),
+      add_memory: vi.fn(),
+      compact_memory: vi.fn(),
+      list_memory: vi.fn(),
+      inspect_memory_graph: vi.fn(),
+      update_memory: vi.fn(),
+      delete_memory: vi.fn(),
+      tag_memory: vi.fn(),
+      list_audit_log: vi.fn(),
+      unarchive_memory: vi.fn(),
+      reindex_memory: vi.fn(),
+    };
 
     await expect(
       runCli(
@@ -419,9 +480,46 @@ describe("parseCliArgs", () => {
         ],
         { registry },
       ),
-    ).rejects.toThrow(/non-whitespace text/);
+    ).rejects.toThrow(/--content/);
 
-    expect(addMemory).not.toHaveBeenCalled();
+    expect(registry.add_memory).not.toHaveBeenCalled();
+  });
+
+  it("rejects whitespace-only content-file path before filesystem reads", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "akasha-cli-remember-"));
+    const registry: ToolRegistry = {
+      ...goalRunRegistryStubs(),
+      build_context_pack: vi.fn(),
+      search_memory: vi.fn(),
+      add_memory: vi.fn(),
+      compact_memory: vi.fn(),
+      list_memory: vi.fn(),
+      inspect_memory_graph: vi.fn(),
+      update_memory: vi.fn(),
+      delete_memory: vi.fn(),
+      tag_memory: vi.fn(),
+      list_audit_log: vi.fn(),
+      unarchive_memory: vi.fn(),
+      reindex_memory: vi.fn(),
+    };
+
+    await expect(
+      runCli(
+        [
+          "remember",
+          "--project",
+          "project-alpha",
+          "--kind",
+          "summary",
+          "--content-file",
+          " \n\t ",
+        ],
+        { registry, cwd: tmpDir },
+      ),
+    ).rejects.toThrow(/--content-file/);
+
+    expect(registry.add_memory).not.toHaveBeenCalled();
+    expectDirectoryToBeEmpty(tmpDir);
   });
 
   it("rejects whitespace-only organizationId before registry calls", async () => {
@@ -491,7 +589,7 @@ describe("parseCliArgs", () => {
         ],
         { cwd: tmpDir },
       ),
-    ).rejects.toThrow(/outDir/);
+    ).rejects.toThrow(/--out-dir/);
 
     expect(fs.existsSync(path.join(tmpDir, ".akasha"))).toBe(false);
     expectDirectoryToBeEmpty(tmpDir);

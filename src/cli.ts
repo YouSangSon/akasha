@@ -76,19 +76,19 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
     const value = rest[index + 1];
 
     if (token === "--project") {
-      projectKey = requireFlagValue(token, value);
+      projectKey = requireNonBlankFlagValue(token, value);
       index += 1;
       continue;
     }
 
     if (token === "--task") {
-      task = requireFlagValue(token, value);
+      task = requireNonBlankFlagValue(token, value);
       index += 1;
       continue;
     }
 
     if (token === "--user") {
-      userScopeId = requireFlagValue(token, value);
+      userScopeId = requireNonBlankFlagValue(token, value);
       index += 1;
       continue;
     }
@@ -211,13 +211,13 @@ function parseRememberArgs(rest: string[]): ParsedCliArgs {
     const value = rest[index + 1];
 
     if (token === "--project") {
-      projectKey = requireFlagValue(token, value);
+      projectKey = requireNonBlankFlagValue(token, value);
       index += 1;
       continue;
     }
 
     if (token === "--user") {
-      userScopeId = requireFlagValue(token, value);
+      userScopeId = requireNonBlankFlagValue(token, value);
       index += 1;
       continue;
     }
@@ -229,19 +229,21 @@ function parseRememberArgs(rest: string[]): ParsedCliArgs {
     }
 
     if (token === "--kind") {
-      kind = requireFlagValue(token, value);
+      kind = requireNonBlankFlagValue(token, value);
       index += 1;
       continue;
     }
 
     if (token === "--content") {
-      content = requireFlagValue(token, value, { allowLeadingDash: true });
+      content = requireNonBlankFlagValue(token, value, {
+        allowLeadingDash: true,
+      });
       index += 1;
       continue;
     }
 
     if (token === "--content-file") {
-      contentFile = requireFlagValue(token, value);
+      contentFile = requireNonBlankFlagValue(token, value);
       index += 1;
       continue;
     }
@@ -286,13 +288,13 @@ function parseInitArgs(rest: string[]): ParsedCliArgs {
     const value = rest[index + 1];
 
     if (token === "--project") {
-      projectKey = requireFlagValue(token, value);
+      projectKey = requireNonBlankFlagValue(token, value);
       index += 1;
       continue;
     }
 
     if (token === "--user") {
-      userScopeId = requireFlagValue(token, value);
+      userScopeId = requireNonBlankFlagValue(token, value);
       index += 1;
       continue;
     }
@@ -304,13 +306,13 @@ function parseInitArgs(rest: string[]): ParsedCliArgs {
     }
 
     if (token === "--task") {
-      task = requireFlagValue(token, value);
+      task = requireNonBlankFlagValue(token, value);
       index += 1;
       continue;
     }
 
     if (token === "--out-dir") {
-      outDir = requireFlagValue(token, value);
+      outDir = requireNonBlankFlagValue(token, value);
       index += 1;
       continue;
     }
@@ -350,8 +352,12 @@ function requireFlagValue(
   return value;
 }
 
-function requireNonBlankFlagValue(flag: string, value: string | undefined): string {
-  const resolved = requireFlagValue(flag, value);
+function requireNonBlankFlagValue(
+  flag: string,
+  value: string | undefined,
+  options: { allowLeadingDash?: boolean } = {},
+): string {
+  const resolved = requireFlagValue(flag, value, options);
   if (resolved.trim().length === 0) {
     throw new Error(`${flag} must contain non-whitespace text`);
   }

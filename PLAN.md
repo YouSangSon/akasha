@@ -4,15 +4,14 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Lifecycle Init Path Guard
+## Current Loop — CLI Semantic Flag Guard
 
 Status:
-- Direct lifecycle initialization now rejects whitespace-only `repoDir` and
-  optional `outDir` values before resolving paths or writing generated files.
-- CLI-level blank `--out-dir` behavior is covered; direct tests also verify
-  whitespace-only path inputs leave the temp repo empty.
-- Reviewer subagent found a weak no-write assertion; it was tightened before
-  final verification.
+- CLI parsing now rejects whitespace-only semantic flags for project, task,
+  user scope, kind, content, content-file, and output directory before registry
+  dispatch or filesystem reads.
+- Existing `--content` values that start with a dash remain supported.
+- Reviewer subagent found no issues.
 - Focused CLI tests, typecheck, build, audit, full suite, and diff whitespace
   checks passed.
 

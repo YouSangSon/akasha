@@ -46,6 +46,24 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened CLI semantic flag parsing:
+  - `pack`, `reindex`, `remember`, and `init` now reject whitespace-only
+    project, task, user scope, kind, content, content-file, and out-dir flag
+    values during parsing.
+  - `--content` still allows leading dashes for summaries that begin with
+    command-like text.
+  - Coverage verifies parse-time failures, no registry dispatch for blank
+    content, and no filesystem reads for blank content-file paths.
+  - Reviewer subagent found no issues.
+
+Verification:
+- `npx vitest run tests/cli.test.ts` (23 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (802 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened direct lifecycle init path inputs:
   - `writeLifecycleInit()` now rejects whitespace-only `repoDir` and optional
     `outDir` values before resolving paths or writing generated files.
