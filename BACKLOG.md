@@ -173,3 +173,5 @@ experience, documentation, features.
   silently becoming unbound.
 - Whitespace-only required service environment variables are rejected before
   config construction.
+- Whitespace-only migration database environment variables are rejected before
+  pool construction.

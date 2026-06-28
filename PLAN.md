@@ -4,15 +4,15 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Required Service Env Guard
+## Current Loop — Migration Database Env Guard
 
 Status:
-- Required service environment variables now reject whitespace-only values.
-- Coverage verifies direct required values and fallback Postgres env values fail
-  before config construction.
-- Reviewer subagent found no issues; fallback Postgres regressions were added
-  for residual coverage.
-- Focused config/server tests, typecheck, build, audit, full suite, and diff
+- Migration database URL resolution now rejects whitespace-only
+  `DATABASE_URL` and `POSTGRES_*` values.
+- Coverage verifies explicit database URLs, default fallback behavior, and
+  invalid whitespace env values without requiring a live Postgres instance.
+- Reviewer subagent found no issues.
+- Focused migration/config tests, typecheck, build, audit, full suite, and diff
   whitespace checks passed.
 
 Loop closeout:

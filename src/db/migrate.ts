@@ -492,18 +492,42 @@ export async function runMigrations(pool: PgPool): Promise<void> {
   await pool.query(readPostgresMigrationSql());
 }
 
-function resolveMigrationDatabaseUrl(env: NodeJS.ProcessEnv): string {
-  if (env.DATABASE_URL) {
-    return env.DATABASE_URL;
+export function resolveMigrationDatabaseUrl(env: NodeJS.ProcessEnv): string {
+  if (env.DATABASE_URL !== undefined) {
+    return requireMigrationEnv(env.DATABASE_URL, "DATABASE_URL");
   }
 
-  const user = env.POSTGRES_USER ?? "memory";
-  const password = env.POSTGRES_PASSWORD ?? "memory";
-  const host = env.POSTGRES_HOST ?? "127.0.0.1";
-  const port = env.POSTGRES_PORT ?? "5432";
-  const database = env.POSTGRES_DB ?? "memory_os";
+  const user = migrationEnvOrDefault(env.POSTGRES_USER, "memory", "POSTGRES_USER");
+  const password = migrationEnvOrDefault(
+    env.POSTGRES_PASSWORD,
+    "memory",
+    "POSTGRES_PASSWORD",
+  );
+  const host = migrationEnvOrDefault(env.POSTGRES_HOST, "127.0.0.1", "POSTGRES_HOST");
+  const port = migrationEnvOrDefault(env.POSTGRES_PORT, "5432", "POSTGRES_PORT");
+  const database = migrationEnvOrDefault(env.POSTGRES_DB, "memory_os", "POSTGRES_DB");
 
   return `postgres://${user}:${password}@${host}:${port}/${database}`;
+}
+
+function migrationEnvOrDefault(
+  value: string | undefined,
+  fallback: string,
+  name: string,
+): string {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  return requireMigrationEnv(value, name);
+}
+
+function requireMigrationEnv(value: string, name: string): string {
+  if (value.trim().length === 0) {
+    throw new Error(`Invalid ${name}: must contain non-whitespace text`);
+  }
+
+  return value;
 }
 
 export async function migrateFromEnv(

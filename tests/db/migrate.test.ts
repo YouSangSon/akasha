@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createPgPool } from "../../src/db/connection.js";
 import {
   readPostgresMigrationSql,
+  resolveMigrationDatabaseUrl,
   runMigrations,
 } from "../../src/db/migrate.js";
 
@@ -18,6 +19,37 @@ const adminConnectionString =
   `postgres://memory:memory@127.0.0.1:${postgresPort}/postgres`;
 const testConnectionString =
   `postgres://memory:memory@127.0.0.1:${postgresPort}/memory_os_test`;
+
+describe("resolveMigrationDatabaseUrl", () => {
+  it("uses DATABASE_URL when provided", () => {
+    const databaseUrl = "postgres://memory:memory@127.0.0.1:5432/memory_os";
+
+    expect(
+      resolveMigrationDatabaseUrl({
+        DATABASE_URL: databaseUrl,
+      }),
+    ).toBe(databaseUrl);
+  });
+
+  it("falls back to local migration defaults when env values are absent", () => {
+    expect(resolveMigrationDatabaseUrl({})).toBe(
+      "postgres://memory:memory@127.0.0.1:5432/memory_os",
+    );
+  });
+
+  it.each([
+    ["DATABASE_URL", { DATABASE_URL: " \n\t " }],
+    ["POSTGRES_USER", { POSTGRES_USER: " \n\t " }],
+    ["POSTGRES_PASSWORD", { POSTGRES_PASSWORD: " \n\t " }],
+    ["POSTGRES_HOST", { POSTGRES_HOST: " \n\t " }],
+    ["POSTGRES_PORT", { POSTGRES_PORT: " \n\t " }],
+    ["POSTGRES_DB", { POSTGRES_DB: " \n\t " }],
+  ])("rejects whitespace-only %s", (name, overrides) => {
+    expect(() => resolveMigrationDatabaseUrl(overrides)).toThrow(
+      `Invalid ${name}: must contain non-whitespace text`,
+    );
+  });
+});
 
 async function waitForPostgres() {
   let lastError: unknown;

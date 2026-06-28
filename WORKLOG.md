@@ -46,6 +46,23 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened migration database environment validation:
+  - Migration database URL resolution now rejects whitespace-only `DATABASE_URL`
+    and `POSTGRES_*` values.
+  - Migration coverage verifies explicit database URLs, default fallback
+    behavior, and invalid whitespace env values without requiring live
+    Postgres.
+  - Reviewer subagent found no issues.
+
+Verification:
+- `npx vitest run tests/db/migrate.test.ts tests/config/service-config.test.ts` (36 passed, 8 skipped)
+- `npx vitest run tests/db/migrate.test.ts tests/config/service-config.test.ts tests/scripts/repo-secret-hygiene.test.ts` (38 passed, 8 skipped)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (794 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened required service environment validation:
   - Required service environment variables now reject whitespace-only values.
   - Config coverage verifies direct required values and fallback Postgres env
