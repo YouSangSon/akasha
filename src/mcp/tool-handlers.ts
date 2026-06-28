@@ -12,6 +12,7 @@ import {
   writeCanonicalMemory,
 } from "../store/canonical-indexing.js";
 import { assertNoSecrets } from "../store/secret-scrub.js";
+import { assertNonBlankMemoryContent } from "../store/memory-content.js";
 import { buildGoalContextPack } from "../goal-run/build-goal-context.js";
 import {
   DEFAULT_REPEAT_THRESHOLD,
@@ -194,6 +195,8 @@ export function createToolHandlers(input: {
 
   return {
     async add_memory(toolInput) {
+      assertNonBlankMemoryContent(toolInput.content);
+
       const scope = toolInput.scope ?? "project";
       const userScopeId = resolveUserScopeId({
         cwd,
@@ -582,6 +585,10 @@ export function createToolHandlers(input: {
 
     async update_memory(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
+      if (toolInput.content !== undefined) {
+        assertNonBlankMemoryContent(toolInput.content);
+      }
+
       return await withCanonicalServices(async (services) => {
         const organizationId = toolInput.organizationId ?? "default";
         const memory = await services.repository.updateMemoryRecord({

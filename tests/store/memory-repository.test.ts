@@ -172,6 +172,30 @@ describe("createMemoryRepository (unit — no PG required)", () => {
     });
   });
 
+  it("addMemory rejects whitespace-only content before opening a transaction", async () => {
+    const mockPool = {
+      connect: vi.fn(),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    await expect(
+      repo.addMemory({
+        scopeType: "project",
+        scopeId: "proj-x",
+        memoryType: "fact",
+        content: " \n\t ",
+        source: {
+          scopeType: "project",
+          scopeId: "proj-x",
+          sourceType: "document",
+          sourceRef: "docs/spec.md",
+        },
+      }),
+    ).rejects.toThrow(/non-whitespace text/);
+
+    expect(mockPool.connect).not.toHaveBeenCalled();
+  });
+
   it("upsertPostgresSource pushes sourceRef filter into SQL WHERE clause (PERF-5)", () => {
     // addMemory calls upsertPostgresSource via a transaction client.
     // The SELECT for an existing source must pass sourceRef as $5 and use
@@ -643,6 +667,44 @@ describe("createMemoryRepository (unit — no PG required)", () => {
       tags: ["fresh", "urgent"],
       updatedAt: "2026-06-26T00:00:01.000Z",
     });
+  });
+
+  it("updateMemoryRecord rejects whitespace-only content before updating the row", async () => {
+    const clientQueryCalls: SqlQueryCall[] = [];
+    const mockClient = {
+      query: vi.fn().mockImplementation((sql: string, params?: unknown[]) => {
+        clientQueryCalls.push({ sql, params: params ?? [] });
+        if (sql === "BEGIN" || sql === "COMMIT" || sql === "ROLLBACK") {
+          return Promise.resolve({ rows: [] });
+        }
+        if (sql.includes("SELECT") && sql.includes("FROM memory_records mr")) {
+          return Promise.resolve({ rows: [hydratedMemoryRow()] });
+        }
+        if (sql.includes("UPDATE memory_records")) {
+          return Promise.reject(new Error("UPDATE should not run"));
+        }
+        return Promise.resolve({ rows: [] });
+      }),
+      release: vi.fn(),
+    };
+    const mockPool = {
+      connect: vi.fn().mockResolvedValue(mockClient),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    await expect(
+      repo.updateMemoryRecord({
+        id: 42,
+        organizationId: "org-a",
+        content: " \n\t ",
+      }),
+    ).rejects.toThrow(/non-whitespace text/);
+
+    expect(
+      clientQueryCalls.some(({ sql }) => sql.includes("UPDATE memory_records")),
+    ).toBe(false);
+    expect(clientQueryCalls.some(({ sql }) => sql === "ROLLBACK")).toBe(true);
+    expect(mockClient.release).toHaveBeenCalledTimes(1);
   });
 
   it("updateMemoryRecord rejects secret-shaped content before persistence", async () => {

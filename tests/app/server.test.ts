@@ -295,6 +295,51 @@ describe("createOperatorServer", () => {
     expect(registry.search_memory).not.toHaveBeenCalled();
   });
 
+  it("rejects whitespace-only memory content before dispatch", async () => {
+    const add = await fetch(`${handle.baseUrl}/v1/memory`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        projectKey: "p",
+        kind: "decision",
+        content: " \n\t ",
+      }),
+    });
+
+    expect(add.status).toBe(400);
+    const addBody = (await add.json()) as {
+      success: boolean;
+      error: { message: string };
+    };
+    expect(addBody.success).toBe(false);
+    expect(addBody.error.message).toContain("non-whitespace text");
+    expect(registry.add_memory).not.toHaveBeenCalled();
+
+    const update = await fetch(`${handle.baseUrl}/v1/memory/update`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${tokens[0]}`,
+      },
+      body: JSON.stringify({
+        memoryId: 42,
+        content: "   ",
+      }),
+    });
+
+    expect(update.status).toBe(400);
+    const updateBody = (await update.json()) as {
+      success: boolean;
+      error: { message: string };
+    };
+    expect(updateBody.success).toBe(false);
+    expect(updateBody.error.message).toContain("non-whitespace text");
+    expect(registry.update_memory).not.toHaveBeenCalled();
+  });
+
   it("rejects add_memory default/project-scope payloads without projectKey before dispatch", async () => {
     const defaultScope = await fetch(`${handle.baseUrl}/v1/memory`, {
       method: "POST",

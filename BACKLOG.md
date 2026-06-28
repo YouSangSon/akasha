@@ -39,3 +39,4 @@ experience, documentation, features.
 - Rate-limit env parsing and bucket capacity require positive integers.
 - Compaction apply candidate IDs require positive safe decimal integers before
   run creation.
+- Whitespace-only memory content is rejected before dispatch or persistence.

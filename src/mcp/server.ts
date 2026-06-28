@@ -6,6 +6,7 @@ import * as z from "zod/v4";
 import {
   MCP_CONTEXT_TOOL_DESCRIPTORS,
   SERVICE_TOOL_DESCRIPTORS,
+  nonBlankTextInputSchema,
 } from "./tool-schemas.js";
 import { createToolRegistry } from "./tool-registry.js";
 import { SUPPORTED_MEMORY_KINDS } from "./tool-utils.js";
@@ -53,7 +54,7 @@ export type {
 const ELICITED_MEMORY_SCHEMA = z.object({
   projectKey: z.string().min(1).optional(),
   kind: z.enum(SUPPORTED_MEMORY_KINDS).optional(),
-  content: z.string().min(1),
+  content: nonBlankTextInputSchema,
 });
 
 const MEMORY_CLASSIFICATION_SCHEMA = z.object({
@@ -587,7 +588,7 @@ function registerAkashaPrompts(server: McpServer, registry: ToolRegistry): void 
       argsSchema: {
         projectKey: z.string().min(1),
         kind: z.string().min(1),
-        content: z.string().min(1),
+        content: nonBlankTextInputSchema,
       },
     },
     async ({ projectKey, kind, content }) => ({

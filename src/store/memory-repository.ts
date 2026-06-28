@@ -17,6 +17,7 @@ import type {
   SearchMemoryResult,
 } from "../types.js";
 import { assertOrganizationId } from "./assert-organization-id.js";
+import { assertNonBlankMemoryContent } from "./memory-content.js";
 import { scanForSecrets, SecretDetectedError } from "./secret-scrub.js";
 
 const DEFAULT_ORG_ID = "default";
@@ -165,6 +166,8 @@ export function createMemoryRepository(
 ): CanonicalMemoryRepository {
   return {
     async addMemory(input) {
+      assertNonBlankMemoryContent(input.content);
+
       const organizationId = input.organizationId ?? DEFAULT_ORG_ID;
       const client = await pool.connect();
 
@@ -465,6 +468,9 @@ export function createMemoryRepository(
 
         const nextTitle = input.title === undefined ? currentRow.title : input.title;
         const nextContent = input.content ?? currentRow.content;
+        if (input.content !== undefined) {
+          assertNonBlankMemoryContent(nextContent);
+        }
         const nextSummary =
           input.summary === undefined ? currentRow.summary : input.summary;
         assertNoSecretsInMemoryFields({

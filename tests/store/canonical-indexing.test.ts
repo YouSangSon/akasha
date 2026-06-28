@@ -15,6 +15,45 @@ const exampleGitHubToken = [
 ].join("_");
 
 describe("canonical indexing", () => {
+  it("rejects whitespace-only canonical memory content before persistence side effects", async () => {
+    const repository = {
+      addMemory: vi.fn(),
+    };
+
+    await expect(
+      writeCanonicalMemory({
+        repository: repository as never,
+        chunkRepository: {} as never,
+        ingestJobs: {} as never,
+        embeddings: {} as never,
+        vectorIndex: {} as never,
+        embedding: {
+          provider: "openai",
+          model: "text-embedding-3-small",
+          dimensions: 1536,
+          version: "v1",
+          targetTokens: 2,
+          overlapTokens: 1,
+        },
+        memory: {
+          scopeType: "project",
+          scopeId: "project-alpha",
+          projectKey: "project-alpha",
+          memoryType: "decision",
+          content: " \n\t ",
+          source: {
+            scopeType: "project",
+            scopeId: "project-alpha",
+            sourceType: "conversation",
+            sourceRef: "manual://session",
+          },
+        },
+      }),
+    ).rejects.toThrow(/non-whitespace text/);
+
+    expect(repository.addMemory).not.toHaveBeenCalled();
+  });
+
   it("writes chunks, embeddings, ingest jobs, and qdrant points for a canonical memory", async () => {
     const record = createRecord({
       id: 501,
@@ -452,8 +491,8 @@ describe("canonical indexing", () => {
     expect(repository.deleteMemoryRecord).toHaveBeenCalledWith(504, "default");
   });
 
-  it("skips write-ahead and qdrant upsert when insertChunks returns an empty array (empty content)", async () => {
-    const record = createRecord({ id: 505, content: "" });
+  it("skips write-ahead and qdrant upsert when insertChunks returns an empty array", async () => {
+    const record = createRecord({ id: 505, content: "nonblank content" });
     const repository = {
       addMemory: vi.fn().mockResolvedValue(record),
     };

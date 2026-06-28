@@ -1,5 +1,6 @@
 import { chunkText, type TextChunk } from "../chunk/chunk-text.js";
 import type { PgPool, PgQueryable } from "../db/connection.js";
+import { assertNonBlankMemoryContent } from "./memory-content.js";
 import { scanForSecrets, SecretDetectedError } from "./secret-scrub.js";
 import type { VectorIndex, VectorPoint } from "../vector/vector-index.js";
 import { buildVectorPoint } from "../vector/point-builder.js";
@@ -541,6 +542,8 @@ export async function writeCanonicalMemory(input: {
   embedding: ChunkEmbeddingConfig;
   memory: AddMemoryInput;
 }): Promise<SearchMemoryResult> {
+  assertNonBlankMemoryContent(input.memory.content);
+
   // Guard: refuse to persist user-supplied text that looks like a credential.
   // Scans every user-controlled field (content + title + summary) and throws
   // a single SecretDetectedError with the union of categories found, so the

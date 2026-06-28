@@ -4,16 +4,17 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Compaction Candidate ID Parsing
+## Current Loop — Whitespace-Only Memory Content Guard
 
 Status:
-- `applyCompaction` now validates archive candidate IDs before creating a
-  compaction run.
-- Candidate IDs must be positive safe decimal integers, avoiding `parseInt`
-  truncation such as `12abc` or `12.5` to `12`.
-- Focused test covers fractional IDs failing before run creation, archive
-  application, or vector deletion.
-- Reviewer found no issues.
+- Memory writes now reject whitespace-only content at HTTP/MCP schema,
+  direct registry handler, canonical write, and repository add/update
+  boundaries.
+- CLI, HTTP, MCP protocol, direct registry, canonical indexing, and repository
+  tests cover blank content rejection before dispatch or persistence side
+  effects.
+- Review first caught a schema-only enforcement gap; the invariant now lives in
+  shared store-level validation. Final re-review found no issues.
 - Typecheck, build, audit, full test suite, and diff whitespace checks passed.
 
 Loop closeout:

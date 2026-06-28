@@ -46,6 +46,29 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened memory content validation:
+  - Memory writes now reject whitespace-only content at HTTP/MCP schema,
+    direct registry handler, canonical write, and repository add/update
+    boundaries.
+  - CLI, HTTP, MCP protocol, direct registry, canonical indexing, and
+    repository tests cover blank content rejection before dispatch or
+    persistence side effects.
+  - Initial review caught that schema-only validation missed direct
+    registry/CLI/canonical write paths; the patch was moved to a shared
+    store-level invariant and re-tested.
+  - Follow-up review requested direct repository and MCP protocol coverage;
+    the added tests closed both gaps. Final re-review reported no issues.
+
+Verification:
+- `npx vitest run tests/cli.test.ts tests/app/server.test.ts tests/mcp/server.test.ts tests/store/canonical-indexing.test.ts tests/store/memory-repository.test.ts`
+  (192 passed, 7 skipped)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (628 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Hardened compaction apply candidate ID parsing:
   - `applyCompaction` now validates archive candidate IDs before creating a
     compaction run.

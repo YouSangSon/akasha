@@ -177,6 +177,12 @@ const sampledMemoryClassificationOutputSchema = z
   .passthrough();
 
 const durabilityInputSchema = z.enum(["ephemeral", "durable", "archived"]);
+export const nonBlankTextInputSchema = z
+  .string()
+  .min(1)
+  .refine((value) => value.trim().length > 0, {
+    message: "must contain non-whitespace text",
+  });
 
 export const SERVICE_TOOL_DESCRIPTORS = [
   {
@@ -188,7 +194,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
       scope: z.enum(["project", "user"]).optional(),
       userScopeId: z.string().min(1).optional(),
       kind: z.enum(SUPPORTED_MEMORY_KINDS),
-      content: z.string().min(1),
+      content: nonBlankTextInputSchema,
     },
     outputSchema: {
       ok: z.literal(true),
@@ -329,7 +335,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
       memoryId: z.number().int().positive(),
       kind: z.enum(SUPPORTED_MEMORY_KINDS).optional(),
       title: z.string().nullable().optional(),
-      content: z.string().min(1).optional(),
+      content: nonBlankTextInputSchema.optional(),
       summary: z.string().nullable().optional(),
       importance: z.number().int().optional(),
       durability: durabilityInputSchema.optional(),
@@ -575,7 +581,7 @@ export const MCP_CONTEXT_TOOL_DESCRIPTORS = [
       "Use MCP sampling to suggest a memory kind and concise summary for candidate memory text.",
     inputSchema: {
       organizationId: z.string().min(1).optional(),
-      content: z.string().min(1),
+      content: nonBlankTextInputSchema,
       instruction: z.string().min(1).optional(),
       maxTokens: z.number().int().positive().max(1000).optional(),
     },

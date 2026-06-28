@@ -3,7 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { parseCliArgs, runCli } from "../src/cli.js";
-import type { ToolRegistry } from "../src/mcp/server.js";
+import { createToolRegistry, type ToolRegistry } from "../src/mcp/server.js";
+import type { MemoryRepository } from "../src/types.js";
 import { goalRunRegistryStubs } from "./fixtures/goal-run-stubs.js";
 
 describe("parseCliArgs", () => {
@@ -352,6 +353,32 @@ describe("parseCliArgs", () => {
       memoryId: "project:project-alpha:1",
       summary: "Stored lifecycle summary",
     });
+  });
+
+  it("rejects whitespace-only remember content through the real registry path", async () => {
+    const addMemory = vi.fn();
+    const repository = { addMemory } as unknown as MemoryRepository;
+    const registry = createToolRegistry({
+      repository,
+      defaultUserScopeId: "user-a",
+    });
+
+    await expect(
+      runCli(
+        [
+          "remember",
+          "--project",
+          "project-alpha",
+          "--kind",
+          "summary",
+          "--content",
+          " \n\t ",
+        ],
+        { registry },
+      ),
+    ).rejects.toThrow(/non-whitespace text/);
+
+    expect(addMemory).not.toHaveBeenCalled();
   });
 
   it("runs remember with --content-file without putting content in argv", async () => {

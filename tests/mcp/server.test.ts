@@ -294,6 +294,18 @@ describe("createToolRegistry", () => {
     });
   });
 
+  it("rejects whitespace-only content through the direct add_memory registry path", async () => {
+    const registry = createToolRegistry({ repository: createRepository() });
+
+    await expect(
+      registry.add_memory({
+        projectKey: "project-alpha",
+        kind: "decision",
+        content: " \n\t ",
+      }),
+    ).rejects.toThrow(/non-whitespace text/);
+  });
+
   it("searches memory using the Task 6 public tool contract", async () => {
     const registry = createToolRegistry({ repository: createRepository() });
 
@@ -941,6 +953,24 @@ describe("createToolRegistry", () => {
     const vectorDeleteOrder =
       services.vectorIndex.deleteByRecordIds.mock.invocationCallOrder[0]!;
     expect(replaceOrder).toBeLessThan(vectorDeleteOrder);
+  });
+
+  it("rejects whitespace-only content through the direct update_memory registry path", async () => {
+    const services = createCanonicalServices();
+    const registry = createToolRegistry({
+      resolveCanonicalServices: async () => services,
+    });
+
+    await expect(
+      registry.update_memory({
+        organizationId: "org-a",
+        memoryId: 501,
+        content: " \n\t ",
+      }),
+    ).rejects.toThrow(/non-whitespace text/);
+
+    expect(services.repository.updateMemoryRecord).not.toHaveBeenCalled();
+    expect(services.vectorIndex.deleteByRecordIds).not.toHaveBeenCalled();
   });
 
   it("does not delete existing index state when update_memory embedding refresh fails", async () => {
@@ -1993,6 +2023,44 @@ describe("createMcpServer structured outputs", () => {
     await server.close();
   });
 
+  it("rejects whitespace-only standard memory content before registry dispatch", async () => {
+    const registry = buildRegistryForMcpProtocol();
+    const server = createMcpServer({ registry });
+    const client = await createInMemoryClient(server);
+
+    const addResult = await client.callTool({
+      name: "add_memory",
+      arguments: {
+        projectKey: "project-alpha",
+        kind: "decision",
+        content: " \n\t ",
+      },
+    });
+    const updateResult = await client.callTool({
+      name: "update_memory",
+      arguments: {
+        memoryId: 12,
+        content: " \n\t ",
+      },
+    });
+
+    for (const result of [addResult, updateResult]) {
+      expect(result.isError).toBe(true);
+      const errorContent = result.content as Array<{ type: string; text: string }>;
+      expect(errorContent[0]).toEqual(
+        expect.objectContaining({
+          type: "text",
+          text: expect.stringContaining("non-whitespace text"),
+        }),
+      );
+    }
+    expect(registry.add_memory).not.toHaveBeenCalled();
+    expect(registry.update_memory).not.toHaveBeenCalled();
+
+    await client.close();
+    await server.close();
+  });
+
   it("stores accepted elicited memory through add_memory_interactive", async () => {
     const registry = buildRegistryForMcpProtocol();
     const server = createMcpServer({ registry });
@@ -2043,6 +2111,43 @@ describe("createMcpServer structured outputs", () => {
         content: "Decision: use MCP elicitation for user-confirmed memory.",
       },
     });
+
+    await client.close();
+    await server.close();
+  });
+
+  it("rejects whitespace-only elicited memory content before storage", async () => {
+    const registry = buildRegistryForMcpProtocol();
+    const server = createMcpServer({ registry });
+    const client = await createInMemoryClient(
+      server,
+      { capabilities: { elicitation: { form: {} } } },
+      (candidate) => {
+        candidate.setRequestHandler(ElicitRequestSchema, async () => ({
+          action: "accept",
+          content: {
+            projectKey: "project-alpha",
+            kind: "decision",
+            content: " \n\t ",
+          },
+        }));
+      },
+    );
+
+    const result = await client.callTool({
+      name: "add_memory_interactive",
+      arguments: {},
+    });
+
+    expect(result.isError).toBe(true);
+    const errorContent = result.content as Array<{ type: string; text: string }>;
+    expect(errorContent[0]).toEqual(
+      expect.objectContaining({
+        type: "text",
+        text: expect.stringContaining("non-whitespace text"),
+      }),
+    );
+    expect(registry.add_memory).not.toHaveBeenCalled();
 
     await client.close();
     await server.close();
@@ -2127,6 +2232,42 @@ describe("createMcpServer structured outputs", () => {
         confidence: 0.91,
       }),
     });
+
+    await client.close();
+    await server.close();
+  });
+
+  it("rejects whitespace-only classification content before sampling", async () => {
+    const createMessage = vi.fn(async () => {
+      throw new Error("sampling should not run for invalid content");
+    });
+    const server = createMcpServer({
+      registry: buildRegistryForMcpProtocol(),
+    });
+    const client = await createInMemoryClient(
+      server,
+      { capabilities: { sampling: {} } },
+      (candidate) => {
+        candidate.setRequestHandler(CreateMessageRequestSchema, createMessage);
+      },
+    );
+
+    const result = await client.callTool({
+      name: "classify_memory_candidate",
+      arguments: {
+        content: " \n\t ",
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    const errorContent = result.content as Array<{ type: string; text: string }>;
+    expect(errorContent[0]).toEqual(
+      expect.objectContaining({
+        type: "text",
+        text: expect.stringContaining("non-whitespace text"),
+      }),
+    );
+    expect(createMessage).not.toHaveBeenCalled();
 
     await client.close();
     await server.close();
