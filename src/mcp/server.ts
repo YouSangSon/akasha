@@ -119,6 +119,20 @@ export async function startStdioServer(options: CreateMcpServerOptions = {}) {
   return server;
 }
 
+export function resolveStdioCwd(
+  env: NodeJS.ProcessEnv = process.env,
+  getFallbackCwd: () => string = () => process.cwd(),
+): string {
+  const cwd = env.DMO_CWD;
+  if (cwd === undefined) {
+    return getFallbackCwd();
+  }
+  if (cwd.trim().length === 0) {
+    throw new Error("DMO_CWD must contain non-whitespace text");
+  }
+  return cwd;
+}
+
 function toToolResult(result: unknown) {
   return {
     content: [
@@ -608,7 +622,7 @@ function registerAkashaPrompts(server: McpServer, registry: ToolRegistry): void 
 }
 
 async function main() {
-  const cwd = process.env.DMO_CWD ?? process.cwd();
+  const cwd = resolveStdioCwd();
   await startStdioServer({ cwd });
 }
 

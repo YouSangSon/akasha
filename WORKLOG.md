@@ -46,6 +46,23 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened MCP stdio cwd resolution:
+  - `resolveStdioCwd()` now rejects whitespace-only `DMO_CWD` values before
+    stdio server startup.
+  - Valid configured paths are returned unchanged so paths with spaces keep
+    working.
+  - Fallback `process.cwd()` lookup remains lazy when `DMO_CWD` is configured.
+  - Reviewer subagent caught the initial eager fallback regression; fixed before
+    final verification.
+
+Verification:
+- `npx vitest run tests/mcp/stdio-cwd.test.ts tests/scripts/public-docs-drift.test.ts` (26 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (841 passed, 34 skipped across 68 files)
+- `git diff --check`
+
 - Hardened restore-smoke Qdrant collection resolution:
   - Explicit whitespace-only manifest `qdrant.collectionName` and
     `QDRANT_COLLECTION_NAME` values now fail instead of falling back to another

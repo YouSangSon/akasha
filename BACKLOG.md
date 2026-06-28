@@ -195,3 +195,5 @@ experience, documentation, features.
   dispatch.
 - Whitespace-only restore-smoke Qdrant collection identifiers are rejected
   before restore command environment construction.
+- Whitespace-only MCP stdio `DMO_CWD` values are rejected before server
+  startup while preserving lazy fallback cwd resolution.
