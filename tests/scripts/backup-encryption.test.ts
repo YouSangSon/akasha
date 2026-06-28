@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   decryptFile,
   encryptManifestArtifacts,
+  loadBackupEncryptionKeyFromEnv,
   parseEncryptionKey,
 } from "../../scripts/backup-encryption.js";
 
@@ -108,6 +109,34 @@ describe("backup encryption", () => {
     expect(parseEncryptionKey(Buffer.from(raw.toString("hex")))).toEqual(raw);
     expect(parseEncryptionKey(Buffer.from(raw.toString("base64")))).toEqual(raw);
     expect(parseEncryptionKey(raw)).toEqual(raw);
+  });
+
+  it("omits unset BACKUP_ENCRYPTION_KEY_FILE", async () => {
+    await expect(loadBackupEncryptionKeyFromEnv({})).resolves.toBeNull();
+  });
+
+  it("trims BACKUP_ENCRYPTION_KEY_FILE before reading the key", async () => {
+    const backupDir = await mkdtemp(path.join(os.tmpdir(), "akasha-backup-encryption-"));
+    tempDirs.push(backupDir);
+    const keyPath = path.join(backupDir, "data-key");
+    const key = Buffer.alloc(32, 2);
+    await writeFile(keyPath, key);
+
+    await expect(
+      loadBackupEncryptionKeyFromEnv({
+        BACKUP_ENCRYPTION_KEY_FILE: ` ${keyPath} `,
+      }),
+    ).resolves.toEqual(key);
+  });
+
+  it("rejects whitespace-only BACKUP_ENCRYPTION_KEY_FILE", async () => {
+    await expect(
+      loadBackupEncryptionKeyFromEnv({
+        BACKUP_ENCRYPTION_KEY_FILE: " \n\t ",
+      }),
+    ).rejects.toThrow(
+      "BACKUP_ENCRYPTION_KEY_FILE must contain non-whitespace text",
+    );
   });
 });
 

@@ -14,6 +14,13 @@ if [ -z "${QDRANT_URL:-}" ]; then
   exit 1
 fi
 
+if [ "${BACKUP_ENCRYPTION_KEY_FILE+x}" = "x" ]; then
+  if [ -z "$(printf '%s' "${BACKUP_ENCRYPTION_KEY_FILE}" | tr -d '[:space:]')" ]; then
+    echo "BACKUP_ENCRYPTION_KEY_FILE must contain non-whitespace text" >&2
+    exit 1
+  fi
+fi
+
 if [ "${QDRANT_COLLECTION_NAME+x}" = "x" ]; then
   if [ -z "$(printf '%s' "${QDRANT_COLLECTION_NAME}" | tr -d '[:space:]')" ]; then
     echo "QDRANT_COLLECTION_NAME must contain non-whitespace text" >&2

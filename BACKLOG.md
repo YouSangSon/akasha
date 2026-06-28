@@ -205,6 +205,8 @@ experience, documentation, features.
   remote path construction.
 - Whitespace-only backup shell-script target directory values are rejected in
   remote-copy branches before SSH/SCP work.
+- Whitespace-only backup encryption key-file values are rejected before backup
+  artifact or remote-copy work.
 - Empty or whitespace-only Qdrant snapshot collection names are rejected before
   metadata or curl snapshot work.
 - Invalid restore-smoke app ports are rejected before Docker startup or health

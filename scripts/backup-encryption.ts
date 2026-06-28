@@ -189,12 +189,17 @@ export async function decryptFile(input: {
 export async function loadBackupEncryptionKeyFromEnv(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<Buffer | null> {
-  const keyFile = env.BACKUP_ENCRYPTION_KEY_FILE?.trim();
-  if (!keyFile) {
+  const keyFile = env.BACKUP_ENCRYPTION_KEY_FILE;
+  if (keyFile === undefined) {
     return null;
   }
 
-  return parseEncryptionKey(await fsp.readFile(keyFile));
+  const trimmedKeyFile = keyFile.trim();
+  if (trimmedKeyFile.length === 0) {
+    throw new Error("BACKUP_ENCRYPTION_KEY_FILE must contain non-whitespace text");
+  }
+
+  return parseEncryptionKey(await fsp.readFile(trimmedKeyFile));
 }
 
 export function parseEncryptionKey(raw: Buffer): Buffer {

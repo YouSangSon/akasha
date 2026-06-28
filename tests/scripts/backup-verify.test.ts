@@ -248,6 +248,82 @@ describe("snapshot Qdrant collection shell guard", () => {
   });
 });
 
+describe("backup encryption key file shell guards", () => {
+  it.each([
+    "scripts/backup-postgres.sh",
+    "scripts/snapshot-qdrant.sh",
+    "scripts/create-backup.sh",
+  ])("%s rejects whitespace-only BACKUP_ENCRYPTION_KEY_FILE", async (scriptPath) => {
+    const script = await readFile(scriptPath, "utf8");
+
+    expect(script).toContain(
+      "BACKUP_ENCRYPTION_KEY_FILE must contain non-whitespace text",
+    );
+    expect(script).toContain("tr -d '[:space:]'");
+  });
+
+  it.each([
+    ["empty", ""],
+    ["whitespace", " \n\t "],
+  ])(
+    "rejects %s BACKUP_ENCRYPTION_KEY_FILE under sh -eu",
+    async (_label, keyFile) => {
+      for (const scriptPath of [
+        "scripts/backup-postgres.sh",
+        "scripts/snapshot-qdrant.sh",
+        "scripts/create-backup.sh",
+      ]) {
+        const result = await runBackupShellScript(scriptPath, {
+          BACKUP_ENCRYPTION_KEY_FILE: keyFile,
+        });
+
+        expect(result.ok).toBe(false);
+        expect(result.stderr).toContain(
+          "BACKUP_ENCRYPTION_KEY_FILE must contain non-whitespace text",
+        );
+        expect(result.log).not.toContain("ssh:");
+        expect(result.log).not.toContain("scp:");
+      }
+    },
+  );
+
+  it("preserves valid BACKUP_ENCRYPTION_KEY_FILE values under sh -eu", async () => {
+    const keyDir = await mkdtemp(path.join(os.tmpdir(), "akasha-backup-key-"));
+    tempDirs.push(keyDir);
+    const keyPath = path.join(keyDir, "data-key");
+    await writeFile(keyPath, Buffer.alloc(32, 8));
+
+    const result = await runBackupShellScript("scripts/create-backup.sh", {
+      BACKUP_ENCRYPTION_KEY_FILE: keyPath,
+    });
+
+    expect(result.ok).toBe(true);
+    const manifest = JSON.parse(
+      await readFile(
+        path.join(result.backupDir, "manifest-20260329-1200.json"),
+        "utf8",
+      ),
+    );
+    expect(manifest).toMatchObject({
+      encryption: {
+        algorithm: "AES-256-GCM",
+        keySource: "BACKUP_ENCRYPTION_KEY_FILE",
+        artifacts: ["postgres"],
+      },
+      postgres: {
+        fileName: "postgres-20260329-1200.sql.gz.enc",
+      },
+    });
+    await expect(
+      exists(path.join(result.backupDir, "postgres-20260329-1200.sql.gz.enc")),
+    ).resolves.toBe(true);
+    await expect(
+      exists(path.join(result.backupDir, "postgres-20260329-1200.sql.gz")),
+    ).resolves.toBe(false);
+    expect(result.log).toContain(`remote.example:${result.backupDir}/`);
+  });
+});
+
 async function runBackupShellScript(
   scriptPath: string,
   envOverrides: Record<string, string>,

@@ -14,6 +14,13 @@ if [ -z "${DATABASE_URL:-}" ]; then
   exit 1
 fi
 
+if [ "${BACKUP_ENCRYPTION_KEY_FILE+x}" = "x" ]; then
+  if [ -z "$(printf '%s' "${BACKUP_ENCRYPTION_KEY_FILE}" | tr -d '[:space:]')" ]; then
+    echo "BACKUP_ENCRYPTION_KEY_FILE must contain non-whitespace text" >&2
+    exit 1
+  fi
+fi
+
 artifact="${BACKUP_DIR}/postgres-${timestamp}.sql.gz"
 checksum="${artifact}.sha256"
 manifest="${BACKUP_DIR}/manifest-${timestamp}.json"

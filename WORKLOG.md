@@ -46,6 +46,28 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened backup encryption key-file handling:
+  - `BACKUP_ENCRYPTION_KEY_FILE` now rejects explicit empty or whitespace-only
+    values in `loadBackupEncryptionKeyFromEnv()` and the backup shell
+    entrypoints before backup artifact or remote-copy work.
+  - Unset values still disable backup encryption; configured nonblank paths are
+    trimmed before key-file reads.
+  - Configuration docs now state that configured key-file values must contain
+    non-whitespace text.
+  - Reviewer subagent caught a missing positive shell encryption test; added a
+    `create-backup.sh` `sh -eu` case that writes a real 32-byte key, verifies
+    the encrypted manifest, checks the `.enc` artifact, and confirms plaintext
+    removal. Re-review found no issues.
+
+Verification:
+- `npx vitest run tests/scripts/backup-encryption.test.ts tests/scripts/backup-verify.test.ts tests/scripts/public-docs-drift.test.ts` (55 passed)
+- `sh -n scripts/create-backup.sh && sh -n scripts/backup-postgres.sh && sh -n scripts/snapshot-qdrant.sh`
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (889 passed, 34 skipped across 68 files)
+- `git diff --check`
+
 - Hardened optional restore-smoke user/org environment handling:
   - `RESTORE_SMOKE_USER_SCOPE_ID` and `RESTORE_SMOKE_ORGANIZATION_ID` now
     reject whitespace-only values before Docker or registry work.

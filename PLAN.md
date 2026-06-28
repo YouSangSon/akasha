@@ -4,16 +4,17 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Restore Smoke Optional Env Guard
+## Current Loop — Backup Encryption Key File Guard
 
 Status:
-- Restore-smoke now rejects whitespace-only optional text env values for
-  `RESTORE_SMOKE_USER_SCOPE_ID` and `RESTORE_SMOKE_ORGANIZATION_ID`.
-- Unset optional values are still omitted, and configured nonblank values are
-  trimmed before use.
-- Reviewer subagent found no issues.
-- Focused restore-smoke/docs tests, typecheck, build, audit, full suite, and
-  diff whitespace checks passed.
+- `BACKUP_ENCRYPTION_KEY_FILE` now rejects explicit empty or whitespace-only
+  values in the TypeScript encryption helper and backup shell entrypoints.
+- Unset values still disable backup encryption; configured nonblank paths are
+  trimmed before key-file reads.
+- Reviewer subagent caught a missing positive shell encryption test; the gap was
+  fixed and re-review found no issues.
+- Focused backup/docs tests, shell syntax checks, typecheck, build, audit, full
+  suite, and diff whitespace checks passed.
 
 Loop closeout:
 - Commit locally; do not push.
