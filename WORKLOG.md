@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened memory enum validation:
+  - Public and direct `update_memory.kind` and `durability` validation now
+    share the same allowed-value constants before repository dispatch.
+  - Direct coverage rejects invalid enum values before repository dispatch and
+    proves valid enum updates still refresh the index path.
+  - Subagent reviewer `Sartre` reported no findings.
+
+Verification:
+- `npx vitest run tests/mcp/server.test.ts` (115 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (702 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Hardened memory importance bounds:
   - Public and direct `update_memory.importance` validation now matches the
     Postgres `INTEGER` range before repository dispatch.

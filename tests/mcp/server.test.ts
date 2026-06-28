@@ -1291,6 +1291,67 @@ describe("createToolRegistry", () => {
     expect(services.vectorIndex.deleteByRecordIds).not.toHaveBeenCalled();
   });
 
+  it("rejects invalid update_memory enum values before repository dispatch", async () => {
+    const services = createCanonicalServices();
+    const resolveCanonicalServices = vi.fn(async () => services);
+    const registry = createToolRegistry({ resolveCanonicalServices });
+
+    await expect(
+      registry.update_memory({
+        organizationId: "org-a",
+        memoryId: 501,
+        kind: "note" as never,
+      }),
+    ).rejects.toThrow(/kind/);
+    await expect(
+      registry.update_memory({
+        organizationId: "org-a",
+        memoryId: 501,
+        durability: "permanent" as never,
+      }),
+    ).rejects.toThrow(/durability/);
+
+    expect(resolveCanonicalServices).not.toHaveBeenCalled();
+    expect(services.repository.updateMemoryRecord).not.toHaveBeenCalled();
+  });
+
+  it("accepts valid update_memory enum values through the direct registry path", async () => {
+    const services = createCanonicalServices();
+    services.repository.updateMemoryRecord.mockResolvedValueOnce({
+      ...createRecord({
+        id: 501,
+        organizationId: "org-a",
+        memoryType: "fact",
+        content: "Use Qdrant for vector indexing.",
+        sourceType: "conversation",
+        externalId: "fact:manual",
+      }),
+      durability: "durable",
+    });
+    const registry = createToolRegistry({
+      resolveCanonicalServices: async () => services,
+    });
+
+    await registry.update_memory({
+      organizationId: "org-a",
+      memoryId: 501,
+      kind: "fact",
+      durability: "durable",
+    });
+
+    expect(services.repository.updateMemoryRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 501,
+        organizationId: "org-a",
+        kind: "fact",
+        durability: "durable",
+      }),
+    );
+    expect(services.vectorIndex.deleteByRecordIds).toHaveBeenCalledWith([501], {
+      organizationId: "org-a",
+    });
+  });
+
   it("rejects invalid governance memory ids before canonical service dispatch", async () => {
     const services = createCanonicalServices();
     const resolveCanonicalServices = vi.fn(async () => services);

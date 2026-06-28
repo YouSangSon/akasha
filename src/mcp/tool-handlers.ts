@@ -44,6 +44,8 @@ import {
   requireProjectKey,
   requireUserScopeId,
   resolveUserScopeId,
+  SUPPORTED_DURABILITY_VALUES,
+  SUPPORTED_MEMORY_KINDS,
   summarize,
   toMemoryType,
 } from "./tool-utils.js";
@@ -641,6 +643,12 @@ export function createToolHandlers(input: {
       if (toolInput.content !== undefined) {
         assertNonBlankMemoryContent(toolInput.content);
       }
+      assertOptionalAllowedValue(toolInput.kind, "kind", SUPPORTED_MEMORY_KINDS);
+      assertOptionalAllowedValue(
+        toolInput.durability,
+        "durability",
+        SUPPORTED_DURABILITY_VALUES,
+      );
       assertOptionalPostgresInteger(toolInput.importance, "importance");
       assertNonBlankTags(toolInput.tags);
 
@@ -1137,6 +1145,21 @@ function assertOptionalPostgresInteger(
     value > POSTGRES_INTEGER_MAX
   ) {
     throw new Error(`${fieldName} must be a Postgres integer`);
+  }
+}
+
+function assertOptionalAllowedValue(
+  value: string | undefined,
+  fieldName: string,
+  allowedValues: readonly string[],
+): void {
+  if (value === undefined) {
+    return;
+  }
+  if (!allowedValues.includes(value)) {
+    throw new Error(
+      `${fieldName} must be one of: ${allowedValues.join(", ")}`,
+    );
   }
 }
 

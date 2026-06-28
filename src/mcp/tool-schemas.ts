@@ -2,6 +2,7 @@ import * as z from "zod/v4";
 import {
   POSTGRES_INTEGER_MAX,
   POSTGRES_INTEGER_MIN,
+  SUPPORTED_DURABILITY_VALUES,
   SUPPORTED_MEMORY_KINDS,
 } from "./tool-utils.js";
 
@@ -180,7 +181,7 @@ const sampledMemoryClassificationOutputSchema = z
   })
   .passthrough();
 
-const durabilityInputSchema = z.enum(["ephemeral", "durable", "archived"]);
+const durabilityInputSchema = z.enum(SUPPORTED_DURABILITY_VALUES);
 export const nonBlankTextInputSchema = z
   .string()
   .min(1)

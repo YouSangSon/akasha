@@ -78,3 +78,5 @@ experience, documentation, features.
 - Invalid direct compaction thresholds are rejected before repository dispatch.
 - Invalid public/direct memory importance values are rejected before repository
   dispatch.
+- Invalid direct memory kind and durability updates are rejected before
+  repository dispatch.

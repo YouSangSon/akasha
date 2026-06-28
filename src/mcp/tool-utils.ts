@@ -4,6 +4,11 @@ import os from "node:os";
 import type { AddMemoryInput, ScopeType } from "../types.js";
 
 export const SUPPORTED_MEMORY_KINDS = ["decision", "summary", "fact"] as const;
+export const SUPPORTED_DURABILITY_VALUES = [
+  "ephemeral",
+  "durable",
+  "archived",
+] as const;
 export const POSTGRES_INTEGER_MIN = -2147483648;
 export const POSTGRES_INTEGER_MAX = 2147483647;
 
