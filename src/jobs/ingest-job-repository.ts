@@ -1,5 +1,6 @@
 import type { PgPool } from "../db/connection.js";
 import { rootLogger } from "../logger.js";
+import { assertNonBlankText } from "../store/memory-content.js";
 import type { IngestJob, IngestJobRepository } from "../types.js";
 
 // How long (in ms) a claimed row is "reserved" before it can be re-claimed.
@@ -48,6 +49,8 @@ const RETURNING_COLUMNS = `
 export function createIngestJobRepository(pool: PgPool): IngestJobRepository {
   return {
     async create(input) {
+      assertNonBlankText(input.organizationId, "organizationId");
+
       const result = await pool.query<IngestJobRow>(
         `
           INSERT INTO ingest_jobs (memory_record_id, organization_id, status)

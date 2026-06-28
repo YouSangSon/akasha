@@ -46,6 +46,21 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened ingest job creation organization validation:
+  - `create` now rejects whitespace-only organization IDs before inserting
+    ingest job rows.
+  - Ingest job coverage verifies invalid organization IDs fail before
+    `pool.query()`.
+  - Reviewer subagent found no issues.
+
+Verification:
+- `npx vitest run tests/jobs/ingest-job-claim.test.ts tests/jobs/serialize-error.test.ts` (7 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (750 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened audit repository organization validation:
   - `record` and `listByOrganization` now reject whitespace-only organization
     IDs before writing or reading audit rows.

@@ -153,3 +153,5 @@ experience, documentation, features.
   indexing side effects.
 - Whitespace-only audit repository organization IDs are rejected before
   persistence.
+- Whitespace-only ingest job creation organization IDs are rejected before
+  persistence.

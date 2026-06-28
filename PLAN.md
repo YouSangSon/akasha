@@ -4,14 +4,15 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Audit Repository Organization Guard
+## Current Loop — Ingest Job Organization Guard
 
 Status:
-- `record` and `listByOrganization` now reject whitespace-only organization IDs
-  before writing or reading audit rows.
-- Coverage verifies invalid audit organization IDs fail before `pool.query()`.
+- `create` now rejects whitespace-only organization IDs before inserting ingest
+  job rows.
+- Coverage verifies invalid ingest job organization IDs fail before
+  `pool.query()`.
 - Reviewer subagent found no issues.
-- Focused audit tests, typecheck, build, audit, full suite, and diff whitespace
+- Focused jobs tests, typecheck, build, audit, full suite, and diff whitespace
   checks passed.
 
 Loop closeout:

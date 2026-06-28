@@ -21,6 +21,20 @@ function makeMockPool(rows: unknown[] = []): {
 }
 
 describe("claimPendingForRetry SQL shape", () => {
+  it("create rejects whitespace-only organizationId before querying", async () => {
+    const { pool, querySpy } = makeMockPool([]);
+    const repo = createIngestJobRepository(pool);
+
+    await expect(
+      repo.create({
+        memoryRecordId: 42,
+        organizationId: " \n\t ",
+      }),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(querySpy).not.toHaveBeenCalled();
+  });
+
   it("issues a single UPDATE … WHERE id IN (SELECT … FOR UPDATE SKIP LOCKED)", async () => {
     const { pool, querySpy } = makeMockPool([]);
     const repo = createIngestJobRepository(pool);
