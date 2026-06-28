@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened direct lifecycle initialization:
+  - `writeLifecycleInit()` now rejects whitespace-only optional
+    `organizationId`, `userScopeId`, and `task` values before creating the
+    output directory or generated hook/config files.
+  - CLI blank `--organization-id` behavior remains covered; new coverage
+    verifies direct function callers cannot bypass the guard.
+  - Reviewer subagent found no issues.
+
+Verification:
+- `npx vitest run tests/cli.test.ts` (20 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (799 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened HTTP organization ID resolution:
   - Memory HTTP routes now reject explicitly blank body `organizationId` values
     before dispatch instead of silently treating them as absent.

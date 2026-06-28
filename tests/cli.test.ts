@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { parseCliArgs, runCli } from "../src/cli.js";
+import { writeLifecycleInit } from "../src/lifecycle/init.js";
 import { createToolRegistry, type ToolRegistry } from "../src/mcp/server.js";
 import type { MemoryRepository } from "../src/types.js";
 import { goalRunRegistryStubs } from "./fixtures/goal-run-stubs.js";
@@ -469,6 +470,28 @@ describe("parseCliArgs", () => {
     ).rejects.toThrow(/--organization-id/);
 
     expect(fs.existsSync(path.join(tmpDir, ".akasha"))).toBe(false);
+  });
+
+  it("rejects whitespace-only direct lifecycle init inputs before writing files", async () => {
+    const cases = [
+      { field: "organizationId", input: { organizationId: " \n\t " } },
+      { field: "userScopeId", input: { userScopeId: " \n\t " } },
+      { field: "task", input: { task: " \n\t " } },
+    ] as const;
+
+    for (const testCase of cases) {
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "akasha-init-"));
+
+      await expect(
+        writeLifecycleInit({
+          repoDir: tmpDir,
+          projectKey: "project-alpha",
+          ...testCase.input,
+        }),
+      ).rejects.toThrow(testCase.field);
+
+      expect(fs.existsSync(path.join(tmpDir, ".akasha"))).toBe(false);
+    }
   });
 
   it("runs remember with --content-file without putting content in argv", async () => {

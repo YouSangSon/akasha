@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { assertNonBlankText } from "../store/memory-content.js";
 
 export type LifecycleInitInput = {
   repoDir: string;
@@ -125,6 +126,15 @@ export function buildLifecycleFiles(
 function normalizeLifecycleInput(input: LifecycleInitInput) {
   if (!input.projectKey.trim()) {
     throw new Error("projectKey is required for lifecycle init.");
+  }
+  if (input.organizationId !== undefined) {
+    assertNonBlankText(input.organizationId, "organizationId");
+  }
+  if (input.userScopeId !== undefined) {
+    assertNonBlankText(input.userScopeId, "userScopeId");
+  }
+  if (input.task !== undefined) {
+    assertNonBlankText(input.task, "task");
   }
 
   const repoDir = path.resolve(input.repoDir);

@@ -177,3 +177,5 @@ experience, documentation, features.
   pool construction.
 - Blank or repeated HTTP organization headers and blank body organization IDs
   are rejected before registry dispatch.
+- Whitespace-only direct lifecycle init organization, user scope, and task
+  inputs are rejected before writing generated files.
