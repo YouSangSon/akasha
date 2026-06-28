@@ -58,6 +58,8 @@ experience, documentation, features.
   embedding dispatch.
 - Blank optional goal-run notes normalize to `null` before persistence.
 - Whitespace-only project/user scope identifiers are rejected before dispatch.
+- Whitespace-only `DEVELOPER_MEMORY_USER_ID` values are rejected before
+  user-scope fallback resolution.
 - Whitespace-only MCP prompt/context identifiers and sampled summaries are
   rejected before storage or dispatch.
 - Whitespace-only organization IDs are rejected on MCP/direct paths, while

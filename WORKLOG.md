@@ -46,6 +46,25 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened `DEVELOPER_MEMORY_USER_ID` handling:
+  - Explicit empty or whitespace-only values now fail before user-scope fallback
+    resolution instead of silently deriving from git/OS identity.
+  - Unset values still derive from `git config user.email`, then OS username,
+    and configured nonblank values are trimmed before use.
+  - Configuration docs and `.env.example` now state that configured values must
+    contain non-whitespace text.
+  - Reviewer subagent caught missing unset fallback coverage and `.env.example`
+    drift; added a deterministic temp-git-repo fallback test and re-review found
+    no issues.
+
+Verification:
+- `npx vitest run tests/mcp/tool-utils.test.ts tests/scripts/public-docs-drift.test.ts` (28 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (892 passed, 34 skipped across 68 files)
+- `git diff --check`
+
 - Hardened backup encryption key-file handling:
   - `BACKUP_ENCRYPTION_KEY_FILE` now rejects explicit empty or whitespace-only
     values in `loadBackupEncryptionKeyFromEnv()` and the backup shell

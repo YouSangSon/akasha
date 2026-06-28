@@ -90,9 +90,13 @@ export function resolveUserScopeId(input: {
     return requireUserScopeId(input.defaultUserScopeId);
   }
 
-  const configuredUserId = process.env.DEVELOPER_MEMORY_USER_ID?.trim();
-
-  if (configuredUserId) {
+  if (process.env.DEVELOPER_MEMORY_USER_ID !== undefined) {
+    const configuredUserId = process.env.DEVELOPER_MEMORY_USER_ID.trim();
+    if (configuredUserId.length === 0) {
+      throw new Error(
+        "DEVELOPER_MEMORY_USER_ID must contain non-whitespace text",
+      );
+    }
     return configuredUserId;
   }
 

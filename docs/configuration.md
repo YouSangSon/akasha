@@ -318,7 +318,7 @@ See [docs/operations.md](operations.md) for the backup/restore workflow.
 | Variable | Default | Notes |
 |---|---|---|
 | `LOG_LEVEL` | `info` in production, `debug` otherwise | Case-insensitive pino log level: `trace`, `debug`, `info`, `warn`, `error`, `fatal`, or `silent`. Logs go to stderr so MCP stdio JSON-RPC stays clean. |
-| `DEVELOPER_MEMORY_USER_ID` | derived from `git config user.email`, then OS username | Stable user-scope id used when a tool needs user memory and no explicit `userScopeId` is supplied. |
+| `DEVELOPER_MEMORY_USER_ID` | derived from `git config user.email`, then OS username | Stable user-scope id used when a tool needs user memory and no explicit `userScopeId` is supplied. If set, it must contain non-whitespace text. |
 | `DMO_CWD` | `process.cwd()` | MCP stdio startup working directory override; mainly useful when launching the built CLI from another directory. If set, it must contain non-whitespace text. |
 
 ## Restore smoke
