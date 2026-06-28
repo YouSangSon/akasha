@@ -30,8 +30,8 @@ type BucketState = {
 export function createTokenBucketLimiter(
   options: RateLimiterOptions,
 ): RateLimiter {
-  if (options.capacity <= 0 || !Number.isFinite(options.capacity)) {
-    throw new Error("rate-limit capacity must be a positive finite number");
+  if (!Number.isSafeInteger(options.capacity) || options.capacity < 1) {
+    throw new Error("rate-limit capacity must be a positive integer");
   }
   if (options.windowMs <= 0 || !Number.isFinite(options.windowMs)) {
     throw new Error("rate-limit windowMs must be a positive finite number");
@@ -91,10 +91,16 @@ export function loadRateLimitFromEnv(
   if (!raw) {
     return null;
   }
-  const capacity = Number(raw);
-  if (!Number.isFinite(capacity) || capacity <= 0) {
+  const normalized = raw.trim();
+  if (!/^\d+$/.test(normalized)) {
     throw new Error(
-      `RATE_LIMIT_PER_MINUTE must be a positive number, got "${raw}"`,
+      `RATE_LIMIT_PER_MINUTE must be a positive integer, got "${raw}"`,
+    );
+  }
+  const capacity = Number(normalized);
+  if (!Number.isSafeInteger(capacity) || capacity < 1) {
+    throw new Error(
+      `RATE_LIMIT_PER_MINUTE must be a positive integer, got "${raw}"`,
     );
   }
   return {

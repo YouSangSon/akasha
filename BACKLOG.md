@@ -36,3 +36,4 @@ experience, documentation, features.
 - Static bearer-token comparison scans fixed-width digests across configured
   tokens.
 - Sweeper interval env parsing requires plain decimal integer strings.
+- Rate-limit env parsing and bucket capacity require positive integers.

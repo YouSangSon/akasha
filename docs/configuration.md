@@ -260,7 +260,7 @@ layers handles the rest.
 
 | Variable | Default | Notes |
 |---|---|---|
-| `RATE_LIMIT_PER_MINUTE` | unset → no limit (compose deployments default to **60**) | Token-bucket cap, keyed per token. Recommended in production. |
+| `RATE_LIMIT_PER_MINUTE` | unset → no limit (compose deployments default to **60**) | Positive integer token-bucket cap, keyed per token. Recommended in production. |
 
 The compaction-apply path has a separate, stricter limit (1 per hour per
 org by default) hard-coded in `applyCompaction` deps. It can be tuned by

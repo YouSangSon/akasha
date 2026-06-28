@@ -46,6 +46,25 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened HTTP rate-limit configuration:
+  - `RATE_LIMIT_PER_MINUTE` now requires a plain positive integer string.
+  - Direct token-bucket construction rejects fractional capacities below or
+    above 1, preventing buckets that can never accumulate a full request token.
+  - Focused tests cover fractional and non-decimal env values (`0.5`,
+    `100.5`, `100abc`, `1e2`, `0x64`).
+  - English/Korean configuration docs now state the cap is a positive integer.
+  - Subagent reviewer `Darwin` timed out twice and was closed before returning
+    findings; local verification completed.
+
+Verification:
+- `npx vitest run tests/app/rate-limit.test.ts tests/scripts/public-docs-drift.test.ts`
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (617 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Hardened sweeper interval env parsing:
   - `COMPACTION_SWEEP_INTERVAL_MS` and `INGEST_SWEEP_INTERVAL_MS` now require
     plain decimal integer strings before conversion.

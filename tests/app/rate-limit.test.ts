@@ -16,12 +16,18 @@ const WINDOW_MS = 60_000;
 const MS_PER_TOKEN = WINDOW_MS / CAPACITY; // 20_000 ms
 
 describe("createTokenBucketLimiter", () => {
-  it("throws on zero or negative capacity", () => {
+  it("throws on zero, negative, or fractional capacity", () => {
     expect(() =>
       createTokenBucketLimiter({ capacity: 0, windowMs: 60_000 }),
     ).toThrow("capacity");
     expect(() =>
       createTokenBucketLimiter({ capacity: -1, windowMs: 60_000 }),
+    ).toThrow("capacity");
+    expect(() =>
+      createTokenBucketLimiter({ capacity: 0.5, windowMs: 60_000 }),
+    ).toThrow("capacity");
+    expect(() =>
+      createTokenBucketLimiter({ capacity: 1.5, windowMs: 60_000 }),
     ).toThrow("capacity");
   });
 
@@ -223,7 +229,7 @@ describe("loadRateLimitFromEnv", () => {
     expect(result).toBeNull();
   });
 
-  it("parses a valid positive number into capacity + 60s window", () => {
+  it("parses a valid positive integer into capacity + 60s window", () => {
     // Arrange & Act
     const result = loadRateLimitFromEnv({ RATE_LIMIT_PER_MINUTE: "100" });
 
@@ -248,6 +254,24 @@ describe("loadRateLimitFromEnv", () => {
   it("throws on a negative value", () => {
     expect(() =>
       loadRateLimitFromEnv({ RATE_LIMIT_PER_MINUTE: "-5" }),
+    ).toThrow("RATE_LIMIT_PER_MINUTE");
+  });
+
+  it("throws on fractional and non-decimal numeric forms", () => {
+    expect(() =>
+      loadRateLimitFromEnv({ RATE_LIMIT_PER_MINUTE: "0.5" }),
+    ).toThrow("RATE_LIMIT_PER_MINUTE");
+    expect(() =>
+      loadRateLimitFromEnv({ RATE_LIMIT_PER_MINUTE: "100.5" }),
+    ).toThrow("RATE_LIMIT_PER_MINUTE");
+    expect(() =>
+      loadRateLimitFromEnv({ RATE_LIMIT_PER_MINUTE: "100abc" }),
+    ).toThrow("RATE_LIMIT_PER_MINUTE");
+    expect(() =>
+      loadRateLimitFromEnv({ RATE_LIMIT_PER_MINUTE: "1e2" }),
+    ).toThrow("RATE_LIMIT_PER_MINUTE");
+    expect(() =>
+      loadRateLimitFromEnv({ RATE_LIMIT_PER_MINUTE: "0x64" }),
     ).toThrow("RATE_LIMIT_PER_MINUTE");
   });
 });
