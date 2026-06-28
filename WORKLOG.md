@@ -46,6 +46,26 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened bearer token comma-separated config parsing:
+  - `MEMORY_API_TOKENS` now rejects leading commas, trailing commas, repeated
+    commas, whitespace-only whole values, and whitespace-only list entries
+    instead of silently dropping blank entries.
+  - Unset and exact whole-empty values still disable static auth for documented
+    loopback local development.
+  - `.env.example`, `docs/configuration.md`, and `docs/configuration.ko.md`
+    document the blank-entry rejection.
+  - Worker implementation passed spec review; code-quality review found one
+    missing whitespace-only test, which was fixed and re-reviewed cleanly.
+
+Verification:
+- `npx vitest run tests/app/bearer-auth.test.ts tests/scripts/public-docs-drift.test.ts` (52 passed)
+- `npx vitest run tests/scripts/public-docs-drift.test.ts` (22 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (991 passed, 34 skipped across 69 files)
+- `git diff --check`
+
 - Hardened OAuth comma-separated config parsing:
   - `MCP_OAUTH_AUTHORIZATION_SERVERS`, `MCP_OAUTH_SCOPES`,
     `MCP_OAUTH_JWKS_URLS`, and `MCP_OAUTH_JWT_ALGORITHMS` now reject explicit

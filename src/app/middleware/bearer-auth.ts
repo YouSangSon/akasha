@@ -25,14 +25,16 @@ export type OAuthTokenVerifier = {
 
 export function loadBearerTokens(env: NodeJS.ProcessEnv): BearerToken[] {
   const raw = env.MEMORY_API_TOKENS;
-  if (!raw) {
+  if (raw === undefined || raw === "") {
     return [];
   }
-  return raw
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0)
-    .map(parseBearerEntry);
+  const entries = raw.split(",").map((entry) => entry.trim());
+  if (entries.some((entry) => entry.length === 0)) {
+    throw new Error(
+      "Invalid MEMORY_API_TOKENS entry: entries must not be blank",
+    );
+  }
+  return entries.map(parseBearerEntry);
 }
 
 function parseBearerEntry(entry: string): BearerToken {

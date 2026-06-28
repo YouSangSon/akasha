@@ -151,6 +151,10 @@ MEMORY_API_TOKENS=alpha-token:dev-team,beta-token:finance-team
 MEMORY_API_TOKENS=alpha-token:dev-team,legacy-token
 ```
 
+설정된 콤마 리스트 안의 빈 항목은 거부됩니다. 앞/뒤 콤마, 반복 콤마,
+whitespace-only 항목은 invalid 입니다. 전체 값을 비운
+`MEMORY_API_TOKENS=` 는 loopback 로컬 개발에서 인증을 끌 때만 사용하세요.
+
 토큰에 org 바인딩이 있을 때:
 - 요청은 자동으로 `organizationId = <bound org>` 상속.
 - 요청 body 또는 `x-organization-id` 헤더가 다르면 → **403**.

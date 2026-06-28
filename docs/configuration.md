@@ -157,6 +157,11 @@ MEMORY_API_TOKENS=alpha-token:dev-team,beta-token:finance-team
 MEMORY_API_TOKENS=alpha-token:dev-team,legacy-token
 ```
 
+Blank entries inside a configured comma list are rejected: leading commas,
+trailing commas, repeated commas, and whitespace-only entries are invalid.
+Set the whole value empty (`MEMORY_API_TOKENS=`) only for loopback local
+development with auth disabled.
+
 When a token has an org binding:
 - Requests automatically inherit `organizationId = <bound org>`.
 - A request body or `x-organization-id` header that disagrees → **403**.

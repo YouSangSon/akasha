@@ -94,6 +94,8 @@ experience, documentation, features.
 - Invalid Qdrant snapshot response names are rejected before snapshot download.
 - Blank OAuth comma-separated config list entries are rejected before verifier
   configuration.
+- Blank `MEMORY_API_TOKENS` comma-list entries are rejected before server auth
+  configuration.
 - Invalid direct repository search/list/graph limits are rejected before SQL
   work.
 - Invalid direct audit repository limits are rejected before SQL work.

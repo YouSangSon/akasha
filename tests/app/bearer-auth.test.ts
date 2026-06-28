@@ -178,6 +178,18 @@ describe("loadBearerTokens", () => {
     expect(tokens).toEqual([]);
   });
 
+  it("returns empty array when MEMORY_API_TOKENS is empty", () => {
+    const tokens = loadBearerTokens({ MEMORY_API_TOKENS: "" });
+
+    expect(tokens).toEqual([]);
+  });
+
+  it("rejects whitespace-only MEMORY_API_TOKENS values", () => {
+    expect(() => loadBearerTokens({ MEMORY_API_TOKENS: " \n\t " })).toThrow(
+      /Invalid MEMORY_API_TOKENS entry: entries must not be blank/i,
+    );
+  });
+
   it("parses a plain token with no org binding", () => {
     // Arrange & Act
     const tokens = loadBearerTokens({ MEMORY_API_TOKENS: "my-plain-token" });
@@ -216,6 +228,18 @@ describe("loadBearerTokens", () => {
     expect(tokens[2]).toEqual({ token: "legacy-token" });
   });
 
+  it("trims valid comma-separated entries", () => {
+    const tokens = loadBearerTokens({
+      MEMORY_API_TOKENS: " alpha:dev-team , beta:finance-team , legacy-token ",
+    });
+
+    expect(tokens).toEqual([
+      { token: "alpha", organizationId: "dev-team" },
+      { token: "beta", organizationId: "finance-team" },
+      { token: "legacy-token" },
+    ]);
+  });
+
   it("rejects a token binding with an empty organization id", () => {
     expect(() =>
       loadBearerTokens({ MEMORY_API_TOKENS: "my-token:" }),
@@ -236,26 +260,15 @@ describe("loadBearerTokens", () => {
     );
   });
 
-  it("ignores empty comma-separated entries while still parsing valid tokens", () => {
-    const tokens = loadBearerTokens({
-      MEMORY_API_TOKENS: "alpha-token:dev-team,  , legacy-token",
-    });
-
-    expect(tokens).toEqual([
-      { token: "alpha-token", organizationId: "dev-team" },
-      { token: "legacy-token" },
-    ]);
-  });
-
-  it("ignores whitespace-only entries", () => {
-    // Arrange & Act
-    const tokens = loadBearerTokens({
-      MEMORY_API_TOKENS: "good-token,  , another-token",
-    });
-
-    // Assert
-    expect(tokens).toHaveLength(2);
-    expect(tokens.map((t) => t.token)).toEqual(["good-token", "another-token"]);
+  it.each([
+    ["leading comma", ",alpha-token"],
+    ["trailing comma", "alpha-token,"],
+    ["repeated comma", "alpha-token,,legacy-token"],
+    ["whitespace-only entry", "alpha-token,  ,legacy-token"],
+  ])("rejects blank comma-list entries: %s", (_label, value) => {
+    expect(() => loadBearerTokens({ MEMORY_API_TOKENS: value })).toThrow(
+      /Invalid MEMORY_API_TOKENS entry: entries must not be blank/i,
+    );
   });
 });
 
