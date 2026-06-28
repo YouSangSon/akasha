@@ -10,7 +10,7 @@ experience, documentation, features.
 
 ## P1
 
-- None currently known.
+- Direct `record_iteration.memoryIds` validation before iteration mutation.
 
 ## P2
 
@@ -64,3 +64,5 @@ experience, documentation, features.
   sampling side effects.
 - Invalid direct repeat-check thresholds are rejected before goal-run lookup or
   embedding work.
+- Invalid direct retrieval limits are rejected before search/context-pack
+  retrieval work.

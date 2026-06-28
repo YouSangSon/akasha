@@ -339,6 +339,30 @@ describe("createToolRegistry", () => {
     expect(retrieveMemory).not.toHaveBeenCalled();
   });
 
+  it("rejects invalid retrieval limits through the direct registry path", async () => {
+    const retrieveMemory = vi.fn();
+    const registry = createToolRegistry({ retrieveMemory });
+
+    for (const limit of [Number.NaN, 0, -1, 1.5]) {
+      await expect(
+        registry.search_memory({
+          projectKey: "project-alpha",
+          query: "Postgres",
+          limit,
+        }),
+      ).rejects.toThrow(/limit/);
+      await expect(
+        registry.build_context_pack({
+          projectKey: "project-alpha",
+          task: "continue work",
+          limit,
+        }),
+      ).rejects.toThrow(/limit/);
+    }
+
+    expect(retrieveMemory).not.toHaveBeenCalled();
+  });
+
   it("rejects whitespace-only organization IDs through the direct registry path", async () => {
     const retrieveMemory = vi.fn();
     const auditLog = buildAuditLog();

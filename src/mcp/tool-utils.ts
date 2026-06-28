@@ -35,7 +35,13 @@ export function requireUserScopeId(userScopeId: string | undefined): string {
 }
 
 export function normalizeLimit(limit: number | undefined): number {
-  return Math.max(1, Math.min(limit ?? 10, 100));
+  if (limit === undefined) {
+    return 10;
+  }
+  if (!Number.isInteger(limit) || limit <= 0) {
+    throw new Error("limit must be a positive integer");
+  }
+  return Math.min(limit, 100);
 }
 
 export function toMemoryType(kind: string): AddMemoryInput["memoryType"] {

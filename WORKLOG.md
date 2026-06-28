@@ -46,6 +46,25 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened direct retrieval limit validation:
+  - `normalizeLimit()` now rejects `NaN`, non-integer, zero, and negative
+    limits before retrieval work while preserving the default `10` and cap
+    `100`.
+  - Direct registry coverage verifies `search_memory` and `build_context_pack`
+    reject invalid limits before `retrieveMemory` is called.
+  - Subagent reviewer `Dalton` reported no findings.
+  - Subagent explorer `Kierkegaard` found the next write-path candidate:
+    direct `record_iteration.memoryIds` validation before iteration mutation.
+
+Verification:
+- `npx vitest run tests/mcp/server.test.ts` (100 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (681 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Hardened repeat-check threshold validation:
   - Direct `check_repeat_attempt.threshold` rejects `NaN`, values less than or
     equal to zero, and values greater than one before goal-run lookup or
