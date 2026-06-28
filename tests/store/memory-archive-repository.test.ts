@@ -345,6 +345,17 @@ describe("MemoryArchiveRepository.findArchiveByIds (P19.1)", () => {
     expect(params).toEqual([[1, 2, 3], "org-a"]);
   });
 
+  it("rejects whitespace-only organizationId before querying", async () => {
+    const { pool, query } = makeMockPool(async () => ({ rows: [] }));
+    const repo = createMemoryArchiveRepository(pool);
+
+    await expect(
+      repo.findArchiveByIds([1, 2, 3], " \n\t "),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(query).not.toHaveBeenCalled();
+  });
+
   it("maps rows including null source_id and unarchived_at", async () => {
     const { pool } = makeMockPool(async () => ({
       rows: [

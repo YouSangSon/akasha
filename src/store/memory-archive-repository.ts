@@ -455,6 +455,8 @@ export function createMemoryArchiveRepository(
     },
 
     async findArchiveByIds(archiveIds, organizationId) {
+      assertNonBlankText(organizationId, "organizationId");
+
       if (archiveIds.length === 0) return [];
       const result = await pool.query<{
         id: number;
