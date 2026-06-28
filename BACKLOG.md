@@ -98,6 +98,8 @@ experience, documentation, features.
   configuration.
 - Blank required backup shell env values are rejected before backup side
   effects.
+- Whitespace-only service-config backup env values are rejected before runtime
+  config construction.
 - Invalid direct repository search/list/graph limits are rejected before SQL
   work.
 - Invalid direct audit repository limits are rejected before SQL work.

@@ -1,3 +1,4 @@
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { resolveServiceConfig } from "../../src/config.js";
 
@@ -188,6 +189,46 @@ describe("resolveServiceConfig", () => {
     ).toThrow(`Invalid ${name}: expected non-empty string`);
   });
 
+  it.each([
+    ["BACKUP_DIR", { BACKUP_DIR: " \n\t " }],
+    ["BACKUP_TARGET_HOST", { BACKUP_TARGET_HOST: " \n\t " }],
+    [
+      "BACKUP_ENCRYPTION_KEY_FILE",
+      { BACKUP_ENCRYPTION_KEY_FILE: " \n\t " },
+    ],
+  ])("rejects whitespace-only optional backup %s", (name, overrides) => {
+    expect(() =>
+      resolveServiceConfig({
+        env: {
+          ...BASE_ENV,
+          ...overrides,
+        },
+      }),
+    ).toThrow(`Invalid ${name}: expected non-empty string`);
+  });
+
+  it("treats exact empty BACKUP_TARGET_HOST as local-only", () => {
+    const config = resolveServiceConfig({
+      env: {
+        ...BASE_ENV,
+        BACKUP_TARGET_HOST: "",
+      },
+    });
+
+    expect(config.backups.targetHost).toBeUndefined();
+  });
+
+  it("rejects exact empty BACKUP_ENCRYPTION_KEY_FILE", () => {
+    expect(() =>
+      resolveServiceConfig({
+        env: {
+          ...BASE_ENV,
+          BACKUP_ENCRYPTION_KEY_FILE: "",
+        },
+      }),
+    ).toThrow("Invalid BACKUP_ENCRYPTION_KEY_FILE: expected non-empty string");
+  });
+
   it("derives the database url from Postgres env when DATABASE_URL is absent", () => {
     const config = resolveServiceConfig({
       env: {
@@ -238,5 +279,17 @@ describe("resolveServiceConfig", () => {
     });
 
     expect(config.backups.targetHost).toBeUndefined();
+  });
+
+  it("uses the default backup directory when BACKUP_DIR is unset", () => {
+    const config = resolveServiceConfig({
+      env: {
+        ...BASE_ENV,
+      },
+    });
+
+    expect(config.backups.directory).toBe(
+      path.join(process.cwd(), ".developer-memory-os", "backups"),
+    );
   });
 });

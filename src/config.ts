@@ -118,6 +118,15 @@ export function resolveServiceConfig(
         apiKey: env.QDRANT_API_KEY ?? "",
         collectionName: qdrantCollectionName,
       };
+  const backupDirectory = envOrDefault(
+    env.BACKUP_DIR,
+    "BACKUP_DIR",
+    path.join(process.cwd(), ".developer-memory-os", "backups"),
+  );
+  const backupTargetHost =
+    env.BACKUP_TARGET_HOST === ""
+      ? undefined
+      : optionalEnv(env.BACKUP_TARGET_HOST, "BACKUP_TARGET_HOST");
 
   return {
     host,
@@ -137,11 +146,12 @@ export function resolveServiceConfig(
       chunkOverlapTokens: 120,
     },
     backups: {
-      directory:
-        env.BACKUP_DIR ??
-        path.join(process.cwd(), ".developer-memory-os", "backups"),
-      targetHost: env.BACKUP_TARGET_HOST,
-      encryptionKeyFile: env.BACKUP_ENCRYPTION_KEY_FILE,
+      directory: backupDirectory,
+      targetHost: backupTargetHost,
+      encryptionKeyFile: optionalEnv(
+        env.BACKUP_ENCRYPTION_KEY_FILE,
+        "BACKUP_ENCRYPTION_KEY_FILE",
+      ),
     },
   };
 }
@@ -161,6 +171,19 @@ function envOrDefault(
 ): string {
   if (value === undefined) {
     return fallback;
+  }
+  if (value.trim().length === 0) {
+    throw new Error(`Invalid ${name}: expected non-empty string`);
+  }
+  return value;
+}
+
+function optionalEnv(
+  value: string | undefined,
+  name: string,
+): string | undefined {
+  if (value === undefined) {
+    return undefined;
   }
   if (value.trim().length === 0) {
     throw new Error(`Invalid ${name}: expected non-empty string`);

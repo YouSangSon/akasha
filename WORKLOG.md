@@ -46,6 +46,25 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened service config backup environment handling:
+  - `resolveServiceConfig()` now rejects whitespace-only `BACKUP_DIR`,
+    `BACKUP_TARGET_HOST`, and `BACKUP_ENCRYPTION_KEY_FILE` values before
+    returning runtime backup config.
+  - Unset `BACKUP_DIR` still uses the existing local backup directory default,
+    and exact empty `BACKUP_TARGET_HOST` still resolves as local-only.
+  - Exact empty `BACKUP_ENCRYPTION_KEY_FILE` remains invalid, matching the
+    backup shell entrypoints' configured-key-file behavior.
+  - Worker implementation passed spec review and code-quality review with no
+    findings.
+
+Verification:
+- `npx vitest run tests/config/service-config.test.ts` (38 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (1006 passed, 34 skipped across 69 files)
+- `git diff --check`
+
 - Hardened required backup shell env guards:
   - `scripts/backup-postgres.sh`, `scripts/snapshot-qdrant.sh`, and
     `scripts/create-backup.sh` now reject unset, empty, and whitespace-only
