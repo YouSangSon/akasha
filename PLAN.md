@@ -4,12 +4,12 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Graph Inspect Organization Guard
+## Current Loop — Repository Get-By-Id Organization Guard
 
 Status:
-- `inspectMemoryGraph` now rejects whitespace-only organization IDs before
-  issuing graph queries.
-- Coverage verifies invalid graph-inspect organization IDs fail before
+- `getMemoryRecordById` now rejects whitespace-only organization IDs before
+  issuing a Postgres query.
+- Coverage verifies invalid get-by-id organization IDs fail before
   `pool.query()`.
 - Reviewer skipped after previous reviewer-agent timeouts; self-review found no
   issues.

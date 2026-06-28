@@ -118,3 +118,5 @@ experience, documentation, features.
   persistence.
 - Whitespace-only graph inspect organization IDs are rejected before
   persistence.
+- Whitespace-only repository get-by-id organization IDs are rejected before
+  persistence.

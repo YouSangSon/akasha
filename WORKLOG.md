@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened repository get-by-id organization validation:
+  - `getMemoryRecordById` now rejects whitespace-only organization IDs before
+    issuing a Postgres query.
+  - Repository coverage verifies invalid organization IDs fail before
+    `pool.query()`.
+  - Reviewer skipped after previous reviewer-agent timeouts; self-review found
+    no issues.
+
+Verification:
+- `npx vitest run tests/store/memory-repository.test.ts` (46 passed, 7 skipped)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (727 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened graph inspect organization validation:
   - `inspectMemoryGraph` now rejects whitespace-only organization IDs before
     issuing graph queries.
