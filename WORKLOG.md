@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened archive run creation organization validation:
+  - `createCompactionRun` now rejects whitespace-only organization IDs before
+    inserting compaction run rows.
+  - Archive repository coverage verifies invalid organization IDs fail before
+    `pool.query()`.
+  - Reviewer skipped after previous reviewer-agent timeouts; self-review found
+    no issues.
+
+Verification:
+- `npx vitest run tests/store/memory-archive-repository.test.ts` (24 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (729 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened archive apply organization validation:
   - `applyCompactionRecord` now rejects whitespace-only organization IDs before
     issuing the canonical DELETE/archive INSERT query.

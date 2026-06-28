@@ -4,12 +4,12 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Archive Apply Organization Guard
+## Current Loop — Archive Run Creation Organization Guard
 
 Status:
-- `applyCompactionRecord` now rejects whitespace-only organization IDs before
-  issuing the canonical DELETE/archive INSERT query.
-- Coverage verifies invalid archive apply organization IDs fail before
+- `createCompactionRun` now rejects whitespace-only organization IDs before
+  inserting compaction run rows.
+- Coverage verifies invalid archive run creation organization IDs fail before
   `pool.query()`.
 - Reviewer skipped after previous reviewer-agent timeouts; self-review found no
   issues.

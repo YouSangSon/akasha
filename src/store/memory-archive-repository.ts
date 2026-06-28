@@ -144,6 +144,8 @@ export function createMemoryArchiveRepository(
 ): MemoryArchiveRepository {
   return {
     async createCompactionRun(input) {
+      assertNonBlankText(input.organizationId, "organizationId");
+
       // ON CONFLICT on idempotency_key: replay defense. Returns the existing
       // row (with its outcome counters) if a run with this UUID already
       // exists — caller decides whether to skip or replay the apply.

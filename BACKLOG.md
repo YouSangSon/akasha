@@ -122,3 +122,5 @@ experience, documentation, features.
   persistence.
 - Whitespace-only archive apply organization IDs are rejected before
   persistence.
+- Whitespace-only archive run creation organization IDs are rejected before
+  persistence.

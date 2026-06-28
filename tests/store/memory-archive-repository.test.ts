@@ -93,6 +93,25 @@ describe("MemoryArchiveRepository.createCompactionRun", () => {
       }),
     ).rejects.toThrow(/idempotency_key/);
   });
+
+  it("rejects whitespace-only organizationId before querying", async () => {
+    const { pool, query } = makeMockPool(async () => ({ rows: [RUN_ROW] }));
+    const repo = createMemoryArchiveRepository(pool);
+
+    await expect(
+      repo.createCompactionRun({
+        organizationId: " \n\t ",
+        actor: "test",
+        scopeType: "project",
+        scopeId: "alpha",
+        dryRun: false,
+        planGeneratedAt: new Date(),
+        idempotencyKey: "00000000-0000-0000-0000-000000000004",
+      }),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(query).not.toHaveBeenCalled();
+  });
 });
 
 describe("MemoryArchiveRepository.applyCompactionRecord", () => {
