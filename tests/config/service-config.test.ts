@@ -142,6 +142,52 @@ describe("resolveServiceConfig", () => {
     expect(config.embedding.dimensions).toBe(512);
   });
 
+  it.each([
+    [
+      "OPENAI_EMBEDDING_MODEL",
+      {
+        EMBEDDING_PROVIDER: "openai",
+        OPENAI_API_KEY: "test-openai-key",
+        OPENAI_EMBEDDING_MODEL: " \n\t ",
+      },
+    ],
+    [
+      "TRANSFORMERS_EMBEDDING_MODEL",
+      {
+        TRANSFORMERS_EMBEDDING_MODEL: " \n\t ",
+      },
+    ],
+    [
+      "EMBEDDING_MODEL",
+      {
+        EMBEDDING_PROVIDER: "local",
+        EMBEDDING_MODEL: " \n\t ",
+      },
+    ],
+    [
+      "QDRANT_COLLECTION_NAME",
+      {
+        QDRANT_COLLECTION_NAME: " \n\t ",
+      },
+    ],
+    [
+      "QDRANT_COLLECTION_NAME",
+      {
+        VECTOR_BACKEND: "pgvector",
+        QDRANT_COLLECTION_NAME: " \n\t ",
+      },
+    ],
+  ])("rejects whitespace-only optional %s", (name, overrides) => {
+    expect(() =>
+      resolveServiceConfig({
+        env: {
+          ...BASE_ENV,
+          ...overrides,
+        },
+      }),
+    ).toThrow(`Invalid ${name}: expected non-empty string`);
+  });
+
   it("derives the database url from Postgres env when DATABASE_URL is absent", () => {
     const config = resolveServiceConfig({
       env: {

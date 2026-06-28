@@ -187,3 +187,5 @@ experience, documentation, features.
   before internal callers can receive them.
 - Invalid OAuth verifier numeric environment values are rejected before JWKS
   verifier construction, including timeout values outside Node timer bounds.
+- Whitespace-only optional service configuration identifiers are rejected
+  before embedding or vector adapter construction.

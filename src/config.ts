@@ -84,22 +84,39 @@ export function resolveServiceConfig(
         : parsePositiveInt(env.EMBEDDING_DIMENSIONS, 384);
   const model =
     provider === "openai"
-      ? env.OPENAI_EMBEDDING_MODEL ?? "text-embedding-3-small"
+      ? envOrDefault(
+          env.OPENAI_EMBEDDING_MODEL,
+          "OPENAI_EMBEDDING_MODEL",
+          "text-embedding-3-small",
+        )
       : provider === "transformers"
-        ? env.TRANSFORMERS_EMBEDDING_MODEL ?? "Xenova/all-MiniLM-L6-v2"
-        : env.EMBEDDING_MODEL ?? "local-deterministic-v1";
+        ? envOrDefault(
+            env.TRANSFORMERS_EMBEDDING_MODEL,
+            "TRANSFORMERS_EMBEDDING_MODEL",
+            "Xenova/all-MiniLM-L6-v2",
+          )
+        : envOrDefault(
+            env.EMBEDDING_MODEL,
+            "EMBEDDING_MODEL",
+            "local-deterministic-v1",
+          );
+  const qdrantCollectionName = envOrDefault(
+    env.QDRANT_COLLECTION_NAME,
+    "QDRANT_COLLECTION_NAME",
+    "memory_chunks_v1",
+  );
 
   // Qdrant credentials are only required when qdrant is the active backend.
   const qdrant = vectorBackend === "qdrant"
     ? {
         url: requireEnv(env.QDRANT_URL, "QDRANT_URL"),
         apiKey: requireEnv(env.QDRANT_API_KEY, "QDRANT_API_KEY"),
-        collectionName: env.QDRANT_COLLECTION_NAME ?? "memory_chunks_v1",
+        collectionName: qdrantCollectionName,
       }
     : {
         url: env.QDRANT_URL ?? "",
         apiKey: env.QDRANT_API_KEY ?? "",
-        collectionName: env.QDRANT_COLLECTION_NAME ?? "memory_chunks_v1",
+        collectionName: qdrantCollectionName,
       };
 
   return {
@@ -134,6 +151,20 @@ function requireEnv(value: string | undefined, name: string): string {
     throw new Error(`Missing required environment variable: ${name}`);
   }
 
+  return value;
+}
+
+function envOrDefault(
+  value: string | undefined,
+  name: string,
+  fallback: string,
+): string {
+  if (value === undefined) {
+    return fallback;
+  }
+  if (value.trim().length === 0) {
+    throw new Error(`Invalid ${name}: expected non-empty string`);
+  }
   return value;
 }
 

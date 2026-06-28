@@ -4,17 +4,16 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — OAuth Numeric Env Guard
+## Current Loop — Optional Service Env Guard
 
 Status:
-- OAuth verifier numeric env parsing now rejects whitespace-only, decimal,
-  negative, exponent, zero-timeout, and timer-overflow values instead of relying
-  on JavaScript number coercion.
-- `MCP_OAUTH_JWKS_TIMEOUT_MS` is capped to the Node timer-compatible maximum.
-- Reviewer subagent caught the missing timeout upper bound; it was fixed before
-  final verification.
-- Focused OAuth tests, typecheck, build, audit, full suite, and diff whitespace
+- Service config now rejects whitespace-only optional embedding model names and
+  `QDRANT_COLLECTION_NAME` instead of passing blank identifiers to embedding or
+  vector adapters.
+- Defaults remain unchanged when those optional variables are unset.
+- Focused config tests, typecheck, build, audit, full suite, and diff whitespace
   checks passed.
+- Reviewer subagent attempt timed out and was closed with no findings returned.
 
 Loop closeout:
 - Commit locally; do not push.

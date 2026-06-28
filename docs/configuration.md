@@ -26,6 +26,8 @@ The Node app reads from `process.env` directly via `resolveServiceConfig` in
 
 Variables marked **required** throw at startup if missing or invalid. This is
 intentional — fail-closed beats running with an undefined value silently.
+Optional variables use their documented defaults when unset, but explicitly
+configured whitespace-only values are invalid.
 
 The fail-closed gate also refuses to bind to a non-loopback host
 (`HOST=0.0.0.0`, `HOST=10.x.x.x`, etc.) when both `MEMORY_API_TOKENS` and
