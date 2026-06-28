@@ -17,7 +17,6 @@ fi
 artifact="${BACKUP_DIR}/postgres-${timestamp}.sql.gz"
 checksum="${artifact}.sha256"
 manifest="${BACKUP_DIR}/manifest-${timestamp}.json"
-remote_dir="${BACKUP_TARGET_DIR:-${BACKUP_DIR}}"
 
 mkdir -p "${BACKUP_DIR}"
 pg_dump "${DATABASE_URL}" | gzip > "${artifact}"
@@ -56,6 +55,15 @@ fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 NODE
 
 if [ -n "${BACKUP_TARGET_HOST:-}" ] && [ -z "${BACKUP_ENCRYPTION_KEY_FILE:-}" ]; then
+  if [ "${BACKUP_TARGET_DIR+x}" = "x" ]; then
+    if [ -z "$(printf '%s' "${BACKUP_TARGET_DIR}" | tr -d '[:space:]')" ]; then
+      echo "BACKUP_TARGET_DIR must contain non-whitespace text" >&2
+      exit 1
+    fi
+    remote_dir="${BACKUP_TARGET_DIR}"
+  else
+    remote_dir="${BACKUP_DIR}"
+  fi
   ssh "${BACKUP_TARGET_HOST}" "mkdir -p \"${remote_dir}\""
   scp "${artifact}" "${checksum}" "${manifest}" \
     "${BACKUP_TARGET_HOST}:${remote_dir}/"

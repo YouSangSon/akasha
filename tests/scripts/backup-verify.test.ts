@@ -1,7 +1,16 @@
 import { createHash } from "node:crypto";
+import { execFile } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
-import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { promisify } from "node:util";
+import {
+  access,
+  chmod,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   resolveBackupTargetDir,
@@ -9,6 +18,7 @@ import {
 } from "../../scripts/backup-verify.js";
 
 const tempDirs: string[] = [];
+const execFileAsync = promisify(execFile);
 
 afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
@@ -134,6 +144,187 @@ describe("resolveBackupTargetDir", () => {
     ).toThrow("BACKUP_TARGET_DIR must contain non-whitespace text");
   });
 });
+
+describe("backup target directory shell guards", () => {
+  it.each([
+    "scripts/backup-postgres.sh",
+    "scripts/snapshot-qdrant.sh",
+    "scripts/create-backup.sh",
+  ])("%s rejects whitespace-only BACKUP_TARGET_DIR", async (scriptPath) => {
+    const script = await readFile(scriptPath, "utf8");
+
+    expect(script).toContain(
+      "BACKUP_TARGET_DIR must contain non-whitespace text",
+    );
+    expect(script).toContain("tr -d '[:space:]'");
+    expect(script).not.toContain("${BACKUP_TARGET_DIR:-${BACKUP_DIR}}");
+  });
+
+  it.each([
+    "scripts/backup-postgres.sh",
+    "scripts/snapshot-qdrant.sh",
+    "scripts/create-backup.sh",
+  ])("%s falls back to BACKUP_DIR when BACKUP_TARGET_DIR is unset", async (scriptPath) => {
+    const result = await runBackupShellScript(scriptPath, {});
+
+    expect(result.ok).toBe(true);
+    expect(result.log).toContain(`remote.example:${result.backupDir}/`);
+  });
+
+  it.each([
+    "scripts/backup-postgres.sh",
+    "scripts/snapshot-qdrant.sh",
+    "scripts/create-backup.sh",
+  ])("%s preserves valid BACKUP_TARGET_DIR values", async (scriptPath) => {
+    const targetDir = path.join(os.tmpdir(), "akasha backup remote target");
+    const result = await runBackupShellScript(scriptPath, {
+      BACKUP_TARGET_DIR: targetDir,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.log).toContain(`remote.example:${targetDir}/`);
+  });
+
+  it.each([
+    ["empty", ""],
+    ["whitespace", " \n\t "],
+  ])(
+    "rejects %s BACKUP_TARGET_DIR under sh -eu",
+    async (_label, targetDir) => {
+      for (const scriptPath of [
+        "scripts/backup-postgres.sh",
+        "scripts/snapshot-qdrant.sh",
+        "scripts/create-backup.sh",
+      ]) {
+        const result = await runBackupShellScript(scriptPath, {
+          BACKUP_TARGET_DIR: targetDir,
+        });
+
+        expect(result.ok).toBe(false);
+        expect(result.stderr).toContain(
+          "BACKUP_TARGET_DIR must contain non-whitespace text",
+        );
+        expect(result.log).toBe("");
+      }
+    },
+  );
+});
+
+async function runBackupShellScript(
+  scriptPath: string,
+  envOverrides: Record<string, string>,
+): Promise<{
+  ok: boolean;
+  stdout: string;
+  stderr: string;
+  log: string;
+  backupDir: string;
+}> {
+  const backupDir = await mkdtemp(path.join(os.tmpdir(), "akasha-backup-shell-"));
+  const binDir = await mkdtemp(path.join(os.tmpdir(), "akasha-backup-bin-"));
+  const logPath = path.join(backupDir, "remote.log");
+  tempDirs.push(backupDir, binDir);
+  await writeStubCommands(binDir);
+
+  const env: NodeJS.ProcessEnv = {
+    PATH: `${binDir}:${process.env.PATH ?? ""}`,
+    BACKUP_DIR: backupDir,
+    BACKUP_TARGET_HOST: "remote.example",
+    BACKUP_TIMESTAMP: "20260329-1200",
+    DATABASE_URL: "postgres://memory:memory@localhost:5432/memory_os",
+    QDRANT_URL: "http://qdrant.local:6333",
+    VECTOR_BACKEND: "pgvector",
+    STUB_LOG: logPath,
+    ...envOverrides,
+  };
+
+  try {
+    const result = await execFileAsync("sh", [scriptPath], {
+      cwd: process.cwd(),
+      env,
+      encoding: "utf8",
+    });
+    return {
+      ok: true,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      log: await readOptionalText(logPath),
+      backupDir,
+    };
+  } catch (error: unknown) {
+    const err = error as { stdout?: string; stderr?: string };
+    return {
+      ok: false,
+      stdout: err.stdout ?? "",
+      stderr: err.stderr ?? "",
+      log: await readOptionalText(logPath),
+      backupDir,
+    };
+  }
+}
+
+async function writeStubCommands(binDir: string): Promise<void> {
+  await Promise.all([
+    writeExecutable(
+      path.join(binDir, "pg_dump"),
+      "#!/usr/bin/env sh\nprintf 'postgres dump bytes'\n",
+    ),
+    writeExecutable(path.join(binDir, "gzip"), "#!/usr/bin/env sh\ncat\n"),
+    writeExecutable(
+      path.join(binDir, "sha256sum"),
+      "#!/usr/bin/env sh\nprintf 'stubsha  %s\\n' \"$1\"\n",
+    ),
+    writeExecutable(
+      path.join(binDir, "curl"),
+      `#!/usr/bin/env sh
+out=""
+previous=""
+for arg do
+  if [ "$previous" = "--output" ]; then
+    out="$arg"
+    previous=""
+    continue
+  fi
+  if [ "$arg" = "--output" ]; then
+    previous="--output"
+  fi
+done
+if [ -n "$out" ]; then
+  printf 'snapshot bytes' > "$out"
+else
+  printf '{"result":{"name":"snapshot-one"}}'
+fi
+`,
+    ),
+    writeExecutable(
+      path.join(binDir, "ssh"),
+      "#!/usr/bin/env sh\nprintf 'ssh:%s\\n' \"$*\" >> \"$STUB_LOG\"\n",
+    ),
+    writeExecutable(
+      path.join(binDir, "scp"),
+      `#!/usr/bin/env sh
+last=""
+for arg do
+  last="$arg"
+done
+printf 'scp:%s\\n' "$last" >> "$STUB_LOG"
+`,
+    ),
+  ]);
+}
+
+async function writeExecutable(filePath: string, content: string): Promise<void> {
+  await writeFile(filePath, content);
+  await chmod(filePath, 0o755);
+}
+
+async function readOptionalText(filePath: string): Promise<string> {
+  try {
+    return await readFile(filePath, "utf8");
+  } catch {
+    return "";
+  }
+}
 
 async function createBackupFixture(options: {
   createdAt?: string;

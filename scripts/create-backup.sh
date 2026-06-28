@@ -58,7 +58,15 @@ if [ -n "${BACKUP_ENCRYPTION_KEY_FILE:-}" ]; then
 fi
 
 if [ -n "${BACKUP_TARGET_HOST:-}" ]; then
-  remote_dir="${BACKUP_TARGET_DIR:-${BACKUP_DIR}}"
+  if [ "${BACKUP_TARGET_DIR+x}" = "x" ]; then
+    if [ -z "$(printf '%s' "${BACKUP_TARGET_DIR}" | tr -d '[:space:]')" ]; then
+      echo "BACKUP_TARGET_DIR must contain non-whitespace text" >&2
+      exit 1
+    fi
+    remote_dir="${BACKUP_TARGET_DIR}"
+  else
+    remote_dir="${BACKUP_DIR}"
+  fi
   if [ -n "${BACKUP_ENCRYPTION_KEY_FILE:-}" ]; then
     ssh "${BACKUP_TARGET_HOST}" "mkdir -p \"${remote_dir}\""
     files_to_copy="$(MANIFEST_PATH="${manifest}" BACKUP_DIR="${BACKUP_DIR}" node <<'NODE'

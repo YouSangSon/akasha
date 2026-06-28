@@ -14,8 +14,7 @@ experience, documentation, features.
 
 ## P2
 
-- Align backup shell scripts with `backup:verify` by rejecting whitespace-only
-  `BACKUP_TARGET_DIR` values instead of relying on shell default expansion.
+- None currently known.
 
 ## Done In This Branch
 
@@ -200,3 +199,5 @@ experience, documentation, features.
   startup while preserving lazy fallback cwd resolution.
 - Whitespace-only `backup:verify` target directory values are rejected before
   remote path construction.
+- Whitespace-only backup shell-script target directory values are rejected in
+  remote-copy branches before SSH/SCP work.

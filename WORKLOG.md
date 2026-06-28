@@ -46,6 +46,29 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened backup shell-script target directory handling:
+  - `backup-postgres.sh`, `snapshot-qdrant.sh`, and `create-backup.sh` now
+    reject whitespace-only `BACKUP_TARGET_DIR` values before remote SSH/SCP
+    work.
+  - Unset `BACKUP_TARGET_DIR` still falls back to `BACKUP_DIR`, and valid
+    configured paths are preserved.
+  - Executable tests run the shell scripts under `sh` with stubbed `pg_dump`,
+    `gzip`, `sha256sum`, `curl`, `ssh`, and `scp`.
+  - Reviewer subagent first caught string-only test coverage, then caught
+    inherited env leakage in the shell harness; both were fixed before final
+    verification.
+
+Verification:
+- `npx vitest run tests/scripts/backup-verify.test.ts` (18 passed)
+- `BACKUP_TARGET_DIR=/inherited-target npx vitest run tests/scripts/backup-verify.test.ts` (18 passed)
+- `BACKUP_ENCRYPTION_KEY_FILE=/tmp/inherited-key npx vitest run tests/scripts/backup-verify.test.ts` (18 passed)
+- `sh -n scripts/create-backup.sh && sh -n scripts/backup-postgres.sh && sh -n scripts/snapshot-qdrant.sh`
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (855 passed, 34 skipped across 68 files)
+- `git diff --check`
+
 - Hardened backup verification target directory resolution:
   - `backup:verify` now rejects whitespace-only `BACKUP_TARGET_DIR` values
     before remote path construction.
