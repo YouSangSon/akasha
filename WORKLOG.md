@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened restore-smoke text environment handling:
+  - `RESTORE_SMOKE_PROJECT`, `RESTORE_SMOKE_PROJECT_KEY`,
+    `RESTORE_SMOKE_SEARCH_QUERY`, and `RESTORE_SMOKE_PACK_TASK` now reject
+    whitespace-only values before Docker or registry work.
+  - Unset values still use the existing defaults, and configured nonblank values
+    are preserved.
+  - Reviewer subagent found no issues.
+
+Verification:
+- `npx vitest run tests/scripts/restore-smoke.test.ts tests/scripts/public-docs-drift.test.ts` (53 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (876 passed, 34 skipped across 68 files)
+- `git diff --check`
+
 - Hardened restore-smoke app port handling:
   - `resolveRestoreAppPort()` now validates `RESTORE_APP_PORT` before Docker
     startup and health checks.

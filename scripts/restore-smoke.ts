@@ -82,6 +82,18 @@ export function resolveRestoreAppPort(
   return raw;
 }
 
+export function resolveRestoreSmokeTextEnv(
+  env: NodeJS.ProcessEnv,
+  name: string,
+  fallback: string,
+): string {
+  const value = env[name];
+  if (value === undefined) {
+    return fallback;
+  }
+  return requireRestoreSmokeText(value, name);
+}
+
 function requireRestoreSmokeText(value: string, name: string): string {
   if (value.trim().length === 0) {
     throw new Error(`${name} must contain non-whitespace text`);
@@ -323,12 +335,28 @@ async function main() {
   const backupDir = requireEnv("BACKUP_DIR");
   const restorePostgresUrl = requireEnv("RESTORE_POSTGRES_URL");
   const restorePostgresCommand = requireEnv("RESTORE_SMOKE_POSTGRES_RESTORE_CMD");
-  const projectName = process.env.RESTORE_SMOKE_PROJECT ?? "restore-smoke";
-  const projectKey = process.env.RESTORE_SMOKE_PROJECT_KEY ?? "project-alpha";
+  const projectName = resolveRestoreSmokeTextEnv(
+    process.env,
+    "RESTORE_SMOKE_PROJECT",
+    "restore-smoke",
+  );
+  const projectKey = resolveRestoreSmokeTextEnv(
+    process.env,
+    "RESTORE_SMOKE_PROJECT_KEY",
+    "project-alpha",
+  );
   const userScopeId = process.env.RESTORE_SMOKE_USER_SCOPE_ID?.trim();
   const organizationId = process.env.RESTORE_SMOKE_ORGANIZATION_ID?.trim();
-  const searchQuery = process.env.RESTORE_SMOKE_SEARCH_QUERY ?? "continue work";
-  const packTask = process.env.RESTORE_SMOKE_PACK_TASK ?? "continue work";
+  const searchQuery = resolveRestoreSmokeTextEnv(
+    process.env,
+    "RESTORE_SMOKE_SEARCH_QUERY",
+    "continue work",
+  );
+  const packTask = resolveRestoreSmokeTextEnv(
+    process.env,
+    "RESTORE_SMOKE_PACK_TASK",
+    "continue work",
+  );
   const appPort = resolveRestoreAppPort();
   const { fileName: manifestFileName, manifest } = await findLatestManifest(backupDir);
   const vectorBackend = manifest.vectorBackend ?? "qdrant";

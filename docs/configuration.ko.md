@@ -320,12 +320,12 @@ context-pack 동작을 검증합니다.
 | `RESTORE_QDRANT_URL` | Qdrant manifest에서 필수 | 격리 restore Qdrant URL. pgvector manifest는 Qdrant restore를 건너뜁니다. |
 | `RESTORE_SMOKE_POSTGRES_RESTORE_CMD` | 필수 | `RESTORE_SMOKE_POSTGRES_ARTIFACT_PATH` 를 복원하는 shell command. |
 | `RESTORE_SMOKE_QDRANT_RESTORE_CMD` | Qdrant manifest에서 필수 | `RESTORE_SMOKE_QDRANT_ARTIFACT_PATH` 를 복원하는 shell command. pgvector manifest는 이 command를 건너뜁니다. |
-| `RESTORE_SMOKE_PROJECT` | `restore-smoke` | 격리 stack의 Docker Compose project 이름. |
-| `RESTORE_SMOKE_PROJECT_KEY` | `project-alpha` | smoke search와 context-pack check에 쓰는 project key. |
+| `RESTORE_SMOKE_PROJECT` | `restore-smoke` | 격리 stack의 Docker Compose project 이름. 설정한다면 non-whitespace text가 필요합니다. |
+| `RESTORE_SMOKE_PROJECT_KEY` | `project-alpha` | smoke search와 context-pack check에 쓰는 project key. 설정한다면 non-whitespace text가 필요합니다. |
 | `RESTORE_SMOKE_ORGANIZATION_ID` | unset | strict search/context-pack check에 전달할 선택적 organization id. 기본 strict restore에서는 설정하고, 의도적으로 `LEGACY_ANONYMOUS_SEARCH=true`를 쓸 때만 생략. |
 | `RESTORE_SMOKE_USER_SCOPE_ID` | unset | restore check에 포함할 선택적 user scope. |
-| `RESTORE_SMOKE_SEARCH_QUERY` | `continue work` | 복원된 search check에 쓰는 query. |
-| `RESTORE_SMOKE_PACK_TASK` | `continue work` | 복원된 context-pack check에 쓰는 task text. |
+| `RESTORE_SMOKE_SEARCH_QUERY` | `continue work` | 복원된 search check에 쓰는 query. 설정한다면 non-whitespace text가 필요합니다. |
+| `RESTORE_SMOKE_PACK_TASK` | `continue work` | 복원된 context-pack check에 쓰는 task text. 설정한다면 non-whitespace text가 필요합니다. |
 | `RESTORE_APP_PORT` | `18787` | 격리 app 서비스에 기대하는 host port. 1부터 65535까지의 plain decimal integer. |
 
 ## 흔한 설정

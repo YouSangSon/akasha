@@ -333,12 +333,12 @@ isolated compose project and validates search/context-pack behavior.
 | `RESTORE_QDRANT_URL` | required for Qdrant manifests | URL for the isolated restore Qdrant. Pgvector manifests skip Qdrant restore. |
 | `RESTORE_SMOKE_POSTGRES_RESTORE_CMD` | required | Shell command that restores `RESTORE_SMOKE_POSTGRES_ARTIFACT_PATH`. |
 | `RESTORE_SMOKE_QDRANT_RESTORE_CMD` | required for Qdrant manifests | Shell command that restores `RESTORE_SMOKE_QDRANT_ARTIFACT_PATH`. Pgvector manifests skip this command. |
-| `RESTORE_SMOKE_PROJECT` | `restore-smoke` | Docker Compose project name for the isolated stack. |
-| `RESTORE_SMOKE_PROJECT_KEY` | `project-alpha` | Project key used by smoke-search and context-pack checks. |
+| `RESTORE_SMOKE_PROJECT` | `restore-smoke` | Docker Compose project name for the isolated stack. If set, it must contain non-whitespace text. |
+| `RESTORE_SMOKE_PROJECT_KEY` | `project-alpha` | Project key used by smoke-search and context-pack checks. If set, it must contain non-whitespace text. |
 | `RESTORE_SMOKE_ORGANIZATION_ID` | unset | Optional organization id passed to strict search/context-pack checks. Set this for default-strict restores unless you intentionally use `LEGACY_ANONYMOUS_SEARCH=true`. |
 | `RESTORE_SMOKE_USER_SCOPE_ID` | unset | Optional user scope included in restore checks. |
-| `RESTORE_SMOKE_SEARCH_QUERY` | `continue work` | Query used by the restored search check. |
-| `RESTORE_SMOKE_PACK_TASK` | `continue work` | Task text used by the restored context-pack check. |
+| `RESTORE_SMOKE_SEARCH_QUERY` | `continue work` | Query used by the restored search check. If set, it must contain non-whitespace text. |
+| `RESTORE_SMOKE_PACK_TASK` | `continue work` | Task text used by the restored context-pack check. If set, it must contain non-whitespace text. |
 | `RESTORE_APP_PORT` | `18787` | Host port expected for the isolated app service. Plain decimal integer from 1 to 65535. |
 
 ## Common configurations

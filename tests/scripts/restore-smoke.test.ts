@@ -4,6 +4,7 @@ import {
   buildRestoreSmokeCommandEnv,
   buildRestoreSmokeToolInput,
   resolveRestoreAppPort,
+  resolveRestoreSmokeTextEnv,
   runRestoreSmoke,
 } from "../../scripts/restore-smoke.js";
 
@@ -320,4 +321,37 @@ describe("resolveRestoreAppPort", () => {
       );
     },
   );
+});
+
+describe("resolveRestoreSmokeTextEnv", () => {
+  it("uses the fallback when a restore-smoke text env var is unset", () => {
+    expect(
+      resolveRestoreSmokeTextEnv(
+        {},
+        "RESTORE_SMOKE_PROJECT_KEY",
+        "project-alpha",
+      ),
+    ).toBe("project-alpha");
+  });
+
+  it("preserves configured restore-smoke text values", () => {
+    expect(
+      resolveRestoreSmokeTextEnv(
+        { RESTORE_SMOKE_SEARCH_QUERY: "continue with backups" },
+        "RESTORE_SMOKE_SEARCH_QUERY",
+        "continue work",
+      ),
+    ).toBe("continue with backups");
+  });
+
+  it.each([
+    "RESTORE_SMOKE_PROJECT",
+    "RESTORE_SMOKE_PROJECT_KEY",
+    "RESTORE_SMOKE_SEARCH_QUERY",
+    "RESTORE_SMOKE_PACK_TASK",
+  ])("rejects whitespace-only %s", (name) => {
+    expect(() =>
+      resolveRestoreSmokeTextEnv({ [name]: " \n\t " }, name, "fallback"),
+    ).toThrow(`${name} must contain non-whitespace text`);
+  });
 });
