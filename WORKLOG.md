@@ -46,6 +46,23 @@ Verification:
 
 ## 2026-06-28
 
+- Updated general operations Qdrant restore examples to use the host-published
+  Qdrant port:
+  - English/Korean operations docs now call host `curl` against
+    `http://127.0.0.1:6333/...` instead of assuming the Qdrant container has
+    `curl` installed.
+  - Public docs drift coverage now guards against reintroducing
+    `docker compose exec qdrant curl -X POST` in the restore example.
+
+Verification:
+- `npx vitest run tests/scripts/public-docs-drift.test.ts`
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (615 passed, 34 skipped across 65 files)
+- `git diff --check`
+- `git diff --cached --check`
+
 - Aligned general operations Qdrant restore examples with collection-name
   configuration:
   - English/Korean operations docs now use `QDRANT_COLLECTION_NAME` for the

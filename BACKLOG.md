@@ -14,7 +14,7 @@ experience, documentation, features.
 
 ## P2
 
-- None currently known.
+- Refresh in-range dependency lockfile/install updates.
 
 ## Done In This Branch
 
@@ -31,3 +31,4 @@ experience, documentation, features.
 - Stale Transformers dynamic-import `@ts-ignore` removed.
 - Architecture docs local embedding module filename drift fixed.
 - Operations restore examples use Qdrant collection-name variables.
+- Operations restore examples use host Qdrant curl path.

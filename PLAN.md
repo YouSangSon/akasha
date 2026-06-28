@@ -4,15 +4,14 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Operations Restore Collection Drift
+## Current Loop — Operations Restore Curl Path
 
 Status:
-- General operations restore examples now use `QDRANT_COLLECTION_NAME` instead
-  of a hardcoded `memory_chunks_v1` snapshot upload path.
-- Upload examples now use `priority=snapshot`, matching the self-hosted
-  restore-smoke guidance.
-- Public docs drift coverage now guards both operations and self-hosted restore
-  upload paths.
+- General operations restore examples currently invoke `curl` inside the Qdrant
+  container.
+- Compose already publishes Qdrant on `127.0.0.1:6333`; use host `curl` so the
+  runbook does not assume the Qdrant image ships curl.
+- Public docs drift coverage guards the host curl path.
 - Review, focused public docs drift test, typecheck, build, audit, full test
   suite, and diff whitespace checks passed.
 

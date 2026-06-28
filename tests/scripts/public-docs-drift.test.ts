@@ -543,9 +543,12 @@ describe("public documentation drift checks", () => {
       "docs/operations.ko.md",
     ]) {
       const text = read(path);
+      expect(text).toContain("${QDRANT_COLLECTION_NAME}");
+      expect(text).toContain("http://127.0.0.1:6333/collections/");
       expect(text).toContain(
         "/collections/${QDRANT_COLLECTION_NAME}/snapshots/upload?priority=snapshot",
       );
+      expect(text).not.toContain("docker compose exec qdrant curl -X POST");
       expect(text).not.toContain("/collections/memory_chunks_v1/snapshots/upload");
     }
 

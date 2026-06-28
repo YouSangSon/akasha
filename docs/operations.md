@@ -91,8 +91,8 @@ gunzip -c /var/lib/developer-memory-os/backups/postgres-YYYYMMDD-HHMM.sql.gz \
 
 # 3. Restore Qdrant snapshot when VECTOR_BACKEND=qdrant.
 QDRANT_COLLECTION_NAME=${QDRANT_COLLECTION_NAME:-memory_chunks_v1}
-docker compose exec qdrant curl -X POST \
-  "http://localhost:6333/collections/${QDRANT_COLLECTION_NAME}/snapshots/upload?priority=snapshot" \
+curl -X POST \
+  "http://127.0.0.1:6333/collections/${QDRANT_COLLECTION_NAME}/snapshots/upload?priority=snapshot" \
   -F snapshot=@/var/lib/developer-memory-os/backups/qdrant-YYYYMMDD-HHMM.snapshot
 
 #    For VECTOR_BACKEND=pgvector, vectors are in the Postgres dump; skip this step.
