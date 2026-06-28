@@ -269,6 +269,10 @@ export function createMemoryRepository(
     },
 
     async searchMemory(input) {
+      if (input.organizationId !== undefined) {
+        assertNonBlankText(input.organizationId, "organizationId");
+      }
+
       if (input.scopes.length === 0) {
         return [];
       }

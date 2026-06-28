@@ -1242,6 +1242,22 @@ describe("createMemoryRepository (unit — no PG required)", () => {
     expect(queryCalls[0]?.sql).toContain("mr.durability <> 'archived'");
   });
 
+  it("searchMemory rejects whitespace-only organization IDs before querying", async () => {
+    const mockPool = { query: vi.fn() };
+    const repo = createMemoryRepository(mockPool as never);
+
+    await expect(
+      repo.searchMemory({
+        query: "timeout retry",
+        scopes: [{ scopeType: "project", scopeId: "proj-x" }],
+        organizationId: " \n\t ",
+        limit: 5,
+      }),
+    ).rejects.toThrow(/organizationId/);
+
+    expect(mockPool.query).not.toHaveBeenCalled();
+  });
+
   it("searchMemory adds entity graph rescue clauses for deterministic mentions", async () => {
     const queryCalls: { sql: string; params: unknown[] }[] = [];
     const mockPool = {

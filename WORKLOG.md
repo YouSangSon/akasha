@@ -46,6 +46,22 @@ Verification:
 
 ## 2026-06-28
 
+- Hardened repository search organization validation:
+  - `searchMemory` now rejects whitespace-only organization IDs before issuing
+    a Postgres query.
+  - Repository coverage verifies invalid organization IDs fail before
+    `pool.query()`.
+  - Reviewer skipped after previous reviewer-agent timeouts; self-review found
+    no issues.
+
+Verification:
+- `npx vitest run tests/store/memory-repository.test.ts` (43 passed, 7 skipped)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (724 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened shared read organization validation:
   - `assertOrganizationId` now rejects whitespace-only organization IDs even
     when the legacy anonymous read flag is enabled.
