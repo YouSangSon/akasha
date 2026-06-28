@@ -3,6 +3,7 @@ import {
   type BackupManifest,
   buildRestoreSmokeCommandEnv,
   buildRestoreSmokeToolInput,
+  resolveOptionalRestoreSmokeTextEnv,
   resolveRestoreAppPort,
   resolveRestoreSmokeTextEnv,
   runRestoreSmoke,
@@ -354,4 +355,30 @@ describe("resolveRestoreSmokeTextEnv", () => {
       resolveRestoreSmokeTextEnv({ [name]: " \n\t " }, name, "fallback"),
     ).toThrow(`${name} must contain non-whitespace text`);
   });
+});
+
+describe("resolveOptionalRestoreSmokeTextEnv", () => {
+  it("omits unset optional restore-smoke text env vars", () => {
+    expect(
+      resolveOptionalRestoreSmokeTextEnv({}, "RESTORE_SMOKE_ORGANIZATION_ID"),
+    ).toBeUndefined();
+  });
+
+  it("trims configured optional restore-smoke text values", () => {
+    expect(
+      resolveOptionalRestoreSmokeTextEnv(
+        { RESTORE_SMOKE_USER_SCOPE_ID: " alice " },
+        "RESTORE_SMOKE_USER_SCOPE_ID",
+      ),
+    ).toBe("alice");
+  });
+
+  it.each(["RESTORE_SMOKE_USER_SCOPE_ID", "RESTORE_SMOKE_ORGANIZATION_ID"])(
+    "rejects whitespace-only %s",
+    (name) => {
+      expect(() =>
+        resolveOptionalRestoreSmokeTextEnv({ [name]: " \n\t " }, name),
+      ).toThrow(`${name} must contain non-whitespace text`);
+    },
+  );
 });

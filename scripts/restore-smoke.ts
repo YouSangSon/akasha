@@ -94,6 +94,13 @@ export function resolveRestoreSmokeTextEnv(
   return requireRestoreSmokeText(value, name);
 }
 
+export function resolveOptionalRestoreSmokeTextEnv(
+  env: NodeJS.ProcessEnv,
+  name: string,
+): string | undefined {
+  return optionalTrimmedRestoreSmokeText(env[name], name);
+}
+
 function requireRestoreSmokeText(value: string, name: string): string {
   if (value.trim().length === 0) {
     throw new Error(`${name} must contain non-whitespace text`);
@@ -345,8 +352,14 @@ async function main() {
     "RESTORE_SMOKE_PROJECT_KEY",
     "project-alpha",
   );
-  const userScopeId = process.env.RESTORE_SMOKE_USER_SCOPE_ID?.trim();
-  const organizationId = process.env.RESTORE_SMOKE_ORGANIZATION_ID?.trim();
+  const userScopeId = resolveOptionalRestoreSmokeTextEnv(
+    process.env,
+    "RESTORE_SMOKE_USER_SCOPE_ID",
+  );
+  const organizationId = resolveOptionalRestoreSmokeTextEnv(
+    process.env,
+    "RESTORE_SMOKE_ORGANIZATION_ID",
+  );
   const searchQuery = resolveRestoreSmokeTextEnv(
     process.env,
     "RESTORE_SMOKE_SEARCH_QUERY",

@@ -46,6 +46,8 @@ experience, documentation, features.
   dispatch or retrieval work.
 - Whitespace-only restore-smoke text environment values are rejected before
   Docker or registry work.
+- Whitespace-only optional restore-smoke user/org environment values are
+  rejected before Docker or registry work.
 - Whitespace-only session-start prompt tasks are rejected before context-pack
   dispatch.
 - Whitespace-only MCP resource path/search parameters are rejected before

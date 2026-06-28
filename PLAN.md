@@ -4,14 +4,13 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Restore Smoke Text Env Guard
+## Current Loop — Restore Smoke Optional Env Guard
 
 Status:
-- Restore-smoke now rejects whitespace-only text env values for
-  `RESTORE_SMOKE_PROJECT`, `RESTORE_SMOKE_PROJECT_KEY`,
-  `RESTORE_SMOKE_SEARCH_QUERY`, and `RESTORE_SMOKE_PACK_TASK`.
-- Unset values still use the existing defaults, and configured nonblank values
-  are preserved.
+- Restore-smoke now rejects whitespace-only optional text env values for
+  `RESTORE_SMOKE_USER_SCOPE_ID` and `RESTORE_SMOKE_ORGANIZATION_ID`.
+- Unset optional values are still omitted, and configured nonblank values are
+  trimmed before use.
 - Reviewer subagent found no issues.
 - Focused restore-smoke/docs tests, typecheck, build, audit, full suite, and
   diff whitespace checks passed.

@@ -46,6 +46,23 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened optional restore-smoke user/org environment handling:
+  - `RESTORE_SMOKE_USER_SCOPE_ID` and `RESTORE_SMOKE_ORGANIZATION_ID` now
+    reject whitespace-only values before Docker or registry work.
+  - Unset optional values are still omitted, and configured nonblank values are
+    trimmed before use.
+  - Configuration docs now state that configured values must contain
+    non-whitespace text.
+  - Reviewer subagent found no issues.
+
+Verification:
+- `npx vitest run tests/scripts/restore-smoke.test.ts tests/scripts/public-docs-drift.test.ts` (57 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (880 passed, 34 skipped across 68 files)
+- `git diff --check`
+
 - Hardened restore-smoke text environment handling:
   - `RESTORE_SMOKE_PROJECT`, `RESTORE_SMOKE_PROJECT_KEY`,
     `RESTORE_SMOKE_SEARCH_QUERY`, and `RESTORE_SMOKE_PACK_TASK` now reject
