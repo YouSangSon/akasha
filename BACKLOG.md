@@ -165,3 +165,5 @@ experience, documentation, features.
   embedding, rate-limit, archive, or vector side effects.
 - Whitespace-only unarchive-compaction organization IDs are rejected before
   archive, restore, chunk, embedding, vector, or mark side effects.
+- Missing, non-string, or whitespace-only vector upsert point organization
+  payloads are rejected before backend calls.

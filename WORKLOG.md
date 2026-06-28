@@ -46,6 +46,23 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened vector upsert point organization validation:
+  - Qdrant and pgvector adapters now reject missing, non-string, or
+    whitespace-only `payload.organization_id` values before backend upsert
+    calls.
+  - Vector coverage verifies invalid upsert point organization payloads fail
+    before Qdrant or pgvector work.
+  - Reviewer subagent found no issues; added missing/non-string regressions for
+    residual coverage.
+
+Verification:
+- `npx vitest run tests/vector/qdrant-index.test.ts tests/vector/pgvector-index.integration.test.ts tests/vector/point-builder.test.ts` (40 passed, 12 skipped)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (773 passed, 34 skipped across 65 files)
+- `git diff --check`
+
 - Hardened unarchive-compaction organization validation:
   - `unarchiveCompaction` now rejects whitespace-only organization IDs before
     archive lookup, restore, chunking, embedding, vector writes, or mark

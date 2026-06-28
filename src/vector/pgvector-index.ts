@@ -55,7 +55,10 @@ import type {
   VectorIndex,
   VectorPoint,
 } from "./vector-index.js";
-import { assertOptionalVectorOrganizationId } from "./organization-id.js";
+import {
+  assertOptionalVectorOrganizationId,
+  assertVectorPointOrganizationIds,
+} from "./organization-id.js";
 
 // Max rows per INSERT batch — 14 params/row × 4000 = 56000 < 65535 cap.
 const UPSERT_BATCH_ROWS = 4000;
@@ -168,6 +171,7 @@ export function createPgVectorIndex(
 
     async upsert(points: VectorPoint[]): Promise<void> {
       if (points.length === 0) return;
+      assertVectorPointOrganizationIds(points);
 
       // LOW 5: Validate embeddings before building SQL — an empty vector produces
       // "[]"::vector which pgvector rejects and aborts the entire batch.

@@ -15,7 +15,10 @@ import type {
   VectorIndex,
   VectorPoint,
 } from "./vector-index.js";
-import { assertOptionalVectorOrganizationId } from "./organization-id.js";
+import {
+  assertOptionalVectorOrganizationId,
+  assertVectorPointOrganizationIds,
+} from "./organization-id.js";
 
 type QdrantFilterClause = {
   key: string;
@@ -64,6 +67,8 @@ export function createQdrantVectorIndex(
 
     async upsert(points: VectorPoint[]): Promise<void> {
       if (points.length === 0) return;
+      assertVectorPointOrganizationIds(points);
+
       await client.upsert(collectionName, { points });
     },
 

@@ -4,15 +4,16 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Unarchive Compaction Organization Guard
+## Current Loop — Vector Upsert Organization Guard
 
 Status:
-- `unarchiveCompaction` now rejects whitespace-only organization IDs before
-  archive lookup, restore, chunking, embedding, vector writes, or mark updates.
-- Coverage verifies invalid unarchive organization IDs fail before those side
-  effects.
-- Reviewer subagent found no issues.
-- Focused compaction tests, typecheck, build, audit, full suite, and diff
+- Vector adapters now reject missing, non-string, or whitespace-only
+  `payload.organization_id` values before upsert backend calls.
+- Coverage verifies invalid upsert point organization payloads fail before
+  Qdrant or pgvector work.
+- Reviewer subagent found no issues; missing/non-string regressions were added
+  for residual coverage.
+- Focused vector tests, typecheck, build, audit, full suite, and diff
   whitespace checks passed.
 
 Loop closeout:

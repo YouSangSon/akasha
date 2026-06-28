@@ -213,6 +213,57 @@ describe("createQdrantVectorIndex — point building (upsert)", () => {
     expect(client.upsert).toHaveBeenCalledWith("memory_chunks_v1", { points });
   });
 
+  it("rejects whitespace-only point organization_id before Qdrant upsert", async () => {
+    const client = {
+      query: vi.fn(),
+      upsert: vi.fn(),
+      delete: vi.fn(),
+      collectionExists: vi.fn(),
+      createCollection: vi.fn(),
+    };
+    const index = createQdrantVectorIndex(client as never, "memory_chunks_v1");
+
+    await expect(
+      index.upsert([
+        {
+          id: "chunk:blank-org",
+          vector: [0.1, 0.2, 0.3],
+          payload: {
+            memory_record_id: 9,
+            organization_id: " \n\t ",
+          },
+        },
+      ]),
+    ).rejects.toThrow(/organizationId|organization_id/);
+
+    expect(client.upsert).not.toHaveBeenCalled();
+  });
+
+  it("rejects missing point organization_id before Qdrant upsert", async () => {
+    const client = {
+      query: vi.fn(),
+      upsert: vi.fn(),
+      delete: vi.fn(),
+      collectionExists: vi.fn(),
+      createCollection: vi.fn(),
+    };
+    const index = createQdrantVectorIndex(client as never, "memory_chunks_v1");
+
+    await expect(
+      index.upsert([
+        {
+          id: "chunk:missing-org",
+          vector: [0.1, 0.2, 0.3],
+          payload: {
+            memory_record_id: 9,
+          },
+        },
+      ]),
+    ).rejects.toThrow(/organization_id/);
+
+    expect(client.upsert).not.toHaveBeenCalled();
+  });
+
   it("skips Qdrant upsert call when points array is empty", async () => {
     const client = {
       query: vi.fn(),
