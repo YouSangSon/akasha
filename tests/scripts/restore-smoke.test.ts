@@ -284,6 +284,15 @@ describe("parseRestoreBackupManifest", () => {
   });
 
   it.each([
+    ["null", "null"],
+    ["array", "[]"],
+  ])("rejects %s manifests before field parsing", (_label, rawManifest) => {
+    expect(() => parseRestoreBackupManifest(rawManifest)).toThrow(
+      "backup manifest must be a JSON object",
+    );
+  });
+
+  it.each([
     ["createdAt", { createdAt: " \n\t " }],
     ["postgres.fileName", { postgres: { fileName: " \n\t " } }],
     ["postgres.sha256", { postgres: { sha256: " \n\t " } }],

@@ -46,6 +46,24 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened backup/restore manifest shape parsing:
+  - `scripts/backup-encryption.ts` and `scripts/restore-smoke.ts` now reject
+    JSON manifests that parse to `null` or arrays with
+    `backup manifest must be a JSON object`.
+  - Backup encryption rejects those manifests before random bytes, artifact
+    encryption, encrypted artifact creation, or manifest mutation work.
+  - Restore smoke rejects those manifests before per-field manifest parsing.
+  - Worker implementation passed spec review and code-quality review with no
+    findings.
+
+Verification:
+- `npx vitest run tests/scripts/backup-encryption.test.ts tests/scripts/restore-smoke.test.ts` (76 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (1026 passed, 34 skipped across 69 files)
+- `git diff --check`
+
 - Hardened backup plaintext retention flag parsing:
   - `BACKUP_ENCRYPTION_KEEP_PLAINTEXT` now accepts only trimmed,
     case-insensitive `true` or `false` values when configured.

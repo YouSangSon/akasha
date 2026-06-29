@@ -90,7 +90,7 @@ export async function encryptManifestArtifacts(
 
 function parseManifest(raw: string): BackupManifest {
   const parsed = JSON.parse(raw) as Partial<BackupManifest> | null;
-  if (parsed === null || typeof parsed !== "object") {
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
     throw new Error("backup manifest must be a JSON object");
   }
 

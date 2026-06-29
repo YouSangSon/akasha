@@ -143,6 +143,31 @@ describe("backup encryption", () => {
   });
 
   it.each([
+    ["null", "null\n"],
+    ["array", "[]\n"],
+  ])("rejects %s manifests before artifact work", async (_label, rawManifest) => {
+    const { backupDir, manifestPath, postgresFileName, qdrantFileName } =
+      await createManifestFixture();
+    await writeFile(manifestPath, rawManifest);
+    const randomBytes = vi.fn((size: number) => Buffer.alloc(size, 3));
+
+    await expect(
+      encryptManifestArtifacts({
+        backupDir,
+        manifestPath,
+        key: Buffer.alloc(32, 7),
+        randomBytes,
+      }),
+    ).rejects.toThrow("backup manifest must be a JSON object");
+
+    expect(randomBytes).not.toHaveBeenCalled();
+    expect(await exists(path.join(backupDir, postgresFileName))).toBe(true);
+    expect(await exists(path.join(backupDir, qdrantFileName))).toBe(true);
+    expect(await exists(path.join(backupDir, `${postgresFileName}.enc`))).toBe(false);
+    expect(await exists(path.join(backupDir, `${qdrantFileName}.enc`))).toBe(false);
+  });
+
+  it.each([
     ["blank createdAt", "createdAt", { createdAt: " \n\t " }],
     ["non-string createdAt", "createdAt", { createdAt: 123 }],
     ["blank postgres.fileName", "postgres.fileName", { postgres: { fileName: " \n\t " } }],

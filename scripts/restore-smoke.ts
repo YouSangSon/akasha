@@ -152,7 +152,11 @@ function optionalTrimmedRestoreSmokeText(
 }
 
 export function parseRestoreBackupManifest(raw: string): BackupManifest {
-  const parsed = JSON.parse(raw) as Partial<BackupManifest>;
+  const parsed = JSON.parse(raw) as Partial<BackupManifest> | null;
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("backup manifest must be a JSON object");
+  }
+
   const vectorBackend = optionalManifestVectorBackend(parsed.vectorBackend);
   const createdAt = requireManifestText(parsed.createdAt, "createdAt");
   const postgres = {
