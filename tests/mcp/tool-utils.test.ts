@@ -4,10 +4,15 @@ import os from "node:os";
 import path from "node:path";
 import { mkdtemp, rm } from "node:fs/promises";
 import { afterEach, describe, expect, it } from "vitest";
-import { resolveUserScopeId } from "../../src/mcp/tool-utils.js";
+import {
+  resolveUserScopeId,
+  type ResolveUserScopeIdInput,
+} from "../../src/mcp/tool-utils.js";
 
 const originalDeveloperMemoryUserId = process.env.DEVELOPER_MEMORY_USER_ID;
 const tempDirs: string[] = [];
+const callResolveUserScopeId = (input: unknown) => () =>
+  resolveUserScopeId(input as ResolveUserScopeIdInput);
 
 describe("resolveUserScopeId", () => {
   afterEach(async () => {
@@ -54,6 +59,31 @@ describe("resolveUserScopeId", () => {
         defaultUserScopeId: " \n\t ",
       }),
     ).toThrow(/userScopeId/);
+  });
+
+  it.each([undefined, null, "input", 12, true, []])(
+    "rejects non-object direct input",
+    (input) => {
+      expect(callResolveUserScopeId(input)).toThrow(
+        "resolveUserScopeId input must be an object",
+      );
+    },
+  );
+
+  it.each([
+    [{}, "cwd must be a string"],
+    [{ cwd: 12 }, "cwd must be a string"],
+    [{ cwd: " \n\t " }, "cwd must contain non-whitespace text"],
+    [
+      { cwd: process.cwd(), explicitUserScopeId: 12 },
+      "explicitUserScopeId must be a string",
+    ],
+    [
+      { cwd: process.cwd(), defaultUserScopeId: false },
+      "defaultUserScopeId must be a string",
+    ],
+  ])("rejects invalid direct input field", (input, message) => {
+    expect(callResolveUserScopeId(input)).toThrow(message);
   });
 
   it("falls back to a trimmed environment user id", () => {

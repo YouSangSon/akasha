@@ -91,11 +91,15 @@ export function summarize(content: string): string {
   return content.slice(0, 80);
 }
 
-export function resolveUserScopeId(input: {
+export type ResolveUserScopeIdInput = {
   cwd: string;
   explicitUserScopeId?: string;
   defaultUserScopeId?: string;
-}): string {
+};
+
+export function resolveUserScopeId(input: ResolveUserScopeIdInput): string {
+  assertResolveUserScopeIdInput(input);
+
   if (input.explicitUserScopeId !== undefined) {
     return requireUserScopeId(input.explicitUserScopeId);
   }
@@ -121,6 +125,34 @@ export function resolveUserScopeId(input: {
   }
 
   return `local-${sanitizeScopeId(os.userInfo().username)}`;
+}
+
+function assertResolveUserScopeIdInput(
+  input: unknown,
+): asserts input is ResolveUserScopeIdInput {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    throw new Error("resolveUserScopeId input must be an object");
+  }
+
+  const candidate = input as Record<string, unknown>;
+  assertNonBlankString(candidate.cwd, "cwd");
+  assertOptionalString(candidate.explicitUserScopeId, "explicitUserScopeId");
+  assertOptionalString(candidate.defaultUserScopeId, "defaultUserScopeId");
+}
+
+function assertNonBlankString(value: unknown, fieldName: string): void {
+  if (typeof value !== "string") {
+    throw new Error(`${fieldName} must be a string`);
+  }
+  if (value.trim().length === 0) {
+    throw new Error(`${fieldName} must contain non-whitespace text`);
+  }
+}
+
+function assertOptionalString(value: unknown, fieldName: string): void {
+  if (value !== undefined && typeof value !== "string") {
+    throw new Error(`${fieldName} must be a string`);
+  }
 }
 
 function readGitEmail(cwd: string): string | null {

@@ -2,6 +2,30 @@
 
 ## 2026-06-30
 
+- Hardened user-scope resolver input validation:
+  - `resolveUserScopeId` now rejects non-object direct inputs before reading
+    explicit/default scope IDs, environment fallback, git config, or local OS
+    username fallback.
+  - Resolver input must include a non-blank string `cwd`.
+  - Explicit and default user scope IDs must be strings when present; existing
+    non-blank validation still applies before returning them.
+  - Existing explicit/default precedence, environment trimming, git-email hash,
+    and local username fallback behavior is preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/mcp/tool-utils.test.ts` (17 passed)
+- `npx vitest run tests/mcp/tool-utils.test.ts tests/mcp/server.test.ts tests/mcp/resolve-org.test.ts`
+  (165 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1318 passed, 34 skipped
+  across 70 files)
+- `git diff --check`
+
 - Hardened ranking input validation:
   - `rankResults`, `newestUpdatedAtFor`, `rankCandidates`, and
     `scoreSearchResult` now reject invalid direct inputs before metadata

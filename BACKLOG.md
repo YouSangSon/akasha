@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid user-scope resolver inputs are rejected before environment, git, or
+  OS fallback resolution.
 - Invalid ranking records, candidates, and score options are rejected before
   metadata scoring or candidate sorting.
 - Invalid repeat-attempt inputs, prior failures, thresholds, and embedding
