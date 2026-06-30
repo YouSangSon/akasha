@@ -86,7 +86,7 @@ export async function unarchiveCompaction(
   input: Readonly<UnarchiveCompactionInput>,
   deps: Readonly<UnarchiveCompactionDeps>,
 ): Promise<UnarchiveResult> {
-  assertNonBlankText(input.organizationId, "organizationId");
+  assertUnarchiveCompactionInput(input);
 
   const startedAt = (deps.now ?? (() => new Date()))();
 
@@ -279,6 +279,40 @@ async function restoreOne(
       deps,
     });
     throw err;
+  }
+}
+
+function assertUnarchiveCompactionInput(
+  input: unknown,
+): asserts input is UnarchiveCompactionInput {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    throw new Error("unarchiveCompaction input must be an object");
+  }
+
+  const candidate = input as Record<string, unknown>;
+  assertPositiveSafeIntegerArray(candidate.archiveIds, "archiveIds");
+  assertNonBlankText(candidate.organizationId, "organizationId");
+  assertNonBlankText(candidate.actor, "actor");
+}
+
+function assertPositiveSafeIntegerArray(
+  value: unknown,
+  fieldName: string,
+): asserts value is number[] {
+  if (!Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an array`);
+  }
+
+  for (const [index, item] of value.entries()) {
+    if (
+      typeof item !== "number" ||
+      !Number.isSafeInteger(item) ||
+      item <= 0
+    ) {
+      throw new Error(
+        `${fieldName}[${index}] must be a positive safe integer`,
+      );
+    }
   }
 }
 

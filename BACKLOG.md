@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid unarchive compaction inputs and archive IDs are rejected before
+  repository, chunking, embedding, or vector side effects.
 - Invalid compaction plan inputs, records, semantic override groups, and
   promotion records are rejected before planning.
 - Invalid semantic duplicate records, embedding maps, and vectors are rejected

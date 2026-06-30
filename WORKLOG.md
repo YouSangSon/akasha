@@ -2,6 +2,30 @@
 
 ## 2026-06-30
 
+- Hardened unarchive compaction input validation:
+  - `unarchiveCompaction` now rejects non-object direct inputs before reading
+    archive IDs or starting restore work.
+  - Archive IDs must be supplied as an array of positive safe integers.
+  - Organization ID and actor must be non-blank strings.
+  - Malformed direct input is covered with no-side-effect assertions across the
+    archive repository, chunk repository, embedding client, and vector index.
+  - Existing empty-input, skip, restore, batched embedding, compensation, and
+    per-archive failure isolation behavior is preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/compact/unarchive-compaction.test.ts` (28 passed)
+- `npx vitest run tests/compact/unarchive-compaction.test.ts tests/mcp/server.test.ts tests/app/server.test.ts`
+  (226 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1378 passed, 34 skipped
+  across 70 files)
+- `git diff --check`
+
 - Hardened compaction plan input validation:
   - `buildCompactionPlan` now rejects non-object direct inputs before duplicate,
     decay, semantic-group override, or promotion planning.

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   unarchiveCompaction,
   type UnarchiveCompactionDeps,
+  type UnarchiveCompactionInput,
 } from "../../src/compact/unarchive-compaction.js";
 import type {
   ArchiveRow,
@@ -17,6 +18,10 @@ const SILENT_LOGGER = {
 } as unknown as UnarchiveCompactionDeps["logger"];
 
 const NOW = new Date("2026-04-25T12:00:00.000Z");
+const callUnarchiveCompaction = (
+  input: unknown,
+  deps: UnarchiveCompactionDeps,
+) => unarchiveCompaction(input as UnarchiveCompactionInput, deps);
 
 function makeArchive(overrides: Partial<ArchiveRow> = {}): ArchiveRow {
   return {
@@ -128,7 +133,78 @@ function makeDeps(
   };
 }
 
+function expectNoUnarchiveSideEffects(
+  repo: ReturnType<typeof makeRepo>,
+  deps: UnarchiveCompactionDeps,
+): void {
+  expect(repo.findArchiveByIds).not.toHaveBeenCalled();
+  expect(repo.restoreToCanonical).not.toHaveBeenCalled();
+  expect(deps.chunkRepository.insertChunks).not.toHaveBeenCalled();
+  expect(deps.embeddings.embedBatch).not.toHaveBeenCalled();
+  expect(deps.vectorIndex.upsert).not.toHaveBeenCalled();
+  expect(deps.vectorIndex.delete).not.toHaveBeenCalled();
+  expect(repo.markUnarchived).not.toHaveBeenCalled();
+}
+
 describe("unarchiveCompaction (empty input)", () => {
+  it.each([undefined, null, "input", 12, true, []])(
+    "rejects non-object direct input",
+    async (input) => {
+      const repo = makeRepo([makeArchive()]);
+      const deps = makeDeps(repo);
+
+      await expect(callUnarchiveCompaction(input, deps)).rejects.toThrow(
+        "unarchiveCompaction input must be an object",
+      );
+
+      expectNoUnarchiveSideEffects(repo, deps);
+    },
+  );
+
+  it.each([
+    [{ archiveIds: null }, "archiveIds must be an array"],
+    [
+      { archiveIds: [0] },
+      "archiveIds[0] must be a positive safe integer",
+    ],
+    [
+      { archiveIds: [1.5] },
+      "archiveIds[0] must be a positive safe integer",
+    ],
+    [
+      { archiveIds: [Number.NaN] },
+      "archiveIds[0] must be a positive safe integer",
+    ],
+    [
+      { archiveIds: [Number.MAX_SAFE_INTEGER + 1] },
+      "archiveIds[0] must be a positive safe integer",
+    ],
+    [{ organizationId: null }, "organizationId must be a string"],
+    [
+      { organizationId: " \n\t " },
+      "organizationId must contain non-whitespace text",
+    ],
+    [{ actor: null }, "actor must be a string"],
+    [{ actor: "" }, "actor must contain non-whitespace text"],
+  ])("rejects invalid direct input field", async (overrides, message) => {
+    const repo = makeRepo([makeArchive()]);
+    const deps = makeDeps(repo);
+
+    await expect(
+      callUnarchiveCompaction(
+        {
+          archiveIds: [50],
+          organizationId: "org-a",
+          actor: "test",
+          ...(overrides as Record<string, unknown>),
+        },
+        deps,
+      ),
+    ).rejects.toThrow(message);
+
+    expectNoUnarchiveSideEffects(repo, deps);
+  });
+
   it("rejects whitespace-only organizationId before side effects", async () => {
     const repo = makeRepo([makeArchive()]);
     const deps = makeDeps(repo);
@@ -140,13 +216,7 @@ describe("unarchiveCompaction (empty input)", () => {
       ),
     ).rejects.toThrow(/organizationId/);
 
-    expect(repo.findArchiveByIds).not.toHaveBeenCalled();
-    expect(repo.restoreToCanonical).not.toHaveBeenCalled();
-    expect(deps.chunkRepository.insertChunks).not.toHaveBeenCalled();
-    expect(deps.embeddings.embedBatch).not.toHaveBeenCalled();
-    expect(deps.vectorIndex.upsert).not.toHaveBeenCalled();
-    expect(deps.vectorIndex.delete).not.toHaveBeenCalled();
-    expect(repo.markUnarchived).not.toHaveBeenCalled();
+    expectNoUnarchiveSideEffects(repo, deps);
   });
 
   it("returns zero counts when no archive ids supplied", async () => {
