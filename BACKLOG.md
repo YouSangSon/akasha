@@ -18,6 +18,9 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid transformers embedding client inputs, injected extractor factories
+  and results, single text inputs, and batch text inputs are rejected before
+  model loading or extractor calls.
 - Invalid OpenAI embedding client inputs, injected client factories/results,
   single text inputs, and batch text inputs are rejected before API calls.
 - Invalid Qdrant client factory inputs and blank/non-string URL or API key

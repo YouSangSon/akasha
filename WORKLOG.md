@@ -2,6 +2,29 @@
 
 ## 2026-06-30
 
+- Hardened transformers embedding client input validation:
+  - `createTransformersEmbeddingClient` now rejects malformed direct input
+    containers, blank/non-string model values, and invalid injected extractor
+    factories before model loading.
+  - `embed` and `embedBatch` now reject malformed direct text input before
+    loading or calling the extractor.
+  - Injected extractor factory results are validated before use, so malformed
+    factories fail explicitly instead of being called as functions.
+  - Existing extractor memoization, pooling/normalization options, empty-vector
+    handling, and number-array conversion behavior are preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/embedding/transformers-embedding.test.ts` (12 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1675 passed, 34 skipped
+  across 72 files)
+- `git diff --check`
+
 - Hardened OpenAI embedding client input validation:
   - `createOpenAiEmbeddingClient` now rejects malformed direct input
     containers, blank/non-string API key or model values, invalid injected
