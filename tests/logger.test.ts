@@ -29,6 +29,23 @@ describe("resolveLogLevel", () => {
     expect(resolveLogLevel({ LOG_LEVEL: level })).toBe(expected);
   });
 
+  const circularLogLevelValue: Record<string, unknown> = { self: null };
+  circularLogLevelValue.self = circularLogLevelValue;
+
+  it.each([
+    ["number", 123, "123 (number)"],
+    ["non-finite number", NaN, "NaN (number)"],
+    ["bigint", 1n, "1n (bigint)"],
+    ["symbol", Symbol("debug"), "Symbol(debug) (symbol)"],
+    ["circular object", circularLogLevelValue, "[object Object] (object)"],
+  ])("rejects non-string LOG_LEVEL value %s", (_label, value, expected) => {
+    const env = { LOG_LEVEL: value } as unknown as NodeJS.ProcessEnv;
+
+    expect(() => resolveLogLevel(env)).toThrow(
+      `Invalid LOG_LEVEL: expected one of trace, debug, info, warn, error, fatal, silent, got ${expected}`,
+    );
+  });
+
   it.each(["", " \n\t ", " info ", "verbose"])(
     "rejects invalid LOG_LEVEL value %s",
     (level) => {

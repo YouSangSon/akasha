@@ -2,6 +2,24 @@
 
 ## 2026-06-30
 
+- Hardened logger level validation:
+  - `resolveLogLevel` now rejects non-string configured `LOG_LEVEL` values
+    before calling `.toLowerCase()`.
+  - Existing default, uppercase normalization, supported-level, and
+    invalid-string behavior are preserved.
+  - The invalid-value formatter safely reports non-string values including
+    bigint, symbol, circular object, and non-finite number inputs.
+  - Reviews found unsafe `JSON.stringify` and non-finite number reporting
+    edges; both were fixed and covered.
+
+Verification:
+- `npx vitest run tests/logger.test.ts` (25 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (1062 passed, 34 skipped across 70 files)
+- `git diff --check`
+
 - Hardened direct lifecycle init project-key validation:
   - `writeLifecycleInit` now rejects non-string `projectKey` values before
     calling `.trim()`.
