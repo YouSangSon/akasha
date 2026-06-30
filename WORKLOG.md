@@ -2,6 +2,33 @@
 
 ## 2026-06-30
 
+- Hardened memory chunk repository input validation:
+  - `createMemoryChunkRepository` now rejects malformed pool handles before
+    returning repository methods.
+  - Chunk insert and replace paths now reject malformed direct input
+    containers, invalid record IDs, blank organization IDs, invalid chunk
+    shapes, invalid offsets, and invalid embedding config before SQL or
+    transactions.
+  - Point-ID updates, record deletes, list pagination, get-by-record, pending
+    ingest replacement, and context-pack run creation now reject invalid direct
+    IDs, mappings, scopes, options, dates, selected memory IDs, and text fields
+    before query construction.
+  - Existing batched insert/update SQL shape, replacement transaction behavior,
+    list pagination, context-pack persistence, and pending ingest retry row
+    creation are preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/store/canonical-indexing.test.ts` (47 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1651 passed, 34 skipped
+  across 71 files)
+- `git diff --check`
+
 - Hardened goal-run repository input validation:
   - `createGoalRunRepository` now rejects malformed pool handles before
     returning repository methods.

@@ -1080,6 +1080,23 @@ describe("canonical indexing", () => {
     ]);
   });
 
+  it.each([
+    {
+      pool: null,
+      message: "memory chunk pool must be an object",
+    },
+    {
+      pool: { connect: vi.fn() },
+      message: "memory chunk pool.query must be a function",
+    },
+    {
+      pool: { query: vi.fn() },
+      message: "memory chunk pool.connect must be a function",
+    },
+  ])("createMemoryChunkRepository rejects malformed pool input %#", ({ pool, message }) => {
+    expect(() => createMemoryChunkRepository(pool as never)).toThrow(message);
+  });
+
   it("insertChunks issues exactly ONE pool.query for N>1 chunks and returns rows in input order", async () => {
     // Returning rows in REVERSED order proves the keyed-map reassembly is
     // not accidentally relying on RETURNING preserving VALUES order.
@@ -1107,6 +1124,7 @@ describe("canonical indexing", () => {
           },
         ],
       }),
+      connect: vi.fn(),
     };
     const repo = createMemoryChunkRepository(mockPool as never);
     const record = createRecord({ id: 10, content: "first chunk second chunk" });
@@ -1141,9 +1159,115 @@ describe("canonical indexing", () => {
     expect(result[1]!.id).toBe(2);
   });
 
+  it.each([
+    {
+      input: null,
+      message: "chunk write input must be an object",
+    },
+    {
+      input: {
+        record: { ...createRecord({ id: 10, content: "first chunk" }), id: 0 },
+        chunks: [
+          {
+            chunkIndex: 0,
+            content: "first chunk",
+            startOffset: 0,
+            endOffset: 5,
+          },
+        ],
+        embedding: {
+          provider: "openai",
+          model: "text-embedding-3-small",
+          dimensions: 1536,
+          version: "v1",
+          targetTokens: 800,
+          overlapTokens: 120,
+        },
+      },
+      message: "record.id must be a positive safe integer",
+    },
+    {
+      input: {
+        record: createRecord({ id: 10, content: "first chunk" }),
+        chunks: [
+          {
+            chunkIndex: 0,
+            content: " \n\t ",
+            startOffset: 0,
+            endOffset: 5,
+          },
+        ],
+        embedding: {
+          provider: "openai",
+          model: "text-embedding-3-small",
+          dimensions: 1536,
+          version: "v1",
+          targetTokens: 800,
+          overlapTokens: 120,
+        },
+      },
+      message: "chunks[0].content must contain non-whitespace text",
+    },
+    {
+      input: {
+        record: createRecord({ id: 10, content: "first chunk" }),
+        chunks: [
+          {
+            chunkIndex: 0,
+            content: "first chunk",
+            startOffset: 6,
+            endOffset: 5,
+          },
+        ],
+        embedding: {
+          provider: "openai",
+          model: "text-embedding-3-small",
+          dimensions: 1536,
+          version: "v1",
+          targetTokens: 800,
+          overlapTokens: 120,
+        },
+      },
+      message: "chunks[0].endOffset must be greater than or equal to startOffset",
+    },
+    {
+      input: {
+        record: createRecord({ id: 10, content: "first chunk" }),
+        chunks: [
+          {
+            chunkIndex: 0,
+            content: "first chunk",
+            startOffset: 0,
+            endOffset: 5,
+          },
+        ],
+        embedding: {
+          provider: " \n\t ",
+          model: "text-embedding-3-small",
+          dimensions: 1536,
+          version: "v1",
+          targetTokens: 800,
+          overlapTokens: 120,
+        },
+      },
+      message: "embedding.provider must contain non-whitespace text",
+    },
+  ])("insertChunks rejects malformed input %#", async ({ input, message }) => {
+    const mockPool = {
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+      connect: vi.fn(),
+    };
+    const repo = createMemoryChunkRepository(mockPool as never);
+
+    await expect(repo.insertChunks(input as never)).rejects.toThrow(message);
+
+    expect(mockPool.query).not.toHaveBeenCalled();
+  });
+
   it("insertChunks rejects whitespace-only record organizationId before querying", async () => {
     const mockPool = {
       query: vi.fn().mockResolvedValue({ rows: [] }),
+      connect: vi.fn(),
     };
     const repo = createMemoryChunkRepository(mockPool as never);
     const record = {
@@ -1179,6 +1303,7 @@ describe("canonical indexing", () => {
   it("updatePointIds issues exactly ONE pool.query for N mappings", async () => {
     const mockPool = {
       query: vi.fn().mockResolvedValue({ rows: [] }),
+      connect: vi.fn(),
     };
     const repo = createMemoryChunkRepository(mockPool as never);
 
@@ -1204,9 +1329,35 @@ describe("canonical indexing", () => {
     expect(params).toContain("chunk:3");
   });
 
+  it.each([
+    {
+      mappings: null,
+      message: "point ID mappings must be an array",
+    },
+    {
+      mappings: [{ chunkId: 0, qdrantPointId: "chunk:1" }],
+      message: "point ID mappings[0].chunkId must be a positive safe integer",
+    },
+    {
+      mappings: [{ chunkId: 1, qdrantPointId: " \n\t " }],
+      message: "point ID mappings[0].qdrantPointId must contain non-whitespace text",
+    },
+  ])("updatePointIds rejects malformed mappings %#", async ({ mappings, message }) => {
+    const mockPool = {
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+      connect: vi.fn(),
+    };
+    const repo = createMemoryChunkRepository(mockPool as never);
+
+    await expect(repo.updatePointIds(mappings as never)).rejects.toThrow(message);
+
+    expect(mockPool.query).not.toHaveBeenCalled();
+  });
+
   it("deleteChunksForRecord rejects whitespace-only organizationId before querying", async () => {
     const mockPool = {
       query: vi.fn().mockResolvedValue({ rows: [] }),
+      connect: vi.fn(),
     };
     const repo = createMemoryChunkRepository(mockPool as never);
 
@@ -1217,8 +1368,23 @@ describe("canonical indexing", () => {
     expect(mockPool.query).not.toHaveBeenCalled();
   });
 
+  it("deleteChunksForRecord rejects invalid recordId before querying", async () => {
+    const mockPool = {
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+      connect: vi.fn(),
+    };
+    const repo = createMemoryChunkRepository(mockPool as never);
+
+    await expect(
+      repo.deleteChunksForRecord(0, "org-a"),
+    ).rejects.toThrow("recordId must be a positive safe integer");
+
+    expect(mockPool.query).not.toHaveBeenCalled();
+  });
+
   it("replaceChunksForRecord rejects whitespace-only record organizationId before connecting", async () => {
     const mockPool = {
+      query: vi.fn(),
       connect: vi.fn(),
     };
     const repo = createMemoryChunkRepository(mockPool as never);
@@ -1252,8 +1418,42 @@ describe("canonical indexing", () => {
     expect(mockPool.connect).not.toHaveBeenCalled();
   });
 
+  it("replaceChunksForRecordWithPendingIngest rejects invalid nextRetryAt before connecting", async () => {
+    const mockPool = {
+      query: vi.fn(),
+      connect: vi.fn(),
+    };
+    const repo = createMemoryChunkRepository(mockPool as never);
+
+    await expect(
+      repo.replaceChunksForRecordWithPendingIngest!({
+        record: createRecord({ id: 501, content: "replacement chunk" }),
+        chunks: [
+          {
+            chunkIndex: 0,
+            content: "replacement chunk",
+            startOffset: 0,
+            endOffset: 17,
+          },
+        ],
+        embedding: {
+          provider: "openai",
+          model: "text-embedding-3-small",
+          dimensions: 1536,
+          version: "v1",
+          targetTokens: 800,
+          overlapTokens: 120,
+        },
+        nextRetryAt: new Date("invalid"),
+      }),
+    ).rejects.toThrow("nextRetryAt must be a valid Date");
+
+    expect(mockPool.connect).not.toHaveBeenCalled();
+  });
+
   it("replaceChunksForRecordWithPendingIngest rejects whitespace-only record organizationId before connecting", async () => {
     const mockPool = {
+      query: vi.fn(),
       connect: vi.fn(),
     };
     const repo = createMemoryChunkRepository(mockPool as never);
@@ -1320,6 +1520,7 @@ describe("canonical indexing", () => {
       release: vi.fn(),
     };
     const mockPool = {
+      query: vi.fn(),
       connect: vi.fn().mockResolvedValue(mockClient),
     };
     const repo = createMemoryChunkRepository(mockPool as never);
@@ -1394,6 +1595,7 @@ describe("canonical indexing", () => {
         queryCalls.push({ sql, params });
         return Promise.resolve({ rows: [] });
       }),
+      connect: vi.fn(),
     };
     const repo = createMemoryChunkRepository(mockPool as never);
 
@@ -1435,6 +1637,7 @@ describe("canonical indexing", () => {
   it("listChunks rejects whitespace-only organizationId before querying", async () => {
     const mockPool = {
       query: vi.fn().mockResolvedValue({ rows: [] }),
+      connect: vi.fn(),
     };
     const repo = createMemoryChunkRepository(mockPool as never);
 
@@ -1447,6 +1650,45 @@ describe("canonical indexing", () => {
     expect(mockPool.query).not.toHaveBeenCalled();
   });
 
+  it.each([
+    {
+      scopes: null,
+      options: undefined,
+      message: "scopes must be an array",
+    },
+    {
+      scopes: [{ scopeType: "team", scopeId: "shared-project" }],
+      options: undefined,
+      message: 'scopes[0].scopeType must be "project" or "user"',
+    },
+    {
+      scopes: [{ scopeType: "project", scopeId: "shared-project" }],
+      options: { afterChunkId: 0 },
+      message: "afterChunkId must be a positive safe integer",
+    },
+    {
+      scopes: [{ scopeType: "project", scopeId: "shared-project" }],
+      options: { limit: 0 },
+      message: "limit must be a positive safe integer",
+    },
+  ])("listChunks rejects malformed scopes/options %#", async ({
+    scopes,
+    options,
+    message,
+  }) => {
+    const mockPool = {
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+      connect: vi.fn(),
+    };
+    const repo = createMemoryChunkRepository(mockPool as never);
+
+    await expect(
+      repo.listChunks("org-a", scopes as never, options as never),
+    ).rejects.toThrow(message);
+
+    expect(mockPool.query).not.toHaveBeenCalled();
+  });
+
   it("listChunks supports cursor pagination by chunk id", async () => {
     const queryCalls: { sql: string; params: unknown[] }[] = [];
     const mockPool = {
@@ -1454,6 +1696,7 @@ describe("canonical indexing", () => {
         queryCalls.push({ sql, params });
         return Promise.resolve({ rows: [] });
       }),
+      connect: vi.fn(),
     };
     const repo = createMemoryChunkRepository(mockPool as never);
 
@@ -1481,9 +1724,24 @@ describe("canonical indexing", () => {
     ]);
   });
 
+  it("getChunksByRecordId rejects invalid recordId before querying", async () => {
+    const mockPool = {
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+      connect: vi.fn(),
+    };
+    const repo = createMemoryChunkRepository(mockPool as never);
+
+    await expect(repo.getChunksByRecordId(0)).rejects.toThrow(
+      "recordId must be a positive safe integer",
+    );
+
+    expect(mockPool.query).not.toHaveBeenCalled();
+  });
+
   it("createContextPackRun rejects whitespace-only organizationId before querying", async () => {
     const mockPool = {
       query: vi.fn().mockResolvedValue({ rows: [] }),
+      connect: vi.fn(),
     };
     const repo = createMemoryChunkRepository(mockPool as never);
 
@@ -1496,6 +1754,48 @@ describe("canonical indexing", () => {
         packMarkdown: "# Context Pack",
       }),
     ).rejects.toThrow(/organizationId/);
+
+    expect(mockPool.query).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      input: null,
+      message: "context pack run input must be an object",
+    },
+    {
+      input: {
+        organizationId: "org-a",
+        projectKey: "project-alpha",
+        task: "Summarize project risks",
+        selectedMemoryIds: [" \n\t "],
+        packMarkdown: "# Context Pack",
+      },
+      message: "selectedMemoryIds[0] must contain non-whitespace text",
+    },
+    {
+      input: {
+        organizationId: "org-a",
+        projectKey: "project-alpha",
+        task: "Summarize project risks",
+        selectedMemoryIds: ["project:project-alpha:1"],
+        packMarkdown: " \n\t ",
+      },
+      message: "packMarkdown must contain non-whitespace text",
+    },
+  ])("createContextPackRun rejects malformed input %#", async ({
+    input,
+    message,
+  }) => {
+    const mockPool = {
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+      connect: vi.fn(),
+    };
+    const repo = createMemoryChunkRepository(mockPool as never);
+
+    await expect(
+      repo.createContextPackRun(input as never),
+    ).rejects.toThrow(message);
 
     expect(mockPool.query).not.toHaveBeenCalled();
   });

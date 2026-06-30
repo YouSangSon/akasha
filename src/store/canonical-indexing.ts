@@ -103,12 +103,16 @@ export type EmbeddingClient = {
 };
 
 export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository {
+  assertMemoryChunkPool(pool);
+
   return {
     async insertChunks(input) {
       return insertPostgresChunks(pool, input);
     },
 
     async updatePointIds(mappings) {
+      assertPointIdMappings(mappings);
+
       if (mappings.length === 0) {
         return;
       }
@@ -136,6 +140,7 @@ export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository
     },
 
     async deleteChunksForRecord(recordId, organizationId) {
+      assertPositiveSafeInteger(recordId, "recordId");
       assertNonBlankText(organizationId, "organizationId");
 
       await pool.query(
@@ -149,6 +154,7 @@ export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository
     },
 
     async replaceChunksForRecord(input) {
+      assertChunkWriteInput(input);
       const organizationId = input.record.organizationId ?? "default";
       assertNonBlankText(organizationId, "organizationId");
       const client = await pool.connect();
@@ -175,6 +181,7 @@ export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository
     },
 
     async replaceChunksForRecordWithPendingIngest(input) {
+      assertReplaceChunksWithPendingIngestInput(input);
       const organizationId = input.record.organizationId ?? "default";
       assertNonBlankText(organizationId, "organizationId");
       const client = await pool.connect();
@@ -226,6 +233,8 @@ export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository
 
     async listChunks(organizationId, scopes, options) {
       assertNonBlankText(organizationId, "organizationId");
+      assertScopeRefs(scopes, "scopes");
+      const listOptions = resolveListChunksOptions(options);
 
       if (scopes.length === 0) {
         return [];
@@ -238,12 +247,12 @@ export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository
         const scopeIdIndex = params.push(scope.scopeId);
         return `(mr.scope_type = $${scopeTypeIndex} AND mr.scope_id = $${scopeIdIndex})`;
       });
-      const cursorClause = options?.afterChunkId === undefined
+      const cursorClause = listOptions.afterChunkId === undefined
         ? ""
-        : `AND mc.id > $${params.push(options.afterChunkId)}`;
-      const limitClause = options?.limit === undefined
+        : `AND mc.id > $${params.push(listOptions.afterChunkId)}`;
+      const limitClause = listOptions.limit === undefined
         ? ""
-        : `LIMIT $${params.push(options.limit)}`;
+        : `LIMIT $${params.push(listOptions.limit)}`;
       const result = await pool.query<{
         id: number;
         memory_record_id: number;
@@ -320,6 +329,8 @@ export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository
     },
 
     async getChunksByRecordId(recordId) {
+      assertPositiveSafeInteger(recordId, "recordId");
+
       const result = await pool.query<{
         id: number;
         memory_record_id: number;
@@ -394,7 +405,7 @@ export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository
     },
 
     async createContextPackRun(input) {
-      assertNonBlankText(input.organizationId, "organizationId");
+      assertContextPackRunInput(input);
 
       await pool.query(
         `
@@ -790,6 +801,8 @@ async function insertPostgresChunks(
     embedding: ChunkEmbeddingConfig;
   },
 ): Promise<StoredMemoryChunk[]> {
+  assertQueryable(queryable, "memory chunk queryable");
+  assertChunkWriteInput(input);
   const orgId = input.record.organizationId ?? "default";
   assertNonBlankText(orgId, "organizationId");
 
@@ -899,6 +912,226 @@ async function replaceChunksForRecordFallback(
     chunks: input.chunks,
     embedding: input.embedding,
   });
+}
+
+function assertMemoryChunkPool(value: unknown): asserts value is PgPool {
+  const candidate = assertObject(value, "memory chunk pool");
+  assertFunction(candidate.query, "memory chunk pool.query");
+  assertFunction(candidate.connect, "memory chunk pool.connect");
+}
+
+function assertQueryable(
+  value: unknown,
+  fieldName: string,
+): asserts value is PgQueryable {
+  const candidate = assertObject(value, fieldName);
+  assertFunction(candidate.query, `${fieldName}.query`);
+}
+
+function assertChunkWriteInput(value: unknown): asserts value is {
+  record: SearchMemoryResult;
+  chunks: TextChunk[];
+  embedding: ChunkEmbeddingConfig;
+} {
+  const candidate = assertObject(value, "chunk write input");
+  assertChunkRecord(candidate.record);
+  assertTextChunks(candidate.chunks, "chunks");
+  assertChunkEmbeddingConfig(candidate.embedding);
+}
+
+function assertReplaceChunksWithPendingIngestInput(
+  value: unknown,
+): asserts value is {
+  record: SearchMemoryResult;
+  chunks: TextChunk[];
+  embedding: ChunkEmbeddingConfig;
+  nextRetryAt: Date;
+} {
+  const candidate = assertObject(value, "chunk replacement input");
+  assertValidDate(candidate.nextRetryAt, "nextRetryAt");
+  assertChunkWriteInput(candidate);
+}
+
+function assertChunkRecord(value: unknown): asserts value is SearchMemoryResult {
+  const candidate = assertObject(value, "chunk record");
+  assertPositiveSafeInteger(candidate.id, "record.id");
+  if (candidate.organizationId !== undefined) {
+    assertNonBlankText(candidate.organizationId, "organizationId");
+  }
+}
+
+function assertTextChunks(value: unknown, fieldName: string): asserts value is TextChunk[] {
+  if (!Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an array`);
+  }
+
+  for (const [index, chunk] of value.entries()) {
+    const candidate = assertObject(chunk, `${fieldName}[${index}]`);
+    assertNonNegativeSafeInteger(
+      candidate.chunkIndex,
+      `${fieldName}[${index}].chunkIndex`,
+    );
+    assertNonBlankText(candidate.content, `${fieldName}[${index}].content`);
+    assertNonNegativeSafeInteger(
+      candidate.startOffset,
+      `${fieldName}[${index}].startOffset`,
+    );
+    assertNonNegativeSafeInteger(
+      candidate.endOffset,
+      `${fieldName}[${index}].endOffset`,
+    );
+    if (
+      typeof candidate.startOffset === "number"
+      && typeof candidate.endOffset === "number"
+      && candidate.endOffset < candidate.startOffset
+    ) {
+      throw new Error(
+        `${fieldName}[${index}].endOffset must be greater than or equal to startOffset`,
+      );
+    }
+  }
+}
+
+function assertChunkEmbeddingConfig(
+  value: unknown,
+): asserts value is ChunkEmbeddingConfig {
+  const candidate = assertObject(value, "chunk embedding config");
+  assertNonBlankText(candidate.provider, "embedding.provider");
+  assertNonBlankText(candidate.model, "embedding.model");
+  assertPositiveSafeInteger(candidate.dimensions, "embedding.dimensions");
+  assertNonBlankText(candidate.version, "embedding.version");
+  assertPositiveSafeInteger(candidate.targetTokens, "embedding.targetTokens");
+  assertNonNegativeSafeInteger(
+    candidate.overlapTokens,
+    "embedding.overlapTokens",
+  );
+}
+
+function assertPointIdMappings(
+  value: unknown,
+): asserts value is Array<{ chunkId: number; qdrantPointId: string }> {
+  if (!Array.isArray(value)) {
+    throw new Error("point ID mappings must be an array");
+  }
+
+  for (const [index, mapping] of value.entries()) {
+    const candidate = assertObject(mapping, `point ID mappings[${index}]`);
+    assertPositiveSafeInteger(
+      candidate.chunkId,
+      `point ID mappings[${index}].chunkId`,
+    );
+    assertNonBlankText(
+      candidate.qdrantPointId,
+      `point ID mappings[${index}].qdrantPointId`,
+    );
+  }
+}
+
+function assertScopeRefs(value: unknown, fieldName: string): asserts value is ScopeRef[] {
+  if (!Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an array`);
+  }
+
+  for (const [index, scope] of value.entries()) {
+    const candidate = assertObject(scope, `${fieldName}[${index}]`);
+    assertScopeType(candidate.scopeType, `${fieldName}[${index}].scopeType`);
+    assertNonBlankText(candidate.scopeId, `${fieldName}[${index}].scopeId`);
+  }
+}
+
+function resolveListChunksOptions(
+  options: ListChunksOptions | undefined,
+): ListChunksOptions {
+  if (options === undefined) {
+    return {};
+  }
+
+  const candidate = assertObject(options, "list chunks options");
+  if (candidate.afterChunkId !== undefined) {
+    assertPositiveSafeInteger(candidate.afterChunkId, "afterChunkId");
+  }
+  if (candidate.limit !== undefined) {
+    assertPositiveSafeInteger(candidate.limit, "limit");
+  }
+
+  return {
+    afterChunkId: candidate.afterChunkId as number | undefined,
+    limit: candidate.limit as number | undefined,
+  };
+}
+
+function assertContextPackRunInput(value: unknown): asserts value is {
+  organizationId: string;
+  projectKey: string;
+  task: string;
+  selectedMemoryIds: string[];
+  packMarkdown: string;
+} {
+  const candidate = assertObject(value, "context pack run input");
+  assertNonBlankText(candidate.organizationId, "organizationId");
+  assertNonBlankText(candidate.projectKey, "projectKey");
+  assertNonBlankText(candidate.task, "task");
+  assertStringArray(candidate.selectedMemoryIds, "selectedMemoryIds");
+  assertNonBlankText(candidate.packMarkdown, "packMarkdown");
+}
+
+function assertStringArray(
+  value: unknown,
+  fieldName: string,
+): asserts value is string[] {
+  if (!Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an array`);
+  }
+
+  for (const [index, item] of value.entries()) {
+    assertNonBlankText(item, `${fieldName}[${index}]`);
+  }
+}
+
+function assertScopeType(value: unknown, fieldName: string): asserts value is ScopeRef["scopeType"] {
+  if (value !== "project" && value !== "user") {
+    throw new Error(`${fieldName} must be "project" or "user"`);
+  }
+}
+
+function assertValidDate(value: unknown, fieldName: string): asserts value is Date {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+    throw new Error(`${fieldName} must be a valid Date`);
+  }
+}
+
+function assertPositiveSafeInteger(
+  value: unknown,
+  fieldName: string,
+): asserts value is number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1) {
+    throw new Error(`${fieldName} must be a positive safe integer`);
+  }
+}
+
+function assertNonNegativeSafeInteger(
+  value: unknown,
+  fieldName: string,
+): asserts value is number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`${fieldName} must be a non-negative safe integer`);
+  }
+}
+
+function assertObject(
+  value: unknown,
+  fieldName: string,
+): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function assertFunction(value: unknown, fieldName: string): void {
+  if (typeof value !== "function") {
+    throw new Error(`${fieldName} must be a function`);
+  }
 }
 
 function toNumber(value: number | string): number {

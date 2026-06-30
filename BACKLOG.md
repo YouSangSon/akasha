@@ -18,6 +18,9 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid memory chunk repository pools, chunk write inputs, point-ID mappings,
+  record IDs, list scopes/options, retry dates, and context-pack run inputs are
+  rejected before SQL or transaction work.
 - Invalid goal-run repository pools, start/list/get/close inputs, iteration
   inputs, scope/status/outcome values, optional text, and memory IDs are
   rejected before SQL or transaction work.
