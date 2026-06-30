@@ -2,6 +2,28 @@
 
 ## 2026-06-30
 
+- Hardened secret scrubber input validation:
+  - `scanForSecrets` now rejects non-string direct content before regex
+    scanning.
+  - `assertNoSecrets` uses the same guard before secret-detection error
+    construction.
+  - Existing detections still return categories only and do not include matched
+    values.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/store/secret-scrub.test.ts` (35 passed)
+- `npx vitest run tests/store/secret-scrub.test.ts tests/store/memory-repository.test.ts tests/store/canonical-indexing.test.ts tests/scripts/repo-secret-hygiene.test.ts`
+  (141 passed, 7 skipped)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1181 passed, 34 skipped
+  across 70 files)
+- `git diff --check`
+
 - Hardened exact duplicate input validation:
   - `findExactContentDuplicates` now rejects non-array inputs before iteration.
   - Each direct record must be an object with a positive safe-integer `id`,

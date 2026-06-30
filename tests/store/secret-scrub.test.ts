@@ -126,6 +126,15 @@ describe("scanForSecrets", () => {
       );
     }
   });
+
+  it.each([undefined, null, 12, true, {}, []])(
+    "rejects non-string direct content before regex scanning",
+    (content) => {
+      expect(() => scanForSecrets(content as string)).toThrow(
+        "content must be a string",
+      );
+    },
+  );
 });
 
 describe("assertNoSecrets", () => {
@@ -153,6 +162,15 @@ describe("assertNoSecrets", () => {
       );
     }
   });
+
+  it.each([undefined, null, 12, true, {}, []])(
+    "rejects non-string direct content before scanning",
+    (content) => {
+      expect(() => assertNoSecrets(content as string)).toThrow(
+        "content must be a string",
+      );
+    },
+  );
 });
 
 describe("eval-seed regression guard", () => {

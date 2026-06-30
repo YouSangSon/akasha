@@ -83,6 +83,8 @@ const PATTERNS: readonly Pattern[] = [
 ];
 
 export function scanForSecrets(content: string): SecretDetection[] {
+  assertStringContent(content, "content");
+
   const detections: SecretDetection[] = [];
 
   for (const pattern of PATTERNS) {
@@ -100,4 +102,13 @@ export function assertNoSecrets(content: string): void {
     return;
   }
   throw new SecretDetectedError(detections.map((d) => d.category));
+}
+
+function assertStringContent(
+  value: unknown,
+  fieldName: string,
+): asserts value is string {
+  if (typeof value !== "string") {
+    throw new Error(`${fieldName} must be a string`);
+  }
 }

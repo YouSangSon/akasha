@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Non-string direct secret-scrubber content is rejected before regex scanning
+  or secret-detection error construction.
 - Invalid exact-duplicate records are rejected before content normalization,
   duplicate grouping, or compaction apply planning.
 - Invalid search-ranking timestamps are rejected before recency scoring,
