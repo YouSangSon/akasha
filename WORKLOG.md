@@ -2,6 +2,23 @@
 
 ## 2026-06-30
 
+- Hardened shared non-blank text validation:
+  - `assertNonBlankText` now rejects non-string values with a field-specific
+    string validation error before calling `.trim()`.
+  - Existing whitespace-only string behavior and messages are preserved.
+  - Direct registry tests cover non-string `add_memory`/`update_memory`
+    content and `update_memory`/`tag_memory` tag entries before canonical
+    repository, embedding, or vector side effects.
+  - Spec review and code-quality review found no issues.
+
+Verification:
+- `npx vitest run tests/mcp/server.test.ts` (126 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (1034 passed, 34 skipped across 69 files)
+- `git diff --check`
+
 - Hardened direct optional goal-run note validation:
   - Direct `start_goal_run.terminationCriteria`, `record_iteration.summary`,
     `record_iteration.error`, `complete_goal_run.resolution`, and

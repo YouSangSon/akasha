@@ -310,6 +310,37 @@ describe("createToolRegistry", () => {
     ).rejects.toThrow(/non-whitespace text/);
   });
 
+  it("rejects non-string memory content before canonical service resolution", async () => {
+    const services = createCanonicalServices();
+    const resolveCanonicalServices = vi.fn(async () => services);
+    const registry = createToolRegistry({ resolveCanonicalServices });
+
+    await expect(
+      registry.add_memory({
+        projectKey: "project-alpha",
+        kind: "decision",
+        content: 42 as never,
+      }),
+    ).rejects.toThrow(/memory content must be a string/);
+    await expect(
+      registry.update_memory({
+        organizationId: "org-a",
+        memoryId: 501,
+        content: 42 as never,
+      }),
+    ).rejects.toThrow(/memory content must be a string/);
+
+    expect(resolveCanonicalServices).not.toHaveBeenCalled();
+    expect(services.repository.addMemory).not.toHaveBeenCalled();
+    expect(services.repository.updateMemoryRecord).not.toHaveBeenCalled();
+    expect(services.embeddings.embedBatch).not.toHaveBeenCalled();
+    expect(
+      services.chunkRepository.replaceChunksForRecordWithPendingIngest,
+    ).not.toHaveBeenCalled();
+    expect(services.vectorIndex.upsert).not.toHaveBeenCalled();
+    expect(services.vectorIndex.deleteByRecordIds).not.toHaveBeenCalled();
+  });
+
   it("rejects invalid add_memory kind values before repository dispatch", async () => {
     const resolveRepository = vi.fn(() => createRepository());
     const legacyRegistry = createToolRegistry({ resolveRepository });
@@ -1833,6 +1864,36 @@ describe("createToolRegistry", () => {
     ).rejects.toThrow(/non-whitespace text/);
 
     expect(services.repository.updateMemoryRecord).not.toHaveBeenCalled();
+    expect(services.vectorIndex.deleteByRecordIds).not.toHaveBeenCalled();
+  });
+
+  it("rejects non-string tags before canonical service resolution", async () => {
+    const services = createCanonicalServices();
+    const resolveCanonicalServices = vi.fn(async () => services);
+    const registry = createToolRegistry({ resolveCanonicalServices });
+
+    await expect(
+      registry.update_memory({
+        organizationId: "org-a",
+        memoryId: 501,
+        tags: ["ops", 42 as never],
+      }),
+    ).rejects.toThrow(/tag must be a string/);
+    await expect(
+      registry.tag_memory({
+        organizationId: "org-a",
+        memoryId: 501,
+        tags: [42 as never],
+      }),
+    ).rejects.toThrow(/tag must be a string/);
+
+    expect(resolveCanonicalServices).not.toHaveBeenCalled();
+    expect(services.repository.updateMemoryRecord).not.toHaveBeenCalled();
+    expect(services.embeddings.embedBatch).not.toHaveBeenCalled();
+    expect(
+      services.chunkRepository.replaceChunksForRecordWithPendingIngest,
+    ).not.toHaveBeenCalled();
+    expect(services.vectorIndex.upsert).not.toHaveBeenCalled();
     expect(services.vectorIndex.deleteByRecordIds).not.toHaveBeenCalled();
   });
 
