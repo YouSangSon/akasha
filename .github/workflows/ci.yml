@@ -34,7 +34,7 @@ jobs:
       - name: Install
         # Skip the onnxruntime-node CUDA/GPU binary download: CI runs CPU-only,
         # and that download hits GitHub releases (flaky — has 500'd mid-run).
-        run: npm ci --onnxruntime-node-install-cuda=skip
+        run: ONNXRUNTIME_NODE_INSTALL_CUDA=skip npm ci
 
       - name: Typecheck
         run: npm run typecheck
@@ -76,7 +76,7 @@ jobs:
       - name: Install
         # Skip the onnxruntime-node CUDA/GPU binary download: CI runs CPU-only,
         # and that download hits GitHub releases (flaky — has 500'd mid-run).
-        run: npm ci --onnxruntime-node-install-cuda=skip
+        run: ONNXRUNTIME_NODE_INSTALL_CUDA=skip npm ci
 
       - name: Run PG-dependent suites
         env:
@@ -119,7 +119,7 @@ jobs:
       - name: Install
         # Skip the onnxruntime-node CUDA/GPU binary download: CI runs CPU-only,
         # and that download hits GitHub releases (flaky — has 500'd mid-run).
-        run: npm ci --onnxruntime-node-install-cuda=skip
+        run: ONNXRUNTIME_NODE_INSTALL_CUDA=skip npm ci
 
       - name: Run pgvector integration suite
         env:

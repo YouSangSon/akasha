@@ -128,6 +128,10 @@ CHANGELOG에서 명시적으로 표기합니다.
 
 ### Fixed
 
+- **Docker 및 CI install이 npm unknown-config flag 없이 ONNX Runtime CUDA
+  provider 다운로드를 건너뜀** — Dockerfile의 `npm ci` 단계와 GitHub Actions가
+  이제 `ONNXRUNTIME_NODE_INSTALL_CUDA=skip` 을 설정해, install script가 지원하는
+  환경변수 경로로 GPU binary 다운로드 변동성을 피합니다.
 - **백엔드-aware readiness 및 tenant attribution 수정** — `/readyz` 는 이제
   `VECTOR_BACKEND=qdrant` 일 때만 Qdrant를 프로브하므로
   `VECTOR_BACKEND=pgvector` 배포가 Qdrant 부재 때문에 readiness 실패하지 않음.

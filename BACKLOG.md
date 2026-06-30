@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Docker and CI installs skip onnxruntime-node CUDA provider downloads through
+  `ONNXRUNTIME_NODE_INSTALL_CUDA=skip`, avoiding npm unknown-config flags.
 - Invalid CLI argv containers, argv entries, option containers, cwd values, and
   registry containers are rejected before command parsing or dispatch.
 - Invalid operator server construction options, injected config/logger/auth

@@ -3,7 +3,7 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
-RUN npm ci
+RUN ONNXRUNTIME_NODE_INSTALL_CUDA=skip npm ci
 
 COPY . .
 RUN npm run build
@@ -19,7 +19,7 @@ RUN addgroup -S -g 10001 akasha \
   && mkdir -p /var/lib/developer-memory-os/backups
 
 COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev
+RUN ONNXRUNTIME_NODE_INSTALL_CUDA=skip npm ci --omit=dev
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/src/db/migrations ./dist/src/db/migrations

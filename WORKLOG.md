@@ -2,6 +2,38 @@
 
 ## 2026-06-30
 
+- Stabilized Docker image dependency installs for local CPU-only ONNX Runtime:
+  - `docker/app.Dockerfile` now sets
+    `ONNXRUNTIME_NODE_INSTALL_CUDA=skip` on both the builder and runtime
+    `npm ci` commands.
+  - `.github/workflows/ci.yml` now uses the same environment variable form
+    instead of npm's unknown CLI config path.
+  - `tests/scripts/dockerfile-hardening.test.ts` now verifies both Dockerfile
+    install commands and CI use the environment variable, while the runtime
+    Docker install still omits dev dependencies.
+  - A worker subagent implemented the scoped patch. Spec review passed.
+    Code-quality review caught the npm unknown-config risk in the initial CLI
+    flag form; the final env-var version passed re-review.
+- Source rationale:
+  - The locked `onnxruntime-node` install script documents
+    `ONNXRUNTIME_NODE_INSTALL_CUDA` as a supported way to control CUDA provider
+    binary installation and `skip` as the value that keeps CPU ONNX Runtime
+    available without downloading GPU binaries:
+    https://github.com/microsoft/onnxruntime/blob/v1.21.0/js/node/script/install.js
+  - A code-quality review caught that npm's unknown CLI config form can warn
+    and may stop working in a future npm major, so Docker and CI now use the
+    install script's direct environment variable.
+
+Verification:
+- `npx vitest run tests/scripts/dockerfile-hardening.test.ts tests/scripts/compose-config.test.ts tests/scripts/public-docs-drift.test.ts`
+  (29 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1792 passed, 34 skipped
+  across 79 files)
+- `git diff --check`
+
 - Hardened CLI direct input validation:
   - `parseCliArgs` now rejects malformed direct argv containers and non-string
     argv entries before command parsing.

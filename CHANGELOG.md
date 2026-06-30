@@ -137,6 +137,10 @@ small actual impact surface.
 
 ### Fixed
 
+- **Docker and CI installs skip ONNX Runtime CUDA provider downloads without npm
+  unknown-config flags** — Dockerfile `npm ci` stages and GitHub Actions now
+  set `ONNXRUNTIME_NODE_INSTALL_CUDA=skip`, avoiding flaky GPU binary downloads
+  while using the install script's supported environment variable path.
 - **Backend-aware readiness and tenant attribution fixes** — `/readyz` now
   probes Qdrant only when `VECTOR_BACKEND=qdrant`, so `VECTOR_BACKEND=pgvector`
   deployments no longer fail readiness because Qdrant is absent. Qdrant

@@ -4,20 +4,21 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — CLI Direct Input Guards
+## Current Loop — Docker ONNX Runtime Install Stability
 
 Status:
-- `parseCliArgs` now rejects malformed direct argv containers and non-string
-  argv entries before command parsing.
-- `runCli` now rejects malformed direct option containers, invalid cwd values,
-  and malformed registry containers before command dispatch.
-- Omitted options, registry-free commands, and command-specific partial
-  registry objects remain supported.
-- Focused CLI tests, typecheck, build, audit, and the single-worker full suite
-  passed.
+- `docker/app.Dockerfile` builder and runner installs now set
+  `ONNXRUNTIME_NODE_INSTALL_CUDA=skip`, matching CI's CPU-only install path
+  and avoiding GPU provider downloads during image builds.
+- CI installs now use the same environment variable form instead of npm's
+  unknown CLI config path.
+- Docker hardening tests now guard both Docker `npm ci` commands and the CI
+  workflow for that env var.
+- Worker implementation, spec review, code-quality review/re-review, focused
+  tests, typecheck, build, audit, and the single-worker full suite passed.
 
 Loop closeout:
-- Commit the final CLI guard, then merge and push `main` per user request.
+- Commit locally without pushing.
 
 ## Next Loop Candidates
 
