@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid goal context pack inputs and iteration render fields are rejected
+  before markdown rendering or last-error extraction.
 - Invalid rate limiter options, injected times, and direct keys are rejected
   before token bucket state is read or updated.
 - Invalid background queue metrics timestamps and non-finite count values are

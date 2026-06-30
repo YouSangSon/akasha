@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildGoalContextPack } from "../../src/goal-run/build-goal-context.js";
+import {
+  buildGoalContextPack,
+  type BuildGoalContextPackInput,
+} from "../../src/goal-run/build-goal-context.js";
 import type { GoalRunIteration, GoalRunWithIterations } from "../../src/types.js";
 
 function iteration(
@@ -39,6 +42,9 @@ function goalRun(
     ...overrides,
   };
 }
+
+const callBuildGoalContextPack = (input: unknown) => () =>
+  buildGoalContextPack(input as BuildGoalContextPackInput);
 
 describe("buildGoalContextPack", () => {
   it("renders goal header, termination criteria, and reused context-pack sections", () => {
@@ -96,5 +102,88 @@ describe("buildGoalContextPack", () => {
     const iterations = [iteration({ iterationIndex: 1, outcome: "success" })];
     const pack = buildGoalContextPack({ goalRun: goalRun(iterations), records: [] });
     expect(pack.markdown).not.toContain("## Last Error");
+  });
+
+  it.each([undefined, null, "input", 12, true, []])(
+    "rejects non-object direct input",
+    (input) => {
+      expect(callBuildGoalContextPack(input)).toThrow(
+        "buildGoalContextPack input must be an object",
+      );
+    },
+  );
+
+  it("rejects invalid top-level goal context input fields", () => {
+    expect(
+      callBuildGoalContextPack({ goalRun: null, records: [] }),
+    ).toThrow("goalRun must be an object");
+
+    expect(
+      callBuildGoalContextPack({ goalRun: goalRun([]), records: {} }),
+    ).toThrow("records must be an array");
+  });
+
+  it.each([
+    ["id", { id: 0 }, "goalRun.id must be a positive safe integer"],
+    ["goal", { goal: null }, "goalRun.goal must be a string"],
+    ["status", { status: 12 }, "goalRun.status must be a string"],
+    [
+      "iterationCount",
+      { iterationCount: -1 },
+      "goalRun.iterationCount must be a non-negative safe integer",
+    ],
+    [
+      "terminationCriteria",
+      { terminationCriteria: 12 },
+      "goalRun.terminationCriteria must be a string or null",
+    ],
+    [
+      "iterations",
+      { iterations: null },
+      "goalRun.iterations must be an array",
+    ],
+  ])("rejects invalid goalRun field: %s", (_label, overrides, message) => {
+    expect(
+      callBuildGoalContextPack({
+        goalRun: goalRun([], overrides as Partial<GoalRunWithIterations>),
+        records: [],
+      }),
+    ).toThrow(message);
+  });
+
+  it.each([
+    [null, "goalRun.iterations[0] must be an object"],
+    [
+      { iterationIndex: 0, outcome: "success", attempt: "done" },
+      "goalRun.iterations[0].iterationIndex must be a positive safe integer",
+    ],
+    [
+      { iterationIndex: 1, outcome: "success", attempt: 12 },
+      "goalRun.iterations[0].attempt must be a string",
+    ],
+    [
+      { iterationIndex: 1, outcome: null, attempt: "done" },
+      "goalRun.iterations[0].outcome must be a string",
+    ],
+    [
+      { iterationIndex: 1, outcome: "success", attempt: "done" },
+      "goalRun.iterations[0].summary must be a string or null",
+    ],
+    [
+      {
+        iterationIndex: 1,
+        outcome: "success",
+        attempt: "done",
+        summary: null,
+      },
+      "goalRun.iterations[0].error must be a string or null",
+    ],
+  ])("rejects invalid iteration render fields", (badIteration, message) => {
+    expect(
+      callBuildGoalContextPack({
+        goalRun: goalRun([badIteration as GoalRunIteration]),
+        records: [],
+      }),
+    ).toThrow(message);
   });
 });

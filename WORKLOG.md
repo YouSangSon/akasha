@@ -2,6 +2,32 @@
 
 ## 2026-06-30
 
+- Hardened goal context pack input validation:
+  - `buildGoalContextPack` now rejects non-object direct inputs before property
+    reads.
+  - `goalRun` must be an object with positive safe-integer `id`, string
+    `goal` and `status`, non-negative safe-integer `iterationCount`, and
+    string/null optional termination criteria.
+  - `goalRun.iterations` must be an array, and each rendered iteration must
+    have a positive safe-integer index, string attempt/outcome, and string/null
+    summary/error fields.
+  - `records` must be an array before delegating memory formatting to
+    `buildContextPack`.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/goal-run/build-goal-context.test.ts` (24 passed)
+- `npx vitest run tests/goal-run/build-goal-context.test.ts tests/goal-run/goal-run-handlers.test.ts tests/context-pack/build-context-pack.test.ts`
+  (54 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1243 passed, 34 skipped
+  across 70 files)
+- `git diff --check`
+
 - Hardened rate limiter input validation:
   - `createTokenBucketLimiter` now rejects non-object direct options before
     reading capacity or window fields.
