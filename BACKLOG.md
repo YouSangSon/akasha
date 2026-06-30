@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid ingest job repository pools, create/update inputs, retry query
+  inputs, IDs, attempt counts, and retry dates are rejected before queries.
 - Invalid audit repository pools, record entries, and list options are rejected
   before insert/select query construction.
 - Invalid project-ingest roots, project IDs, and repository handles are

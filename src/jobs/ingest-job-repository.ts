@@ -47,9 +47,11 @@ const RETURNING_COLUMNS = `
 `;
 
 export function createIngestJobRepository(pool: PgPool): IngestJobRepository {
+  assertIngestJobPool(pool);
+
   return {
     async create(input) {
-      assertNonBlankText(input.organizationId, "organizationId");
+      assertCreateInput(input);
 
       const result = await pool.query<IngestJobRow>(
         `
@@ -64,6 +66,8 @@ export function createIngestJobRepository(pool: PgPool): IngestJobRepository {
     },
 
     async markCompleted(jobId) {
+      assertPositiveSafeInteger(jobId, "jobId");
+
       const result = await pool.query<IngestJobRow>(
         `
           UPDATE ingest_jobs
@@ -79,6 +83,8 @@ export function createIngestJobRepository(pool: PgPool): IngestJobRepository {
     },
 
     async markFailed(jobId, error) {
+      assertPositiveSafeInteger(jobId, "jobId");
+
       rootLogger.error({ err: error, jobId }, "ingest job failed");
       const result = await pool.query<IngestJobRow>(
         `
@@ -97,6 +103,8 @@ export function createIngestJobRepository(pool: PgPool): IngestJobRepository {
     },
 
     async markQdrantCompleted(jobId) {
+      assertPositiveSafeInteger(jobId, "jobId");
+
       const result = await pool.query<IngestJobRow>(
         `
           UPDATE ingest_jobs
@@ -113,7 +121,10 @@ export function createIngestJobRepository(pool: PgPool): IngestJobRepository {
       return mapJob(requireSingleRow(result.rows[0], "ingest job"));
     },
 
-    async markQdrantPending({ jobId, attempts, nextRetryAt, error }) {
+    async markQdrantPending(input) {
+      assertMarkQdrantPendingInput(input);
+      const { jobId, attempts, nextRetryAt, error } = input;
+
       // COALESCE preserves the existing qdrant_last_error when caller omits
       // the error param — sweeper re-arming a schedule without a new error
       // shouldn't erase the last known failure context.
@@ -139,7 +150,10 @@ export function createIngestJobRepository(pool: PgPool): IngestJobRepository {
       return mapJob(requireSingleRow(result.rows[0], "ingest job"));
     },
 
-    async markQdrantFailed({ jobId, attempts, error }) {
+    async markQdrantFailed(input) {
+      assertMarkQdrantFailedInput(input);
+      const { jobId, attempts, error } = input;
+
       const result = await pool.query<IngestJobRow>(
         `
           UPDATE ingest_jobs
@@ -157,7 +171,10 @@ export function createIngestJobRepository(pool: PgPool): IngestJobRepository {
       return mapJob(requireSingleRow(result.rows[0], "ingest job"));
     },
 
-    async listPendingForRetry({ limit, now }) {
+    async listPendingForRetry(input) {
+      assertRetryQueryInput(input);
+      const { limit, now } = input;
+
       // Read-only query for monitoring / manual replay. The sweeper PR will
       // add claim semantics (FOR UPDATE SKIP LOCKED inside a transaction) so
       // multiple replicas don't race on the same row.
@@ -177,7 +194,10 @@ export function createIngestJobRepository(pool: PgPool): IngestJobRepository {
       return result.rows.map(mapJob);
     },
 
-    async claimPendingForRetry({ limit, now }) {
+    async claimPendingForRetry(input) {
+      assertRetryQueryInput(input);
+      const { limit, now } = input;
+
       // Atomically select + claim due rows in a single UPDATE so the
       // SKIP LOCKED lock is held for the full statement. A bare
       // SELECT … FOR UPDATE SKIP LOCKED releases the lock at autocommit,
@@ -217,6 +237,49 @@ export function createIngestJobRepository(pool: PgPool): IngestJobRepository {
       return result.rows.map(mapJob);
     },
   };
+}
+
+function assertIngestJobPool(value: unknown): asserts value is PgPool {
+  const candidate = assertObject(value, "ingest job pool");
+  assertFunction(candidate.query, "ingest job pool.query");
+}
+
+function assertCreateInput(
+  value: unknown,
+): asserts value is { memoryRecordId: number; organizationId: string } {
+  const candidate = assertObject(value, "ingest job create input");
+  assertPositiveSafeInteger(candidate.memoryRecordId, "memoryRecordId");
+  assertNonBlankText(candidate.organizationId, "organizationId");
+}
+
+function assertMarkQdrantPendingInput(value: unknown): asserts value is {
+  jobId: number;
+  attempts: number;
+  nextRetryAt: Date;
+  error?: unknown;
+} {
+  const candidate = assertObject(value, "markQdrantPending input");
+  assertPositiveSafeInteger(candidate.jobId, "jobId");
+  assertNonNegativeSafeInteger(candidate.attempts, "attempts");
+  assertValidDate(candidate.nextRetryAt, "nextRetryAt");
+}
+
+function assertMarkQdrantFailedInput(value: unknown): asserts value is {
+  jobId: number;
+  attempts: number;
+  error: unknown;
+} {
+  const candidate = assertObject(value, "markQdrantFailed input");
+  assertPositiveSafeInteger(candidate.jobId, "jobId");
+  assertNonNegativeSafeInteger(candidate.attempts, "attempts");
+}
+
+function assertRetryQueryInput(
+  value: unknown,
+): asserts value is { limit: number; now: Date } {
+  const candidate = assertObject(value, "ingest retry query input");
+  assertPositiveSafeInteger(candidate.limit, "limit");
+  assertValidDate(candidate.now, "now");
 }
 
 function serializeError(error: unknown): string {
@@ -261,4 +324,55 @@ function requireSingleRow<TRow>(row: TRow | undefined, label: string): TRow {
   }
 
   return row;
+}
+
+function assertObject(
+  value: unknown,
+  fieldName: string,
+): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function assertFunction(value: unknown, fieldName: string): void {
+  if (typeof value !== "function") {
+    throw new Error(`${fieldName} must be a function`);
+  }
+}
+
+function assertPositiveSafeInteger(
+  value: unknown,
+  fieldName: string,
+): asserts value is number {
+  if (
+    typeof value !== "number" ||
+    !Number.isSafeInteger(value) ||
+    value <= 0
+  ) {
+    throw new Error(`${fieldName} must be a positive safe integer`);
+  }
+}
+
+function assertNonNegativeSafeInteger(
+  value: unknown,
+  fieldName: string,
+): asserts value is number {
+  if (
+    typeof value !== "number" ||
+    !Number.isSafeInteger(value) ||
+    value < 0
+  ) {
+    throw new Error(`${fieldName} must be a non-negative safe integer`);
+  }
+}
+
+function assertValidDate(
+  value: unknown,
+  fieldName: string,
+): asserts value is Date {
+  if (!(value instanceof Date) || !Number.isFinite(value.getTime())) {
+    throw new Error(`${fieldName} must be a valid Date`);
+  }
 }

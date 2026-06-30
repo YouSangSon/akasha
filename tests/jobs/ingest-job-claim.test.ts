@@ -10,6 +10,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createIngestJobRepository } from "../../src/jobs/ingest-job-repository.js";
 import type { PgPool } from "../../src/db/connection.js";
+import type { IngestJobRepository } from "../../src/types.js";
 
 function makeMockPool(rows: unknown[] = []): {
   pool: PgPool;
@@ -21,6 +22,82 @@ function makeMockPool(rows: unknown[] = []): {
 }
 
 describe("claimPendingForRetry SQL shape", () => {
+  it.each([
+    {
+      pool: null,
+      message: "ingest job pool must be an object",
+    },
+    {
+      pool: { query: "SELECT 1" },
+      message: "ingest job pool.query must be a function",
+    },
+  ])("rejects malformed direct pool inputs", ({ pool, message }) => {
+    expect(() => createIngestJobRepository(pool as never)).toThrow(message);
+  });
+
+  it.each([
+    {
+      call: (repo: IngestJobRepository) => repo.create(null as never),
+      message: "ingest job create input must be an object",
+    },
+    {
+      call: (repo: IngestJobRepository) =>
+        repo.create({ memoryRecordId: 0, organizationId: "org-1" }),
+      message: "memoryRecordId must be a positive safe integer",
+    },
+    {
+      call: (repo: IngestJobRepository) => repo.markCompleted(0),
+      message: "jobId must be a positive safe integer",
+    },
+    {
+      call: (repo: IngestJobRepository) =>
+        repo.markQdrantPending({
+          jobId: 1,
+          attempts: -1,
+          nextRetryAt: new Date(),
+        }),
+      message: "attempts must be a non-negative safe integer",
+    },
+    {
+      call: (repo: IngestJobRepository) =>
+        repo.markQdrantPending({
+          jobId: 1,
+          attempts: 0,
+          nextRetryAt: new Date(Number.NaN),
+        }),
+      message: "nextRetryAt must be a valid Date",
+    },
+    {
+      call: (repo: IngestJobRepository) =>
+        repo.markQdrantFailed({
+          jobId: 1,
+          attempts: Number.NaN,
+          error: new Error("failed"),
+        }),
+      message: "attempts must be a non-negative safe integer",
+    },
+    {
+      call: (repo: IngestJobRepository) =>
+        repo.listPendingForRetry({ limit: 0, now: new Date() }),
+      message: "limit must be a positive safe integer",
+    },
+    {
+      call: (repo: IngestJobRepository) =>
+        repo.claimPendingForRetry({ limit: 10, now: "now" as never }),
+      message: "now must be a valid Date",
+    },
+  ])(
+    "rejects malformed direct method inputs before querying",
+    async ({ call, message }) => {
+      const { pool, querySpy } = makeMockPool([]);
+      const repo = createIngestJobRepository(pool);
+
+      await expect(call(repo)).rejects.toThrow(message);
+
+      expect(querySpy).not.toHaveBeenCalled();
+    },
+  );
+
   it("create rejects whitespace-only organizationId before querying", async () => {
     const { pool, querySpy } = makeMockPool([]);
     const repo = createIngestJobRepository(pool);

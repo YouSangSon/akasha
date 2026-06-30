@@ -2,6 +2,31 @@
 
 ## 2026-06-30
 
+- Hardened ingest job repository input validation:
+  - `createIngestJobRepository` now rejects malformed pool handles before
+    returning repository methods.
+  - Create/update methods now reject malformed direct inputs, invalid job IDs,
+    invalid memory record IDs, invalid attempt counts, and invalid retry dates
+    before query construction or failure logging.
+  - Retry list/claim methods now validate direct input containers, positive
+    limits, and valid timestamps before computing visibility windows or
+    querying.
+  - Existing claim SQL shape, visibility timeout behavior, error
+    serialization, and integration-only persistence behavior are preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/jobs/ingest-job-claim.test.ts tests/jobs/serialize-error.test.ts`
+  (17 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1592 passed, 34 skipped
+  across 70 files)
+- `git diff --check`
+
 - Hardened audit repository input validation:
   - `createAuditLogRepository` now rejects malformed pool handles before
     returning repository methods.
