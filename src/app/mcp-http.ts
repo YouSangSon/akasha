@@ -26,6 +26,7 @@ export type HandleMcpHttpRequestOptions = {
   rateLimiter: RateLimiter | null;
   logger: Logger;
   oauthProtectedResource?: OAuthProtectedResourceConfig | null;
+  allowedHostnames?: readonly string[];
 };
 
 const MAX_BODY_BYTES = 1_000_000; // 1 MB safety cap
@@ -44,11 +45,20 @@ export async function handleMcpHttpRequest(
     rateLimiter,
     logger,
     oauthProtectedResource = null,
+    allowedHostnames,
   } = options;
 
   if (req.method !== "POST" && req.method !== "GET" && req.method !== "DELETE") {
     sendJsonRpcError(res, 405, -32000, "Method not allowed");
     return;
+  }
+
+  if (allowedHostnames && allowedHostnames.length > 0) {
+    const hostError = validateHostHeader(req.headers.host, allowedHostnames);
+    if (hostError) {
+      sendJsonRpcError(res, 403, -32000, hostError);
+      return;
+    }
   }
 
   if (!isAllowedOrigin(req.headers.origin)) {
@@ -156,6 +166,28 @@ function isAllowedOrigin(origin: string | undefined): boolean {
   } catch {
     return false;
   }
+}
+
+function validateHostHeader(
+  hostHeader: string | undefined,
+  allowedHostnames: readonly string[],
+): string | null {
+  if (!hostHeader) {
+    return "Missing Host header";
+  }
+
+  let hostname: string;
+  try {
+    hostname = new URL(`http://${hostHeader}`).hostname;
+  } catch {
+    return `Invalid Host header: ${hostHeader}`;
+  }
+
+  if (!allowedHostnames.includes(hostname)) {
+    return `Invalid Host: ${hostname}`;
+  }
+
+  return null;
 }
 
 class BadRequestError extends Error {

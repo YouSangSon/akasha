@@ -2,8 +2,10 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { request as httpRequest } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { resolveServiceConfig, type ServiceConfig } from "../../src/config.js";
 import { goalRunRegistryStubs } from "../fixtures/goal-run-stubs.js";
 import type { BearerToken } from "../../src/app/middleware/bearer-auth.js";
 import type { OAuthTokenVerifier } from "../../src/app/middleware/bearer-auth.js";
@@ -16,6 +18,7 @@ import { createOperatorServer } from "../../src/app/server.js";
 import type { ToolRegistry } from "../../src/mcp/types.js";
 
 type ServerHandle = { baseUrl: string; close: () => Promise<void> };
+type RawHttpResponse = { status: number; body: string };
 
 const oauthProtectedResource: OAuthProtectedResourceConfig = {
   metadataUrl:
@@ -123,8 +126,10 @@ async function startServer(
   oauthProtectedResource: OAuthProtectedResourceConfig | null = null,
   rateLimiter?: RateLimiter,
   oauthTokenVerifier?: OAuthTokenVerifier | null,
+  config?: ServiceConfig,
 ): Promise<ServerHandle & { registry: ToolRegistry }> {
   const server = createOperatorServer({
+    config,
     registry,
     bearerTokens: tokens,
     oauthProtectedResource,
@@ -140,6 +145,81 @@ async function startServer(
     baseUrl: `http://127.0.0.1:${address.port}`,
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   };
+}
+
+function buildTestConfig(host: string): ServiceConfig {
+  return resolveServiceConfig({
+    env: {
+      HOST: host,
+      PORT: "1",
+      DATABASE_URL: "postgres://memory:memory@127.0.0.1:5432/memory_os",
+      VECTOR_BACKEND: "pgvector",
+      EMBEDDING_PROVIDER: "local",
+    },
+  });
+}
+
+function postMcpRaw(input: {
+  baseUrl: string;
+  hostHeader?: string;
+  token?: string;
+  body?: unknown;
+}): Promise<RawHttpResponse> {
+  const url = new URL(input.baseUrl);
+  const body = JSON.stringify(
+    input.body ?? {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-03-26",
+        capabilities: {},
+        clientInfo: { name: "host-test", version: "1.0.0" },
+      },
+    },
+  );
+
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    accept: "application/json, text/event-stream",
+    "content-length": Buffer.byteLength(body).toString(),
+  };
+  if (input.hostHeader !== undefined) {
+    headers.host = input.hostHeader;
+  }
+  if (input.token) {
+    headers.authorization = `Bearer ${input.token}`;
+  }
+
+  return new Promise((resolve, reject) => {
+    const req = httpRequest(
+      {
+        hostname: url.hostname,
+        port: Number(url.port),
+        path: "/mcp",
+        method: "POST",
+        setHost:
+          input.hostHeader === undefined || input.hostHeader === ""
+            ? false
+            : undefined,
+        headers,
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk) => {
+          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        });
+        res.on("end", () => {
+          resolve({
+            status: res.statusCode ?? 0,
+            body: Buffer.concat(chunks).toString("utf8"),
+          });
+        });
+      },
+    );
+    req.on("error", reject);
+    req.end(body);
+  });
 }
 
 async function connectMcp(baseUrl: string, token?: string): Promise<Client> {
@@ -336,6 +416,119 @@ describe("Streamable HTTP /mcp", () => {
     });
 
     expect(res.status).toBe(403);
+  });
+
+  it("rejects invalid Host before auth, rate limiting, or registry work when loopback validation is enabled", async () => {
+    const registry = buildRegistry();
+    const oauthVerifier: OAuthTokenVerifier = {
+      verify: vi.fn().mockResolvedValue({
+        token: "oauth-read",
+        authType: "oauth",
+        scopes: ["akasha:memory"],
+      }),
+    };
+    const rateLimiter: RateLimiter = {
+      check: vi.fn().mockReturnValue({
+        allowed: true,
+        remaining: 1,
+        retryAfterMs: 0,
+      }),
+    };
+    handle = await startServer(
+      [],
+      registry,
+      null,
+      rateLimiter,
+      oauthVerifier,
+      buildTestConfig("127.0.0.1"),
+    );
+
+    const res = await postMcpRaw({
+      baseUrl: handle.baseUrl,
+      hostHeader: "evil.example",
+      token: "oauth-read",
+      body: {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: {
+          name: "search_memory",
+          arguments: { organizationId: "org-a", projectKey: "p", query: "q" },
+        },
+      },
+    });
+
+    expect(res.status).toBe(403);
+    expect(JSON.parse(res.body)).toMatchObject({
+      jsonrpc: "2.0",
+      error: { code: -32000, message: "Invalid Host: evil.example" },
+      id: null,
+    });
+    expect(oauthVerifier.verify).not.toHaveBeenCalled();
+    expect(rateLimiter.check).not.toHaveBeenCalled();
+    expect(registry.search_memory).not.toHaveBeenCalled();
+  });
+
+  it("rejects empty Host when loopback validation is enabled", async () => {
+    handle = await startServer(
+      ["token-a"],
+      buildRegistry(),
+      null,
+      undefined,
+      null,
+      buildTestConfig("127.0.0.1"),
+    );
+
+    const res = await postMcpRaw({
+      baseUrl: handle.baseUrl,
+      hostHeader: "",
+      token: "token-a",
+    });
+
+    expect(res.status).toBe(403);
+    expect(JSON.parse(res.body)).toMatchObject({
+      jsonrpc: "2.0",
+      error: { code: -32000, message: "Missing Host header" },
+      id: null,
+    });
+  });
+
+  it("accepts valid loopback Host values when loopback validation is enabled", async () => {
+    handle = await startServer(
+      ["token-a"],
+      buildRegistry(),
+      null,
+      undefined,
+      null,
+      buildTestConfig("127.0.0.1"),
+    );
+    const port = new URL(handle.baseUrl).port;
+
+    const res = await postMcpRaw({
+      baseUrl: handle.baseUrl,
+      hostHeader: `localhost:${port}`,
+      token: "token-a",
+    });
+
+    expect(res.status).toBe(200);
+  });
+
+  it("does not reject non-loopback deployments by Host when validation is disabled", async () => {
+    handle = await startServer(
+      ["token-a"],
+      buildRegistry(),
+      null,
+      undefined,
+      null,
+      buildTestConfig("0.0.0.0"),
+    );
+
+    const res = await postMcpRaw({
+      baseUrl: handle.baseUrl,
+      hostHeader: "evil.example",
+    });
+
+    expect(res.status).toBe(401);
   });
 
   it("returns a failed MCP tool result when a bound token org disagrees with the call", async () => {

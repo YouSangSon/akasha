@@ -105,6 +105,8 @@ experience, documentation, features.
   work.
 - Non-object backup encryption and restore-smoke manifests are rejected before
   artifact or restore parsing work.
+- Loopback-bound MCP Streamable HTTP rejects invalid Host headers before auth,
+  rate limiting, or transport work.
 - Invalid direct repository search/list/graph limits are rejected before SQL
   work.
 - Invalid direct audit repository limits are rejected before SQL work.

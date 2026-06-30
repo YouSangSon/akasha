@@ -58,8 +58,11 @@ should request.
 `/mcp` is the MCP Streamable HTTP endpoint and must be treated like `/v1/*`,
 not like local MCP stdio. When static tokens or OAuth token validation are
 configured, `/mcp` requires bearer auth. It shares the same rate limiter as JSON
-HTTP, and origin validation in `src/app/mcp-http.ts` rejects untrusted
-browser-origin requests before they reach the MCP transport.
+HTTP. Host validation is applied automatically for loopback binds, allowing
+only `localhost`, `127.0.0.1`, and `[::1]` hostnames before `/mcp` reaches auth,
+rate limiting, or the MCP transport. Origin validation in `src/app/mcp-http.ts`
+continues to reject untrusted browser-origin requests before they reach the MCP
+transport.
 
 `/healthz` and `/readyz` remain unauthenticated. Empty token lists are only
 acceptable for loopback local development; non-loopback binds fail closed.

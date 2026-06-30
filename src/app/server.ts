@@ -63,6 +63,11 @@ import {
 import { renderMemoryAdminPage } from "./admin-memory-page.js";
 
 const operatorServerCleanup = new WeakMap<HttpServer, () => Promise<void>>();
+const LOOPBACK_MCP_ALLOWED_HOSTNAMES = [
+  "localhost",
+  "127.0.0.1",
+  "[::1]",
+] as const;
 
 export type CreateOperatorServerOptions = {
   config?: ServiceConfig;
@@ -155,6 +160,10 @@ export function createOperatorServer(
         )
       : options.oauthTokenVerifier;
   const registry = options.registry ?? createDefaultToolRegistry(log);
+  const mcpAllowedHostnames =
+    config && isLoopbackHost(config.host)
+      ? LOOPBACK_MCP_ALLOWED_HOSTNAMES
+      : undefined;
   const routes: Route[] = createMemoryRoutes({
     registry,
     logger: log,
@@ -260,6 +269,7 @@ export function createOperatorServer(
             rateLimiter,
             logger: log,
             oauthProtectedResource,
+            allowedHostnames: mcpAllowedHostnames,
           });
           return;
         }

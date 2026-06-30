@@ -54,8 +54,10 @@ Bearer `insufficient_scope` `WWW-Authenticate` challenge를 반환합니다.
 `/mcp` 는 MCP Streamable HTTP 엔드포인트이며 로컬 MCP stdio가 아니라 `/v1/*`
 처럼 취급해야 합니다. Static token 또는 OAuth token validation이 설정되어 있으면
 `/mcp` 에 bearer auth가 필요합니다. `/mcp` 는 JSON HTTP 와 같은 rate limiter를
-공유하고, `src/app/mcp-http.ts` 의 origin validation은 신뢰하지 않는
-browser-origin 요청을 MCP transport에 도달하기 전에 거부합니다.
+공유합니다. Loopback bind에서는 Host validation이 자동 적용되어 `/mcp` 가 auth,
+rate limiting, MCP transport에 도달하기 전에 `localhost`, `127.0.0.1`,
+`[::1]` hostname만 허용합니다. `src/app/mcp-http.ts` 의 Origin validation은 계속
+신뢰하지 않는 browser-origin 요청을 MCP transport에 도달하기 전에 거부합니다.
 
 `/healthz`, `/readyz` 는 계속 인증이 없습니다. 빈 토큰 목록은 loopback 로컬
 개발에서만 허용되며, non-loopback bind는 fail closed 됩니다.

@@ -46,6 +46,27 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened MCP Streamable HTTP Host validation:
+  - `/mcp` now validates Host headers for loopback-bound operator servers before
+    auth, rate limiting, or MCP transport work.
+  - The allowed loopback hostnames are `localhost`, `127.0.0.1`, and `[::1]`,
+    parsed port-agnostically to match the installed MCP SDK DNS-rebinding
+    guidance.
+  - Non-loopback deployments keep the previous behavior so reverse-proxy and
+    public bind setups are not changed without explicit allowed-host config.
+  - English/Korean security docs now describe Host and Origin validation for
+    `/mcp`.
+  - Worker implementation passed spec review and code-quality review with no
+    findings.
+
+Verification:
+- `npx vitest run tests/app/mcp-http.test.ts tests/scripts/public-docs-drift.test.ts` (41 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (1030 passed, 34 skipped across 69 files)
+- `git diff --check`
+
 - Hardened backup/restore manifest shape parsing:
   - `scripts/backup-encryption.ts` and `scripts/restore-smoke.ts` now reject
     JSON manifests that parse to `null` or arrays with
