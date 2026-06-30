@@ -30,6 +30,8 @@ type BucketState = {
 export function createTokenBucketLimiter(
   options: RateLimiterOptions,
 ): RateLimiter {
+  assertRateLimiterOptions(options);
+
   if (!Number.isSafeInteger(options.capacity) || options.capacity < 1) {
     throw new Error("rate-limit capacity must be a positive integer");
   }
@@ -43,7 +45,15 @@ export function createTokenBucketLimiter(
 
   return {
     check(key: string): RateLimitDecision {
+      if (typeof key !== "string") {
+        throw new Error("rate-limit key must be a string");
+      }
+
       const t = now();
+      if (!Number.isFinite(t)) {
+        throw new Error("rate-limit now must return a finite number");
+      }
+
       const existing = buckets.get(key);
       const bucket = existing ?? {
         tokens: options.capacity,
@@ -81,6 +91,23 @@ export function createTokenBucketLimiter(
       return { allowed: false, remaining: 0, retryAfterMs };
     },
   };
+}
+
+function assertRateLimiterOptions(
+  options: unknown,
+): asserts options is RateLimiterOptions {
+  if (
+    typeof options !== "object" ||
+    options === null ||
+    Array.isArray(options)
+  ) {
+    throw new Error("rate-limit options must be an object");
+  }
+
+  const candidate = options as Record<string, unknown>;
+  if (candidate.now !== undefined && typeof candidate.now !== "function") {
+    throw new Error("rate-limit now must be a function when provided");
+  }
 }
 
 // Reads per-minute rate from env. Returns null when unset (= no rate limiting).

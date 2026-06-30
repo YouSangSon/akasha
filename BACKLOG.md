@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid rate limiter options, injected times, and direct keys are rejected
+  before token bucket state is read or updated.
 - Invalid background queue metrics timestamps and non-finite count values are
   rejected before metrics snapshots are reported.
 - Non-string direct HTTP metric methods are rejected before method

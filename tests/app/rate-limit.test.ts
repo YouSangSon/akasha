@@ -16,6 +16,27 @@ const WINDOW_MS = 60_000;
 const MS_PER_TOKEN = WINDOW_MS / CAPACITY; // 20_000 ms
 
 describe("createTokenBucketLimiter", () => {
+  it.each([undefined, null, "options", 12, true, []])(
+    "throws on non-object direct options",
+    (options) => {
+      expect(() =>
+        createTokenBucketLimiter(
+          options as unknown as Parameters<typeof createTokenBucketLimiter>[0],
+        ),
+      ).toThrow("rate-limit options must be an object");
+    },
+  );
+
+  it("throws when the injected clock is not a function", () => {
+    expect(() =>
+      createTokenBucketLimiter({
+        capacity: 1,
+        windowMs: 1_000,
+        now: 123 as unknown as () => number,
+      }),
+    ).toThrow("rate-limit now must be a function when provided");
+  });
+
   it("throws on zero, negative, or fractional capacity", () => {
     expect(() =>
       createTokenBucketLimiter({ capacity: 0, windowMs: 60_000 }),
@@ -218,6 +239,32 @@ describe("createTokenBucketLimiter", () => {
       expect(b2.remaining).toBe(1);
     });
   });
+
+  it("rejects non-string direct keys before bucket lookup", () => {
+    const limiter = createTokenBucketLimiter({
+      capacity: CAPACITY,
+      windowMs: WINDOW_MS,
+    });
+
+    expect(() => limiter.check(123 as unknown as string)).toThrow(
+      "rate-limit key must be a string",
+    );
+  });
+
+  it.each([Number.NaN, Infinity, -Infinity])(
+    "rejects non-finite injected time before refill math: %s",
+    (time) => {
+      const limiter = createTokenBucketLimiter({
+        capacity: CAPACITY,
+        windowMs: WINDOW_MS,
+        now: () => time,
+      });
+
+      expect(() => limiter.check("tokenA")).toThrow(
+        "rate-limit now must return a finite number",
+      );
+    },
+  );
 });
 
 describe("loadRateLimitFromEnv", () => {

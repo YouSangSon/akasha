@@ -2,6 +2,29 @@
 
 ## 2026-06-30
 
+- Hardened rate limiter input validation:
+  - `createTokenBucketLimiter` now rejects non-object direct options before
+    reading capacity or window fields.
+  - Injected `now` values must be functions when provided.
+  - `check(key)` now rejects non-string direct keys before bucket lookup.
+  - Injected clocks must return finite numbers before refill math runs.
+  - Existing capacity, window, refill, per-key isolation, and environment
+    parsing behavior is preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/app/rate-limit.test.ts` (27 passed)
+- `npx vitest run tests/app/rate-limit.test.ts tests/app/server.test.ts tests/app/mcp-http.test.ts`
+  (113 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1224 passed, 34 skipped
+  across 70 files)
+- `git diff --check`
+
 - Hardened background queue metrics validation:
   - `collect(now)` now rejects non-Date and invalid `Date` values before
     timestamp serialization or database queries.
