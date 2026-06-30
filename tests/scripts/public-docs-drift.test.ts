@@ -85,6 +85,25 @@ function snippetsAround(text: string, needle: string, radius = 120): string[] {
   return snippets;
 }
 
+function unreleasedChangelogSection(path: string): string {
+  const text = read(path);
+  const headingMatch = /^## \[Unreleased]\s*$/m.exec(text);
+  if (!headingMatch || headingMatch.index === undefined) {
+    throw new Error(`${path} does not contain an Unreleased section`);
+  }
+
+  const sectionStart = headingMatch.index + headingMatch[0].length;
+  const nextReleaseStart = text.indexOf("\n## [", sectionStart);
+  return text.slice(
+    sectionStart,
+    nextReleaseStart === -1 ? text.length : nextReleaseStart,
+  );
+}
+
+function migrationRanges(markdown: string): string[] {
+  return [...markdown.matchAll(/\b\d{3}-\d{3}\b/g)].map((match) => match[0]);
+}
+
 describe("public documentation drift checks", () => {
   it("indexes every paired public docs page", () => {
     const publicDocs = publicDocsMarkdownPaths();
@@ -360,6 +379,18 @@ describe("public documentation drift checks", () => {
 
     expect(read("CONTRIBUTING.md")).toContain(next);
     expect(read("CONTRIBUTING.ko.md")).toContain(next);
+  });
+
+  it("keeps Unreleased changelog migration ranges current", () => {
+    const range = currentMigrationRange();
+
+    for (const path of ["CHANGELOG.md", "CHANGELOG.ko.md"]) {
+      const unreleased = unreleasedChangelogSection(path);
+      const ranges = migrationRanges(unreleased);
+      expect(unreleased).toContain(range);
+      expect(ranges).toEqual(expect.arrayContaining([range]));
+      expect(ranges.filter((entry) => entry !== range)).toEqual([]);
+    }
   });
 
   it("documents every service tool and JSON HTTP route in public docs", () => {

@@ -2,6 +2,24 @@
 
 ## 2026-07-01
 
+- Fixed Unreleased changelog migration-range drift:
+  - `CHANGELOG.md` and `CHANGELOG.ko.md` no longer present `001-012` as the
+    current migration range in Unreleased; all range literals in that section
+    now resolve to the current `001-015`.
+  - `tests/scripts/public-docs-drift.test.ts` now checks the Unreleased
+    changelog section only, so older release-history ranges remain allowed.
+    Code-quality review tightened the guard to inspect every `NNN-NNN`
+    literal and anchor on the actual `## [Unreleased]` heading.
+  - Spec and code-quality re-review approved the final scoped diff.
+
+Verification:
+- `npx vitest run tests/scripts/public-docs-drift.test.ts` (24 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (1795 passed, 34 skipped across 79 files)
+- `git diff --check`
+
 - Aligned the local installer with Docker and CI ONNX Runtime install behavior:
   - `install.sh` now runs `npm install` with
     `ONNXRUNTIME_NODE_INSTALL_CUDA=skip` so local dependency installation avoids

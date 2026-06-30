@@ -23,6 +23,8 @@ experience, documentation, features.
 - Docker, CI, and local installer dependency installs skip onnxruntime-node CUDA
   provider downloads through `ONNXRUNTIME_NODE_INSTALL_CUDA=skip`, avoiding npm
   unknown-config flags.
+- Unreleased English/Korean changelog migration-range wording now reports
+  `001-015` and has focused Unreleased-only drift coverage.
 - Invalid CLI argv containers, argv entries, option containers, cwd values, and
   registry containers are rejected before command parsing or dispatch.
 - Invalid operator server construction options, injected config/logger/auth

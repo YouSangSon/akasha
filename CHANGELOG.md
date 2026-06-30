@@ -59,8 +59,8 @@ small actual impact surface.
   the recoverable `memory_archive` path and keeps vector cleanup retryable.
   The static `/admin/memory` page gives operators a compact browser shell while
   leaving all data calls behind the existing authenticated `/v1/*` routes.
-  Migration range is now `001-012` with `memory_tags` for org-scoped tag
-  filters.
+  Current migration range is `001-015`, including `memory_tags` for org-scoped
+  tag filters.
 - **pgvector backend — Postgres-only deploy option** — a `VectorIndex` port
   (`src/vector/vector-index.ts`) abstracts the vector backend so either Qdrant
   or pgvector can be selected at startup via `VECTOR_BACKEND`. The new
@@ -77,7 +77,8 @@ small actual impact surface.
   concepts) into `entities` and `memory_entity_mentions`, and records same-row
   co-mentions plus date context in `entity_relationships`. `search_memory`
   uses that graph as an exact rescue/boost path alongside Postgres FTS,
-  substring fallback, and vector retrieval. Migration range is now `001-012`.
+  substring fallback, and vector retrieval. Current migration range is
+  `001-015`.
 - **MCP roots, elicitation, and sampling helpers** — MCP transports now register
   `list_workspace_roots` for client-advertised `roots/list` and
   `add_memory_interactive` for form-based elicitation before storing accepted
@@ -264,7 +265,7 @@ small actual impact surface.
   sweeper registration and retry loop are in-flight on the #12 branch.
 - **Migration 008: FK index on `memory_chunks`** — `008_chunks_fk_index.sql` adds
   `idx_memory_chunks_record` on `memory_chunks(memory_record_id)`, eliminating sequential scans
-  on the FK join path. Migrations are now 001-009.
+  on the FK join path.
 - **`listMemory` is now bounded** — enforces a `LIMIT` (default 1000, max 5000) on browse
   queries. Previously unbounded queries could return the full table for large tenants.
 - **Batched N+1 DB writes** — chunk inserts and upserts are now issued in a single round-trip
@@ -275,9 +276,10 @@ small actual impact surface.
 - **Documentation accuracy pass** — fixed pre-existing drift across `docs/architecture.md`,
   `docs/configuration.md`, `docs/api-reference.md`, `CONTRIBUTING.md`, and `README.md`:
   `OPENAI_API_KEY` marked optional (only needed when `EMBEDDING_PROVIDER=openai`); embedding
-  default corrected to `transformers`; migration range updated to 001-009; `ingest_jobs` outbox
-  columns added to schema diagram; `/readyz` probe list corrected against actual
-  `check-dependencies.ts` behavior; MCP tool list updated to the then-current 7 tools.
+  default corrected to `transformers`; migration docs brought forward to the then-current
+  outbox range; `ingest_jobs` outbox columns added to schema diagram; `/readyz` probe list
+  corrected against actual `check-dependencies.ts` behavior; MCP tool list updated to the
+  then-current 7 tools.
 - **`AGENTS.md` dangling references removed** — replaced broken `.vibe/context-index.md` and
   `.pi/skills/vibe-workflow/SKILL.md` references (both absent) with accurate contributor
   guidance pointing to `README.md`, `CONTRIBUTING.md`, and `docs/`.
