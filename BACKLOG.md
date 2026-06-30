@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid eval metric inputs are rejected before metric calculation, and
+  duplicate retrieved IDs cannot inflate recall above `1`.
 - Non-finite semantic duplicate thresholds and embedding vectors are rejected
   before clustering or cosine scoring.
 - Non-string direct source-ref parser values are rejected before JSON parsing,

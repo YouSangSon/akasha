@@ -2,6 +2,25 @@
 
 ## 2026-06-30
 
+- Hardened eval metric input validation:
+  - `recallAtK` and `mrrAtK` now reject non-array direct inputs before metric
+    calculation.
+  - Retrieved and relevant IDs must be positive safe integers, matching the
+    record-id contract.
+  - `k` must be a positive integer before top-k slicing.
+  - `recallAtK` now deduplicates retrieved IDs in the top-k window so duplicate
+    retrievals cannot push recall above `1`.
+  - Quality review found the duplicate-retrieved recall inflation bug and an
+    ID-domain gap; both were fixed and covered.
+
+Verification:
+- `npx vitest run tests/eval/metrics.test.ts` (28 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (1114 passed, 34 skipped across 70 files)
+- `git diff --check`
+
 - Hardened semantic duplicate numeric validation:
   - `findSemanticDuplicates` now rejects non-finite thresholds before
     clustering.
