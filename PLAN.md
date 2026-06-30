@@ -4,16 +4,17 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Local Embedding Client Input Guards
+## Current Loop — Embedding Provider Factory Input Guards
 
 Status:
-- `createLocalEmbeddingClient` now rejects malformed client input and invalid
-  dimensions before allocating deterministic vectors.
-- Single-text and batch embedding methods now reject malformed direct text
-  input before hashing.
-- Existing deterministic vector generation, configured dimensions, L2
-  normalization, and batch ordering behavior are preserved.
-- Focused local embedding tests, typecheck, build, audit, and single-worker
+- `createEmbeddingProvider` now rejects malformed router/config input, unknown
+  provider names, invalid model/dimensions values, and non-string OpenAI API
+  key values before provider construction.
+- The OpenAI branch now treats missing and whitespace-only API keys as the
+  same documented `OPENAI_API_KEY` configuration error.
+- Existing local provider routing and provider-name helper behavior are
+  preserved.
+- Focused embedding factory tests, typecheck, build, audit, and single-worker
   full suite passed.
 - Default parallel `npm test` remains timing-sensitive on unrelated server and
   backup shell tests under load, so full-suite verification used one worker.

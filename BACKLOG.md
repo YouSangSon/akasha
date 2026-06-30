@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid embedding provider factory inputs, provider names, model/dimensions
+  values, and OpenAI API key values are rejected before provider construction.
 - Invalid local embedding client inputs, dimensions, single text inputs, and
   batch text inputs are rejected before hashing.
 - Invalid transformers embedding client inputs, injected extractor factories

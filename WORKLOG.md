@@ -2,6 +2,27 @@
 
 ## 2026-06-30
 
+- Hardened embedding provider factory input validation:
+  - `createEmbeddingProvider` now rejects malformed direct input containers,
+    malformed config objects, unknown provider names, invalid model/dimensions
+    values, and non-string OpenAI API key values before provider construction.
+  - The OpenAI provider branch now treats missing and whitespace-only API keys
+    as the same documented `OPENAI_API_KEY` configuration error.
+  - Existing local provider routing and provider-name helper behavior are
+    preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/embedding/embedding-factory.test.ts` (13 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1699 passed, 34 skipped
+  across 74 files)
+- `git diff --check`
+
 - Hardened local embedding client input validation:
   - `createLocalEmbeddingClient` now rejects malformed direct input containers
     and invalid dimensions before allocating deterministic vectors.
