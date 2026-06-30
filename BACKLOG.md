@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid worker-process options and injected starter handles are rejected
+  before worker startup/no-worker logging reads their fields.
 - Invalid background-worker coordinator options, env values, metrics, injected
   starters, and bootstrap service results are rejected before worker startup.
 - Invalid compaction and ingest sweeper loop inputs, logger methods, metrics,

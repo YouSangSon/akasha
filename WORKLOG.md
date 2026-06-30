@@ -2,6 +2,31 @@
 
 ## 2026-06-30
 
+- Hardened worker-process input validation:
+  - `runWorkerProcess` now rejects invalid direct options before resolving
+    defaults or invoking the background-worker starter.
+  - Worker process options now validate optional logger, environment flag
+    values, metrics recorder, and injected starter function.
+  - Handles returned by injected starters must provide valid worker names and a
+    stop function before `startedWorkers` is read or startup/no-worker logging
+    runs.
+  - Existing fail-fast delegation, no-worker warning, successful handle return,
+    and app/server startup behavior is preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/app/worker.test.ts` (18 passed)
+- `npx vitest run tests/app/worker.test.ts tests/app/background-workers.test.ts tests/app/start-background-workers-server.test.ts tests/app/start-operator-server-metrics.test.ts tests/app/server.test.ts`
+  (110 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1524 passed, 34 skipped
+  across 70 files)
+- `git diff --check`
+
 - Hardened background-worker coordinator input validation:
   - `startBackgroundWorkers` now rejects non-object direct options before
     reading worker flags, bootstrapping services, or starting sweepers.

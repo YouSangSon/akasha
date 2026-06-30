@@ -4,20 +4,18 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Background Worker Coordinator Guards
+## Current Loop — Worker Process Input Guards
 
 Status:
-- `startBackgroundWorkers` now rejects invalid direct options before reading
-  worker flags, bootstrapping services, or starting sweepers.
-- Coordinator options now validate logger methods, environment flag types,
-  fail-fast mode, metrics recorders, service bootstrap, and injected starter
-  functions.
-- Malformed bootstrap service results are rejected in fail-fast mode and logged
-  as worker startup failures in default mode without starting sweepers.
-- Existing disabled-worker noop behavior, shared bootstrap, stop handling,
-  fail-fast bootstrap errors, server startup resilience, and metrics wiring is
-  preserved.
-- Focused coordinator, adjacent app/server tests, typecheck, build, audit,
+- `runWorkerProcess` now rejects invalid direct options before resolving
+  defaults or invoking the background-worker starter.
+- Worker process options now validate optional logger, environment flag values,
+  metrics recorder, and injected starter function.
+- Handles returned by injected starters are validated before `startedWorkers`
+  is read or startup/no-worker logging runs.
+- Existing fail-fast delegation, no-worker warning, successful handle return,
+  and app/server startup behavior is preserved.
+- Focused worker-process, adjacent app/server tests, typecheck, build, audit,
   single-worker full suite, and diff checks passed.
 - Default parallel `npm test` remains timing-sensitive on unrelated server and
   backup shell tests under load, so full-suite verification used one worker.
