@@ -162,6 +162,76 @@ describe("project ingestion", () => {
       }),
     ]);
   });
+
+  it("rejects malformed direct project roots before reading approved files", () => {
+    expect(() => collectProjectSources(null as never)).toThrow(
+      "projectRoot must be a non-empty string",
+    );
+    expect(() => collectProjectSources(" \n\t ")).toThrow(
+      "projectRoot must be a non-empty string",
+    );
+
+    const missingRoot = path.join(
+      os.tmpdir(),
+      `developer-memory-os-missing-${process.pid}-${Date.now()}`,
+    );
+    fs.rmSync(missingRoot, { recursive: true, force: true });
+    expect(() => collectProjectSources(missingRoot)).toThrow(
+      "projectRoot must be an existing directory",
+    );
+
+    const tempProjectRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "developer-memory-os-ingest-file-root-"),
+    );
+    tempDirs.push(tempProjectRoot);
+    const fileRoot = path.join(tempProjectRoot, "not-a-directory");
+    fs.writeFileSync(fileRoot, "not a directory");
+
+    expect(() => collectProjectSources(fileRoot)).toThrow(
+      "projectRoot must be an existing directory",
+    );
+  });
+
+  it.each([
+    {
+      input: null,
+      message: "ingestProjectArtifacts input must be an object",
+    },
+    {
+      input: {
+        projectRoot: " \n\t ",
+        projectId: "project-alpha",
+        repository: createInMemoryRepository(),
+      },
+      message: "projectRoot must be a non-empty string",
+    },
+    {
+      input: {
+        projectRoot: fixtureProjectRoot,
+        projectId: " \n\t ",
+        repository: createInMemoryRepository(),
+      },
+      message: "projectId must be a non-empty string",
+    },
+    {
+      input: {
+        projectRoot: fixtureProjectRoot,
+        projectId: "project-alpha",
+        repository: null,
+      },
+      message: "repository must be an object",
+    },
+    {
+      input: {
+        projectRoot: fixtureProjectRoot,
+        projectId: "project-alpha",
+        repository: { addMemory: "store" },
+      },
+      message: "repository.addMemory must be a function",
+    },
+  ])("rejects malformed direct ingest inputs", ({ input, message }) => {
+    expect(() => ingestProjectArtifacts(input as never)).toThrow(message);
+  });
 });
 
 function createInMemoryRepository(): MemoryRepository {

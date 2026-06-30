@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid project-ingest roots, project IDs, and repository handles are
+  rejected before approved-source reads or memory persistence.
 - Invalid OAuth scope input containers, token scope lists, scope kinds, and
   direct helper tool names are rejected before authorization decisions.
 - Invalid dependency health probe containers and probe builder inputs are

@@ -2,6 +2,28 @@
 
 ## 2026-06-30
 
+- Hardened project-ingest input validation:
+  - `collectProjectSources` now rejects non-string, blank, missing, and
+    non-directory project roots before joining approved source paths or reading
+    files.
+  - `ingestProjectArtifacts` now rejects malformed direct inputs, blank project
+    roots, blank project IDs, missing repository objects, and invalid
+    `repository.addMemory` handles before filesystem or persistence work.
+  - Existing approved-source filtering and normalized project memory ingestion
+    behavior is preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/ingest/ingest-project.test.ts` (7 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1568 passed, 34 skipped
+  across 70 files)
+- `git diff --check`
+
 - Hardened OAuth scope enforcement input validation:
   - `checkOAuthScopes` and `requiredScopeKindForTool` now reject malformed
     direct scope input containers before reading tool arguments such as

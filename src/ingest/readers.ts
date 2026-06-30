@@ -15,6 +15,8 @@ export type CollectedProjectSource = {
 export function collectProjectSources(
   projectRoot: string,
 ): CollectedProjectSource[] {
+  assertProjectRoot(projectRoot);
+
   return APPROVED_PROJECT_SOURCES.flatMap((source) => {
     const filePath = path.join(projectRoot, source.sourceRef);
 
@@ -60,6 +62,15 @@ function readProjectSource(
 
 function toSourceRef(projectRoot: string, filePath: string): string {
   return path.relative(projectRoot, filePath).split(path.sep).join("/");
+}
+
+function assertProjectRoot(value: unknown): asserts value is string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error("projectRoot must be a non-empty string");
+  }
+  if (!fs.existsSync(value) || !fs.statSync(value).isDirectory()) {
+    throw new Error("projectRoot must be an existing directory");
+  }
 }
 
 const APPROVED_PROJECT_SOURCES: ReadonlyArray<{
