@@ -1836,6 +1836,36 @@ describe("createToolRegistry", () => {
     expect(services.vectorIndex.deleteByRecordIds).not.toHaveBeenCalled();
   });
 
+  it("rejects non-array tags before canonical service resolution", async () => {
+    const services = createCanonicalServices();
+    const resolveCanonicalServices = vi.fn(async () => services);
+    const registry = createToolRegistry({ resolveCanonicalServices });
+
+    await expect(
+      registry.update_memory({
+        organizationId: "org-a",
+        memoryId: 501,
+        tags: "ops" as never,
+      }),
+    ).rejects.toThrow(/tags must be an array/);
+    await expect(
+      registry.tag_memory({
+        organizationId: "org-a",
+        memoryId: 501,
+        tags: "ops" as never,
+      }),
+    ).rejects.toThrow(/tags must be an array/);
+
+    expect(resolveCanonicalServices).not.toHaveBeenCalled();
+    expect(services.repository.updateMemoryRecord).not.toHaveBeenCalled();
+    expect(services.embeddings.embedBatch).not.toHaveBeenCalled();
+    expect(
+      services.chunkRepository.replaceChunksForRecordWithPendingIngest,
+    ).not.toHaveBeenCalled();
+    expect(services.vectorIndex.deleteByRecordIds).not.toHaveBeenCalled();
+    expect(services.vectorIndex.upsert).not.toHaveBeenCalled();
+  });
+
   it("compacts memory using the narrower Task 6 public tool contract", async () => {
     const registry = createToolRegistry({ repository: createRepository() });
 

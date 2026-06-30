@@ -1125,6 +1125,9 @@ function assertNonBlankTags(tags: readonly string[] | undefined): void {
   if (tags === undefined) {
     return;
   }
+  if (!Array.isArray(tags)) {
+    throw new Error("tags must be an array");
+  }
   for (const tag of tags) {
     assertNonBlankText(tag, "tag");
   }

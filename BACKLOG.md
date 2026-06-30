@@ -107,6 +107,8 @@ experience, documentation, features.
   artifact or restore parsing work.
 - Loopback-bound MCP Streamable HTTP rejects invalid Host headers before auth,
   rate limiting, or transport work.
+- Non-array direct governance tag inputs are rejected before canonical service
+  or repository work.
 - Invalid direct repository search/list/graph limits are rejected before SQL
   work.
 - Invalid direct audit repository limits are rejected before SQL work.

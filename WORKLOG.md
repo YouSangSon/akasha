@@ -46,6 +46,24 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened direct governance tag input validation:
+  - Direct `update_memory` and `tag_memory` registry calls now reject configured
+    non-array `tags` before canonical service resolution.
+  - `tags: undefined` still preserves the existing no-tag-update behavior for
+    `update_memory`, and arrays still validate entries for non-whitespace text.
+  - Focused tests cover string `tags` on both direct paths and assert no
+    repository, chunk, embedding, or vector work occurs.
+  - Worker implementation passed spec review and code-quality review with no
+    findings.
+
+Verification:
+- `npx vitest run tests/mcp/server.test.ts` (124 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (1031 passed, 34 skipped across 69 files)
+- `git diff --check`
+
 - Hardened MCP Streamable HTTP Host validation:
   - `/mcp` now validates Host headers for loopback-bound operator servers before
     auth, rate limiting, or MCP transport work.
