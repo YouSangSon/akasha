@@ -2,6 +2,33 @@
 
 ## 2026-06-30
 
+- Hardened outbox sweeper input validation:
+  - `runOutboxSweep` now rejects non-object direct input before reading tunables,
+    claiming rows, or deleting Qdrant points.
+  - Sweeper dependencies, logger methods, optional tunables, and injected clock
+    results are validated before repository calls.
+  - Claimed cleanup rows must provide positive safe-integer archive IDs,
+    non-blank organization IDs, non-blank Qdrant point IDs, and non-negative
+    safe-integer attempt counts before vector deletion or status updates.
+  - Malformed direct input and malformed claimed rows are covered with
+    no-side-effect assertions for claims, status updates, and vector deletes.
+  - Existing empty sweep, clean, retry, give-up, and custom tunable behavior is
+    preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/compact/outbox-sweeper.test.ts` (30 passed)
+- `npx vitest run tests/compact/outbox-sweeper.test.ts tests/compact/sweeper-loop.test.ts tests/compact/apply-compaction.test.ts tests/app/background-workers.test.ts tests/app/start-background-workers-server.test.ts tests/app/start-operator-server-metrics.test.ts`
+  (88 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1429 passed, 34 skipped
+  across 70 files)
+- `git diff --check`
+
 - Hardened apply compaction input validation:
   - `applyCompaction` now rejects non-object direct input before generated run
     IDs, semantic embedding, rate-limit checks, archive repository calls, or

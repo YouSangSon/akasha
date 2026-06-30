@@ -42,14 +42,19 @@ const DEFAULT_MAX_ATTEMPTS = 5;
 export async function runOutboxSweep(
   input: Readonly<RunOutboxSweepInput>,
 ): Promise<SweepResult> {
+  assertRunOutboxSweepInput(input);
+
   const batchSize = input.batchSize ?? DEFAULT_BATCH_SIZE;
   const maxAttempts = input.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
   const getNow = input.now ?? (() => new Date());
+  const now = getNow();
+  assertValidDate(now, "now result");
 
   const pending = await input.archiveRepository.claimPendingQdrantCleanup({
     limit: batchSize,
-    now: getNow(),
+    now,
   });
+  assertPendingQdrantCleanupRows(pending);
 
   let cleaned = 0;
   let retried = 0;
@@ -119,5 +124,123 @@ async function sweepOne(
     }
 
     return giveUp ? "failed" : "retry";
+  }
+}
+
+function assertRunOutboxSweepInput(
+  input: unknown,
+): asserts input is RunOutboxSweepInput {
+  const candidate = assertObject(input, "runOutboxSweep input");
+  const archiveRepository = assertObject(
+    candidate.archiveRepository,
+    "archiveRepository",
+  );
+  const vectorIndex = assertObject(candidate.vectorIndex, "vectorIndex");
+  const logger = assertObject(candidate.logger, "logger");
+
+  assertFunction(
+    archiveRepository.claimPendingQdrantCleanup,
+    "archiveRepository.claimPendingQdrantCleanup",
+  );
+  assertFunction(
+    archiveRepository.markQdrantStatus,
+    "archiveRepository.markQdrantStatus",
+  );
+  assertFunction(vectorIndex.delete, "vectorIndex.delete");
+  assertFunction(logger.warn, "logger.warn");
+  assertFunction(logger.error, "logger.error");
+  assertOptionalPositiveSafeInteger(candidate.batchSize, "batchSize");
+  assertOptionalPositiveSafeInteger(candidate.maxAttempts, "maxAttempts");
+  assertOptionalFunction(candidate.now, "now");
+}
+
+function assertPendingQdrantCleanupRows(
+  rows: unknown,
+): asserts rows is PendingQdrantCleanup[] {
+  if (!Array.isArray(rows)) {
+    throw new Error("claimPendingQdrantCleanup result must be an array");
+  }
+
+  for (const [index, row] of rows.entries()) {
+    assertPendingQdrantCleanupRow(row, index);
+  }
+}
+
+function assertPendingQdrantCleanupRow(row: unknown, index: number): void {
+  const prefix = `claimPendingQdrantCleanup result[${index}]`;
+  const candidate = assertObject(row, prefix);
+  assertPositiveSafeInteger(candidate.archiveId, `${prefix}.archiveId`);
+  assertNonBlankString(candidate.organizationId, `${prefix}.organizationId`);
+  assertStringArray(candidate.qdrantPointIds, `${prefix}.qdrantPointIds`);
+  assertNonNegativeSafeInteger(candidate.attemptCount, `${prefix}.attemptCount`);
+}
+
+function assertObject(
+  value: unknown,
+  fieldName: string,
+): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function assertFunction(value: unknown, fieldName: string): void {
+  if (typeof value !== "function") {
+    throw new Error(`${fieldName} must be a function`);
+  }
+}
+
+function assertOptionalFunction(value: unknown, fieldName: string): void {
+  if (value === undefined) {
+    return;
+  }
+  assertFunction(value, fieldName);
+}
+
+function assertOptionalPositiveSafeInteger(
+  value: unknown,
+  fieldName: string,
+): void {
+  if (value === undefined) {
+    return;
+  }
+  assertPositiveSafeInteger(value, fieldName);
+}
+
+function assertPositiveSafeInteger(value: unknown, fieldName: string): void {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
+    throw new Error(`${fieldName} must be a positive safe integer`);
+  }
+}
+
+function assertNonNegativeSafeInteger(value: unknown, fieldName: string): void {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`${fieldName} must be a non-negative safe integer`);
+  }
+}
+
+function assertStringArray(value: unknown, fieldName: string): void {
+  if (!Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an array`);
+  }
+
+  for (const [index, item] of value.entries()) {
+    assertNonBlankString(item, `${fieldName}[${index}]`);
+  }
+}
+
+function assertNonBlankString(value: unknown, fieldName: string): void {
+  if (typeof value !== "string") {
+    throw new Error(`${fieldName} must be a string`);
+  }
+  if (value.trim().length === 0) {
+    throw new Error(`${fieldName} must contain non-whitespace text`);
+  }
+}
+
+function assertValidDate(value: unknown, fieldName: string): void {
+  if (!(value instanceof Date) || !Number.isFinite(value.getTime())) {
+    throw new Error(`${fieldName} must be a valid Date`);
   }
 }

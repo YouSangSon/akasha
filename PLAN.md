@@ -4,21 +4,20 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Apply Compaction Input Guards
+## Current Loop — Outbox Sweeper Input Guards
 
 Status:
-- `applyCompaction` now rejects invalid direct input before generated run IDs,
-  semantic embedding, rate-limit checks, archive repository calls, or Qdrant
-  deletes.
-- The apply path reuses compaction-plan input validation and adds apply-specific
-  checks for organization ID, actor, semantic threshold, dependency shape,
-  rate-limit config, generated run IDs, and injected clock results.
-- Malformed direct calls are covered with no-side-effect assertions across
-  generated IDs, embeddings, archive repository calls, and vector deletes.
-- Existing dry-run, apply, replay, rate-limit, duplicate/decay, semantic
-  fallback, Qdrant-pending, and PG-failure behavior is preserved.
-- Focused apply, adjacent compaction/MCP/HTTP, typecheck, build, audit,
-  single-worker full suite, and diff checks passed.
+- `runOutboxSweep` now rejects invalid direct input before claiming rows or
+  deleting Qdrant points.
+- Sweeper tunables, dependency methods, logger methods, and injected clock
+  results are validated before repository calls.
+- Claimed cleanup rows are validated before vector deletes or qdrant-status
+  updates, including archive IDs, organization IDs, point IDs, and attempt
+  counts.
+- Existing empty sweep, clean, retry, give-up, and custom tunable behavior is
+  preserved.
+- Focused outbox, adjacent sweeper/background-worker tests, typecheck, build,
+  audit, single-worker full suite, and diff checks passed.
 - Default parallel `npm test` remains timing-sensitive on unrelated server and
   backup shell tests under load, so full-suite verification used one worker.
 

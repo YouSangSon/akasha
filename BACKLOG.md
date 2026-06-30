@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid outbox sweeper inputs, tunables, clock results, and claimed cleanup
+  rows are rejected before vector cleanup side effects.
 - Invalid apply compaction inputs, dependencies, rate-limit config, generated
   run IDs, and injected times are rejected before apply side effects.
 - Invalid unarchive compaction inputs and archive IDs are rejected before
