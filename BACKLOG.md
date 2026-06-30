@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid memory archive repository pools and Qdrant cleanup inputs are
+  rejected before cleanup query construction.
 - Invalid ingest job repository pools, create/update inputs, retry query
   inputs, IDs, attempt counts, and retry dates are rejected before queries.
 - Invalid audit repository pools, record entries, and list options are rejected

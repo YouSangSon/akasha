@@ -2,6 +2,27 @@
 
 ## 2026-06-30
 
+- Hardened memory archive cleanup input validation:
+  - `createMemoryArchiveRepository` now rejects malformed pool handles before
+    returning repository methods.
+  - Qdrant cleanup status, find, claim, unarchive marking, and restored-record
+    delete helpers now reject invalid IDs, statuses, error-message types,
+    claim input containers, limits, and timestamps before query construction.
+  - Existing compaction run creation, archive apply, cleanup claim SQL shape,
+    unarchive restore behavior, and scope-lock behavior are preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/store/memory-archive-repository.test.ts` (44 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1603 passed, 34 skipped
+  across 70 files)
+- `git diff --check`
+
 - Hardened ingest job repository input validation:
   - `createIngestJobRepository` now rejects malformed pool handles before
     returning repository methods.

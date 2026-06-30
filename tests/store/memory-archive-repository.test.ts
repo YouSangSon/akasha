@@ -24,6 +24,21 @@ const RUN_ROW = {
   qdrant_failed: 0,
 };
 
+describe("createMemoryArchiveRepository", () => {
+  it.each([
+    {
+      pool: null,
+      message: "memory archive pool must be an object",
+    },
+    {
+      pool: { query: "SELECT 1" },
+      message: "memory archive pool.query must be a function",
+    },
+  ])("rejects malformed direct pool inputs", ({ pool, message }) => {
+    expect(() => createMemoryArchiveRepository(pool as never)).toThrow(message);
+  });
+});
+
 describe("MemoryArchiveRepository.createCompactionRun", () => {
   it("inserts a new run and maps the returning row", async () => {
     const { pool, query } = makeMockPool(async () => ({ rows: [RUN_ROW] }));
@@ -233,6 +248,31 @@ describe("MemoryArchiveRepository.applyCompactionRecord", () => {
 });
 
 describe("MemoryArchiveRepository.markQdrantStatus", () => {
+  it.each([
+    {
+      call: (repo: ReturnType<typeof createMemoryArchiveRepository>) =>
+        repo.markQdrantStatus(0, "deleted"),
+      message: "archiveId must be a positive safe integer",
+    },
+    {
+      call: (repo: ReturnType<typeof createMemoryArchiveRepository>) =>
+        repo.markQdrantStatus(42, "cleaned" as never),
+      message: 'status must be "pending", "deleted", or "failed"',
+    },
+    {
+      call: (repo: ReturnType<typeof createMemoryArchiveRepository>) =>
+        repo.markQdrantStatus(42, "failed", 503 as never),
+      message: "errorMessage must be a string when provided",
+    },
+  ])("rejects malformed direct status inputs before querying", async ({ call, message }) => {
+    const { pool, query } = makeMockPool(async () => ({ rows: [] }));
+    const repo = createMemoryArchiveRepository(pool);
+
+    await expect(call(repo)).rejects.toThrow(message);
+
+    expect(query).not.toHaveBeenCalled();
+  });
+
   it("uses the deleted-specific SQL when status='deleted'", async () => {
     const { pool, query } = makeMockPool(async () => ({ rows: [] }));
     const repo = createMemoryArchiveRepository(pool);
@@ -272,6 +312,17 @@ describe("MemoryArchiveRepository.markQdrantStatus", () => {
 });
 
 describe("MemoryArchiveRepository.findPendingQdrantCleanup", () => {
+  it("rejects malformed direct limits before querying", async () => {
+    const { pool, query } = makeMockPool(async () => ({ rows: [] }));
+    const repo = createMemoryArchiveRepository(pool);
+
+    await expect(repo.findPendingQdrantCleanup(0)).rejects.toThrow(
+      "limit must be a positive safe integer",
+    );
+
+    expect(query).not.toHaveBeenCalled();
+  });
+
   it("maps rows to PendingQdrantCleanup shape", async () => {
     const { pool } = makeMockPool(async () => ({
       rows: [
@@ -323,6 +374,30 @@ describe("MemoryArchiveRepository.findPendingQdrantCleanup", () => {
 });
 
 describe("MemoryArchiveRepository.claimPendingQdrantCleanup", () => {
+  it.each([
+    {
+      input: null,
+      message: "qdrant cleanup claim input must be an object",
+    },
+    {
+      input: { limit: 0, now: new Date() },
+      message: "limit must be a positive safe integer",
+    },
+    {
+      input: { limit: 10, now: new Date(Number.NaN) },
+      message: "now must be a valid Date",
+    },
+  ])("rejects malformed direct claim inputs before querying", async ({ input, message }) => {
+    const { pool, query } = makeMockPool(async () => ({ rows: [] }));
+    const repo = createMemoryArchiveRepository(pool);
+
+    await expect(
+      repo.claimPendingQdrantCleanup(input as never),
+    ).rejects.toThrow(message);
+
+    expect(query).not.toHaveBeenCalled();
+  });
+
   it("claims rows with one UPDATE using FOR UPDATE SKIP LOCKED and retry visibility", async () => {
     const now = new Date("2026-06-25T00:00:00.000Z");
     const { pool, query } = makeMockPool(async () => ({
@@ -539,6 +614,17 @@ describe("MemoryArchiveRepository.deleteRestoredCanonicalRecord (P19.1)", () => 
 
     expect(query).not.toHaveBeenCalled();
   });
+
+  it("rejects malformed direct record IDs before querying", async () => {
+    const { pool, query } = makeMockPool(async () => ({ rows: [] }));
+    const repo = createMemoryArchiveRepository(pool);
+
+    await expect(
+      repo.deleteRestoredCanonicalRecord(0, "org-a"),
+    ).rejects.toThrow("recordId must be a positive safe integer");
+
+    expect(query).not.toHaveBeenCalled();
+  });
 });
 
 describe("MemoryArchiveRepository.markUnarchived (P19.1)", () => {
@@ -553,6 +639,17 @@ describe("MemoryArchiveRepository.markUnarchived (P19.1)", () => {
     expect(sql).toContain("UPDATE memory_archive");
     expect(sql).toContain("unarchived_at = NOW()");
     expect(params).toEqual([50]);
+  });
+
+  it("rejects malformed direct archive IDs before querying", async () => {
+    const { pool, query } = makeMockPool(async () => ({ rows: [] }));
+    const repo = createMemoryArchiveRepository(pool);
+
+    await expect(repo.markUnarchived(0)).rejects.toThrow(
+      "archiveId must be a positive safe integer",
+    );
+
+    expect(query).not.toHaveBeenCalled();
   });
 });
 

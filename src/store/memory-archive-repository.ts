@@ -142,6 +142,8 @@ export type ArchiveRow = {
 export function createMemoryArchiveRepository(
   pool: PgPool,
 ): MemoryArchiveRepository {
+  assertArchivePool(pool);
+
   return {
     async createCompactionRun(input) {
       assertNonBlankText(input.organizationId, "organizationId");
@@ -301,6 +303,10 @@ export function createMemoryArchiveRepository(
     },
 
     async markQdrantStatus(archiveId, status, errorMessage) {
+      assertPositiveSafeInteger(archiveId, "archiveId");
+      assertQdrantStatus(status, "status");
+      assertOptionalString(errorMessage, "errorMessage");
+
       if (status === "deleted") {
         await pool.query(
           `
@@ -368,6 +374,8 @@ export function createMemoryArchiveRepository(
     },
 
     async findPendingQdrantCleanup(limit) {
+      assertPositiveSafeInteger(limit, "limit");
+
       // Read-only compatibility wrapper for tests/manual monitoring. Sweeper
       // workers must use claimPendingQdrantCleanup for atomic visibility.
       const result = await pool.query<{
@@ -397,7 +405,10 @@ export function createMemoryArchiveRepository(
       }));
     },
 
-    async claimPendingQdrantCleanup({ limit, now }) {
+    async claimPendingQdrantCleanup(input) {
+      assertQdrantCleanupClaimInput(input);
+      const { limit, now } = input;
+
       const claimUntil = new Date(
         now.getTime() + QDRANT_CLEANUP_VISIBILITY_TIMEOUT_MS,
       );
@@ -565,6 +576,7 @@ export function createMemoryArchiveRepository(
     },
 
     async deleteRestoredCanonicalRecord(recordId, organizationId) {
+      assertPositiveSafeInteger(recordId, "recordId");
       assertNonBlankText(organizationId, "organizationId");
 
       await pool.query(
@@ -578,6 +590,8 @@ export function createMemoryArchiveRepository(
     },
 
     async markUnarchived(archiveId) {
+      assertPositiveSafeInteger(archiveId, "archiveId");
+
       await pool.query(
         `
           UPDATE memory_archive
@@ -611,6 +625,29 @@ export function createMemoryArchiveRepository(
   };
 }
 
+function assertArchivePool(value: unknown): asserts value is PgPool {
+  const candidate = assertObject(value, "memory archive pool");
+  assertFunction(candidate.query, "memory archive pool.query");
+}
+
+function assertQdrantStatus(
+  value: unknown,
+  fieldName: string,
+): asserts value is QdrantStatus {
+  if (value !== "pending" && value !== "deleted" && value !== "failed") {
+    throw new Error(`${fieldName} must be "pending", "deleted", or "failed"`);
+  }
+}
+
+function assertQdrantCleanupClaimInput(value: unknown): asserts value is {
+  limit: number;
+  now: Date;
+} {
+  const candidate = assertObject(value, "qdrant cleanup claim input");
+  assertPositiveSafeInteger(candidate.limit, "limit");
+  assertValidDate(candidate.now, "now");
+}
+
 function toIso(value: string | Date): string {
   return value instanceof Date ? value.toISOString() : value;
 }
@@ -633,4 +670,49 @@ function mapRunRow(row: {
     decayCount: row.decay_count,
     qdrantFailed: row.qdrant_failed,
   };
+}
+
+function assertObject(
+  value: unknown,
+  fieldName: string,
+): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function assertFunction(value: unknown, fieldName: string): void {
+  if (typeof value !== "function") {
+    throw new Error(`${fieldName} must be a function`);
+  }
+}
+
+function assertPositiveSafeInteger(
+  value: unknown,
+  fieldName: string,
+): asserts value is number {
+  if (
+    typeof value !== "number" ||
+    !Number.isSafeInteger(value) ||
+    value <= 0
+  ) {
+    throw new Error(`${fieldName} must be a positive safe integer`);
+  }
+}
+
+function assertValidDate(
+  value: unknown,
+  fieldName: string,
+): asserts value is Date {
+  if (!(value instanceof Date) || !Number.isFinite(value.getTime())) {
+    throw new Error(`${fieldName} must be a valid Date`);
+  }
+}
+
+function assertOptionalString(value: unknown, fieldName: string): void {
+  if (value === undefined || typeof value === "string") {
+    return;
+  }
+  throw new Error(`${fieldName} must be a string when provided`);
 }
