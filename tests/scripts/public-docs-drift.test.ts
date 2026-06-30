@@ -100,6 +100,18 @@ function unreleasedChangelogSection(path: string): string {
   );
 }
 
+function unreleasedChangelogBulletContaining(path: string, needle: string): string {
+  const section = `${unreleasedChangelogSection(path)}\n### `;
+  const bullets = [...section.matchAll(/^- [\s\S]*?(?=^- |^### )/gm)].map(
+    (match) => match[0],
+  );
+  const bullet = bullets.find((entry) => entry.includes(needle));
+  if (!bullet) {
+    throw new Error(`${path} Unreleased section does not contain ${needle}`);
+  }
+  return bullet;
+}
+
 function migrationRanges(markdown: string): string[] {
   return [...markdown.matchAll(/\b\d{3}-\d{3}\b/g)].map((match) => match[0]);
 }
@@ -391,6 +403,31 @@ describe("public documentation drift checks", () => {
       expect(ranges).toEqual(expect.arrayContaining([range]));
       expect(ranges.filter((entry) => entry !== range)).toEqual([]);
     }
+  });
+
+  it("does not describe the Unreleased ingest outbox sweeper as still in flight", () => {
+    const english = unreleasedChangelogBulletContaining(
+      "CHANGELOG.md",
+      "Migration 007: `ingest_jobs`",
+    );
+    const englishLower = english.toLowerCase();
+    expect(english).toContain("INGEST_SWEEP_ENABLED");
+    expect(english).toContain("src/compact/ingest-sweeper.ts");
+    expect(english).toContain("src/compact/ingest-sweeper-loop.ts");
+    expect(englishLower).not.toContain("#12 branch");
+    expect(englishLower).not.toContain("in-flight");
+    expect(englishLower).not.toContain("in-progress");
+
+    const korean = unreleasedChangelogBulletContaining(
+      "CHANGELOG.ko.md",
+      "Migration 007: `ingest_jobs`",
+    );
+    expect(korean).toContain("INGEST_SWEEP_ENABLED");
+    expect(korean).toContain("src/compact/ingest-sweeper.ts");
+    expect(korean).toContain("src/compact/ingest-sweeper-loop.ts");
+    expect(korean).not.toContain("#12 브랜치");
+    expect(korean).not.toContain("진행 중");
+    expect(korean).not.toContain("진행중");
   });
 
   it("documents every service tool and JSON HTTP route in public docs", () => {

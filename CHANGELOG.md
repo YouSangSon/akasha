@@ -259,10 +259,13 @@ small actual impact surface.
 
 ### Performance (audit cycle 2)
 
-- **Migration 007: `ingest_jobs` outbox columns** (foundational, in-progress) — adds
-  `status`, `retry_count`, `last_error`, `process_after`, and `processed_at` columns to
-  `ingest_jobs` for the option-B outbox sweeper. Schema file is on `main` (#12, part 1 of 5);
-  sweeper registration and retry loop are in-flight on the #12 branch.
+- **Migration 007: `ingest_jobs` Qdrant outbox columns** — adds
+  `qdrant_status`, `qdrant_attempts`, `qdrant_next_retry_at`, and `qdrant_last_error`
+  columns for crash-resilient Qdrant indexing. The shipped write path records
+  pending/completed state around Qdrant upserts, and the opt-in ingest sweeper/retry loop
+  (`src/compact/ingest-sweeper.ts`, `src/compact/ingest-sweeper-loop.ts`) claims due rows
+  with `FOR UPDATE SKIP LOCKED` and re-indexes already-committed chunks when
+  `INGEST_SWEEP_ENABLED=true`.
 - **Migration 008: FK index on `memory_chunks`** — `008_chunks_fk_index.sql` adds
   `idx_memory_chunks_record` on `memory_chunks(memory_record_id)`, eliminating sequential scans
   on the FK join path.

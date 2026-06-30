@@ -2,6 +2,23 @@
 
 ## 2026-07-01
 
+- Fixed stale Unreleased ingest outbox sweeper changelog wording:
+  - `CHANGELOG.md` and `CHANGELOG.ko.md` now describe Migration 007 as shipped
+    Qdrant outbox support for the implemented opt-in ingest sweeper/retry loop,
+    including the current `qdrant_*` columns and `INGEST_SWEEP_ENABLED` path.
+  - `tests/scripts/public-docs-drift.test.ts` now guards only the Unreleased
+    Migration 007 ingest outbox bullet against stale `#12 branch`, `in-flight`,
+    and `in-progress` wording, leaving older release history unrestricted.
+  - Spec and code-quality reviews approved the scoped diff.
+
+Verification:
+- `npx vitest run tests/scripts/public-docs-drift.test.ts` (25 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (1796 passed, 34 skipped across 79 files)
+- `git diff --check`
+
 - Fixed Unreleased changelog migration-range drift:
   - `CHANGELOG.md` and `CHANGELOG.ko.md` no longer present `001-012` as the
     current migration range in Unreleased; all range literals in that section

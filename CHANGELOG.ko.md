@@ -241,10 +241,13 @@ CHANGELOG에서 명시적으로 표기합니다.
 
 ### Performance (audit cycle 2)
 
-- **Migration 007: `ingest_jobs` outbox 컬럼** (기반 작업, 진행 중) — option-B outbox sweeper를
-  위해 `ingest_jobs` 에 `status`, `retry_count`, `last_error`, `process_after`, `processed_at`
-  컬럼 추가. 스키마 파일은 `main` 에 존재 (#12, 5개 중 1번째); sweeper 등록과 retry 루프는
-  #12 브랜치에서 진행 중.
+- **Migration 007: `ingest_jobs` Qdrant outbox 컬럼** — crash-resilient Qdrant
+  인덱싱을 위해 `qdrant_status`, `qdrant_attempts`, `qdrant_next_retry_at`,
+  `qdrant_last_error` 컬럼을 추가. 현재 write path는 Qdrant upsert 전후
+  pending/completed 상태를 기록하고, opt-in ingest sweeper/retry loop
+  (`src/compact/ingest-sweeper.ts`, `src/compact/ingest-sweeper-loop.ts`)는
+  `INGEST_SWEEP_ENABLED=true`일 때 due row를 `FOR UPDATE SKIP LOCKED`로 claim해
+  이미 커밋된 chunk를 재인덱싱합니다.
 - **Migration 008: `memory_chunks` FK 인덱스** — `008_chunks_fk_index.sql` 이
   `memory_chunks(memory_record_id)` 에 `idx_memory_chunks_record` 인덱스 추가, FK join 경로의
   sequential scan 제거.
