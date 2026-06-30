@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid chunk-text inputs are rejected before tokenization or chunk offset
+  calculation.
 - Invalid decay-score inputs are rejected before scoring or candidate
   selection.
 - Invalid retry backoff attempt counts are rejected before exponential delay

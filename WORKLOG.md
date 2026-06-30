@@ -2,6 +2,23 @@
 
 ## 2026-06-30
 
+- Hardened chunk-text input validation:
+  - `chunkText` now rejects non-object inputs before property access.
+  - Non-string `text` is rejected before `.matchAll()`.
+  - `targetTokens` must be a positive safe integer, and `overlapTokens` must
+    be a non-negative safe integer smaller than `targetTokens`.
+  - Blank text still returns `[]` after valid settings; deterministic chunk
+    offsets are preserved.
+  - Review found no behavioral issues.
+
+Verification:
+- `npx vitest run tests/chunk/chunk-text.test.ts` (11 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (1140 passed, 34 skipped across 70 files)
+- `git diff --check`
+
 - Hardened decay-score input validation:
   - `decayScore` now rejects non-finite importance, invalid `now`, invalid
     half-life values, and non-canonical `createdAt` timestamps before scoring.
