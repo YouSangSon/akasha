@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid decay-score inputs are rejected before scoring or candidate
+  selection.
 - Invalid retry backoff attempt counts are rejected before exponential delay
   calculation.
 - Invalid eval metric inputs are rejected before metric calculation, and

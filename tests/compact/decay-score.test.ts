@@ -1,10 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   decayScore,
   findDecayCandidates,
 } from "../../src/compact/decay-score.js";
 
 const NOW = new Date("2026-04-25T12:00:00.000Z");
+const INVALID_NOW_VALUES: Array<[string, Date]> = [
+  ["non-Date", "not-a-date" as unknown as Date],
+  ["invalid Date", new Date("not-a-date")],
+];
 
 describe("decayScore", () => {
   it("returns full importance for a record created right now", () => {
@@ -49,13 +53,42 @@ describe("decayScore", () => {
   });
 
   it("throws on invalid createdAt", () => {
+    for (const createdAt of [
+      "not-a-date",
+      "2026-02-30T00:00:00.000Z",
+      123 as unknown as string,
+    ]) {
+      expect(() =>
+        decayScore({
+          importance: 1,
+          createdAt,
+          now: NOW,
+        }),
+      ).toThrow(/ISO 8601/);
+    }
+  });
+
+  it.each([Number.NaN, Infinity, -Infinity])(
+    "throws on non-finite importance: %s",
+    (importance) => {
+      expect(() =>
+        decayScore({
+          importance,
+          createdAt: NOW.toISOString(),
+          now: NOW,
+        }),
+      ).toThrow(/importance.*finite/);
+    },
+  );
+
+  it.each(INVALID_NOW_VALUES)("throws on invalid now: %s", (_label, now) => {
     expect(() =>
       decayScore({
         importance: 1,
-        createdAt: "not-a-date",
-        now: NOW,
+        createdAt: NOW.toISOString(),
+        now,
       }),
-    ).toThrow(/ISO 8601/);
+    ).toThrow(/now.*valid Date/);
   });
 
   it("throws on non-positive halfLifeDays", () => {
@@ -111,4 +144,43 @@ describe("findDecayCandidates", () => {
   it("returns all when threshold is above all scores", () => {
     expect(findDecayCandidates(records, scoreOf, 100, NOW)).toHaveLength(3);
   });
+
+  it("throws when records is not an array", () => {
+    expect(() =>
+      findDecayCandidates("not-array" as unknown as Rec[], scoreOf, 1, NOW),
+    ).toThrow(/records.*array/);
+  });
+
+  it("throws when scoreOf is not a function", () => {
+    expect(() =>
+      findDecayCandidates(
+        records,
+        undefined as unknown as typeof scoreOf,
+        1,
+        NOW,
+      ),
+    ).toThrow(/scoreOf.*function/);
+  });
+
+  it.each([Number.NaN, Infinity, -Infinity])(
+    "throws on non-finite threshold: %s",
+    (threshold) => {
+      const scoring = vi.fn(scoreOf);
+      expect(() =>
+        findDecayCandidates(records, scoring, threshold, NOW),
+      ).toThrow(/threshold.*finite/);
+      expect(scoring).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(INVALID_NOW_VALUES)(
+    "throws on invalid now before scoring: %s",
+    (_label, now) => {
+      const scoring = vi.fn(scoreOf);
+      expect(() => findDecayCandidates(records, scoring, 1, now)).toThrow(
+        /now.*valid Date/,
+      );
+      expect(scoring).not.toHaveBeenCalled();
+    },
+  );
 });

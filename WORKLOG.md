@@ -2,6 +2,25 @@
 
 ## 2026-06-30
 
+- Hardened decay-score input validation:
+  - `decayScore` now rejects non-finite importance, invalid `now`, invalid
+    half-life values, and non-canonical `createdAt` timestamps before scoring.
+  - `createdAt` must be a string that round-trips exactly through
+    `Date#toISOString()`, so impossible dates and non-string direct values are
+    rejected.
+  - `findDecayCandidates` now rejects non-array records, non-function scoring
+    callbacks, non-finite thresholds, and invalid `now` before scoring records.
+  - Quality review found permissive `Date.parse` behavior for `createdAt`; a
+    strict ISO round-trip parser and tests fixed it.
+
+Verification:
+- `npx vitest run tests/compact/decay-score.test.ts` (21 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (1131 passed, 34 skipped across 70 files)
+- `git diff --check`
+
 - Hardened retry backoff attempt validation:
   - `nextRetryDelayMs` now rejects invalid attempt counts before exponential
     delay calculation.

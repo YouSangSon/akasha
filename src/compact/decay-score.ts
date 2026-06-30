@@ -14,18 +14,40 @@ export type DecayScoreInput = {
   halfLifeDays?: number; // default 30
 };
 
+function assertValidDate(value: Date, name: string): void {
+  if (!(value instanceof Date) || !Number.isFinite(value.getTime())) {
+    throw new Error(`${name} must be a valid Date`);
+  }
+}
+
+function parseIsoTimestamp(value: string): number {
+  if (typeof value !== "string") {
+    throw new Error(
+      `createdAt is not a valid ISO 8601 timestamp: ${String(value)}`,
+    );
+  }
+
+  const parsed = Date.parse(value);
+  if (Number.isNaN(parsed) || new Date(parsed).toISOString() !== value) {
+    throw new Error(`createdAt is not a valid ISO 8601 timestamp: ${value}`);
+  }
+
+  return parsed;
+}
+
 export function decayScore(input: DecayScoreInput): number {
+  if (!Number.isFinite(input.importance)) {
+    throw new Error("importance must be a finite number");
+  }
+
+  assertValidDate(input.now, "now");
+
   const halfLife = input.halfLifeDays ?? 30;
   if (halfLife <= 0 || !Number.isFinite(halfLife)) {
     throw new Error("halfLifeDays must be a positive finite number");
   }
 
-  const created = Date.parse(input.createdAt);
-  if (Number.isNaN(created)) {
-    throw new Error(
-      `createdAt is not a valid ISO 8601 timestamp: ${input.createdAt}`,
-    );
-  }
+  const created = parseIsoTimestamp(input.createdAt);
 
   const ageMs = Math.max(0, input.now.getTime() - created);
   const ageDays = ageMs / (1000 * 60 * 60 * 24);
@@ -47,6 +69,17 @@ export function findDecayCandidates<T>(
   threshold: number,
   now: Date,
 ): DecayCandidate<T>[] {
+  if (!Array.isArray(records)) {
+    throw new Error("records must be an array");
+  }
+  if (typeof scoreOf !== "function") {
+    throw new Error("scoreOf must be a function");
+  }
+  if (!Number.isFinite(threshold)) {
+    throw new Error("threshold must be a finite number");
+  }
+  assertValidDate(now, "now");
+
   const candidates: DecayCandidate<T>[] = [];
   for (const record of records) {
     const baseInput = scoreOf(record);
