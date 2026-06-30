@@ -39,6 +39,12 @@ import type {
   WithCanonicalServices,
 } from "./types.js";
 import {
+  assertCreateToolRegistryOptions,
+  assertFunction,
+  assertNonBlankString,
+  assertObject,
+} from "./tool-registry-validation.js";
+import {
   normalizeLimit,
   POSTGRES_INTEGER_MAX,
   POSTGRES_INTEGER_MIN,
@@ -59,6 +65,8 @@ export function createToolHandlers(input: {
   cwd: string;
   withCanonicalServices: WithCanonicalServices;
 }): ToolRegistry {
+  assertCreateToolHandlersInput(input);
+
   const { options, cwd, withCanonicalServices } = input;
   const baseLogger = options.logger ?? rootLogger;
   const hasOverrides = hasRepositoryOverrides(options);
@@ -1403,6 +1411,19 @@ function canonicalEmbeddingConfig(services: CanonicalServices) {
     targetTokens: services.config.embedding.chunkTargetTokens,
     overlapTokens: services.config.embedding.chunkOverlapTokens,
   };
+}
+
+function assertCreateToolHandlersInput(
+  value: unknown,
+): asserts value is {
+  options: CreateToolRegistryOptions;
+  cwd: string;
+  withCanonicalServices: WithCanonicalServices;
+} {
+  const candidate = assertObject(value, "tool handlers input");
+  assertCreateToolRegistryOptions(candidate.options);
+  assertNonBlankString(candidate.cwd, "cwd");
+  assertFunction(candidate.withCanonicalServices, "withCanonicalServices");
 }
 
 function hasRepositoryOverrides(options: CreateToolRegistryOptions): boolean {

@@ -4,18 +4,17 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Embedding Provider Factory Input Guards
+## Current Loop — MCP Registry Construction Input Guards
 
 Status:
-- `createEmbeddingProvider` now rejects malformed router/config input, unknown
-  provider names, invalid model/dimensions values, and non-string OpenAI API
-  key values before provider construction.
-- The OpenAI branch now treats missing and whitespace-only API keys as the
-  same documented `OPENAI_API_KEY` configuration error.
-- Existing local provider routing and provider-name helper behavior are
+- `createToolRegistry` now rejects malformed construction options before
+  reading option fields or wiring handlers.
+- `createToolHandlers` now rejects malformed direct handler construction input
+  before destructuring shared MCP wiring fields.
+- Existing default registry construction and MCP server behavior are
   preserved.
-- Focused embedding factory tests, typecheck, build, audit, and single-worker
-  full suite passed.
+- Focused MCP registry tests, typecheck, build, audit, and single-worker full
+  suite passed.
 - Default parallel `npm test` remains timing-sensitive on unrelated server and
   backup shell tests under load, so full-suite verification used one worker.
 

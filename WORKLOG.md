@@ -2,6 +2,28 @@
 
 ## 2026-06-30
 
+- Hardened MCP registry construction input validation:
+  - `createToolRegistry` now rejects malformed direct options, invalid cwd and
+    default scope/actor text, malformed override repositories/loggers/audit
+    handles, and invalid resolver functions before handler wiring.
+  - `createToolHandlers` now rejects malformed direct construction input,
+    invalid nested registry options, invalid cwd values, and invalid canonical
+    service callback handles before destructuring shared MCP fields.
+  - Existing default registry construction and MCP server behavior are
+    preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/mcp/tool-registry.test.ts` (17 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1716 passed, 34 skipped
+  across 75 files)
+- `git diff --check`
+
 - Hardened embedding provider factory input validation:
   - `createEmbeddingProvider` now rejects malformed direct input containers,
     malformed config objects, unknown provider names, invalid model/dimensions

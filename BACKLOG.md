@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid MCP registry construction options and direct handler construction
+  inputs are rejected before registry/handler wiring.
 - Invalid embedding provider factory inputs, provider names, model/dimensions
   values, and OpenAI API key values are rejected before provider construction.
 - Invalid local embedding client inputs, dimensions, single text inputs, and

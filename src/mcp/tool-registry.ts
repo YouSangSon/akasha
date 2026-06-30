@@ -8,12 +8,15 @@ import type {
   ToolRegistry,
   WithCanonicalServices,
 } from "./types.js";
+import { assertCreateToolRegistryOptions } from "./tool-registry-validation.js";
 import { rootLogger } from "../logger.js";
 import { assertNonBlankText } from "../store/memory-content.js";
 
 export function createToolRegistry(
   options: CreateToolRegistryOptions = {},
 ): ToolRegistry {
+  assertCreateToolRegistryOptions(options);
+
   const cwd = options.cwd ?? process.cwd();
   const withCanonicalServices =
     options.withCanonicalServices ??
