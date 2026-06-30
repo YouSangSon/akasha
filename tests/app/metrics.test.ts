@@ -5,6 +5,7 @@ import { createOperatorServer } from "../../src/app/server.js";
 import {
   createMetricsRegistry,
   METRICS_CONTENT_TYPE,
+  normalizeHttpMethod,
 } from "../../src/app/metrics.js";
 import type { BackgroundQueueMetricsCollector } from "../../src/app/background-queue-metrics.js";
 import type { DependencyProbes } from "../../src/health/check-dependencies.js";
@@ -149,6 +150,23 @@ function expectMetricLine(text: string, prefix: string): void {
   const value = Number(line?.split(" ").at(-1));
   expect(Number.isFinite(value)).toBe(true);
 }
+
+describe("normalizeHttpMethod", () => {
+  it("normalizes known methods and buckets unknown or missing methods", () => {
+    expect(normalizeHttpMethod("post")).toBe("POST");
+    expect(normalizeHttpMethod("TRACE")).toBe("OTHER");
+    expect(normalizeHttpMethod(undefined)).toBe("OTHER");
+  });
+
+  it.each([null, 12, true, {}, []])(
+    "rejects non-string direct method input: %s",
+    (method) => {
+      expect(() =>
+        normalizeHttpMethod(method as string | undefined),
+      ).toThrow("method must be a string when provided");
+    },
+  );
+});
 
 describe("GET /metrics", () => {
   it("is unauthenticated even when bearer tokens are configured", async () => {

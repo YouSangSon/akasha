@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Non-string direct HTTP metric methods are rejected before method
+  normalization.
 - Invalid vector point inputs are rejected before vector ID construction or
   payload metadata assembly.
 - Non-string direct secret-scrubber content is rejected before regex scanning

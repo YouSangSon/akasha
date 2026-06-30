@@ -2,6 +2,26 @@
 
 ## 2026-06-30
 
+- Hardened HTTP metrics method validation:
+  - `normalizeHttpMethod` now rejects non-string direct method values before
+    uppercase normalization.
+  - Known method strings still normalize to their uppercase labels.
+  - Unknown method strings and missing methods still bucket as `OTHER`.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/app/metrics.test.ts` (15 passed)
+- `npx vitest run tests/app/metrics.test.ts tests/app/server.test.ts tests/app/start-operator-server-metrics.test.ts`
+  (83 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1209 passed, 34 skipped
+  across 70 files)
+- `git diff --check`
+
 - Hardened vector point input validation:
   - `buildVectorPoint` now rejects non-object direct inputs before property
     reads.

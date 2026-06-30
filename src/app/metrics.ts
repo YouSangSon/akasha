@@ -157,6 +157,10 @@ export function createMetricsRegistry(): MetricsRegistry {
 }
 
 export function normalizeHttpMethod(method: string | undefined): string {
+  if (method !== undefined && typeof method !== "string") {
+    throw new Error("method must be a string when provided");
+  }
+
   const upper = method?.toUpperCase() ?? "UNKNOWN";
   return KNOWN_METHODS.has(upper) ? upper : "OTHER";
 }
