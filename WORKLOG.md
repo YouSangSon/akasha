@@ -2,6 +2,23 @@
 
 ## 2026-06-30
 
+- Hardened source-ref parser validation:
+  - `parseStoredPostgresSourceRef` now rejects non-string direct values before
+    JSON parsing, fallback logging, or metadata return.
+  - Invalid JSON strings still fall back to raw source refs with a warning.
+  - Valid JSON without `sourceRef`, including JSON primitives like `"null"`,
+    now falls back silently to the raw string.
+  - Reviews found missing no-log coverage and a JSON primitive warning edge;
+    both were fixed and covered.
+
+Verification:
+- `npx vitest run tests/store/parse-source-ref.test.ts` (6 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (1094 passed, 34 skipped across 70 files)
+- `git diff --check`
+
 - Hardened direct lexical/entity helper validation:
   - Exported lexical helpers now reject non-string direct query/value inputs
     before lowercasing, trimming, tokenization, or scoring.

@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Non-string direct source-ref parser values are rejected before JSON parsing,
+  fallback logging, or metadata return.
 - Non-string direct lexical/entity helper inputs are rejected before string
   normalization, regex matching, or scoring field access.
 - Non-string service config environment values are rejected before string

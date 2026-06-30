@@ -1584,13 +1584,24 @@ function serializeStoredPostgresSourceRef(
 export function parseStoredPostgresSourceRef(
   value: string,
 ): PostgresStoredSourceMetadata {
-  try {
-    const parsed = JSON.parse(value) as Partial<PostgresStoredSourceMetadata>;
+  if (typeof value !== "string") {
+    throw new Error("sourceRef must be a string");
+  }
 
-    if (typeof parsed.sourceRef === "string") {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+
+    if (parsed !== null && typeof parsed === "object") {
+      const metadata = parsed as Partial<PostgresStoredSourceMetadata>;
+      if (typeof metadata.sourceRef !== "string") {
+        return {
+          sourceRef: value,
+          uri: null,
+        };
+      }
       return {
-        sourceRef: parsed.sourceRef,
-        uri: typeof parsed.uri === "string" ? parsed.uri : null,
+        sourceRef: metadata.sourceRef,
+        uri: typeof metadata.uri === "string" ? metadata.uri : null,
       };
     }
   } catch (err) {

@@ -13,6 +13,15 @@ describe("parseStoredPostgresSourceRef", () => {
     expect(result).toEqual({ sourceRef: "README.md", uri: "file:///README.md" });
   });
 
+  it("rejects non-string source_ref values before parsing", () => {
+    const warnSpy = vi.spyOn(loggerModule.rootLogger, "warn");
+
+    expect(() =>
+      parseStoredPostgresSourceRef(123 as unknown as string),
+    ).toThrow("sourceRef must be a string");
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
   it("falls back to raw value when JSON is invalid and logs a warning", () => {
     const warnSpy = vi.spyOn(loggerModule.rootLogger, "warn");
     const badValue = "not-json{{";
@@ -35,6 +44,15 @@ describe("parseStoredPostgresSourceRef", () => {
 
     expect(result).toEqual({ sourceRef: value, uri: null });
     // Missing sourceRef is a silent fallback (no JSON parse error thrown), no warning
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it("falls back to raw value when JSON is a primitive", () => {
+    const warnSpy = vi.spyOn(loggerModule.rootLogger, "warn");
+
+    const result = parseStoredPostgresSourceRef("null");
+
+    expect(result).toEqual({ sourceRef: "null", uri: null });
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
