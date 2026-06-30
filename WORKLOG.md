@@ -2,6 +2,30 @@
 
 ## 2026-06-30
 
+- Hardened OpenAI embedding client input validation:
+  - `createOpenAiEmbeddingClient` now rejects malformed direct input
+    containers, blank/non-string API key or model values, invalid injected
+    client factories, and malformed injected client results before embedding
+    calls.
+  - `embed` and `embedBatch` now reject malformed direct text input before
+    calling the injected OpenAI embeddings API client.
+  - Injected `createClient` results are validated directly; an injection that
+    returns `null` no longer falls back to constructing the real OpenAI SDK.
+  - Existing successful single/batch embedding behavior and response-count
+    validation are preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/embedding/openai-embeddings.test.ts` (16 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1667 passed, 34 skipped
+  across 72 files)
+- `git diff --check`
+
 - Hardened Qdrant client factory input validation:
   - `createQdrantClient` now rejects malformed direct input containers and
     blank/non-string URL or API key values before constructing the Qdrant SDK

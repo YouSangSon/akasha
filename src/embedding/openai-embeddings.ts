@@ -32,16 +32,22 @@ export type OpenAiEmbeddingClientInput = {
 export function createOpenAiEmbeddingClient(
   input: OpenAiEmbeddingClientInput,
 ) {
+  assertOpenAiEmbeddingClientInput(input);
+
   const client =
-    input.createClient?.(input.apiKey) ??
-    ({
-      embeddings: new OpenAI({
-        apiKey: input.apiKey,
-      }).embeddings,
-    } satisfies EmbeddingsCreateClient);
+    input.createClient !== undefined
+      ? input.createClient(input.apiKey)
+      : ({
+          embeddings: new OpenAI({
+            apiKey: input.apiKey,
+          }).embeddings,
+        } satisfies EmbeddingsCreateClient);
+  assertEmbeddingsCreateClient(client);
 
   return {
     async embed(inputText: string): Promise<EmbeddingVector> {
+      assertNonBlankText(inputText, "inputText");
+
       const response = await client.embeddings.create({
         input: inputText,
         model: input.model,
@@ -65,6 +71,8 @@ export function createOpenAiEmbeddingClient(
     },
 
     async embedBatch(inputs: string[]): Promise<EmbeddingVector[]> {
+      assertEmbeddingInputBatch(inputs);
+
       if (inputs.length === 0) {
         return [];
       }
@@ -94,4 +102,64 @@ export function createOpenAiEmbeddingClient(
       return embeddings;
     },
   };
+}
+
+function assertOpenAiEmbeddingClientInput(
+  value: unknown,
+): asserts value is OpenAiEmbeddingClientInput {
+  const candidate = assertObject(value, "OpenAI embedding client input");
+  assertNonBlankText(candidate.apiKey, "apiKey");
+  assertNonBlankText(candidate.model, "model");
+  if (candidate.createClient !== undefined) {
+    assertFunction(candidate.createClient, "createClient");
+  }
+}
+
+function assertEmbeddingsCreateClient(
+  value: unknown,
+): asserts value is EmbeddingsCreateClient {
+  const candidate = assertObject(value, "OpenAI embeddings client");
+  const embeddings = assertObject(
+    candidate.embeddings,
+    "OpenAI embeddings client.embeddings",
+  );
+  assertFunction(embeddings.create, "OpenAI embeddings client.embeddings.create");
+}
+
+function assertEmbeddingInputBatch(value: unknown): asserts value is string[] {
+  if (!Array.isArray(value)) {
+    throw new Error("inputs must be an array");
+  }
+
+  for (const [index, input] of value.entries()) {
+    assertNonBlankText(input, `inputs[${index}]`);
+  }
+}
+
+function assertObject(
+  value: unknown,
+  fieldName: string,
+): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function assertFunction(value: unknown, fieldName: string): void {
+  if (typeof value !== "function") {
+    throw new Error(`${fieldName} must be a function`);
+  }
+}
+
+function assertNonBlankText(
+  value: unknown,
+  fieldName: string,
+): asserts value is string {
+  if (typeof value !== "string") {
+    throw new Error(`${fieldName} must be a string`);
+  }
+  if (value.trim().length === 0) {
+    throw new Error(`${fieldName} must contain non-whitespace text`);
+  }
 }

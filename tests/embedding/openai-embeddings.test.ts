@@ -5,6 +5,53 @@ import {
 } from "../../src/embedding/openai-embeddings.js";
 
 describe("createOpenAiEmbeddingClient", () => {
+  it.each([
+    {
+      input: null,
+      message: "OpenAI embedding client input must be an object",
+    },
+    {
+      input: {
+        apiKey: " \n\t ",
+        model: "text-embedding-3-small",
+      },
+      message: "apiKey must contain non-whitespace text",
+    },
+    {
+      input: {
+        apiKey: "__TEST_PLACEHOLDER__",
+        model: 123,
+      },
+      message: "model must be a string",
+    },
+    {
+      input: {
+        apiKey: "__TEST_PLACEHOLDER__",
+        model: "text-embedding-3-small",
+        createClient: "not-a-function",
+      },
+      message: "createClient must be a function",
+    },
+    {
+      input: {
+        apiKey: "__TEST_PLACEHOLDER__",
+        model: "text-embedding-3-small",
+        createClient: () => null,
+      },
+      message: "OpenAI embeddings client must be an object",
+    },
+    {
+      input: {
+        apiKey: "__TEST_PLACEHOLDER__",
+        model: "text-embedding-3-small",
+        createClient: () => ({ embeddings: { create: "not-a-function" } }),
+      },
+      message: "OpenAI embeddings client.embeddings.create must be a function",
+    },
+  ])("rejects malformed client input %#", ({ input, message }) => {
+    expect(() => createOpenAiEmbeddingClient(input as never)).toThrow(message);
+  });
+
   it("requests embeddings through the injected client and returns the vector", async () => {
     const fakeApiKey = "__TEST_PLACEHOLDER__";
     const create = vi.fn(async () => ({
@@ -29,6 +76,36 @@ describe("createOpenAiEmbeddingClient", () => {
       input: "Always respond in Korean.",
       model: "text-embedding-3-small",
     });
+  });
+
+  it.each([
+    {
+      inputText: 123,
+      message: "inputText must be a string",
+    },
+    {
+      inputText: " \n\t ",
+      message: "inputText must contain non-whitespace text",
+    },
+  ])("embed rejects malformed input before calling the API %#", async ({
+    inputText,
+    message,
+  }) => {
+    const create = vi.fn(async () => ({
+      data: [{ embedding: [0.1, 0.2, 0.3] }],
+    }));
+    const client = createOpenAiEmbeddingClient({
+      apiKey: "__TEST_PLACEHOLDER__",
+      model: "text-embedding-3-small",
+      createClient: () =>
+        ({
+          embeddings: { create },
+        }) satisfies EmbeddingsCreateClient,
+    });
+
+    await expect(client.embed(inputText as never)).rejects.toThrow(message);
+
+    expect(create).not.toHaveBeenCalled();
   });
 
   it("throws when the API returns no embedding data", async () => {
@@ -113,6 +190,36 @@ describe("createOpenAiEmbeddingClient", () => {
     const vectors = await client.embedBatch([]);
 
     expect(vectors).toEqual([]);
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      inputs: null,
+      message: "inputs must be an array",
+    },
+    {
+      inputs: ["valid", " \n\t "],
+      message: "inputs[1] must contain non-whitespace text",
+    },
+  ])("embedBatch rejects malformed input before calling the API %#", async ({
+    inputs,
+    message,
+  }) => {
+    const create = vi.fn(async () => ({
+      data: [{ embedding: [0.1, 0.2] }],
+    }));
+    const client = createOpenAiEmbeddingClient({
+      apiKey: "__TEST_PLACEHOLDER__",
+      model: "text-embedding-3-small",
+      createClient: () =>
+        ({
+          embeddings: { create },
+        }) satisfies EmbeddingsCreateClient,
+    });
+
+    await expect(client.embedBatch(inputs as never)).rejects.toThrow(message);
+
     expect(create).not.toHaveBeenCalled();
   });
 

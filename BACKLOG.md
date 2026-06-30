@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid OpenAI embedding client inputs, injected client factories/results,
+  single text inputs, and batch text inputs are rejected before API calls.
 - Invalid Qdrant client factory inputs and blank/non-string URL or API key
   values are rejected before SDK client construction.
 - Invalid memory chunk repository pools, chunk write inputs, point-ID mappings,
