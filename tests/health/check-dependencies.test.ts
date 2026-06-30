@@ -43,6 +43,26 @@ describe("checkDependencies", () => {
 
     expect(report.checks.map((c) => c.name)).toEqual(["postgres"]);
   });
+
+  it.each([
+    {
+      input: null,
+      message: "dependency probes must be an object",
+    },
+    {
+      input: { postgres: "connected" },
+      message: "dependencyProbes.postgres must be a function",
+    },
+    {
+      input: {
+        postgres: vi.fn().mockResolvedValue(undefined),
+        redis: vi.fn().mockResolvedValue(undefined),
+      },
+      message: 'dependency probe "redis" is not supported',
+    },
+  ])("rejects malformed direct probe inputs", async ({ input, message }) => {
+    await expect(checkDependencies(input as never)).rejects.toThrow(message);
+  });
 });
 
 describe("buildPostgresProbe", () => {
@@ -57,6 +77,19 @@ describe("buildPostgresProbe", () => {
     const pool = { query: vi.fn().mockRejectedValue(new Error("pg down")) };
     const probe = buildPostgresProbe(pool);
     await expect(probe()).rejects.toThrow(/pg down/);
+  });
+
+  it.each([
+    {
+      input: null,
+      message: "postgres probe pool must be an object",
+    },
+    {
+      input: { query: "SELECT 1" },
+      message: "postgres probe pool.query must be a function",
+    },
+  ])("rejects malformed direct pool inputs", ({ input, message }) => {
+    expect(() => buildPostgresProbe(input as never)).toThrow(message);
   });
 });
 
@@ -89,6 +122,39 @@ describe("buildQdrantProbe", () => {
     });
     await expect(probe()).rejects.toThrow(/503/);
   });
+
+  it.each([
+    {
+      input: null,
+      message: "qdrant probe input must be an object",
+    },
+    {
+      input: { url: " \n\t ", apiKey: "key-aaa" },
+      message: "qdrant probe input.url must be a non-empty string",
+    },
+    {
+      input: { url: "http://qdrant.local:6333", apiKey: "" },
+      message: "qdrant probe input.apiKey must be a non-empty string",
+    },
+    {
+      input: {
+        url: "http://qdrant.local:6333",
+        apiKey: "key-aaa",
+        fetch: {},
+      },
+      message: "qdrant probe input.fetch must be a function",
+    },
+    {
+      input: {
+        url: "http://qdrant.local:6333",
+        apiKey: "key-aaa",
+        timeoutMs: Number.NaN,
+      },
+      message: "qdrant probe input.timeoutMs must be a positive finite number",
+    },
+  ])("rejects malformed direct inputs", ({ input, message }) => {
+    expect(() => buildQdrantProbe(input as never)).toThrow(message);
+  });
 });
 
 describe("buildOpenAiProbe", () => {
@@ -119,5 +185,26 @@ describe("buildOpenAiProbe", () => {
       fetch: fakeFetch as unknown as typeof fetch,
     });
     await expect(probe()).rejects.toThrow(/401/);
+  });
+
+  it.each([
+    {
+      input: null,
+      message: "openai probe input must be an object",
+    },
+    {
+      input: { apiKey: " \n\t " },
+      message: "openai probe input.apiKey must be a non-empty string",
+    },
+    {
+      input: { apiKey: "sk-test-aaa", fetch: "fetch" },
+      message: "openai probe input.fetch must be a function",
+    },
+    {
+      input: { apiKey: "sk-test-aaa", timeoutMs: 0 },
+      message: "openai probe input.timeoutMs must be a positive finite number",
+    },
+  ])("rejects malformed direct inputs", ({ input, message }) => {
+    expect(() => buildOpenAiProbe(input as never)).toThrow(message);
   });
 });

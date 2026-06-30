@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid dependency health probe containers and probe builder inputs are
+  rejected before readiness iteration or probe closure construction.
 - Invalid metrics registry observations, dependency reports, and backlog
   snapshots are rejected before telemetry state mutation or label rendering.
 - Invalid worker-process options and injected starter handles are rejected

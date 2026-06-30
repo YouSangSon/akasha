@@ -2,6 +2,33 @@
 
 ## 2026-06-30
 
+- Hardened dependency health probe input validation:
+  - `checkDependencies` now rejects malformed direct probe containers before
+    iterating entries or reporting readiness checks.
+  - Dependency probe names are constrained to the typed low-cardinality set:
+    Postgres, Qdrant, and OpenAI.
+  - `buildPostgresProbe` now validates its pool and `query` method before
+    returning a probe closure.
+  - `buildQdrantProbe` and `buildOpenAiProbe` now reject malformed direct
+    inputs, blank URL/API-key values, invalid optional fetch handles, and
+    invalid timeout values before returning a probe closure.
+  - Existing `/readyz`, `/metrics` dependency gauges, probe failure reporting,
+    and provider/backend probe selection behavior is preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/health/check-dependencies.test.ts` (23 passed)
+- `npx vitest run tests/health/check-dependencies.test.ts tests/app/server.test.ts tests/app/metrics.test.ts`
+  (126 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1559 passed, 34 skipped
+  across 70 files)
+- `git diff --check`
+
 - Hardened metrics-registry boundary validation:
   - `createMetricsRegistry` now rejects malformed direct HTTP request
     observations before normalizing methods or recording samples.
