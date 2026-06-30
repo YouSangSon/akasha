@@ -30,12 +30,11 @@ const DEFAULT_INTERVAL_MS = 30_000;
 export function startBackgroundSweeper(
   input: Readonly<StartBackgroundSweeperInput>,
 ): BackgroundSweeperHandle {
-  const intervalMs = input.intervalMs ?? DEFAULT_INTERVAL_MS;
-  if (intervalMs < 1000) {
-    throw new Error(
-      `startBackgroundSweeper: intervalMs must be ≥ 1000 (got ${intervalMs})`,
-    );
-  }
+  assertStartBackgroundSweeperInput(input);
+  const intervalMs = resolveIntervalMs(
+    input.intervalMs,
+    "startBackgroundSweeper",
+  );
 
   let stopped = false;
   let inFlight: Promise<SweepResult> | null = null;
@@ -129,6 +128,67 @@ export function startBackgroundSweeper(
 
 function elapsedSeconds(start: bigint): number {
   return Number(process.hrtime.bigint() - start) / 1_000_000_000;
+}
+
+function assertStartBackgroundSweeperInput(
+  input: unknown,
+): asserts input is StartBackgroundSweeperInput {
+  const candidate = assertObject(input, "startBackgroundSweeper input");
+  const logger = assertObject(candidate.logger, "logger");
+  assertFunction(logger.info, "logger.info");
+  assertFunction(logger.error, "logger.error");
+  assertOptionalMetrics(candidate.metrics);
+  assertOptionalIntervalMs(candidate.intervalMs, "startBackgroundSweeper");
+}
+
+function resolveIntervalMs(
+  value: number | undefined,
+  context: string,
+): number {
+  if (value === undefined) {
+    return DEFAULT_INTERVAL_MS;
+  }
+  assertOptionalIntervalMs(value, context);
+  return value;
+}
+
+function assertOptionalIntervalMs(value: unknown, context: string): void {
+  if (value === undefined) {
+    return;
+  }
+  if (
+    typeof value !== "number" ||
+    !Number.isSafeInteger(value) ||
+    value < 1000
+  ) {
+    throw new Error(
+      `${context}: intervalMs must be ≥ 1000 (got ${String(value)})`,
+    );
+  }
+}
+
+function assertOptionalMetrics(value: unknown): void {
+  if (value === undefined) {
+    return;
+  }
+  const metrics = assertObject(value, "metrics");
+  assertFunction(metrics.observeSweeperTick, "metrics.observeSweeperTick");
+}
+
+function assertObject(
+  value: unknown,
+  fieldName: string,
+): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function assertFunction(value: unknown, fieldName: string): void {
+  if (typeof value !== "function") {
+    throw new Error(`${fieldName} must be a function`);
+  }
 }
 
 // Helper for ops/tests: manually fire one sweep without starting a loop.

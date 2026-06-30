@@ -15,6 +15,8 @@ const SILENT_LOGGER = {
   debug: vi.fn(),
   child: vi.fn(),
 } as unknown as StartIngestSweeperInput["logger"];
+const callStartIngestSweeper = (input: unknown) =>
+  startIngestSweeper(input as StartIngestSweeperInput);
 
 function makeIngestJobRepo(): IngestJobRepository {
   return {
@@ -40,6 +42,16 @@ function makeChunkRepo(): MemoryChunkRepository {
   };
 }
 
+function makeVectorIndex() {
+  return {
+    upsert: vi.fn(),
+    query: vi.fn(),
+    delete: vi.fn(),
+    deleteByRecordIds: vi.fn().mockResolvedValue(undefined),
+    ensureCollection: vi.fn(),
+  };
+}
+
 describe("startIngestSweeper", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -48,13 +60,69 @@ describe("startIngestSweeper", () => {
     vi.useRealTimers();
   });
 
+  it.each([undefined, null, "input", 12, true, []])(
+    "rejects non-object direct input",
+    (input) => {
+      expect(() => callStartIngestSweeper(input)).toThrow(
+        "startIngestSweeper input must be an object",
+      );
+    },
+  );
+
+  it.each<[
+    (input: StartIngestSweeperInput) => unknown,
+    string,
+  ]>([
+    [(input) => ({ ...input, logger: null }), "logger must be an object"],
+    [
+      (input) => ({ ...input, logger: { ...input.logger, info: null } }),
+      "logger.info must be a function",
+    ],
+    [
+      (input) => ({ ...input, logger: { ...input.logger, error: null } }),
+      "logger.error must be a function",
+    ],
+    [(input) => ({ ...input, metrics: null }), "metrics must be an object"],
+    [
+      (input) => ({
+        ...input,
+        metrics: { observeSweeperTick: null },
+      }),
+      "metrics.observeSweeperTick must be a function",
+    ],
+    [
+      (input) => ({ ...input, intervalMs: Number.NaN }),
+      "startIngestSweeper: intervalMs must be ≥ 1000 (got NaN)",
+    ],
+    [
+      (input) => ({ ...input, intervalMs: 1000.5 }),
+      "startIngestSweeper: intervalMs must be ≥ 1000 (got 1000.5)",
+    ],
+  ])("rejects invalid direct input field", (mutateInput, message) => {
+    const ingestJobs = makeIngestJobRepo();
+
+    expect(() =>
+      callStartIngestSweeper(
+        mutateInput({
+          ingestJobs,
+          chunkRepository: makeChunkRepo(),
+          embeddings: { embed: vi.fn(), embedBatch: vi.fn() },
+          vectorIndex: makeVectorIndex(),
+          logger: SILENT_LOGGER,
+        }),
+      ),
+    ).toThrow(message);
+
+    expect(ingestJobs.claimPendingForRetry).not.toHaveBeenCalled();
+  });
+
   it("rejects intervalMs < 1000", () => {
     expect(() =>
       startIngestSweeper({
         ingestJobs: makeIngestJobRepo(),
         chunkRepository: makeChunkRepo(),
         embeddings: { embed: vi.fn(), embedBatch: vi.fn() },
-        vectorIndex: { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), ensureCollection: vi.fn() },
+        vectorIndex: makeVectorIndex(),
         logger: SILENT_LOGGER,
         intervalMs: 500,
       }),
@@ -68,7 +136,7 @@ describe("startIngestSweeper", () => {
       ingestJobs,
       chunkRepository: makeChunkRepo(),
       embeddings: { embed: vi.fn(), embedBatch: vi.fn() },
-      vectorIndex: { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), ensureCollection: vi.fn() },
+      vectorIndex: makeVectorIndex(),
       logger: SILENT_LOGGER,
       metrics,
       intervalMs: 1000,
@@ -104,7 +172,7 @@ describe("startIngestSweeper", () => {
       ingestJobs,
       chunkRepository: makeChunkRepo(),
       embeddings: { embed: vi.fn(), embedBatch: vi.fn() },
-      vectorIndex: { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), ensureCollection: vi.fn() },
+      vectorIndex: makeVectorIndex(),
       logger: SILENT_LOGGER,
       intervalMs: 1000,
     });
@@ -129,7 +197,7 @@ describe("startIngestSweeper", () => {
       ingestJobs,
       chunkRepository: makeChunkRepo(),
       embeddings: { embed: vi.fn(), embedBatch: vi.fn() },
-      vectorIndex: { upsert: vi.fn(), query: vi.fn(), delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), ensureCollection: vi.fn() },
+      vectorIndex: makeVectorIndex(),
       logger: SILENT_LOGGER,
       metrics,
       intervalMs: 1000,

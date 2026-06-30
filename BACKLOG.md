@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid compaction and ingest sweeper loop inputs, logger methods, metrics,
+  and intervals are rejected before timers are scheduled.
 - Invalid ingest sweeper inputs, claimed jobs, chunk rows, and embedding
   vectors are rejected before unsafe ingest vector side effects.
 - Invalid outbox sweeper inputs, tunables, clock results, and claimed cleanup

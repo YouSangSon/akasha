@@ -13,6 +13,10 @@ const SILENT_LOGGER = {
   debug: vi.fn(),
   child: vi.fn(),
 } as unknown as Parameters<typeof startBackgroundSweeper>[0]["logger"];
+const callStartBackgroundSweeper = (input: unknown) =>
+  startBackgroundSweeper(
+    input as Parameters<typeof startBackgroundSweeper>[0],
+  );
 
 function makeRepo(): MemoryArchiveRepository {
   return {
@@ -32,6 +36,16 @@ function makeRepo(): MemoryArchiveRepository {
   };
 }
 
+function makeVectorIndex() {
+  return {
+    delete: vi.fn(),
+    deleteByRecordIds: vi.fn().mockResolvedValue(undefined),
+    upsert: vi.fn(),
+    query: vi.fn(),
+    ensureCollection: vi.fn(),
+  };
+}
+
 describe("startBackgroundSweeper", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -40,12 +54,66 @@ describe("startBackgroundSweeper", () => {
     vi.useRealTimers();
   });
 
+  it.each([undefined, null, "input", 12, true, []])(
+    "rejects non-object direct input",
+    (input) => {
+      expect(() => callStartBackgroundSweeper(input)).toThrow(
+        "startBackgroundSweeper input must be an object",
+      );
+    },
+  );
+
+  it.each<[
+    (input: Parameters<typeof startBackgroundSweeper>[0]) => unknown,
+    string,
+  ]>([
+    [(input) => ({ ...input, logger: null }), "logger must be an object"],
+    [
+      (input) => ({ ...input, logger: { ...input.logger, info: null } }),
+      "logger.info must be a function",
+    ],
+    [
+      (input) => ({ ...input, logger: { ...input.logger, error: null } }),
+      "logger.error must be a function",
+    ],
+    [(input) => ({ ...input, metrics: null }), "metrics must be an object"],
+    [
+      (input) => ({
+        ...input,
+        metrics: { observeSweeperTick: null },
+      }),
+      "metrics.observeSweeperTick must be a function",
+    ],
+    [
+      (input) => ({ ...input, intervalMs: Number.NaN }),
+      "startBackgroundSweeper: intervalMs must be ≥ 1000 (got NaN)",
+    ],
+    [
+      (input) => ({ ...input, intervalMs: 1000.5 }),
+      "startBackgroundSweeper: intervalMs must be ≥ 1000 (got 1000.5)",
+    ],
+  ])("rejects invalid direct input field", (mutateInput, message) => {
+    const repo = makeRepo();
+
+    expect(() =>
+      callStartBackgroundSweeper(
+        mutateInput({
+          archiveRepository: repo,
+          vectorIndex: makeVectorIndex(),
+          logger: SILENT_LOGGER,
+        }),
+      ),
+    ).toThrow(message);
+
+    expect(repo.claimPendingQdrantCleanup).not.toHaveBeenCalled();
+  });
+
   it("rejects intervalMs < 1000", () => {
     const repo = makeRepo();
     expect(() =>
       startBackgroundSweeper({
         archiveRepository: repo,
-        vectorIndex: { delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), upsert: vi.fn(), query: vi.fn(), ensureCollection: vi.fn() },
+        vectorIndex: makeVectorIndex(),
         logger: SILENT_LOGGER,
         intervalMs: 500,
       }),
@@ -57,7 +125,7 @@ describe("startBackgroundSweeper", () => {
     const metrics = { observeSweeperTick: vi.fn() };
     const handle = startBackgroundSweeper({
       archiveRepository: repo,
-      vectorIndex: { delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), upsert: vi.fn(), query: vi.fn(), ensureCollection: vi.fn() },
+      vectorIndex: makeVectorIndex(),
       logger: SILENT_LOGGER,
       metrics,
       intervalMs: 1000,
@@ -91,7 +159,7 @@ describe("startBackgroundSweeper", () => {
     const repo = makeRepo();
     const handle = startBackgroundSweeper({
       archiveRepository: repo,
-      vectorIndex: { delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), upsert: vi.fn(), query: vi.fn(), ensureCollection: vi.fn() },
+      vectorIndex: makeVectorIndex(),
       logger: SILENT_LOGGER,
       intervalMs: 1000,
     });
@@ -114,7 +182,7 @@ describe("startBackgroundSweeper", () => {
 
     const handle = startBackgroundSweeper({
       archiveRepository: repo,
-      vectorIndex: { delete: vi.fn(), deleteByRecordIds: vi.fn().mockResolvedValue(undefined), upsert: vi.fn(), query: vi.fn(), ensureCollection: vi.fn() },
+      vectorIndex: makeVectorIndex(),
       logger: SILENT_LOGGER,
       metrics,
       intervalMs: 1000,

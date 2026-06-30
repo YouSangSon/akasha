@@ -2,6 +2,33 @@
 
 ## 2026-06-30
 
+- Hardened sweeper loop input validation:
+  - `startBackgroundSweeper` and `startIngestSweeper` now reject non-object
+    direct input before reading loop options, scheduling timers, or logging
+    startup.
+  - Loop logger methods, optional metrics recorders, and interval values are
+    validated before any background sweep can be scheduled.
+  - `intervalMs` now rejects non-finite, non-integer, and sub-1000 values.
+  - Malformed loop input is covered with no-claim assertions for both
+    compaction and ingest sweepers.
+  - Existing tick scheduling, stop handling, metric recording, error swallowing,
+    and environment parsing behavior is preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/compact/sweeper-loop.test.ts tests/compact/ingest-sweeper-loop.test.ts`
+  (46 passed)
+- `npx vitest run tests/compact/sweeper-loop.test.ts tests/compact/ingest-sweeper-loop.test.ts tests/compact/outbox-sweeper.test.ts tests/compact/ingest-sweeper.test.ts tests/app/background-workers.test.ts tests/app/start-background-workers-server.test.ts tests/app/start-operator-server-metrics.test.ts`
+  (132 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1489 passed, 34 skipped
+  across 70 files)
+- `git diff --check`
+
 - Hardened ingest sweeper input validation:
   - `runIngestSweep` now rejects non-object direct input before claiming jobs,
     reading chunks, embedding, deleting old vectors, or upserting new vectors.
