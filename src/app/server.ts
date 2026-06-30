@@ -46,6 +46,7 @@ import {
 import { handleMcpHttpRequest } from "./mcp-http.js";
 import {
   isOAuthProtectedResourceMetadataPath,
+  assertOAuthProtectedResourceConfig,
   loadOAuthProtectedResourceConfig,
   sendOAuthProtectedResourceMetadata,
   setOAuthWwwAuthenticateHeader,
@@ -56,6 +57,10 @@ import {
   createCanonicalServicesResolver,
   createServiceBackedAuditLog,
 } from "../mcp/canonical-services.js";
+import {
+  assertFunction,
+  assertObject,
+} from "../mcp/tool-registry-validation.js";
 import {
   startBackgroundWorkers,
   type BackgroundWorkersHandle,
@@ -141,6 +146,8 @@ export function assertSafeAuthConfig(args: {
 export function createOperatorServer(
   options: CreateOperatorServerOptions = {},
 ) {
+  assertOperatorServerOptions(options, "create");
+
   // Don't resolve service config eagerly — that requires OPENAI_API_KEY etc.
   // Tests inject registry and skip config; only startOperatorServer needs
   // host/port for binding.
@@ -431,6 +438,8 @@ export function selectDependencyProbes(
 export function startOperatorServer(
   options: CreateOperatorServerOptions = {},
 ) {
+  assertOperatorServerOptions(options, "start");
+
   const config = options.config ?? resolveServiceConfig();
   const log = options.logger ?? rootLogger;
 
@@ -613,6 +622,183 @@ async function collectBackgroundQueueBacklog(input: {
       collectSuccess: false,
       rows: [],
     };
+  }
+}
+
+function assertOperatorServerOptions(
+  value: unknown,
+  mode: "create" | "start",
+): asserts value is CreateOperatorServerOptions {
+  const candidate = assertObject(value, "operator server options");
+
+  assertOptionalServiceConfig(candidate.config);
+  assertOptionalObject(candidate.registry, "registry");
+  assertOptionalLogger(
+    candidate.logger,
+    mode,
+    canAuthBeDisabled(candidate),
+  );
+  assertOptionalBearerTokens(candidate.bearerTokens);
+  assertOptionalObject(candidate.dependencyProbes, "dependencyProbes");
+  assertOptionalRateLimiter(candidate.rateLimiter);
+  assertOptionalOAuthProtectedResource(
+    candidate.oauthProtectedResource,
+  );
+  assertOptionalNullableOAuthTokenVerifier(candidate.oauthTokenVerifier);
+  assertOptionalMetrics(candidate.metrics);
+  assertOptionalBackgroundQueueMetrics(candidate.backgroundQueueMetrics);
+}
+
+function assertOptionalObject(value: unknown, fieldName: string): void {
+  if (value === undefined) {
+    return;
+  }
+  assertObject(value, fieldName);
+}
+
+function assertOptionalOAuthProtectedResource(value: unknown): void {
+  if (value === undefined || value === null) {
+    return;
+  }
+  assertOAuthProtectedResourceConfig(value);
+}
+
+function assertOptionalLogger(
+  value: unknown,
+  mode: "create" | "start",
+  authCanBeDisabled: boolean,
+): void {
+  if (value === undefined) {
+    return;
+  }
+  const logger = assertObject(value, "logger");
+  assertFunction(logger.error, "logger.error");
+  if (mode === "create") {
+    if (authCanBeDisabled || logger.warn !== undefined) {
+      assertFunction(logger.warn, "logger.warn");
+    }
+    return;
+  }
+  assertFunction(logger.warn, "logger.warn");
+  assertFunction(logger.info, "logger.info");
+}
+
+function canAuthBeDisabled(
+  options: Record<string, unknown>,
+): boolean {
+  const bearerTokens = options.bearerTokens;
+  const oauthTokenVerifier = options.oauthTokenVerifier;
+  if (Array.isArray(bearerTokens) && bearerTokens.length > 0) {
+    return false;
+  }
+  if (oauthTokenVerifier !== undefined && oauthTokenVerifier !== null) {
+    return false;
+  }
+  return true;
+}
+
+function assertOptionalServiceConfig(value: unknown): void {
+  if (value === undefined) {
+    return;
+  }
+  const config = assertObject(value, "config");
+  assertString(config.host, "config.host");
+  assertNumber(config.port, "config.port");
+  assertString(config.databaseUrl, "config.databaseUrl");
+  if (config.vectorBackend !== "qdrant" && config.vectorBackend !== "pgvector") {
+    throw new Error('config.vectorBackend must be "qdrant" or "pgvector"');
+  }
+  if (config.vectorBackend === "qdrant") {
+    const qdrant = assertObject(config.qdrant, "config.qdrant");
+    assertString(qdrant.url, "config.qdrant.url");
+    assertString(qdrant.apiKey, "config.qdrant.apiKey");
+  }
+  const embedding = assertObject(config.embedding, "config.embedding");
+  if (
+    embedding.provider !== "openai" &&
+    embedding.provider !== "local" &&
+    embedding.provider !== "transformers"
+  ) {
+    throw new Error(
+      'config.embedding.provider must be "openai", "local", or "transformers"',
+    );
+  }
+  if (embedding.provider === "openai") {
+    const openai = assertObject(config.openai, "config.openai");
+    assertString(openai.apiKey, "config.openai.apiKey");
+  }
+}
+
+function assertOptionalBearerTokens(value: unknown): void {
+  if (value === undefined) {
+    return;
+  }
+  if (!Array.isArray(value)) {
+    throw new Error("bearerTokens must be an array");
+  }
+  for (const [index, token] of value.entries()) {
+    if (typeof token === "string") {
+      continue;
+    }
+    const entry = assertObject(token, `bearerTokens[${index}]`);
+    if (typeof entry.token !== "string") {
+      throw new Error(`bearerTokens[${index}].token must be a string`);
+    }
+    if (
+      entry.organizationId !== undefined &&
+      typeof entry.organizationId !== "string"
+    ) {
+      throw new Error(
+        `bearerTokens[${index}].organizationId must be a string`,
+      );
+    }
+  }
+}
+
+function assertOptionalRateLimiter(value: unknown): void {
+  if (value === undefined) {
+    return;
+  }
+  const rateLimiter = assertObject(value, "rateLimiter");
+  assertFunction(rateLimiter.check, "rateLimiter.check");
+}
+
+function assertOptionalNullableOAuthTokenVerifier(value: unknown): void {
+  if (value === undefined || value === null) {
+    return;
+  }
+  const verifier = assertObject(value, "oauthTokenVerifier");
+  assertFunction(verifier.verify, "oauthTokenVerifier.verify");
+}
+
+function assertOptionalMetrics(value: unknown): void {
+  if (value === undefined) {
+    return;
+  }
+  const metrics = assertObject(value, "metrics");
+  assertFunction(metrics.observeHttpRequest, "metrics.observeHttpRequest");
+  assertFunction(metrics.observeSweeperTick, "metrics.observeSweeperTick");
+  assertFunction(metrics.setDependencyReport, "metrics.setDependencyReport");
+  assertFunction(metrics.render, "metrics.render");
+}
+
+function assertOptionalBackgroundQueueMetrics(value: unknown): void {
+  if (value === undefined || value === null) {
+    return;
+  }
+  const collector = assertObject(value, "backgroundQueueMetrics");
+  assertFunction(collector.collect, "backgroundQueueMetrics.collect");
+}
+
+function assertString(value: unknown, fieldName: string): asserts value is string {
+  if (typeof value !== "string") {
+    throw new Error(`${fieldName} must be a string`);
+  }
+}
+
+function assertNumber(value: unknown, fieldName: string): asserts value is number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(`${fieldName} must be a finite number`);
   }
 }
 

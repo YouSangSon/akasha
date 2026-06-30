@@ -222,7 +222,7 @@ function assertSupportedResourceUrl(resource: string): void {
   }
 }
 
-function assertOAuthProtectedResourceConfig(
+export function assertOAuthProtectedResourceConfig(
   config: unknown,
 ): asserts config is OAuthProtectedResourceConfig {
   if (typeof config !== "object" || config === null || Array.isArray(config)) {
@@ -241,6 +241,20 @@ function assertOAuthProtectedResourceConfig(
   }
 
   const metadata = candidate.metadata as Record<string, unknown>;
+  assertString(metadata.resource, "metadata.resource");
+  if (!Array.isArray(metadata.authorization_servers)) {
+    throw new Error("metadata.authorization_servers must be an array");
+  }
+  for (const [index, server] of metadata.authorization_servers.entries()) {
+    assertString(server, `metadata.authorization_servers[${index}]`);
+  }
+  if (
+    !Array.isArray(metadata.bearer_methods_supported) ||
+    metadata.bearer_methods_supported.length !== 1 ||
+    metadata.bearer_methods_supported[0] !== "header"
+  ) {
+    throw new Error('metadata.bearer_methods_supported must be ["header"]');
+  }
   if (!Array.isArray(metadata.scopes_supported)) {
     throw new Error("metadata.scopes_supported must be an array");
   }

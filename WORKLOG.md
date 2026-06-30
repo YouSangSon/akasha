@@ -2,6 +2,33 @@
 
 ## 2026-06-30
 
+- Hardened operator server option validation:
+  - `createOperatorServer` and `startOperatorServer` now reject malformed
+    direct option containers, injected service config shapes, registry
+    handles, logger handles, bearer token lists, dependency probes, rate
+    limiters, OAuth verifier handles, metrics registries, and background queue
+    collectors before reading option fields.
+  - OAuth protected-resource metadata validation is now reusable and covers the
+    metadata fields serialized by the well-known endpoint.
+  - Existing omitted-options env fallback, empty-registry construction,
+    auth-disabled warning behavior, metrics rendering, and background worker
+    startup paths are preserved.
+  - A worker subagent implemented the patch; spec review passed, and
+    code-quality review drove fixes for conditional config/OAuth/logger
+    validation before final approval.
+
+Verification:
+- `npx vitest run tests/app/operator-server-boundary.test.ts tests/app/server.test.ts tests/app/oauth-protected-resource.test.ts`
+  (115 passed)
+- `npx vitest run tests/app/operator-server-boundary.test.ts tests/app/server.test.ts tests/app/start-operator-server-metrics.test.ts tests/app/start-background-workers-server.test.ts tests/app/metrics.test.ts tests/app/mcp-http.test.ts tests/app/oauth-protected-resource.test.ts`
+  (172 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1784 passed, 34 skipped
+  across 79 files)
+- `git diff --check`
+
 - Hardened JSON HTTP route input validation:
   - `createMemoryRoutes` now rejects malformed direct route contexts, registry
     objects, logger handles, and OAuth metadata handles before route
