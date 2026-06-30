@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid MCP server construction options and stdio cwd env/fallback inputs are
+  rejected before server wiring or stdio startup.
 - Invalid MCP registry construction options and direct handler construction
   inputs are rejected before registry/handler wiring.
 - Invalid embedding provider factory inputs, provider names, model/dimensions

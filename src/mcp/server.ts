@@ -9,6 +9,12 @@ import {
   nonBlankTextInputSchema,
 } from "./tool-schemas.js";
 import { createToolRegistry } from "./tool-registry.js";
+import {
+  assertCreateToolRegistryOptions,
+  assertFunction,
+  assertNonBlankString,
+  assertObject,
+} from "./tool-registry-validation.js";
 import { SUPPORTED_MEMORY_KINDS } from "./tool-utils.js";
 import type {
   AddMemoryInteractiveToolInput,
@@ -66,6 +72,8 @@ const MEMORY_CLASSIFICATION_SCHEMA = z.object({
 export function createMcpServer(
   options: CreateMcpServerOptions = {},
 ): McpServer {
+  assertCreateMcpServerOptions(options);
+
   const registry =
     options.registry ??
     createToolRegistry({
@@ -123,14 +131,34 @@ export function resolveStdioCwd(
   env: NodeJS.ProcessEnv = process.env,
   getFallbackCwd: () => string = () => process.cwd(),
 ): string {
-  const cwd = env.DMO_CWD;
+  const candidateEnv = assertObject(env, "env");
+  assertFunction(getFallbackCwd, "getFallbackCwd");
+
+  const cwd = candidateEnv.DMO_CWD;
   if (cwd === undefined) {
-    return getFallbackCwd();
+    const fallbackCwd = getFallbackCwd();
+    assertNonBlankString(fallbackCwd, "fallback cwd");
+    return fallbackCwd;
   }
-  if (cwd.trim().length === 0) {
-    throw new Error("DMO_CWD must contain non-whitespace text");
-  }
+  assertNonBlankString(cwd, "DMO_CWD");
   return cwd;
+}
+
+function assertCreateMcpServerOptions(
+  value: unknown,
+): asserts value is CreateMcpServerOptions {
+  const candidate = assertObject(value, "MCP server options");
+  const registry = candidate.registry;
+  const authorizeTool = candidate.authorizeTool;
+
+  assertCreateToolRegistryOptions(candidate);
+
+  if (registry !== undefined) {
+    assertObject(registry, "registry");
+  }
+  if (authorizeTool !== undefined) {
+    assertFunction(authorizeTool, "authorizeTool");
+  }
 }
 
 function toToolResult(result: unknown) {

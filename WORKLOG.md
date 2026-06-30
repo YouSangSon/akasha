@@ -2,6 +2,29 @@
 
 ## 2026-06-30
 
+- Hardened MCP server construction input validation:
+  - `createMcpServer` now rejects malformed direct options, invalid shared
+    registry options, malformed injected registry handles, and invalid
+    authorizer callbacks before server/registry wiring.
+  - `resolveStdioCwd` now rejects malformed env objects, non-string `DMO_CWD`
+    values, invalid fallback callbacks, and blank fallback cwd values before
+    stdio startup.
+  - Existing default server construction, injected registry schema-only tests,
+    and valid configured/fallback cwd behavior are preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/mcp/mcp-server-construction.test.ts tests/mcp/stdio-cwd.test.ts`
+  (15 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1727 passed, 34 skipped
+  across 76 files)
+- `git diff --check`
+
 - Hardened MCP registry construction input validation:
   - `createToolRegistry` now rejects malformed direct options, invalid cwd and
     default scope/actor text, malformed override repositories/loggers/audit
