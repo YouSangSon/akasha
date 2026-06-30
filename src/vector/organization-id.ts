@@ -1,6 +1,12 @@
 import type { VectorPoint } from "./vector-index.js";
 
-export function assertVectorOrganizationId(organizationId: string): void {
+export function assertVectorOrganizationId(
+  organizationId: unknown,
+): asserts organizationId is string {
+  if (typeof organizationId !== "string") {
+    throw new Error("organizationId must be a string");
+  }
+
   if (organizationId.trim().length === 0) {
     throw new Error("organizationId must not be blank");
   }
@@ -22,8 +28,8 @@ export function assertVectorPointOrganizationIds(
 }
 
 export function assertOptionalVectorOrganizationId(
-  organizationId: string | undefined,
-): void {
+  organizationId: unknown,
+): asserts organizationId is string | undefined {
   if (organizationId === undefined || organizationId === "") {
     return;
   }

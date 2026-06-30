@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Non-string vector organization IDs are rejected before Qdrant or pgvector
+  backend calls.
 - Non-string direct repository title and summary values are rejected before
   memory persistence.
 - Non-string direct repository tag entries are rejected before transaction work.

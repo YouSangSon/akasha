@@ -4,15 +4,17 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Repository Nullable Text Type Guard
+## Current Loop — Vector Organization Scope Type Guard
 
 Status:
-- Repository title/summary normalization now rejects non-string non-null values
-  before calling `.trim()`.
-- Existing `null`, whitespace-to-`null`, non-empty string, default summary, and
-  secret scanning behavior are preserved.
-- Focused repository tests, typecheck, build, audit, full suite, review, and
-  diff whitespace checks passed.
+- Vector organization ID guards now reject non-string values before calling
+  `.trim()`.
+- Optional vector organization IDs still allow `undefined` and `""` for legacy
+  unscoped mode while rejecting whitespace-only strings.
+- Helper, Qdrant, and pgvector tests cover non-string values before backend
+  calls.
+- Focused vector tests, typecheck, build, audit, full suite, review, and diff
+  whitespace checks passed.
 
 Loop closeout:
 - Commit locally; do not push.

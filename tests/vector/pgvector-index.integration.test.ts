@@ -207,6 +207,17 @@ describe("pgvector adapter — deleteByRecordIds SQL shape", () => {
 
     expect(query).not.toHaveBeenCalled();
   });
+
+  it("deleteByRecordIds rejects non-string organizationId before SQL", async () => {
+    const { pool, query } = makeMockPool();
+    const index = createPgVectorIndex(pool, { tableName: "memory_vectors_test" });
+
+    await expect(
+      index.deleteByRecordIds([101], { organizationId: 123 } as never),
+    ).rejects.toThrow("organizationId must be a string");
+
+    expect(query).not.toHaveBeenCalled();
+  });
 });
 
 describe.skipIf(!TEST_URL)("pgvector adapter — integration against real pgvector", () => {

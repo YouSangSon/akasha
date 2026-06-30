@@ -2,6 +2,24 @@
 
 ## 2026-06-30
 
+- Hardened vector organization scope validation:
+  - Vector organization ID guards now reject non-string values before calling
+    `.trim()`.
+  - Optional vector organization IDs still allow `undefined` and `""` for
+    legacy unscoped mode while rejecting whitespace-only strings.
+  - Helper tests cover required/optional validation, and Qdrant/pgvector tests
+    cover non-string scoped delete-by-record IDs before backend calls.
+  - Review found one pgvector coverage gap; a no-SQL regression test was added
+    and follow-up review found no blocking issues.
+
+Verification:
+- `npx vitest run tests/vector/organization-id.test.ts tests/vector/qdrant-index.test.ts tests/vector/pgvector-index.integration.test.ts` (43 passed, 12 skipped)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (1056 passed, 34 skipped across 70 files)
+- `git diff --check`
+
 - Hardened direct repository nullable text validation:
   - Repository title/summary normalization now rejects non-string non-null
     values before calling `.trim()`.
