@@ -2,6 +2,33 @@
 
 ## 2026-06-30
 
+- Hardened repeat-attempt input validation:
+  - `findRepeatAttempts` now rejects non-object direct inputs before reading
+    embeddings, prior failures, or threshold values.
+  - Candidate embeddings and prior failure embeddings must be arrays of finite
+    numbers, and prior embeddings must match the candidate dimensions before
+    cosine scoring.
+  - Prior failures must provide positive safe-integer iteration indexes and
+    string attempts.
+  - Thresholds must be finite numbers in `(0, 1]`; invalid numeric and
+    non-numeric values now fail explicitly.
+  - Existing default threshold, match filtering, and best-first score ordering
+    behavior is preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/goal-run/find-repeat-attempts.test.ts` (22 passed)
+- `npx vitest run tests/goal-run/find-repeat-attempts.test.ts tests/goal-run/goal-run-handlers.test.ts tests/mcp/server.test.ts`
+  (177 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1297 passed, 34 skipped
+  across 70 files)
+- `git diff --check`
+
 - Hardened retrieval input validation:
   - `retrieveMemory` now rejects non-object direct inputs before property
     access.

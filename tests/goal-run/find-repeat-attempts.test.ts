@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_REPEAT_THRESHOLD,
+  type FindRepeatAttemptsInput,
   findRepeatAttempts,
 } from "../../src/goal-run/find-repeat-attempts.js";
+
+const callFindRepeatAttempts = (input: unknown) => () =>
+  findRepeatAttempts(input as FindRepeatAttemptsInput);
 
 describe("findRepeatAttempts", () => {
   it("flags a prior failure whose embedding matches the candidate", () => {
@@ -64,5 +68,73 @@ describe("findRepeatAttempts", () => {
         threshold: 1.5,
       }),
     ).toThrow();
+  });
+
+  it.each([undefined, null, "input", 12, true, []])(
+    "rejects non-object direct input",
+    (input) => {
+      expect(callFindRepeatAttempts(input)).toThrow(
+        "findRepeatAttempts input must be an object",
+      );
+    },
+  );
+
+  it.each([
+    [
+      { candidateEmbedding: "vector" },
+      "candidateEmbedding must be an array",
+    ],
+    [
+      { candidateEmbedding: [1, Number.NaN] },
+      "candidateEmbedding[1] must be a finite number",
+    ],
+    [{ priorFailures: null }, "priorFailures must be an array"],
+    [
+      { threshold: Number.POSITIVE_INFINITY },
+      "findRepeatAttempts threshold must be in (0, 1], got Infinity",
+    ],
+    [
+      { threshold: "0.8" },
+      "findRepeatAttempts threshold must be in (0, 1], got 0.8",
+    ],
+  ])("rejects invalid top-level field", (overrides, message) => {
+    expect(
+      callFindRepeatAttempts({
+        candidateEmbedding: [1, 0],
+        priorFailures: [],
+        ...(overrides as Record<string, unknown>),
+      }),
+    ).toThrow(message);
+  });
+
+  it.each([
+    [null, "priorFailures[0] must be an object"],
+    [
+      { iterationIndex: 0, attempt: "retry", embedding: [1, 0] },
+      "priorFailures[0].iterationIndex must be a positive safe integer",
+    ],
+    [
+      { iterationIndex: 1, attempt: 12, embedding: [1, 0] },
+      "priorFailures[0].attempt must be a string",
+    ],
+    [
+      { iterationIndex: 1, attempt: "retry", embedding: "vector" },
+      "priorFailures[0].embedding must be an array",
+    ],
+    [
+      { iterationIndex: 1, attempt: "retry", embedding: [1, Number.NaN] },
+      "priorFailures[0].embedding[1] must be a finite number",
+    ],
+    [
+      { iterationIndex: 1, attempt: "retry", embedding: [1, 0, 0] },
+      "priorFailures[0].embedding length must match candidateEmbedding length (3 vs 2)",
+    ],
+  ])("rejects invalid prior failure field", (failure, message) => {
+    expect(
+      callFindRepeatAttempts({
+        candidateEmbedding: [1, 0],
+        priorFailures: [failure],
+      }),
+    ).toThrow(message);
   });
 });

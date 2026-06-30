@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid repeat-attempt inputs, prior failures, thresholds, and embedding
+  dimensions are rejected before cosine scoring.
 - Invalid retrieval inputs and corrupt vector hit memory IDs are rejected or
   ignored before repository hydration and ranking.
 - Invalid context pack records and source metadata are rejected before section
