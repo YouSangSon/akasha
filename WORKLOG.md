@@ -2,6 +2,24 @@
 
 ## 2026-06-30
 
+- Hardened direct repository nullable text validation:
+  - Repository title/summary normalization now rejects non-string non-null
+    values before calling `.trim()`.
+  - Existing `null`, whitespace-to-`null`, non-empty string, default summary,
+    and secret scanning behavior are preserved.
+  - Focused tests cover `addMemory` rejection before pool connection and
+    `updateMemoryRecord` rejection after current-row read but before row update,
+    with rollback/release.
+  - Spec and quality reviews found no issues.
+
+Verification:
+- `npx vitest run tests/store/memory-repository.test.ts` (78 passed, 7 skipped)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (1050 passed, 34 skipped across 69 files)
+- `git diff --check`
+
 - Hardened direct repository tag validation:
   - Repository tag normalization now rejects non-string tag entries before
     calling `.trim()`.

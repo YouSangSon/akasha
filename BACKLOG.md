@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Non-string direct repository title and summary values are rejected before
+  memory persistence.
 - Non-string direct repository tag entries are rejected before transaction work.
 - Non-string direct repository search queries are rejected before lexical SQL
   work while blank queries keep returning no rows.

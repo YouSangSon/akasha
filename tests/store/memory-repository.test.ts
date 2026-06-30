@@ -338,6 +338,38 @@ describe("createMemoryRepository (unit — no PG required)", () => {
     );
   });
 
+  it("addMemory rejects non-string title and summary before opening a transaction", async () => {
+    const cases = [
+      { field: "title", patch: { title: 42 as never } },
+      { field: "summary", patch: { summary: 42 as never } },
+    ];
+
+    for (const { field, patch } of cases) {
+      const mockPool = {
+        connect: vi.fn(),
+      };
+      const repo = createMemoryRepository(mockPool as never);
+
+      await expect(
+        repo.addMemory({
+          scopeType: "project",
+          scopeId: "proj-x",
+          memoryType: "fact",
+          content: "plain text only",
+          source: {
+            scopeType: "project",
+            scopeId: "proj-x",
+            sourceType: "document",
+            sourceRef: "docs/spec.md",
+          },
+          ...patch,
+        }),
+      ).rejects.toThrow(`${field} must be a string`);
+
+      expect(mockPool.connect).not.toHaveBeenCalled();
+    }
+  });
+
   it("addMemory normalizes whitespace-only title and summary to null", async () => {
     const sourceRow = {
       source_id_joined: 9,
@@ -1067,6 +1099,56 @@ describe("createMemoryRepository (unit — no PG required)", () => {
     ).rejects.toThrow("tag must be a string");
 
     expect(mockPool.connect).not.toHaveBeenCalled();
+  });
+
+  it("updateMemoryRecord rejects non-string title and summary before updating the row", async () => {
+    const cases = [
+      { field: "title", patch: { title: 42 as never } },
+      { field: "summary", patch: { summary: 42 as never } },
+    ];
+
+    for (const { field, patch } of cases) {
+      const clientQueryCalls: SqlQueryCall[] = [];
+      const mockClient = {
+        query: vi.fn().mockImplementation((sql: string, params?: unknown[]) => {
+          clientQueryCalls.push({ sql, params: params ?? [] });
+          if (sql === "BEGIN" || sql === "COMMIT" || sql === "ROLLBACK") {
+            return Promise.resolve({ rows: [] });
+          }
+          if (sql.includes("SELECT") && sql.includes("FROM memory_records mr")) {
+            return Promise.resolve({ rows: [hydratedMemoryRow()] });
+          }
+          if (sql.includes("UPDATE memory_records")) {
+            return Promise.reject(new Error("UPDATE should not run"));
+          }
+          return Promise.resolve({ rows: [] });
+        }),
+        release: vi.fn(),
+      };
+      const mockPool = {
+        connect: vi.fn().mockResolvedValue(mockClient),
+      };
+      const repo = createMemoryRepository(mockPool as never);
+
+      await expect(
+        repo.updateMemoryRecord({
+          id: 42,
+          organizationId: "org-a",
+          ...patch,
+        }),
+      ).rejects.toThrow(`${field} must be a string`);
+
+      expect(
+        clientQueryCalls.some(
+          ({ sql }) => sql.includes("SELECT") && sql.includes("FROM memory_records mr"),
+        ),
+      ).toBe(true);
+      expect(
+        clientQueryCalls.some(({ sql }) => sql.includes("UPDATE memory_records")),
+      ).toBe(false);
+      expect(clientQueryCalls.some(({ sql }) => sql === "ROLLBACK")).toBe(true);
+      expect(mockClient.release).toHaveBeenCalledTimes(1);
+    }
   });
 
   it("updateMemoryRecord rejects whitespace-only content before updating the row", async () => {

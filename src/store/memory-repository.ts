@@ -176,11 +176,11 @@ export function createMemoryRepository(
       const memoryType = normalizeMemoryType(input.memoryType);
       const durability = normalizeDurability(input.durability, "ephemeral");
       const importance = normalizePostgresInteger(input.importance, 0);
-      const title = normalizeNullableText(input.title ?? null);
+      const title = normalizeNullableText(input.title ?? null, "title");
       const summary =
         input.summary === undefined
           ? summarize(input.content)
-          : normalizeNullableText(input.summary);
+          : normalizeNullableText(input.summary, "summary");
       assertNoSecretsInMemoryFields({
         title,
         content: input.content,
@@ -506,7 +506,7 @@ export function createMemoryRepository(
         const nextTitle =
           input.title === undefined
             ? currentRow.title
-            : normalizeNullableText(input.title);
+            : normalizeNullableText(input.title, "title");
         const nextContent = input.content ?? currentRow.content;
         if (input.content !== undefined) {
           assertNonBlankMemoryContent(nextContent);
@@ -514,7 +514,7 @@ export function createMemoryRepository(
         const nextSummary =
           input.summary === undefined
             ? currentRow.summary
-            : normalizeNullableText(input.summary);
+            : normalizeNullableText(input.summary, "summary");
         const nextKind = normalizeMemoryType(input.kind, currentRow.kind);
         const nextDurability = normalizeDurability(
           input.durability,
@@ -993,8 +993,14 @@ function assertNoSecretsInMemoryFields(input: {
   }
 }
 
-function normalizeNullableText(value: string | null): string | null {
-  return value === null || value.trim().length === 0 ? null : value;
+function normalizeNullableText(value: unknown, fieldName: string): string | null {
+  if (value === null) {
+    return null;
+  }
+  if (typeof value !== "string") {
+    throw new Error(`${fieldName} must be a string`);
+  }
+  return value.trim().length === 0 ? null : value;
 }
 
 function normalizeMemoryType(
