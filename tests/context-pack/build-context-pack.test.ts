@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildContextPack } from "../../src/context-pack/build-context-pack.js";
+import {
+  buildContextPack,
+  type BuildContextPackInput,
+} from "../../src/context-pack/build-context-pack.js";
 import type { SearchMemoryResult } from "../../src/types.js";
 
 type ResultOverrides = Partial<Omit<SearchMemoryResult, "source">> & {
@@ -36,6 +39,9 @@ function createResult(
     },
   };
 }
+
+const callBuildContextPack = (input: unknown) => () =>
+  buildContextPack(input as BuildContextPackInput);
 
 describe("buildContextPack", () => {
   it("groups ranked records into structured sections and renders markdown", () => {
@@ -517,5 +523,76 @@ Next step: validate migration paths.`,
       "warning: prompt-injection-like content",
     );
     expect(pack.markdown).toContain("Real note: rotate keys monthly");
+  });
+
+  it.each([undefined, null, "input", 12, true, []])(
+    "rejects non-object direct input",
+    (input) => {
+      expect(callBuildContextPack(input)).toThrow(
+        "buildContextPack input must be an object",
+      );
+    },
+  );
+
+  it("rejects a non-array records field", () => {
+    expect(callBuildContextPack({ records: {} })).toThrow(
+      "records must be an array",
+    );
+  });
+
+  it.each([
+    [null, "records[0] must be an object"],
+    [
+      { id: 0 },
+      "records[0].id must be a positive safe integer",
+    ],
+    [
+      { scopeType: "workspace" },
+      'records[0].scopeType must be "project" or "user"',
+    ],
+    [{ scopeId: 12 }, "records[0].scopeId must be a string"],
+    [
+      { memoryType: "task" },
+      'records[0].memoryType must be "decision", "fact", or "summary"',
+    ],
+    [{ content: null }, "records[0].content must be a string"],
+    [{ source: null }, "records[0].source must be an object"],
+    [
+      {
+        source: {
+          ...createResult({}).source,
+          sourceType: "ticket",
+        },
+      },
+      'records[0].source.sourceType must be "decision", "document", or "conversation"',
+    ],
+    [
+      {
+        source: {
+          ...createResult({}).source,
+          title: undefined,
+        },
+      },
+      "records[0].source.title must be a string or null",
+    ],
+    [
+      {
+        source: {
+          ...createResult({}).source,
+          externalId: 42,
+        },
+      },
+      "records[0].source.externalId must be a string",
+    ],
+  ])("rejects invalid consumed record field", (overrides, message) => {
+    const record =
+      overrides === null
+        ? null
+        : ({
+            ...createResult({}),
+            ...(overrides as Record<string, unknown>),
+          } as SearchMemoryResult);
+
+    expect(callBuildContextPack({ records: [record] })).toThrow(message);
   });
 });

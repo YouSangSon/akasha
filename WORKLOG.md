@@ -2,6 +2,31 @@
 
 ## 2026-06-30
 
+- Hardened context pack record input validation:
+  - `buildContextPack` now rejects non-object direct inputs before reading
+    `records`.
+  - `records` must be an array, and each consumed record must be an object with
+    a positive safe-integer `id`, valid project/user scope, string `scopeId`,
+    valid memory type, and string content.
+  - Consumed source metadata must be an object with a valid source type,
+    string/null title, and optional string external ID.
+  - Existing section grouping, caps, project-before-user rendering order,
+    compact excerpts, and prompt-injection warning behavior is preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/context-pack/build-context-pack.test.ts` (23 passed)
+- `npx vitest run tests/context-pack/build-context-pack.test.ts tests/goal-run/build-goal-context.test.ts tests/mcp/server.test.ts`
+  (178 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1260 passed, 34 skipped
+  across 70 files)
+- `git diff --check`
+
 - Hardened goal context pack input validation:
   - `buildGoalContextPack` now rejects non-object direct inputs before property
     reads.

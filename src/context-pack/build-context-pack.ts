@@ -62,6 +62,8 @@ export type BuildContextPackInput = {
 export function buildContextPack(
   input: BuildContextPackInput,
 ): ContextPack {
+  assertBuildContextPackInput(input);
+
   const sections: ContextPackSections = {
     project_summary: [],
     recent_decisions: [],
@@ -141,6 +143,106 @@ export function buildContextPack(
     selectionRationale,
     markdown: renderMarkdown(sections),
   };
+}
+
+function assertBuildContextPackInput(
+  input: unknown,
+): asserts input is BuildContextPackInput {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    throw new Error("buildContextPack input must be an object");
+  }
+
+  const candidate = input as Record<string, unknown>;
+  if (!Array.isArray(candidate.records)) {
+    throw new Error("records must be an array");
+  }
+
+  for (const [index, record] of candidate.records.entries()) {
+    assertSearchMemoryResult(record, index);
+  }
+}
+
+function assertSearchMemoryResult(
+  record: unknown,
+  index: number,
+): asserts record is SearchMemoryResult {
+  const prefix = `records[${index}]`;
+
+  if (typeof record !== "object" || record === null || Array.isArray(record)) {
+    throw new Error(`${prefix} must be an object`);
+  }
+
+  const candidate = record as Record<string, unknown>;
+  assertPositiveSafeInteger(candidate.id, `${prefix}.id`);
+  assertScopeType(candidate.scopeType, `${prefix}.scopeType`);
+  assertStringField(candidate.scopeId, `${prefix}.scopeId`);
+  assertMemoryType(candidate.memoryType, `${prefix}.memoryType`);
+  assertStringField(candidate.content, `${prefix}.content`);
+  assertMemorySource(candidate.source, `${prefix}.source`);
+}
+
+function assertMemorySource(
+  source: unknown,
+  fieldName: string,
+): asserts source is SearchMemoryResult["source"] {
+  if (typeof source !== "object" || source === null || Array.isArray(source)) {
+    throw new Error(`${fieldName} must be an object`);
+  }
+
+  const candidate = source as Record<string, unknown>;
+  assertSourceType(candidate.sourceType, `${fieldName}.sourceType`);
+  assertStringOrNullField(candidate.title, `${fieldName}.title`);
+  assertOptionalStringField(candidate.externalId, `${fieldName}.externalId`);
+}
+
+function assertPositiveSafeInteger(value: unknown, fieldName: string): void {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
+    throw new Error(`${fieldName} must be a positive safe integer`);
+  }
+}
+
+function assertStringField(value: unknown, fieldName: string): void {
+  if (typeof value !== "string") {
+    throw new Error(`${fieldName} must be a string`);
+  }
+}
+
+function assertStringOrNullField(value: unknown, fieldName: string): void {
+  if (typeof value !== "string" && value !== null) {
+    throw new Error(`${fieldName} must be a string or null`);
+  }
+}
+
+function assertOptionalStringField(value: unknown, fieldName: string): void {
+  if (value !== undefined && typeof value !== "string") {
+    throw new Error(`${fieldName} must be a string`);
+  }
+}
+
+function assertScopeType(value: unknown, fieldName: string): void {
+  if (value !== "project" && value !== "user") {
+    throw new Error(`${fieldName} must be "project" or "user"`);
+  }
+}
+
+function assertMemoryType(value: unknown, fieldName: string): void {
+  if (value !== "decision" && value !== "fact" && value !== "summary") {
+    throw new Error(
+      `${fieldName} must be "decision", "fact", or "summary"`,
+    );
+  }
+}
+
+function assertSourceType(value: unknown, fieldName: string): void {
+  if (
+    value !== "decision" &&
+    value !== "document" &&
+    value !== "conversation"
+  ) {
+    throw new Error(
+      `${fieldName} must be "decision", "document", or "conversation"`,
+    );
+  }
 }
 
 function isDecision(record: SearchMemoryResult): boolean {

@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid context pack records and source metadata are rejected before section
+  selection or markdown rendering.
 - Invalid goal context pack inputs and iteration render fields are rejected
   before markdown rendering or last-error extraction.
 - Invalid rate limiter options, injected times, and direct keys are rejected
