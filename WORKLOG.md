@@ -2,6 +2,28 @@
 
 ## 2026-06-30
 
+- Hardened Qdrant client factory input validation:
+  - `createQdrantClient` now rejects malformed direct input containers and
+    blank/non-string URL or API key values before constructing the Qdrant SDK
+    client.
+  - Added unit coverage that mocks `@qdrant/js-client-rest`, so valid
+    construction is checked without network compatibility probes or SDK
+    warnings.
+  - Existing service config expectations and valid SDK construction behavior
+    are preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/qdrant/client.test.ts` (6 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1657 passed, 34 skipped
+  across 72 files)
+- `git diff --check`
+
 - Hardened memory chunk repository input validation:
   - `createMemoryChunkRepository` now rejects malformed pool handles before
     returning repository methods.
