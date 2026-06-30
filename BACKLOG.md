@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid ingest sweeper inputs, claimed jobs, chunk rows, and embedding
+  vectors are rejected before unsafe ingest vector side effects.
 - Invalid outbox sweeper inputs, tunables, clock results, and claimed cleanup
   rows are rejected before vector cleanup side effects.
 - Invalid apply compaction inputs, dependencies, rate-limit config, generated

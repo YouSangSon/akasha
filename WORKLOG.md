@@ -2,6 +2,35 @@
 
 ## 2026-06-30
 
+- Hardened ingest sweeper input validation:
+  - `runIngestSweep` now rejects non-object direct input before claiming jobs,
+    reading chunks, embedding, deleting old vectors, or upserting new vectors.
+  - Sweeper dependencies, logger methods, optional tunables, and injected clock
+    results are validated before repository calls.
+  - Claimed ingest jobs must provide positive safe-integer job and memory record
+    IDs, non-blank organization IDs, and non-negative safe-integer Qdrant
+    attempt counts before per-job work starts.
+  - Reindexable chunks and embedding vectors are validated before vector
+    deletes or upserts.
+  - Malformed chunk or embedding data stays in the existing per-job retry/fail
+    path while avoiding vector side effects.
+  - Existing empty sweep, success, no-chunk completion, retry, give-up, custom
+    batch size, and idempotent re-upsert behavior is preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/compact/ingest-sweeper.test.ts` (49 passed)
+- `npx vitest run tests/compact/ingest-sweeper.test.ts tests/compact/ingest-sweeper-loop.test.ts tests/store/canonical-indexing.test.ts tests/vector/point-builder.test.ts tests/app/background-workers.test.ts tests/app/start-background-workers-server.test.ts tests/app/start-operator-server-metrics.test.ts`
+  (117 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1463 passed, 34 skipped
+  across 70 files)
+- `git diff --check`
+
 - Hardened outbox sweeper input validation:
   - `runOutboxSweep` now rejects non-object direct input before reading tunables,
     claiming rows, or deleting Qdrant points.

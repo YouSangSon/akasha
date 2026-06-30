@@ -19,6 +19,7 @@ import type { IngestJobRepository } from "../types.js";
 import type {
   EmbeddingClient,
   MemoryChunkRepository,
+  ReindexableMemoryChunk,
 } from "../store/canonical-indexing.js";
 import type { IngestJob } from "../types.js";
 import { nextRetryDelayMs } from "../jobs/retry-backoff.js";
@@ -50,14 +51,18 @@ const DEFAULT_MAX_ATTEMPTS = 5;
 export async function runIngestSweep(
   input: Readonly<RunIngestSweepInput>,
 ): Promise<IngestSweepResult> {
+  assertRunIngestSweepInput(input);
+
   const batchSize = input.batchSize ?? DEFAULT_BATCH_SIZE;
   const maxAttempts = input.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
   const getNow = input.now ?? (() => new Date());
+  const now = nowFrom(getNow);
 
   const claimed = await input.ingestJobs.claimPendingForRetry({
     limit: batchSize,
-    now: getNow(),
+    now,
   });
+  assertClaimedIngestJobs(claimed);
 
   let completed = 0;
   let retried = 0;
@@ -83,6 +88,7 @@ async function sweepOne(
     const chunks = await input.chunkRepository.getChunksByRecordId(
       job.memoryRecordId,
     );
+    assertReindexableMemoryChunks(chunks);
 
     if (chunks.length === 0) {
       // No chunks means the record was deleted between claim and now.
@@ -103,6 +109,7 @@ async function sweepOne(
       chunks.map((chunk) => chunk.content),
     );
 
+    assertEmbeddingBatch(embeddings);
     if (embeddings.length !== chunks.length) {
       throw new Error(
         `embedBatch returned ${embeddings.length} vectors for ${chunks.length} chunks`,
@@ -170,7 +177,7 @@ async function sweepOne(
         });
       } else {
         const delayMs = nextRetryDelayMs(nextAttempt);
-        const nextRetryAt = new Date(getNow().getTime() + delayMs);
+        const nextRetryAt = new Date(nowFrom(getNow).getTime() + delayMs);
         await input.ingestJobs.markQdrantPending({
           jobId: job.id,
           attempts: nextAttempt,
@@ -191,4 +198,229 @@ async function sweepOne(
 
     return giveUp ? "failed" : "retry";
   }
+}
+
+function assertRunIngestSweepInput(
+  input: unknown,
+): asserts input is RunIngestSweepInput {
+  const candidate = assertObject(input, "runIngestSweep input");
+  const ingestJobs = assertObject(candidate.ingestJobs, "ingestJobs");
+  const chunkRepository = assertObject(
+    candidate.chunkRepository,
+    "chunkRepository",
+  );
+  const embeddings = assertObject(candidate.embeddings, "embeddings");
+  const vectorIndex = assertObject(candidate.vectorIndex, "vectorIndex");
+  const logger = assertObject(candidate.logger, "logger");
+
+  assertFunction(
+    ingestJobs.claimPendingForRetry,
+    "ingestJobs.claimPendingForRetry",
+  );
+  assertFunction(
+    ingestJobs.markQdrantCompleted,
+    "ingestJobs.markQdrantCompleted",
+  );
+  assertFunction(ingestJobs.markQdrantPending, "ingestJobs.markQdrantPending");
+  assertFunction(ingestJobs.markQdrantFailed, "ingestJobs.markQdrantFailed");
+  assertFunction(
+    chunkRepository.getChunksByRecordId,
+    "chunkRepository.getChunksByRecordId",
+  );
+  assertFunction(
+    chunkRepository.updatePointIds,
+    "chunkRepository.updatePointIds",
+  );
+  assertFunction(embeddings.embedBatch, "embeddings.embedBatch");
+  assertFunction(
+    vectorIndex.deleteByRecordIds,
+    "vectorIndex.deleteByRecordIds",
+  );
+  assertFunction(vectorIndex.upsert, "vectorIndex.upsert");
+  assertFunction(logger.info, "logger.info");
+  assertFunction(logger.warn, "logger.warn");
+  assertFunction(logger.error, "logger.error");
+  assertOptionalPositiveSafeInteger(candidate.batchSize, "batchSize");
+  assertOptionalPositiveSafeInteger(candidate.maxAttempts, "maxAttempts");
+  assertOptionalFunction(candidate.now, "now");
+}
+
+function assertClaimedIngestJobs(jobs: unknown): asserts jobs is IngestJob[] {
+  if (!Array.isArray(jobs)) {
+    throw new Error("claimPendingForRetry result must be an array");
+  }
+
+  for (const [index, job] of jobs.entries()) {
+    assertClaimedIngestJob(job, index);
+  }
+}
+
+function assertClaimedIngestJob(job: unknown, index: number): void {
+  const prefix = `claimPendingForRetry result[${index}]`;
+  const candidate = assertObject(job, prefix);
+  assertPositiveSafeInteger(candidate.id, `${prefix}.id`);
+  assertPositiveSafeInteger(
+    candidate.memoryRecordId,
+    `${prefix}.memoryRecordId`,
+  );
+  assertNonBlankString(candidate.organizationId, `${prefix}.organizationId`);
+  assertNonNegativeSafeInteger(
+    candidate.qdrantAttempts,
+    `${prefix}.qdrantAttempts`,
+  );
+}
+
+function assertReindexableMemoryChunks(
+  chunks: unknown,
+): asserts chunks is ReindexableMemoryChunk[] {
+  if (!Array.isArray(chunks)) {
+    throw new Error("getChunksByRecordId result must be an array");
+  }
+
+  for (const [index, chunk] of chunks.entries()) {
+    assertReindexableMemoryChunk(chunk, index);
+  }
+}
+
+function assertReindexableMemoryChunk(chunk: unknown, index: number): void {
+  const prefix = `getChunksByRecordId result[${index}]`;
+  const candidate = assertObject(chunk, prefix);
+  assertPositiveSafeInteger(candidate.id, `${prefix}.id`);
+  assertPositiveSafeInteger(
+    candidate.memoryRecordId,
+    `${prefix}.memoryRecordId`,
+  );
+  assertNonBlankString(candidate.content, `${prefix}.content`);
+  assertOptionalNonBlankString(
+    candidate.organizationId,
+    `${prefix}.organizationId`,
+  );
+  assertNonBlankString(candidate.scopeType, `${prefix}.scopeType`);
+  assertNonBlankString(candidate.scopeId, `${prefix}.scopeId`);
+  assertOptionalStringOrNull(candidate.projectKey, `${prefix}.projectKey`);
+  assertNonBlankString(candidate.kind, `${prefix}.kind`);
+  assertOptionalNonBlankString(candidate.durability, `${prefix}.durability`);
+  assertOptionalStringOrNull(candidate.title, `${prefix}.title`);
+  assertOptionalStringOrNull(candidate.summary, `${prefix}.summary`);
+  assertOptionalStringArray(candidate.tags, `${prefix}.tags`);
+  assertNonBlankString(candidate.updatedAt, `${prefix}.updatedAt`);
+  assertNonBlankString(candidate.embeddingVersion, `${prefix}.embeddingVersion`);
+}
+
+function assertEmbeddingBatch(embeddings: unknown): void {
+  if (!Array.isArray(embeddings)) {
+    throw new Error("embedBatch result must be an array");
+  }
+
+  for (const [index, vector] of embeddings.entries()) {
+    assertVector(vector, `embedBatch result[${index}]`);
+  }
+}
+
+function assertVector(vector: unknown, fieldName: string): void {
+  if (!Array.isArray(vector) || vector.length === 0) {
+    throw new Error(`${fieldName} must be a non-empty array`);
+  }
+
+  for (const [index, value] of vector.entries()) {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      throw new Error(`${fieldName}[${index}] must be a finite number`);
+    }
+  }
+}
+
+function assertObject(
+  value: unknown,
+  fieldName: string,
+): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function assertFunction(value: unknown, fieldName: string): void {
+  if (typeof value !== "function") {
+    throw new Error(`${fieldName} must be a function`);
+  }
+}
+
+function assertOptionalFunction(value: unknown, fieldName: string): void {
+  if (value === undefined) {
+    return;
+  }
+  assertFunction(value, fieldName);
+}
+
+function assertOptionalPositiveSafeInteger(
+  value: unknown,
+  fieldName: string,
+): void {
+  if (value === undefined) {
+    return;
+  }
+  assertPositiveSafeInteger(value, fieldName);
+}
+
+function assertPositiveSafeInteger(value: unknown, fieldName: string): void {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
+    throw new Error(`${fieldName} must be a positive safe integer`);
+  }
+}
+
+function assertNonNegativeSafeInteger(value: unknown, fieldName: string): void {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`${fieldName} must be a non-negative safe integer`);
+  }
+}
+
+function assertNonBlankString(value: unknown, fieldName: string): void {
+  if (typeof value !== "string") {
+    throw new Error(`${fieldName} must be a string`);
+  }
+  if (value.trim().length === 0) {
+    throw new Error(`${fieldName} must contain non-whitespace text`);
+  }
+}
+
+function assertOptionalNonBlankString(
+  value: unknown,
+  fieldName: string,
+): void {
+  if (value === undefined) {
+    return;
+  }
+  assertNonBlankString(value, fieldName);
+}
+
+function assertOptionalStringOrNull(value: unknown, fieldName: string): void {
+  if (value === undefined || value === null) {
+    return;
+  }
+  if (typeof value !== "string") {
+    throw new Error(`${fieldName} must be a string or null`);
+  }
+}
+
+function assertOptionalStringArray(value: unknown, fieldName: string): void {
+  if (value === undefined) {
+    return;
+  }
+  if (!Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an array`);
+  }
+
+  for (const [index, item] of value.entries()) {
+    if (typeof item !== "string") {
+      throw new Error(`${fieldName}[${index}] must be a string`);
+    }
+  }
+}
+
+function nowFrom(getNow: () => Date): Date {
+  const value = getNow();
+  if (!(value instanceof Date) || !Number.isFinite(value.getTime())) {
+    throw new Error("now result must be a valid Date");
+  }
+  return value;
 }

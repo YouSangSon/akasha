@@ -17,6 +17,9 @@ const SILENT_LOGGER = {
   debug: vi.fn(),
   child: vi.fn(),
 } as unknown as RunIngestSweepInput["logger"];
+const NOW = new Date("2026-06-25T00:00:00.000Z");
+const callRunIngestSweep = (input: unknown) =>
+  runIngestSweep(input as RunIngestSweepInput);
 
 // Minimal IngestJob fixture.
 function makeJob(overrides: Partial<IngestJob> = {}): IngestJob {
@@ -95,6 +98,37 @@ function makeChunkRepo(
   };
 }
 
+function makeVectorIndex(
+  overrides: Partial<{
+    upsert: ReturnType<typeof vi.fn>;
+    query: ReturnType<typeof vi.fn>;
+    delete: ReturnType<typeof vi.fn>;
+    deleteByRecordIds: ReturnType<typeof vi.fn>;
+    ensureCollection: ReturnType<typeof vi.fn>;
+  }> = {},
+) {
+  return {
+    upsert: overrides.upsert ?? vi.fn().mockResolvedValue(undefined),
+    query: overrides.query ?? vi.fn(),
+    delete: overrides.delete ?? vi.fn(),
+    deleteByRecordIds:
+      overrides.deleteByRecordIds ?? vi.fn().mockResolvedValue(undefined),
+    ensureCollection: overrides.ensureCollection ?? vi.fn(),
+  };
+}
+
+function makeEmbeddings(
+  overrides: Partial<{
+    embed: ReturnType<typeof vi.fn>;
+    embedBatch: ReturnType<typeof vi.fn>;
+  }> = {},
+) {
+  return {
+    embed: overrides.embed ?? vi.fn(),
+    embedBatch: overrides.embedBatch ?? vi.fn().mockResolvedValue([]),
+  };
+}
+
 describe("nextRetryDelayMs", () => {
   it("returns 1s base for attempt 0", () => {
     expect(nextRetryDelayMs(0)).toBe(1_000);
@@ -124,6 +158,278 @@ describe("nextRetryDelayMs", () => {
 });
 
 describe("runIngestSweep", () => {
+  it.each([undefined, null, "input", 12, true, []])(
+    "rejects non-object direct input",
+    async (input) => {
+      await expect(callRunIngestSweep(input)).rejects.toThrow(
+        "runIngestSweep input must be an object",
+      );
+    },
+  );
+
+  it.each<[
+    (input: RunIngestSweepInput) => unknown,
+    string,
+  ]>([
+    [(input) => ({ ...input, ingestJobs: null }), "ingestJobs must be an object"],
+    [
+      (input) => ({
+        ...input,
+        ingestJobs: { ...input.ingestJobs, claimPendingForRetry: null },
+      }),
+      "ingestJobs.claimPendingForRetry must be a function",
+    ],
+    [
+      (input) => ({ ...input, chunkRepository: null }),
+      "chunkRepository must be an object",
+    ],
+    [
+      (input) => ({
+        ...input,
+        chunkRepository: {
+          ...input.chunkRepository,
+          getChunksByRecordId: null,
+        },
+      }),
+      "chunkRepository.getChunksByRecordId must be a function",
+    ],
+    [(input) => ({ ...input, embeddings: null }), "embeddings must be an object"],
+    [
+      (input) => ({
+        ...input,
+        embeddings: { ...input.embeddings, embedBatch: null },
+      }),
+      "embeddings.embedBatch must be a function",
+    ],
+    [(input) => ({ ...input, vectorIndex: null }), "vectorIndex must be an object"],
+    [
+      (input) => ({
+        ...input,
+        vectorIndex: { ...input.vectorIndex, upsert: null },
+      }),
+      "vectorIndex.upsert must be a function",
+    ],
+    [(input) => ({ ...input, logger: null }), "logger must be an object"],
+    [
+      (input) => ({ ...input, logger: { ...input.logger, warn: null } }),
+      "logger.warn must be a function",
+    ],
+    [
+      (input) => ({ ...input, batchSize: 0 }),
+      "batchSize must be a positive safe integer",
+    ],
+    [
+      (input) => ({ ...input, maxAttempts: Number.NaN }),
+      "maxAttempts must be a positive safe integer",
+    ],
+    [(input) => ({ ...input, now: "now" }), "now must be a function"],
+  ])("rejects invalid direct input field", async (mutateInput, message) => {
+    const { repo, markQdrantCompleted, markQdrantPending, markQdrantFailed } =
+      makeIngestJobRepo([]);
+    const chunkRepo = makeChunkRepo([]);
+    const embeddings = makeEmbeddings();
+    const vectorIndex = makeVectorIndex();
+
+    await expect(
+      callRunIngestSweep(
+        mutateInput({
+          ingestJobs: repo,
+          chunkRepository: chunkRepo,
+          embeddings,
+          vectorIndex,
+          logger: SILENT_LOGGER,
+        }),
+      ),
+    ).rejects.toThrow(message);
+
+    expect(repo.claimPendingForRetry).not.toHaveBeenCalled();
+    expect(chunkRepo.getChunksByRecordId).not.toHaveBeenCalled();
+    expect(embeddings.embedBatch).not.toHaveBeenCalled();
+    expect(vectorIndex.deleteByRecordIds).not.toHaveBeenCalled();
+    expect(vectorIndex.upsert).not.toHaveBeenCalled();
+    expect(markQdrantCompleted).not.toHaveBeenCalled();
+    expect(markQdrantPending).not.toHaveBeenCalled();
+    expect(markQdrantFailed).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid injected time values before claiming rows", async () => {
+    const { repo } = makeIngestJobRepo([]);
+    const chunkRepo = makeChunkRepo([]);
+    const embeddings = makeEmbeddings();
+    const vectorIndex = makeVectorIndex();
+
+    await expect(
+      runIngestSweep({
+        ingestJobs: repo,
+        chunkRepository: chunkRepo,
+        embeddings,
+        vectorIndex,
+        logger: SILENT_LOGGER,
+        now: () => new Date("not-a-date"),
+      }),
+    ).rejects.toThrow("now result must be a valid Date");
+
+    expect(repo.claimPendingForRetry).not.toHaveBeenCalled();
+    expect(chunkRepo.getChunksByRecordId).not.toHaveBeenCalled();
+    expect(embeddings.embedBatch).not.toHaveBeenCalled();
+    expect(vectorIndex.deleteByRecordIds).not.toHaveBeenCalled();
+    expect(vectorIndex.upsert).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [null, "claimPendingForRetry result must be an array", true],
+    [null, "claimPendingForRetry result[0] must be an object"],
+    [
+      { id: 0 },
+      "claimPendingForRetry result[0].id must be a positive safe integer",
+    ],
+    [
+      { memoryRecordId: 0 },
+      "claimPendingForRetry result[0].memoryRecordId must be a positive safe integer",
+    ],
+    [
+      { organizationId: " \n\t " },
+      "claimPendingForRetry result[0].organizationId must contain non-whitespace text",
+    ],
+    [
+      { qdrantAttempts: -1 },
+      "claimPendingForRetry result[0].qdrantAttempts must be a non-negative safe integer",
+    ],
+  ])(
+    "rejects malformed claimed ingest jobs",
+    async (overrides, message, useRawClaimResult = false) => {
+      const job =
+        overrides === null
+          ? overrides
+          : {
+              ...makeJob(),
+              ...(overrides as Record<string, unknown>),
+            };
+      const claimed = useRawClaimResult ? job : [job];
+      const { repo, markQdrantCompleted, markQdrantPending, markQdrantFailed } =
+        makeIngestJobRepo(claimed as IngestJob[]);
+      const chunkRepo = makeChunkRepo([]);
+      const embeddings = makeEmbeddings();
+      const vectorIndex = makeVectorIndex();
+
+      await expect(
+        runIngestSweep({
+          ingestJobs: repo,
+          chunkRepository: chunkRepo,
+          embeddings,
+          vectorIndex,
+          logger: SILENT_LOGGER,
+        }),
+      ).rejects.toThrow(message);
+
+      expect(repo.claimPendingForRetry).toHaveBeenCalledOnce();
+      expect(chunkRepo.getChunksByRecordId).not.toHaveBeenCalled();
+      expect(embeddings.embedBatch).not.toHaveBeenCalled();
+      expect(vectorIndex.deleteByRecordIds).not.toHaveBeenCalled();
+      expect(vectorIndex.upsert).not.toHaveBeenCalled();
+      expect(markQdrantCompleted).not.toHaveBeenCalled();
+      expect(markQdrantPending).not.toHaveBeenCalled();
+      expect(markQdrantFailed).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    [null, "getChunksByRecordId result must be an array", true],
+    [null, "getChunksByRecordId result[0] must be an object"],
+    [
+      { id: 0 },
+      "getChunksByRecordId result[0].id must be a positive safe integer",
+    ],
+    [
+      { content: "" },
+      "getChunksByRecordId result[0].content must contain non-whitespace text",
+    ],
+    [
+      { tags: [12] },
+      "getChunksByRecordId result[0].tags[0] must be a string",
+    ],
+  ])(
+    "retries malformed chunks without vector side effects",
+    async (overrides, message, useRawChunkResult = false) => {
+      const job = makeJob({ id: 6, memoryRecordId: 10, qdrantAttempts: 0 });
+      const chunk =
+        overrides === null
+          ? overrides
+          : {
+              ...makeChunk(),
+              ...(overrides as Record<string, unknown>),
+            };
+      const chunks = useRawChunkResult ? chunk : [chunk];
+      const { repo, markQdrantPending } = makeIngestJobRepo([job]);
+      const chunkRepo = makeChunkRepo(chunks as ReindexableMemoryChunk[]);
+      const embeddings = makeEmbeddings({
+        embedBatch: vi.fn().mockResolvedValue([[0.1, 0.2, 0.3]]),
+      });
+      const vectorIndex = makeVectorIndex();
+
+      const result = await runIngestSweep({
+        ingestJobs: repo,
+        chunkRepository: chunkRepo,
+        embeddings,
+        vectorIndex,
+        logger: SILENT_LOGGER,
+        now: () => NOW,
+      });
+
+      expect(result).toEqual({ scanned: 1, completed: 0, retried: 1, failed: 0 });
+      expect(embeddings.embedBatch).not.toHaveBeenCalled();
+      expect(vectorIndex.deleteByRecordIds).not.toHaveBeenCalled();
+      expect(vectorIndex.upsert).not.toHaveBeenCalled();
+      expect(chunkRepo.updatePointIds).not.toHaveBeenCalled();
+      expect(markQdrantPending).toHaveBeenCalledWith(
+        expect.objectContaining({
+          jobId: job.id,
+          attempts: 1,
+          error: expect.any(Error),
+        }),
+      );
+      expect(
+        (markQdrantPending.mock.calls[0]![0].error as Error).message,
+      ).toBe(message);
+    },
+  );
+
+  it.each([
+    [null, "embedBatch result must be an array"],
+    [[[]], "embedBatch result[0] must be a non-empty array"],
+    [[[Number.NaN]], "embedBatch result[0][0] must be a finite number"],
+  ])(
+    "retries malformed embedding results before vector side effects",
+    async (vectors, message) => {
+      const job = makeJob({ id: 7, memoryRecordId: 10, qdrantAttempts: 0 });
+      const chunk = makeChunk();
+      const { repo, markQdrantPending } = makeIngestJobRepo([job]);
+      const chunkRepo = makeChunkRepo([chunk]);
+      const embeddings = makeEmbeddings({
+        embedBatch: vi.fn().mockResolvedValue(vectors),
+      });
+      const vectorIndex = makeVectorIndex();
+
+      const result = await runIngestSweep({
+        ingestJobs: repo,
+        chunkRepository: chunkRepo,
+        embeddings,
+        vectorIndex,
+        logger: SILENT_LOGGER,
+        now: () => NOW,
+      });
+
+      expect(result).toEqual({ scanned: 1, completed: 0, retried: 1, failed: 0 });
+      expect(embeddings.embedBatch).toHaveBeenCalledWith([chunk.content]);
+      expect(vectorIndex.deleteByRecordIds).not.toHaveBeenCalled();
+      expect(vectorIndex.upsert).not.toHaveBeenCalled();
+      expect(chunkRepo.updatePointIds).not.toHaveBeenCalled();
+      expect(
+        (markQdrantPending.mock.calls[0]![0].error as Error).message,
+      ).toBe(message);
+    },
+  );
+
   it("returns zero counts when no pending rows are claimed", async () => {
     const { repo } = makeIngestJobRepo([]);
     const chunkRepo = makeChunkRepo([]);
