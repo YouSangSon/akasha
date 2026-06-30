@@ -2,6 +2,34 @@
 
 ## 2026-06-30
 
+- Hardened background-worker coordinator input validation:
+  - `startBackgroundWorkers` now rejects non-object direct options before
+    reading worker flags, bootstrapping services, or starting sweepers.
+  - Coordinator options now validate logger methods, environment flag types,
+    fail-fast mode, metrics recorders, service bootstrap, and injected starter
+    functions.
+  - Bootstrap service results must provide the expected service objects and an
+    optional `close` function.
+  - Malformed bootstrap service results are rejected in fail-fast mode and
+    logged as worker startup failures in default mode without starting sweepers.
+  - Existing disabled-worker noop behavior, shared bootstrap, stop handling,
+    fail-fast bootstrap errors, server startup resilience, and metrics wiring is
+    preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/app/background-workers.test.ts` (21 passed)
+- `npx vitest run tests/app/background-workers.test.ts tests/app/start-background-workers-server.test.ts tests/app/start-operator-server-metrics.test.ts tests/app/worker.test.ts tests/app/server.test.ts`
+  (93 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1507 passed, 34 skipped
+  across 70 files)
+- `git diff --check`
+
 - Hardened sweeper loop input validation:
   - `startBackgroundSweeper` and `startIngestSweeper` now reject non-object
     direct input before reading loop options, scheduling timers, or logging

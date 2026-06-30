@@ -56,6 +56,8 @@ type StartedWorker = {
 export async function startBackgroundWorkers(
   options: Readonly<StartBackgroundWorkersOptions>,
 ): Promise<BackgroundWorkersHandle> {
+  assertStartBackgroundWorkersOptions(options);
+
   const env = options.env ?? process.env;
   const enabledWorkers = resolveEnabledWorkers(env);
   if (enabledWorkers.length === 0) {
@@ -69,6 +71,7 @@ export async function startBackgroundWorkers(
   let services: BackgroundWorkerServices;
   try {
     services = await bootstrapServices();
+    assertBackgroundWorkerServices(services);
   } catch (err: unknown) {
     if (failFast) {
       throw err;
@@ -142,6 +145,94 @@ export async function startBackgroundWorkers(
   );
 
   return createWorkersHandle(started, services);
+}
+
+function assertStartBackgroundWorkersOptions(
+  options: unknown,
+): asserts options is StartBackgroundWorkersOptions {
+  const candidate = assertObject(options, "startBackgroundWorkers options");
+  const logger = assertObject(candidate.logger, "logger");
+  assertFunction(logger.info, "logger.info");
+  assertFunction(logger.error, "logger.error");
+  assertOptionalEnv(candidate.env);
+  assertOptionalBoolean(candidate.failFast, "failFast");
+  assertOptionalMetrics(candidate.metrics);
+  assertOptionalFunction(candidate.bootstrapServices, "bootstrapServices");
+  assertOptionalFunction(
+    candidate.startCompactionSweeper,
+    "startCompactionSweeper",
+  );
+  assertOptionalFunction(candidate.startIngestSweeper, "startIngestSweeper");
+}
+
+function assertBackgroundWorkerServices(
+  services: unknown,
+): asserts services is BackgroundWorkerServices {
+  const candidate = assertObject(services, "background worker services");
+  assertObject(candidate.archiveRepository, "services.archiveRepository");
+  assertObject(candidate.chunkRepository, "services.chunkRepository");
+  assertObject(candidate.embeddings, "services.embeddings");
+  assertObject(candidate.ingestJobs, "services.ingestJobs");
+  assertObject(candidate.vectorIndex, "services.vectorIndex");
+  assertOptionalFunction(candidate.close, "services.close");
+}
+
+function assertOptionalEnv(value: unknown): void {
+  if (value === undefined) {
+    return;
+  }
+  const env = assertObject(value, "env");
+  for (const key of [
+    "COMPACTION_SWEEP_ENABLED",
+    "COMPACTION_SWEEP_INTERVAL_MS",
+    "INGEST_SWEEP_ENABLED",
+    "INGEST_SWEEP_INTERVAL_MS",
+  ]) {
+    const envValue = env[key];
+    if (envValue !== undefined && typeof envValue !== "string") {
+      throw new Error(`env.${key} must be a string`);
+    }
+  }
+}
+
+function assertOptionalBoolean(value: unknown, fieldName: string): void {
+  if (value === undefined) {
+    return;
+  }
+  if (typeof value !== "boolean") {
+    throw new Error(`${fieldName} must be a boolean`);
+  }
+}
+
+function assertOptionalMetrics(value: unknown): void {
+  if (value === undefined) {
+    return;
+  }
+  const metrics = assertObject(value, "metrics");
+  assertFunction(metrics.observeSweeperTick, "metrics.observeSweeperTick");
+}
+
+function assertObject(
+  value: unknown,
+  fieldName: string,
+): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function assertFunction(value: unknown, fieldName: string): void {
+  if (typeof value !== "function") {
+    throw new Error(`${fieldName} must be a function`);
+  }
+}
+
+function assertOptionalFunction(value: unknown, fieldName: string): void {
+  if (value === undefined) {
+    return;
+  }
+  assertFunction(value, fieldName);
 }
 
 function resolveEnabledWorkers(env: NodeJS.ProcessEnv): BackgroundWorkerName[] {

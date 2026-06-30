@@ -12,8 +12,109 @@ type StartCompactionSweeper = NonNullable<
 type StartIngestSweeper = NonNullable<
   StartBackgroundWorkersOptions["startIngestSweeper"]
 >;
+const callStartBackgroundWorkers = (input: unknown) =>
+  startBackgroundWorkers(input as StartBackgroundWorkersOptions);
 
 describe("startBackgroundWorkers", () => {
+  it.each([undefined, null, "input", 12, true, []])(
+    "rejects non-object direct options",
+    async (input) => {
+      await expect(callStartBackgroundWorkers(input)).rejects.toThrow(
+        "startBackgroundWorkers options must be an object",
+      );
+    },
+  );
+
+  it.each<[
+    (options: StartBackgroundWorkersOptions) => unknown,
+    string,
+  ]>([
+    [(options) => ({ ...options, logger: null }), "logger must be an object"],
+    [
+      (options) => ({
+        ...options,
+        logger: { ...options.logger, error: null },
+      }),
+      "logger.error must be a function",
+    ],
+    [(options) => ({ ...options, env: null }), "env must be an object"],
+    [
+      (options) => ({
+        ...options,
+        env: { COMPACTION_SWEEP_ENABLED: 1 },
+      }),
+      "env.COMPACTION_SWEEP_ENABLED must be a string",
+    ],
+    [
+      (options) => ({ ...options, failFast: "true" }),
+      "failFast must be a boolean",
+    ],
+    [(options) => ({ ...options, metrics: null }), "metrics must be an object"],
+    [
+      (options) => ({
+        ...options,
+        metrics: { observeSweeperTick: null },
+      }),
+      "metrics.observeSweeperTick must be a function",
+    ],
+    [
+      (options) => ({ ...options, bootstrapServices: "bootstrap" }),
+      "bootstrapServices must be a function",
+    ],
+    [
+      (options) => ({ ...options, startCompactionSweeper: null }),
+      "startCompactionSweeper must be a function",
+    ],
+    [
+      (options) => ({ ...options, startIngestSweeper: null }),
+      "startIngestSweeper must be a function",
+    ],
+  ])("rejects invalid direct option field", async (mutateOptions, message) => {
+    const bootstrapServices = vi.fn().mockResolvedValue(buildServices());
+
+    await expect(
+      callStartBackgroundWorkers(
+        mutateOptions({
+          logger: buildLogger(),
+          env: {},
+          bootstrapServices,
+        }),
+      ),
+    ).rejects.toThrow(message);
+
+    expect(bootstrapServices).not.toHaveBeenCalled();
+  });
+
+  it("rejects malformed bootstrap services in fail-fast mode", async () => {
+    await expect(
+      startBackgroundWorkers({
+        logger: buildLogger(),
+        env: enabledEnv(),
+        failFast: true,
+        bootstrapServices: vi.fn().mockResolvedValue(null),
+      }),
+    ).rejects.toThrow("background worker services must be an object");
+  });
+
+  it("logs malformed bootstrap services and returns a noop handle by default", async () => {
+    const logger = buildLogger();
+    const startCompactionSweeper = vi.fn<StartCompactionSweeper>();
+    const startIngestSweeper = vi.fn<StartIngestSweeper>();
+
+    const handle = await startBackgroundWorkers({
+      logger,
+      env: enabledEnv(),
+      bootstrapServices: vi.fn().mockResolvedValue(null),
+      startCompactionSweeper,
+      startIngestSweeper,
+    });
+
+    expect(handle.startedWorkers).toEqual([]);
+    expect(startCompactionSweeper).not.toHaveBeenCalled();
+    expect(startIngestSweeper).not.toHaveBeenCalled();
+    expect(logger.error).toHaveBeenCalledTimes(2);
+  });
+
   it("shares one canonical services bootstrap across both enabled loops", async () => {
     const logger = buildLogger();
     const services = buildServices();

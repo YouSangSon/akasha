@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid background-worker coordinator options, env values, metrics, injected
+  starters, and bootstrap service results are rejected before worker startup.
 - Invalid compaction and ingest sweeper loop inputs, logger methods, metrics,
   and intervals are rejected before timers are scheduled.
 - Invalid ingest sweeper inputs, claimed jobs, chunk rows, and embedding

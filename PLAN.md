@@ -4,19 +4,21 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Sweeper Loop Input Guards
+## Current Loop — Background Worker Coordinator Guards
 
 Status:
-- `startBackgroundSweeper` and `startIngestSweeper` now reject invalid direct
-  input before scheduling timers or logging loop startup.
-- Loop logger methods, optional metrics recorders, and interval values are
-  validated before any background sweep can be scheduled.
-- `intervalMs` now rejects non-finite, non-integer, and sub-1000 values instead
-  of only checking the numeric lower bound.
-- Existing tick scheduling, stop handling, metric recording, error swallowing,
-  and environment parsing behavior is preserved.
-- Focused sweeper-loop, adjacent one-shot/background-worker tests, typecheck,
-  build, audit, single-worker full suite, and diff checks passed.
+- `startBackgroundWorkers` now rejects invalid direct options before reading
+  worker flags, bootstrapping services, or starting sweepers.
+- Coordinator options now validate logger methods, environment flag types,
+  fail-fast mode, metrics recorders, service bootstrap, and injected starter
+  functions.
+- Malformed bootstrap service results are rejected in fail-fast mode and logged
+  as worker startup failures in default mode without starting sweepers.
+- Existing disabled-worker noop behavior, shared bootstrap, stop handling,
+  fail-fast bootstrap errors, server startup resilience, and metrics wiring is
+  preserved.
+- Focused coordinator, adjacent app/server tests, typecheck, build, audit,
+  single-worker full suite, and diff checks passed.
 - Default parallel `npm test` remains timing-sensitive on unrelated server and
   backup shell tests under load, so full-suite verification used one worker.
 
