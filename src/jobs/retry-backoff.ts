@@ -6,6 +6,10 @@
 
 // Exponential backoff: base 1 s, doubles per attempt, capped at 5 min.
 export function nextRetryDelayMs(attempts: number): number {
+  if (!Number.isSafeInteger(attempts) || attempts < 0) {
+    throw new Error("retry attempts must be a non-negative safe integer");
+  }
+
   const BASE_MS = 1_000;
   const CAP_MS = 5 * 60 * 1_000;
   return Math.min(BASE_MS * Math.pow(2, attempts), CAP_MS);

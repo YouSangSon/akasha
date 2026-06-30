@@ -109,6 +109,18 @@ describe("nextRetryDelayMs", () => {
   it("caps at 5 minutes", () => {
     expect(nextRetryDelayMs(20)).toBe(5 * 60 * 1_000);
   });
+
+  it.each([
+    ["NaN", Number.NaN],
+    ["Infinity", Number.POSITIVE_INFINITY],
+    ["decimal", 1.5],
+    ["negative", -1],
+    ["unsafe integer", Number.MAX_SAFE_INTEGER + 1],
+  ])("rejects invalid attempt counts: %s", (_label, attempts) => {
+    expect(() => nextRetryDelayMs(attempts)).toThrow(
+      "retry attempts must be a non-negative safe integer",
+    );
+  });
 });
 
 describe("runIngestSweep", () => {

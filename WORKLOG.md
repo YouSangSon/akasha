@@ -2,6 +2,22 @@
 
 ## 2026-06-30
 
+- Hardened retry backoff attempt validation:
+  - `nextRetryDelayMs` now rejects invalid attempt counts before exponential
+    delay calculation.
+  - Attempt counts must be non-negative safe integers.
+  - Existing attempt `0`, doubling, and 5-minute cap behavior are preserved.
+  - Review found no behavioral issues; the suggested unsafe-integer test case
+    was added.
+
+Verification:
+- `npx vitest run tests/compact/ingest-sweeper.test.ts` (15 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (1119 passed, 34 skipped across 70 files)
+- `git diff --check`
+
 - Hardened eval metric input validation:
   - `recallAtK` and `mrrAtK` now reject non-array direct inputs before metric
     calculation.
