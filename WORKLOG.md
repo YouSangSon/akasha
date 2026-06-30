@@ -2,6 +2,33 @@
 
 ## 2026-06-30
 
+- Hardened retrieval input validation:
+  - `retrieveMemory` now rejects non-object direct inputs before property
+    access.
+  - Direct retrieval inputs must provide a query-capable vector index,
+    hydration-capable repository, non-empty finite vector, valid optional
+    string fields, boolean legacy opt-in, non-blank project/user scope
+    identifiers, and positive safe-integer limit.
+  - Vector hits with missing, non-numeric, non-positive, fractional, or
+    non-finite `memory_record_id` payloads are ignored before Postgres
+    hydration or vector-score fusion.
+  - Existing organization strictness, legacy anonymous opt-in behavior,
+    lexical oversampling, ranking, and hybrid fusion behavior is preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/search/retrieve-memory.test.ts` (31 passed)
+- `npx vitest run tests/search/retrieve-memory.test.ts tests/search/rank-results.test.ts tests/search/lexical-score.test.ts tests/mcp/server.test.ts`
+  (184 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1280 passed, 34 skipped
+  across 70 files)
+- `git diff --check`
+
 - Hardened context pack record input validation:
   - `buildContextPack` now rejects non-object direct inputs before reading
     `records`.

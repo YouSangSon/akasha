@@ -1,7 +1,79 @@
 import { describe, expect, it, vi } from "vitest";
-import { retrieveMemory } from "../../src/search/retrieve-memory.js";
+import {
+  retrieveMemory,
+  type RetrieveMemoryInput,
+} from "../../src/search/retrieve-memory.js";
+
+const callRetrieveMemory = (input: unknown) =>
+  retrieveMemory(input as RetrieveMemoryInput);
+
+function createValidRetrieveInput(
+  overrides: Record<string, unknown> = {},
+): RetrieveMemoryInput {
+  return ({
+    vectorIndex: {
+      query: vi.fn().mockResolvedValue([]),
+    },
+    repository: {
+      getMemoryRecordsByIds: vi.fn().mockResolvedValue([]),
+    },
+    vector: [0.1, 0.2, 0.3],
+    organizationId: "dev-team",
+    projectKey: "project-alpha",
+    limit: 5,
+    ...overrides,
+  } as unknown) as RetrieveMemoryInput;
+}
 
 describe("retrieveMemory", () => {
+  it.each([undefined, null, "input", 12, true, []])(
+    "rejects non-object direct input",
+    async (input) => {
+      await expect(callRetrieveMemory(input)).rejects.toThrow(
+        "retrieveMemory input must be an object",
+      );
+    },
+  );
+
+  it.each([
+    [{ vectorIndex: null }, "vectorIndex must be an object"],
+    [
+      { vectorIndex: { query: "search" } },
+      "vectorIndex.query must be a function",
+    ],
+    [{ repository: null }, "repository must be an object"],
+    [
+      { repository: {} },
+      "repository.getMemoryRecordsByIds must be a function",
+    ],
+    [
+      {
+        repository: {
+          getMemoryRecordsByIds: vi.fn().mockResolvedValue([]),
+          searchMemory: true,
+        },
+      },
+      "repository.searchMemory must be a function",
+    ],
+    [{ vector: [] }, "vector must be a non-empty array"],
+    [{ vector: [0.1, Infinity] }, "vector[1] must be a finite number"],
+    [{ organizationId: 12 }, "organizationId must be a string"],
+    [{ query: 12 }, "query must be a string"],
+    [{ allowLegacyAnonymous: "true" }, "allowLegacyAnonymous must be a boolean"],
+    [
+      { projectKey: " \n\t " },
+      "projectKey must contain non-whitespace text",
+    ],
+    [{ userScopeId: "" }, "userScopeId must contain non-whitespace text"],
+    [{ limit: 0 }, "limit must be a positive safe integer"],
+  ])("rejects invalid direct input field", async (overrides, message) => {
+    await expect(
+      retrieveMemory(
+        createValidRetrieveInput(overrides as Record<string, unknown>),
+      ),
+    ).rejects.toThrow(message);
+  });
+
   it("hydrates vector hits from postgres and keeps project results ahead of user results", async () => {
     const vectorIndex = {
       query: vi
@@ -219,6 +291,68 @@ describe("retrieveMemory", () => {
       "dev-team",
       undefined,
     );
+  });
+
+  it("ignores vector hits with invalid memory record ids before hydration", async () => {
+    const vectorIndex = {
+      query: vi.fn().mockResolvedValue([
+        { id: "chunk:no-payload", score: 0.99, payload: {} },
+        { id: "chunk:string", score: 0.98, payload: { memory_record_id: "12" } },
+        { id: "chunk:zero", score: 0.97, payload: { memory_record_id: 0 } },
+        {
+          id: "chunk:fraction",
+          score: 0.96,
+          payload: { memory_record_id: 12.5 },
+        },
+        { id: "chunk:nan", score: 0.95, payload: { memory_record_id: NaN } },
+        { id: "chunk:12", score: 0.9, payload: { memory_record_id: 12 } },
+      ]),
+      upsert: vi.fn(),
+      delete: vi.fn(),
+      deleteByRecordIds: vi.fn().mockResolvedValue(undefined),
+      ensureCollection: vi.fn(),
+    };
+
+    const repository = {
+      getMemoryRecordsByIds: vi.fn().mockResolvedValue([
+        {
+          id: 12,
+          sourceId: 202,
+          scopeType: "project",
+          scopeId: "project-alpha",
+          memoryType: "decision",
+          content: "Only valid vector payload ids should hydrate.",
+          createdAt: "2026-04-25T00:00:00.000Z",
+          updatedAt: "2026-04-25T00:00:00.000Z",
+          source: {
+            id: 302,
+            scopeType: "project",
+            scopeId: "project-alpha",
+            sourceType: "decision",
+            externalId: "adr-1",
+            title: "ADR 1",
+            uri: "file:///tmp/adr-1.md",
+            createdAt: "2026-04-25T00:00:00.000Z",
+          },
+        },
+      ]),
+    };
+
+    const results = await retrieveMemory({
+      vectorIndex: vectorIndex as never,
+      repository: repository as never,
+      vector: [0.1, 0.2, 0.3],
+      organizationId: "dev-team",
+      projectKey: "project-alpha",
+      limit: 5,
+    });
+
+    expect(repository.getMemoryRecordsByIds).toHaveBeenCalledWith(
+      [12],
+      "dev-team",
+      undefined,
+    );
+    expect(results.map((result) => result.id)).toEqual([12]);
   });
 
   it("throws when organizationId is missing and the legacy anonymous escape hatch is not opted into", async () => {

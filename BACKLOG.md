@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid retrieval inputs and corrupt vector hit memory IDs are rejected or
+  ignored before repository hydration and ranking.
 - Invalid context pack records and source metadata are rejected before section
   selection or markdown rendering.
 - Invalid goal context pack inputs and iteration render fields are rejected

@@ -4,16 +4,16 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Context Pack Record Input Guards
+## Current Loop — Retrieval Input Guards
 
 Status:
-- `buildContextPack` now rejects invalid top-level input before record
-  iteration.
-- Context pack records must provide valid consumed id, scope, memory type,
-  content, and source metadata before section selection or markdown rendering.
-- Existing grouping, section caps, cache-friendly ordering, compact excerpts,
-  and prompt-injection labeling behavior is preserved.
-- Focused context-pack and adjacent goal/MCP tests, typecheck, build, audit,
+- `retrieveMemory` now rejects invalid direct inputs before organization,
+  vector index, repository, scope, vector, or limit access.
+- Corrupt vector hits with invalid `memory_record_id` payloads are ignored
+  before repository hydration or vector-score fusion.
+- Existing org strictness, legacy anonymous opt-in behavior, lexical
+  oversampling, ranking, and hybrid fusion behavior is preserved.
+- Focused retrieval and adjacent search/MCP tests, typecheck, build, audit,
   single-worker full suite, and diff checks passed.
 - Default parallel `npm test` remains timing-sensitive on unrelated server and
   backup shell tests under load, so full-suite verification used one worker.

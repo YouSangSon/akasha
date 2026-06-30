@@ -38,6 +38,7 @@ export type RetrieveMemoryInput = {
 export async function retrieveMemory(
   input: RetrieveMemoryInput,
 ): Promise<SearchMemoryResult[]> {
+  assertRetrieveMemoryInput(input);
   assertOrganizationId(input.organizationId, input.allowLegacyAnonymous, "retrieveMemory");
 
   const organizationId = input.organizationId ?? "";
@@ -124,6 +125,103 @@ function retrievalScopes(input: RetrieveMemoryInput): ScopeRef[] {
   ];
 }
 
+function assertRetrieveMemoryInput(
+  input: unknown,
+): asserts input is RetrieveMemoryInput {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    throw new Error("retrieveMemory input must be an object");
+  }
+
+  const candidate = input as Record<string, unknown>;
+  assertVectorIndex(candidate.vectorIndex);
+  assertRepository(candidate.repository);
+  assertFiniteVector(candidate.vector);
+  assertOptionalNonBlankString(candidate.organizationId, "organizationId");
+  assertOptionalString(candidate.query, "query");
+  assertOptionalBoolean(candidate.allowLegacyAnonymous, "allowLegacyAnonymous");
+  assertNonBlankString(candidate.projectKey, "projectKey");
+  assertOptionalNonBlankString(candidate.userScopeId, "userScopeId");
+  assertPositiveSafeInteger(candidate.limit, "limit");
+}
+
+function assertVectorIndex(value: unknown): void {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error("vectorIndex must be an object");
+  }
+
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate.query !== "function") {
+    throw new Error("vectorIndex.query must be a function");
+  }
+}
+
+function assertRepository(value: unknown): void {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error("repository must be an object");
+  }
+
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate.getMemoryRecordsByIds !== "function") {
+    throw new Error("repository.getMemoryRecordsByIds must be a function");
+  }
+  if (
+    candidate.searchMemory !== undefined &&
+    typeof candidate.searchMemory !== "function"
+  ) {
+    throw new Error("repository.searchMemory must be a function");
+  }
+}
+
+function assertFiniteVector(value: unknown): void {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error("vector must be a non-empty array");
+  }
+
+  for (const [index, component] of value.entries()) {
+    if (typeof component !== "number" || !Number.isFinite(component)) {
+      throw new Error(`vector[${index}] must be a finite number`);
+    }
+  }
+}
+
+function assertOptionalNonBlankString(
+  value: unknown,
+  fieldName: string,
+): void {
+  if (value === undefined) {
+    return;
+  }
+
+  assertNonBlankString(value, fieldName);
+}
+
+function assertOptionalString(value: unknown, fieldName: string): void {
+  if (value !== undefined && typeof value !== "string") {
+    throw new Error(`${fieldName} must be a string`);
+  }
+}
+
+function assertOptionalBoolean(value: unknown, fieldName: string): void {
+  if (value !== undefined && typeof value !== "boolean") {
+    throw new Error(`${fieldName} must be a boolean`);
+  }
+}
+
+function assertNonBlankString(value: unknown, fieldName: string): void {
+  if (typeof value !== "string") {
+    throw new Error(`${fieldName} must be a string`);
+  }
+  if (value.trim().length === 0) {
+    throw new Error(`${fieldName} must contain non-whitespace text`);
+  }
+}
+
+function assertPositiveSafeInteger(value: unknown, fieldName: string): void {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
+    throw new Error(`${fieldName} must be a positive safe integer`);
+  }
+}
+
 async function queryLexicalCandidates(
   input: RetrieveMemoryInput,
   scopes: ScopeRef[],
@@ -162,7 +260,7 @@ function uniqueMemoryRecordIds(hits: VectorHit[]): number[] {
   for (const hit of hits) {
     const id = hit.payload?.memory_record_id;
 
-    if (typeof id !== "number" || seen.has(id)) {
+    if (!isPositiveSafeInteger(id) || seen.has(id)) {
       continue;
     }
 
@@ -178,7 +276,7 @@ function maxVectorScoresByRecordId(hits: VectorHit[]): Map<number, number> {
 
   for (const hit of hits) {
     const id = hit.payload?.memory_record_id;
-    if (typeof id !== "number") {
+    if (!isPositiveSafeInteger(id)) {
       continue;
     }
 
@@ -189,6 +287,14 @@ function maxVectorScoresByRecordId(hits: VectorHit[]): Map<number, number> {
   }
 
   return scores;
+}
+
+function isPositiveSafeInteger(value: unknown): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isSafeInteger(value) &&
+    value > 0
+  );
 }
 
 function scoreLexicalRecords(
