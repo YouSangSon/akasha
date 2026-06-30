@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildRetrievedMemoryCandidate,
+  newestUpdatedAtFor,
   rankCandidates,
   rankResults,
   scoreSearchResult,
@@ -121,6 +122,17 @@ describe("rankResults", () => {
     expect(ranked.map((record) => record.id)).toEqual([22, 21]);
   });
 
+  it.each([
+    "not-a-date",
+    "2026-02-30T00:00:00.000Z",
+    "2026-03-28T10:00:00Z",
+    123 as unknown as string,
+  ])("rejects invalid updatedAt before ranking: %s", (updatedAt) => {
+    expect(() => rankResults([createResult({ updatedAt })])).toThrow(
+      /record\.updatedAt is not a canonical ISO 8601 timestamp/,
+    );
+  });
+
   it("exposes deterministic internal score components", () => {
     const record = createResult({
       id: 31,
@@ -153,6 +165,14 @@ describe("rankResults", () => {
     );
   });
 
+  it("rejects non-finite newestUpdatedAt before scoring", () => {
+    expect(() =>
+      scoreSearchResult(createResult({}), {
+        newestUpdatedAt: Number.NaN,
+      }),
+    ).toThrow("newestUpdatedAt must be a finite timestamp");
+  });
+
   it("uses vector score to order records when metadata ties", () => {
     const lowerVector = buildRetrievedMemoryCandidate(
       createResult({
@@ -176,5 +196,40 @@ describe("rankResults", () => {
     const ranked = rankCandidates([lowerVector, higherVector]);
 
     expect(ranked.map((candidate) => candidate.record.id)).toEqual([41, 42]);
+  });
+
+  it("rejects invalid candidate updatedAt before tie-break sorting", () => {
+    const candidate = buildRetrievedMemoryCandidate(
+      createResult({
+        id: 51,
+        updatedAt: "2026-03-28T10:00:00.000Z",
+      }),
+    );
+    const invalidCandidate = {
+      ...candidate,
+      record: createResult({
+        id: 52,
+        updatedAt: "not-a-date",
+      }),
+    };
+
+    expect(() => rankCandidates([candidate, invalidCandidate])).toThrow(
+      /record\.updatedAt is not a canonical ISO 8601 timestamp/,
+    );
+  });
+
+  it("finds the newest canonical updatedAt timestamp", () => {
+    expect(
+      newestUpdatedAtFor([
+        createResult({ updatedAt: "2026-03-27T10:00:00.000Z" }),
+        createResult({ updatedAt: "2026-03-29T10:00:00.000Z" }),
+      ]),
+    ).toBe(Date.parse("2026-03-29T10:00:00.000Z"));
+  });
+
+  it("rejects empty input when deriving the newest updatedAt", () => {
+    expect(() => newestUpdatedAtFor([])).toThrow(
+      "records must contain at least one record",
+    );
   });
 });

@@ -2,6 +2,25 @@
 
 ## 2026-06-30
 
+- Hardened search-ranking timestamp validation:
+  - Ranking now rejects non-canonical `updatedAt` timestamps before recency
+    scoring or candidate tie-break sorting.
+  - `buildRetrievedMemoryCandidate` and `newestUpdatedAtFor` derive recency
+    anchors only from canonical ISO timestamps.
+  - `scoreSearchResult` rejects non-finite `newestUpdatedAt` values before
+    total-score calculation.
+  - `newestUpdatedAtFor` now rejects empty input instead of returning
+    `-Infinity`.
+
+Verification:
+- `npx vitest run tests/search/rank-results.test.ts tests/search/retrieve-memory.test.ts`
+  (23 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (1148 passed, 34 skipped across 70 files)
+- `git diff --check`
+
 - Hardened chunk-text input validation:
   - `chunkText` now rejects non-object inputs before property access.
   - Non-string `text` is rejected before `.matchAll()`.

@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid search-ranking timestamps are rejected before recency scoring,
+  candidate tie-break sorting, or newest timestamp derivation.
 - Invalid chunk-text inputs are rejected before tokenization or chunk offset
   calculation.
 - Invalid decay-score inputs are rejected before scoring or candidate
