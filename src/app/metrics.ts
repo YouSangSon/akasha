@@ -1,7 +1,12 @@
-import type { DependencyReport } from "../health/check-dependencies.js";
+import type {
+  DependencyReport,
+  DependencyStatus,
+} from "../health/check-dependencies.js";
 import type {
   SweeperRowOutcome,
   SweeperTickObservation,
+  SweeperTickStatus,
+  SweeperWorker,
 } from "../compact/sweeper-metrics.js";
 import type {
   BackgroundQueue,
@@ -70,6 +75,16 @@ const KNOWN_SWEEPER_ROW_OUTCOMES = new Set<SweeperRowOutcome>([
   "failed",
 ]);
 
+const KNOWN_SWEEPER_WORKERS = new Set<SweeperWorker>([
+  "compaction",
+  "ingest",
+]);
+
+const KNOWN_SWEEPER_TICK_STATUSES = new Set<SweeperTickStatus>([
+  "success",
+  "error",
+]);
+
 const KNOWN_BACKGROUND_QUEUES = new Set<BackgroundQueue>([
   "ingest",
   "compaction",
@@ -89,6 +104,7 @@ export function createMetricsRegistry(): MetricsRegistry {
 
   return {
     observeHttpRequest(observation) {
+      assertHttpRequestObservation(observation);
       const method = normalizeHttpMethod(observation.method);
       const status = String(observation.statusCode);
       const key = buildHttpSampleKey(method, observation.route, status);
@@ -111,6 +127,7 @@ export function createMetricsRegistry(): MetricsRegistry {
     },
 
     observeSweeperTick(observation) {
+      assertSweeperTickObservation(observation);
       const key = buildSweeperTickSampleKey(
         observation.worker,
         observation.status,
@@ -141,10 +158,12 @@ export function createMetricsRegistry(): MetricsRegistry {
     },
 
     setDependencyReport(report) {
+      assertDependencyReport(report);
       latestDependencyReport = report;
     },
 
     render(backlog) {
+      assertOptionalBackgroundQueueBacklog(backlog);
       return renderMetrics({
         httpSamples: [...httpSamples.values()],
         sweeperTickSamples: [...sweeperTickSamples.values()],
@@ -265,6 +284,16 @@ function observeSweeperRows(
 
 function isKnownSweeperRowOutcome(outcome: string): outcome is SweeperRowOutcome {
   return KNOWN_SWEEPER_ROW_OUTCOMES.has(outcome as SweeperRowOutcome);
+}
+
+function isKnownSweeperWorker(worker: string): worker is SweeperWorker {
+  return KNOWN_SWEEPER_WORKERS.has(worker as SweeperWorker);
+}
+
+function isKnownSweeperTickStatus(
+  status: string,
+): status is SweeperTickStatus {
+  return KNOWN_SWEEPER_TICK_STATUSES.has(status as SweeperTickStatus);
 }
 
 function isKnownBackgroundQueue(queue: string): queue is BackgroundQueue {
@@ -464,4 +493,151 @@ function sanitizeGaugeValue(value: number): number {
     return 0;
   }
   return Math.max(0, Math.trunc(value));
+}
+
+function assertHttpRequestObservation(
+  value: unknown,
+): asserts value is HttpRequestObservation {
+  const candidate = assertObject(value, "HTTP request observation");
+  assertOptionalString(candidate.method, "method");
+  assertString(candidate.route, "route");
+  assertFiniteNumber(candidate.statusCode, "statusCode");
+  assertFiniteNumber(candidate.durationSeconds, "durationSeconds");
+}
+
+function assertSweeperTickObservation(
+  value: unknown,
+): asserts value is SweeperTickObservation {
+  const candidate = assertObject(value, "sweeper tick observation");
+  assertSweeperWorker(candidate.worker, "worker");
+  assertSweeperTickStatus(candidate.status, "status");
+  assertFiniteNumber(candidate.durationSeconds, "durationSeconds");
+
+  if (candidate.counts === undefined) {
+    return;
+  }
+
+  const counts = assertObject(candidate.counts, "counts");
+  for (const [outcome, count] of Object.entries(counts)) {
+    if (!isKnownSweeperRowOutcome(outcome)) {
+      continue;
+    }
+    assertFiniteNumber(count, `counts.${outcome}`);
+  }
+}
+
+function assertDependencyReport(
+  value: unknown,
+): asserts value is DependencyReport {
+  const candidate = assertObject(value, "dependency report");
+  assertDependencyStatus(candidate.status, "dependency report.status");
+  if (!Array.isArray(candidate.checks)) {
+    throw new Error("dependency report.checks must be an array");
+  }
+
+  for (const [index, checkValue] of candidate.checks.entries()) {
+    const prefix = `dependency report.checks[${index}]`;
+    const check = assertObject(checkValue, prefix);
+    assertString(check.name, `${prefix}.name`);
+    assertDependencyStatus(check.status, `${prefix}.status`);
+    assertFiniteNumber(check.durationMs, `${prefix}.durationMs`);
+    if (check.message !== undefined) {
+      assertString(check.message, `${prefix}.message`);
+    }
+  }
+}
+
+function assertOptionalBackgroundQueueBacklog(
+  value: unknown,
+): asserts value is BackgroundQueueBacklogSnapshot | undefined {
+  if (value === undefined) {
+    return;
+  }
+
+  const candidate = assertObject(value, "background queue backlog");
+  assertBoolean(
+    candidate.collectSuccess,
+    "background queue backlog.collectSuccess",
+  );
+  if (!Array.isArray(candidate.rows)) {
+    throw new Error("background queue backlog.rows must be an array");
+  }
+
+  for (const [index, rowValue] of candidate.rows.entries()) {
+    const prefix = `background queue backlog.rows[${index}]`;
+    const row = assertObject(rowValue, prefix);
+    assertString(row.queue, `${prefix}.queue`);
+    assertString(row.state, `${prefix}.state`);
+    assertFiniteNumber(row.count, `${prefix}.count`);
+  }
+}
+
+function assertSweeperWorker(
+  value: unknown,
+  fieldName: string,
+): asserts value is SweeperWorker {
+  if (typeof value !== "string" || !isKnownSweeperWorker(value)) {
+    throw new Error(`${fieldName} must be "compaction" or "ingest"`);
+  }
+}
+
+function assertSweeperTickStatus(
+  value: unknown,
+  fieldName: string,
+): asserts value is SweeperTickStatus {
+  if (typeof value !== "string" || !isKnownSweeperTickStatus(value)) {
+    throw new Error(`${fieldName} must be "success" or "error"`);
+  }
+}
+
+function assertDependencyStatus(
+  value: unknown,
+  fieldName: string,
+): asserts value is DependencyStatus {
+  if (value !== "ok" && value !== "fail") {
+    throw new Error(`${fieldName} must be "ok" or "fail"`);
+  }
+}
+
+function assertObject(
+  value: unknown,
+  fieldName: string,
+): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function assertString(value: unknown, fieldName: string): asserts value is string {
+  if (typeof value !== "string") {
+    throw new Error(`${fieldName} must be a string`);
+  }
+}
+
+function assertOptionalString(
+  value: unknown,
+  fieldName: string,
+): asserts value is string | undefined {
+  if (value !== undefined && typeof value !== "string") {
+    throw new Error(`${fieldName} must be a string when provided`);
+  }
+}
+
+function assertBoolean(
+  value: unknown,
+  fieldName: string,
+): asserts value is boolean {
+  if (typeof value !== "boolean") {
+    throw new Error(`${fieldName} must be a boolean`);
+  }
+}
+
+function assertFiniteNumber(
+  value: unknown,
+  fieldName: string,
+): asserts value is number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new Error(`${fieldName} must be a finite number`);
+  }
 }

@@ -2,6 +2,31 @@
 
 ## 2026-06-30
 
+- Hardened metrics-registry boundary validation:
+  - `createMetricsRegistry` now rejects malformed direct HTTP request
+    observations before normalizing methods or recording samples.
+  - Sweeper observations now validate worker/status enums, finite durations,
+    and finite known row counts before mutating tick or row counters.
+  - Dependency reports now validate report status, check containers, check
+    names/statuses, and finite durations before they can be rendered.
+  - Background queue backlog snapshots now validate their container shape,
+    collection status, rows, and finite counts before label rendering while
+    still filtering unknown queue/state strings from output.
+  - Existing `/metrics`, `/readyz`, background worker metrics, and collector
+    failure behavior is preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/app/metrics.test.ts` (36 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1545 passed, 34 skipped
+  across 70 files)
+- `git diff --check`
+
 - Hardened worker-process input validation:
   - `runWorkerProcess` now rejects invalid direct options before resolving
     defaults or invoking the background-worker starter.

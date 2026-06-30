@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid metrics registry observations, dependency reports, and backlog
+  snapshots are rejected before telemetry state mutation or label rendering.
 - Invalid worker-process options and injected starter handles are rejected
   before worker startup/no-worker logging reads their fields.
 - Invalid background-worker coordinator options, env values, metrics, injected

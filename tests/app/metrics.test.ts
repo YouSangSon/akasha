@@ -331,6 +331,46 @@ describe("GET /metrics", () => {
   });
 });
 
+describe("createMetricsRegistry HTTP metrics", () => {
+  it.each([
+    {
+      input: null,
+      message: "HTTP request observation must be an object",
+    },
+    {
+      input: {
+        method: "GET",
+        route: null,
+        statusCode: 200,
+        durationSeconds: 0.1,
+      },
+      message: "route must be a string",
+    },
+    {
+      input: {
+        method: "GET",
+        route: "/healthz",
+        statusCode: Number.NaN,
+        durationSeconds: 0.1,
+      },
+      message: "statusCode must be a finite number",
+    },
+    {
+      input: {
+        method: "GET",
+        route: "/healthz",
+        statusCode: 200,
+        durationSeconds: Number.POSITIVE_INFINITY,
+      },
+      message: "durationSeconds must be a finite number",
+    },
+  ])("rejects malformed request observations", ({ input, message }) => {
+    const metrics = createMetricsRegistry();
+
+    expect(() => metrics.observeHttpRequest(input as never)).toThrow(message);
+  });
+});
+
 describe("createMetricsRegistry sweeper metrics", () => {
   it("emits low-cardinality sweeper tick and row counters", () => {
     const metrics = createMetricsRegistry();
@@ -389,6 +429,95 @@ describe("createMetricsRegistry sweeper metrics", () => {
     );
     expect(text).not.toContain("ignoredCustomOutcome");
   });
+
+  it.each([
+    {
+      input: null,
+      message: "sweeper tick observation must be an object",
+    },
+    {
+      input: {
+        worker: "project-123",
+        status: "success",
+        durationSeconds: 0.1,
+      },
+      message: 'worker must be "compaction" or "ingest"',
+    },
+    {
+      input: {
+        worker: "ingest",
+        status: "project-123",
+        durationSeconds: 0.1,
+      },
+      message: 'status must be "success" or "error"',
+    },
+    {
+      input: {
+        worker: "ingest",
+        status: "success",
+        durationSeconds: Number.NaN,
+      },
+      message: "durationSeconds must be a finite number",
+    },
+    {
+      input: {
+        worker: "ingest",
+        status: "success",
+        durationSeconds: 0.1,
+        counts: null,
+      },
+      message: "counts must be an object",
+    },
+    {
+      input: {
+        worker: "ingest",
+        status: "success",
+        durationSeconds: 0.1,
+        counts: { scanned: Number.POSITIVE_INFINITY },
+      },
+      message: "counts.scanned must be a finite number",
+    },
+  ])("rejects malformed sweeper observations", ({ input, message }) => {
+    const metrics = createMetricsRegistry();
+
+    expect(() => metrics.observeSweeperTick(input as never)).toThrow(message);
+  });
+});
+
+describe("createMetricsRegistry dependency metrics", () => {
+  it.each([
+    {
+      input: null,
+      message: "dependency report must be an object",
+    },
+    {
+      input: { status: "private", checks: [] },
+      message: 'dependency report.status must be "ok" or "fail"',
+    },
+    {
+      input: { status: "ok", checks: null },
+      message: "dependency report.checks must be an array",
+    },
+    {
+      input: {
+        status: "ok",
+        checks: [{ name: null, status: "ok", durationMs: 1 }],
+      },
+      message: "dependency report.checks[0].name must be a string",
+    },
+    {
+      input: {
+        status: "ok",
+        checks: [{ name: "postgres", status: "ok", durationMs: Number.NaN }],
+      },
+      message:
+        "dependency report.checks[0].durationMs must be a finite number",
+    },
+  ])("rejects malformed dependency reports", ({ input, message }) => {
+    const metrics = createMetricsRegistry();
+
+    expect(() => metrics.setDependencyReport(input as never)).toThrow(message);
+  });
 });
 
 describe("createMetricsRegistry background queue metrics", () => {
@@ -439,5 +568,42 @@ describe("createMetricsRegistry background queue metrics", () => {
     expect(text).toContain("akasha_background_queue_collect_success 0");
     expect(text).not.toContain("organization");
     expect(text).not.toContain("private qdrant error");
+  });
+
+  it.each([
+    {
+      input: null,
+      message: "background queue backlog must be an object",
+    },
+    {
+      input: { collectSuccess: "true", rows: [] },
+      message: "background queue backlog.collectSuccess must be a boolean",
+    },
+    {
+      input: { collectSuccess: true, rows: null },
+      message: "background queue backlog.rows must be an array",
+    },
+    {
+      input: { collectSuccess: true, rows: [null] },
+      message: "background queue backlog.rows[0] must be an object",
+    },
+    {
+      input: {
+        collectSuccess: true,
+        rows: [{ queue: null, state: "pending", count: 1 }],
+      },
+      message: "background queue backlog.rows[0].queue must be a string",
+    },
+    {
+      input: {
+        collectSuccess: true,
+        rows: [{ queue: "ingest", state: "pending", count: Number.NaN }],
+      },
+      message: "background queue backlog.rows[0].count must be a finite number",
+    },
+  ])("rejects malformed backlog snapshots", ({ input, message }) => {
+    const metrics = createMetricsRegistry();
+
+    expect(() => metrics.render(input as never)).toThrow(message);
   });
 });
