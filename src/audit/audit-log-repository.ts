@@ -41,9 +41,11 @@ type AuditLogRow = {
 };
 
 export function createAuditLogRepository(pool: PgPool): AuditLogRepository {
+  assertAuditLogPool(pool);
+
   return {
     async record(entry) {
-      assertNonBlankText(entry.organizationId, "organizationId");
+      assertAuditLogEntry(entry);
 
       await pool.query(
         `
@@ -76,7 +78,7 @@ export function createAuditLogRepository(pool: PgPool): AuditLogRepository {
     async listByOrganization(organizationId, options) {
       assertNonBlankText(organizationId, "organizationId");
 
-      const limit = clampAuditLimit(options?.limit);
+      const limit = resolveAuditLimit(options);
       const result = await pool.query<AuditLogRow>(
         `
           SELECT
@@ -125,6 +127,33 @@ const DEFAULT_AUDIT_LIMIT = 100;
 const MAX_AUDIT_LIMIT = 1000;
 const MAX_ERROR_MESSAGE_LENGTH = 1024;
 
+function assertAuditLogPool(value: unknown): asserts value is PgPool {
+  const candidate = assertObject(value, "audit log pool");
+  assertFunction(candidate.query, "audit log pool.query");
+}
+
+function assertAuditLogEntry(
+  value: unknown,
+): asserts value is AuditLogEntry {
+  const candidate = assertObject(value, "audit log entry");
+  assertNonBlankText(candidate.organizationId, "organizationId");
+  assertNonBlankText(candidate.actor, "actor");
+  assertNonBlankText(candidate.tool, "tool");
+  assertOptionalNonBlankStringOrNull(candidate.projectKey, "projectKey");
+  assertAuditOutcome(candidate.outcome, "outcome");
+  assertOptionalStringOrNull(candidate.errorMessage, "errorMessage");
+  assertNonNegativeFiniteNumber(candidate.durationMs, "durationMs");
+  assertOptionalNonBlankStringOrNull(candidate.requestId, "requestId");
+}
+
+function resolveAuditLimit(options: { limit?: number } | undefined): number {
+  if (options === undefined) {
+    return DEFAULT_AUDIT_LIMIT;
+  }
+  const candidate = assertObject(options, "audit log list options");
+  return clampAuditLimit(candidate.limit as number | undefined);
+}
+
 function clampAuditLimit(value: number | undefined): number {
   if (value === undefined) {
     return DEFAULT_AUDIT_LIMIT;
@@ -135,4 +164,57 @@ function clampAuditLimit(value: number | undefined): number {
     );
   }
   return value;
+}
+
+function assertAuditOutcome(
+  value: unknown,
+  fieldName: string,
+): asserts value is AuditOutcome {
+  if (value !== "ok" && value !== "error") {
+    throw new Error(`${fieldName} must be "ok" or "error"`);
+  }
+}
+
+function assertObject(
+  value: unknown,
+  fieldName: string,
+): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function assertFunction(value: unknown, fieldName: string): void {
+  if (typeof value !== "function") {
+    throw new Error(`${fieldName} must be a function`);
+  }
+}
+
+function assertOptionalStringOrNull(value: unknown, fieldName: string): void {
+  if (value === undefined || value === null) {
+    return;
+  }
+  if (typeof value !== "string") {
+    throw new Error(`${fieldName} must be a string when provided`);
+  }
+}
+
+function assertOptionalNonBlankStringOrNull(
+  value: unknown,
+  fieldName: string,
+): void {
+  if (value === undefined || value === null) {
+    return;
+  }
+  assertNonBlankText(value, fieldName);
+}
+
+function assertNonNegativeFiniteNumber(
+  value: unknown,
+  fieldName: string,
+): asserts value is number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    throw new Error(`${fieldName} must be a non-negative finite number`);
+  }
 }

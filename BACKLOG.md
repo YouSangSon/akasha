@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid audit repository pools, record entries, and list options are rejected
+  before insert/select query construction.
 - Invalid project-ingest roots, project IDs, and repository handles are
   rejected before approved-source reads or memory persistence.
 - Invalid OAuth scope input containers, token scope lists, scope kinds, and

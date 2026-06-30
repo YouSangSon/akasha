@@ -2,6 +2,31 @@
 
 ## 2026-06-30
 
+- Hardened audit repository input validation:
+  - `createAuditLogRepository` now rejects malformed pool handles before
+    returning repository methods.
+  - `record` now rejects malformed direct audit entries, missing/blank required
+    text fields, invalid outcome values, invalid optional text fields, and
+    negative/non-finite durations before constructing insert queries.
+  - `listByOrganization` now rejects malformed direct options objects before
+    resolving limits or querying.
+  - Existing organization checks, audit limit bounds, error-message truncation,
+    audit-list behavior, and best-effort tool-boundary audit handling are
+    preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/audit/audit-truncation.test.ts tests/audit/audit-write.test.ts`
+  (33 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1582 passed, 34 skipped
+  across 70 files)
+- `git diff --check`
+
 - Hardened project-ingest input validation:
   - `collectProjectSources` now rejects non-string, blank, missing, and
     non-directory project roots before joining approved source paths or reading
