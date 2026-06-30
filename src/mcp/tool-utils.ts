@@ -28,6 +28,7 @@ export function formatMemoryIdentifier(record: {
   scopeId: string;
   id: number;
 }): string {
+  assertFormatMemoryIdentifierRecord(record);
   return `${record.scopeType}:${record.scopeId}:${record.id}`;
 }
 
@@ -70,6 +71,9 @@ export function normalizeLimit(limit: number | undefined): number {
   if (limit === undefined) {
     return 10;
   }
+  if (typeof limit !== "number") {
+    throw new Error("limit must be a number");
+  }
   if (!Number.isInteger(limit) || limit <= 0 || limit > 100) {
     throw new Error("limit must be a positive integer up to 100");
   }
@@ -77,6 +81,10 @@ export function normalizeLimit(limit: number | undefined): number {
 }
 
 export function toMemoryType(kind: string): AddMemoryInput["memoryType"] {
+  if (typeof kind !== "string") {
+    throw new Error("memory kind must be a string");
+  }
+
   switch (kind) {
     case "decision":
     case "summary":
@@ -88,6 +96,10 @@ export function toMemoryType(kind: string): AddMemoryInput["memoryType"] {
 }
 
 export function summarize(content: string): string {
+  if (typeof content !== "string") {
+    throw new Error("content must be a string");
+  }
+
   return content.slice(0, 80);
 }
 
@@ -138,6 +150,23 @@ function assertResolveUserScopeIdInput(
   assertNonBlankString(candidate.cwd, "cwd");
   assertOptionalString(candidate.explicitUserScopeId, "explicitUserScopeId");
   assertOptionalString(candidate.defaultUserScopeId, "defaultUserScopeId");
+}
+
+function assertFormatMemoryIdentifierRecord(record: unknown): void {
+  if (typeof record !== "object" || record === null || Array.isArray(record)) {
+    throw new Error("memory identifier record must be an object");
+  }
+
+  const candidate = record as Record<string, unknown>;
+  assertNonBlankString(candidate.scopeType, "scopeType");
+  assertNonBlankString(candidate.scopeId, "scopeId");
+  assertPositiveSafeInteger(candidate.id, "id");
+}
+
+function assertPositiveSafeInteger(value: unknown, fieldName: string): void {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
+    throw new Error(`${fieldName} must be a positive safe integer`);
+  }
 }
 
 function assertNonBlankString(value: unknown, fieldName: string): void {

@@ -5,7 +5,11 @@ import path from "node:path";
 import { mkdtemp, rm } from "node:fs/promises";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  formatMemoryIdentifier,
+  normalizeLimit,
   resolveUserScopeId,
+  summarize,
+  toMemoryType,
   type ResolveUserScopeIdInput,
 } from "../../src/mcp/tool-utils.js";
 
@@ -13,6 +17,74 @@ const originalDeveloperMemoryUserId = process.env.DEVELOPER_MEMORY_USER_ID;
 const tempDirs: string[] = [];
 const callResolveUserScopeId = (input: unknown) => () =>
   resolveUserScopeId(input as ResolveUserScopeIdInput);
+
+describe("tool utility input guards", () => {
+  it("formats memory identifiers from valid records", () => {
+    expect(
+      formatMemoryIdentifier({
+        scopeType: "project",
+        scopeId: "project-alpha",
+        id: 12,
+      }),
+    ).toBe("project:project-alpha:12");
+  });
+
+  it.each([
+    [null, "memory identifier record must be an object"],
+    [
+      { scopeType: 12, scopeId: "project-alpha", id: 1 },
+      "scopeType must be a string",
+    ],
+    [
+      { scopeType: "project", scopeId: " \n\t ", id: 1 },
+      "scopeId must contain non-whitespace text",
+    ],
+    [
+      { scopeType: "project", scopeId: "project-alpha", id: 0 },
+      "id must be a positive safe integer",
+    ],
+  ])("rejects invalid memory identifier input", (record, message) => {
+    expect(() =>
+      formatMemoryIdentifier(
+        record as { scopeType: string; scopeId: string; id: number },
+      ),
+    ).toThrow(message);
+  });
+
+  it("normalizes optional limits", () => {
+    expect(normalizeLimit(undefined)).toBe(10);
+    expect(normalizeLimit(25)).toBe(25);
+  });
+
+  it.each([
+    ["10", "limit must be a number"],
+    [0, "limit must be a positive integer up to 100"],
+    [101, "limit must be a positive integer up to 100"],
+    [1.5, "limit must be a positive integer up to 100"],
+  ])("rejects invalid limits", (limit, message) => {
+    expect(() => normalizeLimit(limit as number)).toThrow(message);
+  });
+
+  it("converts supported memory kinds", () => {
+    expect(toMemoryType("decision")).toBe("decision");
+    expect(toMemoryType("summary")).toBe("summary");
+    expect(toMemoryType("fact")).toBe("fact");
+  });
+
+  it("rejects invalid memory kind inputs", () => {
+    expect(() => toMemoryType(12 as unknown as string)).toThrow(
+      "memory kind must be a string",
+    );
+    expect(() => toMemoryType("task")).toThrow("Unsupported memory kind: task");
+  });
+
+  it("summarizes text while rejecting non-string content", () => {
+    expect(summarize("a".repeat(90))).toHaveLength(80);
+    expect(() => summarize(12 as unknown as string)).toThrow(
+      "content must be a string",
+    );
+  });
+});
 
 describe("resolveUserScopeId", () => {
   afterEach(async () => {

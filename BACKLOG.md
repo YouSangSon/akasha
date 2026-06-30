@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid MCP utility primitive inputs are rejected before identifier
+  formatting, limit normalization, memory-kind conversion, or summarization.
 - Invalid user-scope resolver inputs are rejected before environment, git, or
   OS fallback resolution.
 - Invalid ranking records, candidates, and score options are rejected before

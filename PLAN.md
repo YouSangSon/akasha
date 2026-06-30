@@ -4,16 +4,18 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — User Scope Resolver Input Guards
+## Current Loop — MCP Utility Primitive Guards
 
 Status:
-- `resolveUserScopeId` now rejects invalid direct input before reading
-  explicit/default user scope IDs, environment fallback, git config, or local
-  OS user fallback.
-- Resolver inputs must provide a non-blank string `cwd`; explicit and default
-  user scope IDs must be strings when present.
-- Existing explicit/default precedence, environment trimming, git-email hash,
-  and local username fallback behavior is preserved.
+- `formatMemoryIdentifier`, `normalizeLimit`, `toMemoryType`, and `summarize`
+  now reject invalid direct primitive inputs before formatting, slicing, or
+  conversion.
+- Memory identifier records must include non-blank scope fields and positive
+  safe-integer IDs.
+- Limits must be numbers before positive integer range checks run; memory kinds
+  and summary content must be strings before conversion/slicing.
+- Existing formatting, default limit, supported memory-kind conversion, and
+  summary truncation behavior is preserved.
 - Focused MCP utility and adjacent MCP tests, typecheck, build, audit,
   single-worker full suite, and diff checks passed.
 - Default parallel `npm test` remains timing-sensitive on unrelated server and

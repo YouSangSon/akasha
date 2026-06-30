@@ -2,6 +2,31 @@
 
 ## 2026-06-30
 
+- Hardened MCP utility primitive validation:
+  - `formatMemoryIdentifier` now rejects non-object records, blank scope
+    fields, and non-positive/non-safe IDs before formatting.
+  - `normalizeLimit` now rejects non-number direct limits before integer/range
+    checks.
+  - `toMemoryType` now rejects non-string direct kinds before supported-kind
+    conversion.
+  - `summarize` now rejects non-string direct content before slicing.
+  - Existing identifier formatting, default limit, supported memory-kind
+    conversion, and summary truncation behavior is preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/mcp/tool-utils.test.ts` (30 passed)
+- `npx vitest run tests/mcp/tool-utils.test.ts tests/mcp/server.test.ts tests/mcp/resolve-org.test.ts`
+  (178 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1331 passed, 34 skipped
+  across 70 files)
+- `git diff --check`
+
 - Hardened user-scope resolver input validation:
   - `resolveUserScopeId` now rejects non-object direct inputs before reading
     explicit/default scope IDs, environment fallback, git config, or local OS
