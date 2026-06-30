@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { findExactContentDuplicates } from "../../src/compact/detect-duplicates.js";
+import {
+  findExactContentDuplicates,
+  type RecordWithIdAndContent,
+} from "../../src/compact/detect-duplicates.js";
+
+const callFindExactContentDuplicates = (records: unknown) => () =>
+  findExactContentDuplicates(records as RecordWithIdAndContent[]);
 
 describe("findExactContentDuplicates", () => {
   it("returns empty when all records are distinct", () => {
@@ -57,4 +63,54 @@ describe("findExactContentDuplicates", () => {
       2, 4,
     ]);
   });
+
+  it.each([undefined, null, "records", 12, true, {}])(
+    "rejects non-array records input",
+    (records) => {
+      expect(callFindExactContentDuplicates(records)).toThrow(
+        "records must be an array",
+      );
+    },
+  );
+
+  it.each([null, [], "record", 12])(
+    "rejects invalid record entries before normalization",
+    (record) => {
+      expect(callFindExactContentDuplicates([record])).toThrow(
+        "records[0] must be an object",
+      );
+    },
+  );
+
+  it.each([0, -1, 1.5, Number.NaN, Infinity, "1"])(
+    "rejects invalid record ids before sorting: %s",
+    (id) => {
+      expect(
+        callFindExactContentDuplicates([
+          { id, content: "same" },
+          { id: 2, content: "same" },
+        ]),
+      ).toThrow("records[0].id must be a positive safe integer");
+    },
+  );
+
+  it("rejects non-string content before normalization", () => {
+    expect(
+      callFindExactContentDuplicates([
+        { id: 1, content: { replace: () => "same" } },
+      ]),
+    ).toThrow("records[0].content must be a string");
+  });
+
+  it.each([Number.NaN, Infinity, -Infinity, "5"])(
+    "rejects invalid importance before sorting: %s",
+    (importance) => {
+      expect(
+        callFindExactContentDuplicates([
+          { id: 1, content: "same", importance },
+          { id: 2, content: "same" },
+        ]),
+      ).toThrow("records[0].importance must be a finite number");
+    },
+  );
 });

@@ -21,6 +21,8 @@ export type RecordWithIdAndContent = {
 export function findExactContentDuplicates<T extends RecordWithIdAndContent>(
   records: readonly T[],
 ): DuplicateGroup<T>[] {
+  assertDuplicateRecords(records);
+
   const byNormalized = new Map<string, T[]>();
   for (const record of records) {
     const key = normalizeContent(record.content);
@@ -39,6 +41,45 @@ export function findExactContentDuplicates<T extends RecordWithIdAndContent>(
     groups.push({ keep: keep!, archive });
   }
   return groups;
+}
+
+function assertDuplicateRecords<T extends RecordWithIdAndContent>(
+  records: readonly T[],
+): void {
+  if (!Array.isArray(records)) {
+    throw new Error("records must be an array");
+  }
+
+  for (const [index, record] of records.entries()) {
+    assertDuplicateRecord(record, index);
+  }
+}
+
+function assertDuplicateRecord(
+  record: unknown,
+  index: number,
+): asserts record is RecordWithIdAndContent {
+  if (typeof record !== "object" || record === null || Array.isArray(record)) {
+    throw new Error(`records[${index}] must be an object`);
+  }
+
+  const candidate = record as Record<string, unknown>;
+  const { content, id, importance } = candidate;
+
+  if (typeof id !== "number" || !Number.isSafeInteger(id) || id <= 0) {
+    throw new Error(`records[${index}].id must be a positive safe integer`);
+  }
+
+  if (typeof content !== "string") {
+    throw new Error(`records[${index}].content must be a string`);
+  }
+
+  if (
+    importance !== undefined &&
+    (typeof importance !== "number" || !Number.isFinite(importance))
+  ) {
+    throw new Error(`records[${index}].importance must be a finite number`);
+  }
 }
 
 function normalizeContent(content: string): string {

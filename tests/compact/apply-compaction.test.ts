@@ -301,7 +301,7 @@ describe("applyCompaction (apply path - happy path)", () => {
         makeInput({ records, dryRun: false, decayThreshold: 0 }),
         makeDeps(repo, qdrant),
       ),
-    ).rejects.toThrow(/Expected positive integer id/);
+    ).rejects.toThrow("records[1].id must be a positive safe integer");
 
     expect(createCompactionRun).not.toHaveBeenCalled();
     expect(applyCompactionRecord).not.toHaveBeenCalled();

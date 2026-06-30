@@ -2,6 +2,33 @@
 
 ## 2026-06-30
 
+- Hardened exact duplicate input validation:
+  - `findExactContentDuplicates` now rejects non-array inputs before iteration.
+  - Each direct record must be an object with a positive safe-integer `id`,
+    string `content`, and finite optional `importance`.
+  - Invalid content is rejected before whitespace/case normalization.
+  - Invalid ids or importance values are rejected before duplicate candidate
+    sorting or compaction apply planning.
+  - The apply-compaction invalid-id test now asserts the earlier
+    plan-construction boundary while preserving the no-side-effects checks.
+  - Default parallel `npm test` twice hit unrelated 5s timeout-sensitive tests
+    in server startup and backup shell files; those files passed in isolation,
+    and the single-worker full suite passed.
+
+Verification:
+- `npx vitest run tests/compact/detect-duplicates.test.ts` (26 passed)
+- `npx vitest run tests/compact/detect-duplicates.test.ts tests/compact/compact-memory.test.ts tests/compact/apply-compaction.test.ts`
+  (50 passed)
+- `npx vitest run tests/app/start-background-workers-server.test.ts tests/app/start-operator-server-metrics.test.ts`
+  (4 passed)
+- `npx vitest run tests/scripts/backup-verify.test.ts` (60 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1169 passed, 34 skipped
+  across 70 files)
+- `git diff --check`
+
 - Hardened search-ranking timestamp validation:
   - Ranking now rejects non-canonical `updatedAt` timestamps before recency
     scoring or candidate tie-break sorting.

@@ -4,15 +4,17 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Search Ranking Timestamp Guards
+## Current Loop — Exact Duplicate Input Guards
 
 Status:
-- Search ranking helpers now reject non-canonical `updatedAt` timestamps before
-  recency scoring or tie-break sorting.
-- `newestUpdatedAtFor` rejects empty input, and `scoreSearchResult` rejects
-  non-finite recency anchors before total-score calculation.
-- Focused search tests, typecheck, build, audit, full suite, and diff
-  whitespace checks passed.
+- `findExactContentDuplicates` now rejects invalid records before content
+  normalization, duplicate grouping, or candidate sorting.
+- Direct records must be an array of objects with positive safe-integer `id`,
+  string `content`, and finite optional `importance`.
+- Focused duplicate and compaction tests, typecheck, build, audit, isolated
+  timeout-sensitive files, single-worker full suite, and diff checks passed.
+- Default parallel `npm test` still hit unrelated 5s timeout-sensitive tests
+  under load; those files passed in isolation.
 
 Loop closeout:
 - Commit locally; do not push.
