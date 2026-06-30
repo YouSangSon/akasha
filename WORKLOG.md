@@ -2,6 +2,33 @@
 
 ## 2026-06-30
 
+- Hardened compaction plan input validation:
+  - `buildCompactionPlan` now rejects non-object direct inputs before duplicate,
+    decay, semantic-group override, or promotion planning.
+  - Plan records must provide positive safe-integer IDs, valid memory/source
+    types, string content, string `createdAt`, and finite optional importance.
+  - Scope, scope labels, dry-run flag, optional project key, decay parameters,
+    injected dates, and semantic duplicate override groups are validated before
+    result construction.
+  - `shouldPromoteRecord` now rejects malformed direct records before source or
+    content inspection.
+  - Existing exact duplicate detection, decay defaults, semantic override use,
+    promotion candidate selection, and summary output behavior is preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/compact/compact-memory.test.ts` (36 passed)
+- `npx vitest run tests/compact/compact-memory.test.ts tests/compact/apply-compaction.test.ts tests/compact/detect-duplicates.test.ts tests/compact/decay-score.test.ts tests/mcp/server.test.ts`
+  (228 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1363 passed, 34 skipped
+  across 70 files)
+- `git diff --check`
+
 - Hardened semantic duplicate input validation:
   - `cosineSimilarity` now rejects non-array direct vector inputs before
     reading lengths.

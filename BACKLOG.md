@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid compaction plan inputs, records, semantic override groups, and
+  promotion records are rejected before planning.
 - Invalid semantic duplicate records, embedding maps, and vectors are rejected
   before cosine scoring or clustering.
 - Invalid OAuth protected-resource helper inputs are rejected before challenge
