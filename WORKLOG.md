@@ -2,6 +2,33 @@
 
 ## 2026-06-30
 
+- Hardened OAuth scope enforcement input validation:
+  - `checkOAuthScopes` and `requiredScopeKindForTool` now reject malformed
+    direct scope input containers before reading tool arguments such as
+    `dryRun`.
+  - OAuth token scope lists now must be arrays of strings before scope matching
+    runs.
+  - `acceptedScopesForKind` now rejects unsupported direct scope kinds with an
+    explicit error.
+  - Unsupported direct tool names now fail explicitly instead of falling
+    through scope-kind switch logic.
+  - Existing HTTP route scope enforcement, MCP Streamable HTTP authorization,
+    JWT verification, and static-token bypass behavior is preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/app/oauth-token-auth.test.ts` (21 passed)
+- `npx vitest run tests/app/oauth-token-auth.test.ts tests/app/mcp-http.test.ts tests/app/server.test.ts`
+  (107 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1562 passed, 34 skipped
+  across 70 files)
+- `git diff --check`
+
 - Hardened dependency health probe input validation:
   - `checkDependencies` now rejects malformed direct probe containers before
     iterating entries or reporting readiness checks.

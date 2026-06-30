@@ -136,9 +136,11 @@ export function checkOAuthScopes(
   input: Record<string, unknown>,
   protectedResource: OAuthProtectedResourceConfig | null,
 ): OAuthScopeCheck {
+  assertObject(input, "OAuth scope input");
   if (auth?.authType !== "oauth") {
     return { ok: true };
   }
+  assertOAuthTokenScopes(auth);
 
   const kind = requiredScopeKindForTool(toolName, input);
   const acceptedScopes = acceptedScopesForKind(kind);
@@ -158,6 +160,8 @@ export function requiredScopeKindForTool(
   toolName: ToolName,
   input: Record<string, unknown>,
 ): OAuthScopeKind {
+  assertObject(input, "OAuth scope input");
+
   switch (toolName) {
     case "add_memory":
     case "add_memory_interactive":
@@ -188,9 +192,13 @@ export function requiredScopeKindForTool(
     case "check_repeat_attempt":
       return "read";
   }
+
+  throw new Error(`unsupported OAuth scope tool: ${String(toolName)}`);
 }
 
 export function acceptedScopesForKind(kind: OAuthScopeKind): readonly string[] {
+  assertOAuthScopeKind(kind);
+
   switch (kind) {
     case "read":
       return ["akasha:memory", "akasha:read", "akasha:admin"];
@@ -199,6 +207,8 @@ export function acceptedScopesForKind(kind: OAuthScopeKind): readonly string[] {
     case "admin":
       return ["akasha:memory", "akasha:admin"];
   }
+
+  throw new Error(`unsupported OAuth scope kind: ${String(kind)}`);
 }
 
 function selectChallengeScope(
@@ -528,4 +538,36 @@ function requireHttpsUrl(value: string, name: string): string {
   }
 
   return parsed.toString();
+}
+
+function assertObject(
+  value: unknown,
+  fieldName: string,
+): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function assertOAuthTokenScopes(auth: BearerToken): void {
+  if (auth.scopes === undefined) {
+    return;
+  }
+  if (!Array.isArray(auth.scopes)) {
+    throw new Error("OAuth token scopes must be an array");
+  }
+  for (const [index, scope] of auth.scopes.entries()) {
+    if (typeof scope !== "string") {
+      throw new Error(`OAuth token scopes[${index}] must be a string`);
+    }
+  }
+}
+
+function assertOAuthScopeKind(
+  value: unknown,
+): asserts value is OAuthScopeKind {
+  if (value !== "read" && value !== "write" && value !== "admin") {
+    throw new Error('OAuth scope kind must be "read", "write", or "admin"');
+  }
 }

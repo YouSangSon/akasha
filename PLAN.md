@@ -4,20 +4,18 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Dependency Health Probe Input Guards
+## Current Loop — OAuth Scope Input Guards
 
 Status:
-- `checkDependencies` now validates the direct probes container before
-  iterating entries or reporting readiness checks.
-- Dependency probe keys are constrained to the typed low-cardinality set:
-  Postgres, Qdrant, and OpenAI.
-- Probe builders now reject malformed Postgres pools, Qdrant/OpenAI inputs,
-  optional fetch handles, blank credentials, and invalid timeout values before
-  returning a probe closure.
-- Existing `/readyz`, `/metrics` dependency gauges, probe failure reporting,
-  and provider/backend probe selection behavior is preserved.
-- Focused health tests, adjacent server/metrics tests, typecheck, build,
-  audit, single-worker full suite, and diff checks passed.
+- OAuth scope enforcement now validates direct scope input containers before
+  checking `dryRun` or routing tool authorization decisions.
+- OAuth token scope lists are rejected when malformed before scope matching.
+- Direct scope-kind and unsupported tool helper values now fail with explicit
+  errors instead of falling through switch logic.
+- Existing HTTP route scope enforcement, MCP Streamable HTTP authorization,
+  JWT verification, and static-token bypass behavior is preserved.
+- Focused OAuth tests, adjacent MCP/server tests, typecheck, build, audit,
+  single-worker full suite, and diff checks passed.
 - Default parallel `npm test` remains timing-sensitive on unrelated server and
   backup shell tests under load, so full-suite verification used one worker.
 

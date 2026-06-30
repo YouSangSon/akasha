@@ -335,6 +335,53 @@ describe("OAuth scope enforcement", () => {
       ),
     ).toEqual({ ok: true });
   });
+
+  it("rejects malformed direct scope inputs", () => {
+    expect(() =>
+      requiredScopeKindForTool("compact_memory", null as never),
+    ).toThrow("OAuth scope input must be an object");
+    expect(() =>
+      checkOAuthScopes(
+        { token: "jwt", authType: "oauth", scopes: ["akasha:read"] },
+        "compact_memory",
+        null as never,
+        protectedResource,
+      ),
+    ).toThrow("OAuth scope input must be an object");
+  });
+
+  it("rejects malformed direct OAuth token scopes", () => {
+    expect(() =>
+      checkOAuthScopes(
+        { token: "jwt", authType: "oauth", scopes: "akasha:read" as never },
+        "add_memory",
+        {},
+        protectedResource,
+      ),
+    ).toThrow("OAuth token scopes must be an array");
+
+    expect(() =>
+      checkOAuthScopes(
+        {
+          token: "jwt",
+          authType: "oauth",
+          scopes: ["akasha:read", 42] as never,
+        },
+        "add_memory",
+        {},
+        protectedResource,
+      ),
+    ).toThrow("OAuth token scopes[1] must be a string");
+  });
+
+  it("rejects unsupported direct scope helpers", () => {
+    expect(() => acceptedScopesForKind("owner" as never)).toThrow(
+      'OAuth scope kind must be "read", "write", or "admin"',
+    );
+    expect(() => requiredScopeKindForTool("unknown_tool" as never, {})).toThrow(
+      "unsupported OAuth scope tool: unknown_tool",
+    );
+  });
 });
 
 async function createJwtFixture(
