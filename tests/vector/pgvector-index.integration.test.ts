@@ -21,6 +21,14 @@ import { runIngestSweep } from "../../src/compact/ingest-sweeper.js";
 import type { PgPool } from "../../src/db/connection.js";
 
 const TEST_URL = process.env.PGVECTOR_TEST_URL;
+const HAS_TEST_URL = typeof TEST_URL === "string" && TEST_URL.trim().length > 0;
+
+function requirePgVectorTestUrl(): string {
+  if (typeof TEST_URL !== "string" || TEST_URL.trim().length === 0) {
+    throw new Error("PGVECTOR_TEST_URL must be set to run pgvector integration tests");
+  }
+  return TEST_URL;
+}
 
 function makeMockPool(): { pool: PgPool; query: ReturnType<typeof vi.fn> } {
   const query = vi.fn().mockResolvedValue({ rows: [] });
@@ -220,13 +228,15 @@ describe("pgvector adapter — deleteByRecordIds SQL shape", () => {
   });
 });
 
-describe.skipIf(!TEST_URL)("pgvector adapter — integration against real pgvector", () => {
+describe.skipIf(!HAS_TEST_URL)("pgvector adapter — integration against real pgvector", () => {
   const TABLE = "test_memory_vectors";
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-  const pool = createPgPool({ connectionString: TEST_URL! });
-  const index = createPgVectorIndex(pool, { tableName: TABLE });
+  let pool: PgPool;
+  let index: ReturnType<typeof createPgVectorIndex>;
 
   beforeAll(async () => {
+    pool = createPgPool({ connectionString: requirePgVectorTestUrl() });
+    index = createPgVectorIndex(pool, { tableName: TABLE });
+
     // Wait for Postgres to be ready (it may still be starting after docker run).
     let lastErr: unknown;
     for (let attempt = 0; attempt < 30; attempt++) {
@@ -660,15 +670,17 @@ describe("pgvector adapter — delete SQL", () => {
 // the pgvector backend, making the record queryable. This proves the VectorIndex
 // abstraction works end-to-end for the VECTOR_BACKEND=pgvector path.
 
-describe.skipIf(!TEST_URL)("ingest sweeper recovery — integration against real pgvector", () => {
+describe.skipIf(!HAS_TEST_URL)("ingest sweeper recovery — integration against real pgvector", () => {
   const VECTOR_TABLE = "test_sweeper_vectors";
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-  const pool = createPgPool({ connectionString: TEST_URL! });
-  const vectorIndex = createPgVectorIndex(pool, { tableName: VECTOR_TABLE });
+  let pool: PgPool;
+  let vectorIndex: ReturnType<typeof createPgVectorIndex>;
 
   const DIMS = 3;
 
   beforeAll(async () => {
+    pool = createPgPool({ connectionString: requirePgVectorTestUrl() });
+    vectorIndex = createPgVectorIndex(pool, { tableName: VECTOR_TABLE });
+
     // Wait for Postgres to be ready.
     let lastErr: unknown;
     for (let attempt = 0; attempt < 30; attempt++) {
@@ -813,13 +825,15 @@ describe.skipIf(!TEST_URL)("ingest sweeper recovery — integration against real
   });
 });
 
-describe.skipIf(!TEST_URL)("pgvector adapter — deleteByRecordIds prevents orphan vectors", () => {
+describe.skipIf(!HAS_TEST_URL)("pgvector adapter — deleteByRecordIds prevents orphan vectors", () => {
   const TABLE = "test_orphan_vectors";
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-  const pool = createPgPool({ connectionString: TEST_URL! });
-  const index = createPgVectorIndex(pool, { tableName: TABLE });
+  let pool: PgPool;
+  let index: ReturnType<typeof createPgVectorIndex>;
 
   beforeAll(async () => {
+    pool = createPgPool({ connectionString: requirePgVectorTestUrl() });
+    index = createPgVectorIndex(pool, { tableName: TABLE });
+
     let lastErr: unknown;
     for (let attempt = 0; attempt < 30; attempt++) {
       try {

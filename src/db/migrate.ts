@@ -454,6 +454,7 @@ export type ReadPostgresMigrationSqlOptions = {
 export function readPostgresMigrationSql(
   options: ReadPostgresMigrationSqlOptions = {},
 ): string {
+  assertReadPostgresMigrationSqlOptions(options);
   const readFile = options.readFile ?? fs.readFileSync;
 
   // If the caller pinned a single file path (legacy/test override), honor
@@ -489,29 +490,49 @@ export function readPostgresMigrationSql(
 }
 
 export async function runMigrations(pool: PgPool): Promise<void> {
+  assertMigrationPool(pool);
+
   await pool.query(readPostgresMigrationSql());
 }
 
 export function resolveMigrationDatabaseUrl(env: NodeJS.ProcessEnv): string {
-  if (env.DATABASE_URL !== undefined) {
-    return requireMigrationEnv(env.DATABASE_URL, "DATABASE_URL");
+  const candidate = assertObject(env, "migration env");
+
+  if (candidate.DATABASE_URL !== undefined) {
+    return requireMigrationEnv(candidate.DATABASE_URL, "DATABASE_URL");
   }
 
-  const user = migrationEnvOrDefault(env.POSTGRES_USER, "memory", "POSTGRES_USER");
+  const user = migrationEnvOrDefault(
+    candidate.POSTGRES_USER,
+    "memory",
+    "POSTGRES_USER",
+  );
   const password = migrationEnvOrDefault(
-    env.POSTGRES_PASSWORD,
+    candidate.POSTGRES_PASSWORD,
     "memory",
     "POSTGRES_PASSWORD",
   );
-  const host = migrationEnvOrDefault(env.POSTGRES_HOST, "127.0.0.1", "POSTGRES_HOST");
-  const port = migrationEnvOrDefault(env.POSTGRES_PORT, "5432", "POSTGRES_PORT");
-  const database = migrationEnvOrDefault(env.POSTGRES_DB, "memory_os", "POSTGRES_DB");
+  const host = migrationEnvOrDefault(
+    candidate.POSTGRES_HOST,
+    "127.0.0.1",
+    "POSTGRES_HOST",
+  );
+  const port = migrationEnvOrDefault(
+    candidate.POSTGRES_PORT,
+    "5432",
+    "POSTGRES_PORT",
+  );
+  const database = migrationEnvOrDefault(
+    candidate.POSTGRES_DB,
+    "memory_os",
+    "POSTGRES_DB",
+  );
 
   return `postgres://${user}:${password}@${host}:${port}/${database}`;
 }
 
 function migrationEnvOrDefault(
-  value: string | undefined,
+  value: unknown,
   fallback: string,
   name: string,
 ): string {
@@ -522,7 +543,10 @@ function migrationEnvOrDefault(
   return requireMigrationEnv(value, name);
 }
 
-function requireMigrationEnv(value: string, name: string): string {
+function requireMigrationEnv(value: unknown, name: string): string {
+  if (typeof value !== "string") {
+    throw new Error(`Invalid ${name}: must be a string`);
+  }
   if (value.trim().length === 0) {
     throw new Error(`Invalid ${name}: must contain non-whitespace text`);
   }
@@ -554,4 +578,49 @@ if (isDirectExecution()) {
     console.error(error);
     process.exit(1);
   });
+}
+
+function assertReadPostgresMigrationSqlOptions(
+  value: unknown,
+): asserts value is ReadPostgresMigrationSqlOptions {
+  const candidate = assertObject(value, "migration sql options");
+  if (candidate.readFile !== undefined) {
+    assertFunction(candidate.readFile, "readFile");
+  }
+  if (candidate.migrationFilePath !== undefined) {
+    assertNonBlankText(candidate.migrationFilePath, "migrationFilePath");
+  }
+}
+
+function assertMigrationPool(value: unknown): asserts value is PgPool {
+  const candidate = assertObject(value, "migration pool");
+  assertFunction(candidate.query, "migration pool.query");
+}
+
+function assertObject(
+  value: unknown,
+  fieldName: string,
+): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function assertFunction(value: unknown, fieldName: string): void {
+  if (typeof value !== "function") {
+    throw new Error(`${fieldName} must be a function`);
+  }
+}
+
+function assertNonBlankText(
+  value: unknown,
+  fieldName: string,
+): asserts value is string {
+  if (typeof value !== "string") {
+    throw new Error(`${fieldName} must be a string`);
+  }
+  if (value.trim().length === 0) {
+    throw new Error(`${fieldName} must contain non-whitespace text`);
+  }
 }

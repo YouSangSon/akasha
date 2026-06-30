@@ -49,6 +49,18 @@ describe("resolveMigrationDatabaseUrl", () => {
       `Invalid ${name}: must contain non-whitespace text`,
     );
   });
+
+  it("rejects a malformed env object", () => {
+    expect(() => resolveMigrationDatabaseUrl(null as never)).toThrow(
+      "migration env must be an object",
+    );
+  });
+
+  it("rejects non-string env values", () => {
+    expect(() =>
+      resolveMigrationDatabaseUrl({ DATABASE_URL: 123 } as never),
+    ).toThrow("Invalid DATABASE_URL: must be a string");
+  });
 });
 
 async function waitForPostgres() {
@@ -394,6 +406,27 @@ describe.skipIf(!process.env.POSTGRES_HOST)("runMigrations", () => {
 });
 
 describe("readPostgresMigrationSql", () => {
+  it.each([
+    {
+      options: null,
+      message: "migration sql options must be an object",
+    },
+    {
+      options: { readFile: "not-a-function" },
+      message: "readFile must be a function",
+    },
+    {
+      options: { migrationFilePath: 123 },
+      message: "migrationFilePath must be a string",
+    },
+    {
+      options: { migrationFilePath: " \n\t " },
+      message: "migrationFilePath must contain non-whitespace text",
+    },
+  ])("rejects malformed options %#", ({ options, message }) => {
+    expect(() => readPostgresMigrationSql(options as never)).toThrow(message);
+  });
+
   it("falls back to the embedded Postgres migration when the sql asset is unavailable", () => {
     const sql = readPostgresMigrationSql({
       readFile(filePath) {
@@ -431,5 +464,20 @@ describe("readPostgresMigrationSql", () => {
     expect(sql).toContain("idx_ingest_jobs_qdrant_failed_status");
     expect(sql).toContain("idx_memory_archive_qdrant_pending_status");
     expect(sql).toContain("idx_memory_archive_qdrant_failed_status");
+  });
+});
+
+describe("runMigrations", () => {
+  it.each([
+    {
+      pool: null,
+      message: "migration pool must be an object",
+    },
+    {
+      pool: { query: "not-a-function" },
+      message: "migration pool.query must be a function",
+    },
+  ])("rejects malformed pool input %#", async ({ pool, message }) => {
+    await expect(runMigrations(pool as never)).rejects.toThrow(message);
   });
 });

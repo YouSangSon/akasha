@@ -18,6 +18,9 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid DB pool factory inputs, migration helper options, migration env
+  values, and migration pool handles are rejected before pool construction,
+  fallback reads, or migration queries.
 - Invalid memory archive repository pools and Qdrant cleanup inputs are
   rejected before cleanup query construction.
 - Invalid ingest job repository pools, create/update inputs, retry query

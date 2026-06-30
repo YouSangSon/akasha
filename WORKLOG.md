@@ -2,6 +2,34 @@
 
 ## 2026-06-30
 
+- Hardened DB boundary input validation:
+  - `createPgPool` now rejects malformed input containers and blank/non-string
+    connection strings before constructing a `pg.Pool`.
+  - `readPostgresMigrationSql`, `runMigrations`, and
+    `resolveMigrationDatabaseUrl` now reject malformed options, pool handles,
+    env objects, and non-string env values before fallback reads or migration
+    queries.
+  - pgvector integration suites now defer real pool construction until
+    `beforeAll` and treat blank `PGVECTOR_TEST_URL` as absent, so skipped
+    suites do not fail during test collection.
+  - Existing migration SQL fallback behavior, migration URL defaults, and
+    pgvector opt-in integration behavior are preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/db/connection.test.ts tests/db/migrate.test.ts`
+  (21 passed, 8 skipped)
+- `npx vitest run tests/db/connection.test.ts tests/db/migrate.test.ts tests/vector/pgvector-index.integration.test.ts`
+  (35 passed, 20 skipped)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1615 passed, 34 skipped
+  across 71 files)
+- `git diff --check`
+
 - Hardened memory archive cleanup input validation:
   - `createMemoryArchiveRepository` now rejects malformed pool handles before
     returning repository methods.
