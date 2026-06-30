@@ -334,6 +334,52 @@ describe("goal-run handlers", () => {
     );
   });
 
+  it("rejects non-string optional goal-run notes before service dispatch", async () => {
+    const goalRuns = goalRunServicesStub();
+    const registry = registryWith(goalRuns);
+
+    await expect(
+      registry.start_goal_run({
+        projectKey: "proj-x",
+        goal: "ship phase 1",
+        terminationCriteria: 123 as never,
+      }),
+    ).rejects.toThrow(/terminationCriteria must be a string/);
+    await expect(
+      registry.record_iteration({
+        goalRunId: 7,
+        attempt: "try A",
+        outcome: "failure",
+        summary: 123 as never,
+      }),
+    ).rejects.toThrow(/summary must be a string/);
+    await expect(
+      registry.record_iteration({
+        goalRunId: 7,
+        attempt: "try A",
+        outcome: "failure",
+        error: 123 as never,
+      }),
+    ).rejects.toThrow(/error must be a string/);
+    await expect(
+      registry.complete_goal_run({
+        goalRunId: 7,
+        resolution: 123 as never,
+      }),
+    ).rejects.toThrow(/resolution must be a string/);
+    await expect(
+      registry.abandon_goal_run({
+        goalRunId: 7,
+        reason: 123 as never,
+      }),
+    ).rejects.toThrow(/reason must be a string/);
+
+    expect(goalRuns.start).not.toHaveBeenCalled();
+    expect(goalRuns.recordIteration).not.toHaveBeenCalled();
+    expect(goalRuns.complete).not.toHaveBeenCalled();
+    expect(goalRuns.abandon).not.toHaveBeenCalled();
+  });
+
   it("list_goal_runs resolves default user scope when userScopeId is omitted", async () => {
     const goalRuns = goalRunServicesStub();
     const registry = createToolRegistry({

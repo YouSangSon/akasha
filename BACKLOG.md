@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Non-string direct goal-run optional notes are rejected before service
+  dispatch.
 - Goal-run close notes, scoped start/list behavior, schema validation, and docs.
 - Sweeper tick/duration/row Prometheus metrics.
 - Background queue backlog gauges with partial indexes.

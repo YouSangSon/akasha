@@ -893,6 +893,7 @@ export function createToolHandlers(input: {
       });
       const terminationCriteria = optionalNonBlankText(
         toolInput.terminationCriteria,
+        "terminationCriteria",
       );
       assertNoSecrets(toolInput.goal);
       if (terminationCriteria) {
@@ -921,8 +922,8 @@ export function createToolHandlers(input: {
         SUPPORTED_GOAL_RUN_OUTCOMES,
       );
       assertPositiveIntegerArray(toolInput.memoryIds, "memoryIds");
-      const summary = optionalNonBlankText(toolInput.summary);
-      const error = optionalNonBlankText(toolInput.error);
+      const summary = optionalNonBlankText(toolInput.summary, "summary");
+      const error = optionalNonBlankText(toolInput.error, "error");
       assertNoSecrets(toolInput.attempt);
       if (summary) {
         assertNoSecrets(summary);
@@ -983,7 +984,7 @@ export function createToolHandlers(input: {
     async complete_goal_run(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
       assertPositiveInteger(toolInput.goalRunId, "goalRunId");
-      const resolution = optionalNonBlankText(toolInput.resolution);
+      const resolution = optionalNonBlankText(toolInput.resolution, "resolution");
       if (resolution) {
         assertNoSecrets(resolution);
       }
@@ -1000,7 +1001,7 @@ export function createToolHandlers(input: {
     async abandon_goal_run(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
       assertPositiveInteger(toolInput.goalRunId, "goalRunId");
-      const reason = optionalNonBlankText(toolInput.reason);
+      const reason = optionalNonBlankText(toolInput.reason, "reason");
       if (reason) {
         assertNoSecrets(reason);
       }
@@ -1115,10 +1116,17 @@ export function createToolHandlers(input: {
 // browse/paging intent of listMemory; the pack itself caps each section.
 const GOAL_CONTEXT_RECORD_LIMIT = 50;
 
-function optionalNonBlankText(value: string | null | undefined): string | null {
-  return value === undefined || value === null || value.trim().length === 0
-    ? null
-    : value;
+function optionalNonBlankText(
+  value: string | null | undefined,
+  fieldName = "value",
+): string | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (typeof value !== "string") {
+    throw new Error(`${fieldName} must be a string`);
+  }
+  return value.trim().length === 0 ? null : value;
 }
 
 function assertNonBlankTags(tags: readonly string[] | undefined): void {

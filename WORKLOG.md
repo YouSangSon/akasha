@@ -1,5 +1,25 @@
 # WORKLOG
 
+## 2026-06-30
+
+- Hardened direct optional goal-run note validation:
+  - Direct `start_goal_run.terminationCriteria`, `record_iteration.summary`,
+    `record_iteration.error`, `complete_goal_run.resolution`, and
+    `abandon_goal_run.reason` now reject configured non-string values before
+    service dispatch.
+  - `null`, `undefined`, and blank values still normalize to `null`; non-empty
+    strings still pass through secret scanning and persistence.
+  - Focused tests cover all five fields and assert no goal-run service calls.
+  - Spec review and code-quality review found no issues.
+
+Verification:
+- `npx vitest run tests/goal-run/goal-run-handlers.test.ts` (23 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (1032 passed, 34 skipped across 69 files)
+- `git diff --check`
+
 ## 2026-06-27
 
 - Read project rules, README, contributing guide, architecture/config docs,
