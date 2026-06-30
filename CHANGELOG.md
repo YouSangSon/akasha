@@ -140,10 +140,11 @@ small actual impact surface.
 - **Environment template now describes Docker Compose loading accurately** —
   `.env.example` now refers to Compose variable substitution instead of
   `env_file`, matching `compose.yaml` and the configuration guide.
-- **Docker and CI installs skip ONNX Runtime CUDA provider downloads without npm
-  unknown-config flags** — Dockerfile `npm ci` stages and GitHub Actions now
-  set `ONNXRUNTIME_NODE_INSTALL_CUDA=skip`, avoiding flaky GPU binary downloads
-  while using the install script's supported environment variable path.
+- **Docker, CI, and local installs skip ONNX Runtime CUDA provider downloads
+  without npm unknown-config flags** — Dockerfile `npm ci` stages, GitHub
+  Actions, and `install.sh` now set `ONNXRUNTIME_NODE_INSTALL_CUDA=skip`,
+  avoiding flaky GPU binary downloads while using onnxruntime-node's supported
+  environment variable path.
 - **Backend-aware readiness and tenant attribution fixes** — `/readyz` now
   probes Qdrant only when `VECTOR_BACKEND=qdrant`, so `VECTOR_BACKEND=pgvector`
   deployments no longer fail readiness because Qdrant is absent. Qdrant

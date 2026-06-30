@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 describe("docker/app.Dockerfile hardening", () => {
   const dockerfile = fs.readFileSync("docker/app.Dockerfile", "utf8");
   const ciWorkflow = fs.readFileSync(".github/workflows/ci.yml", "utf8");
+  const installScript = fs.readFileSync("install.sh", "utf8");
   const npmCiCommands = dockerfile
     .split("\n")
     .map((line) => line.trim())
@@ -12,6 +13,10 @@ describe("docker/app.Dockerfile hardening", () => {
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line.startsWith("run: ") && line.includes("npm ci"));
+  const localInstallCommands = installScript
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line === "npm install" || line.endsWith(" npm install"));
 
   it("runs the runtime image as the non-root akasha user", () => {
     expect(dockerfile).toContain("addgroup -S -g 10001 akasha");
@@ -42,5 +47,12 @@ describe("docker/app.Dockerfile hardening", () => {
       expect(command).toContain("ONNXRUNTIME_NODE_INSTALL_CUDA=skip");
     }
     expect(ciWorkflow).not.toContain("--onnxruntime-node-install-cuda=skip");
+  });
+
+  it("uses the onnxruntime-node CUDA skip environment variable in install.sh", () => {
+    expect(localInstallCommands).toEqual([
+      "ONNXRUNTIME_NODE_INSTALL_CUDA=skip npm install",
+    ]);
+    expect(installScript).not.toContain("--onnxruntime-node-install-cuda=skip");
   });
 });

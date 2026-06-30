@@ -1,5 +1,28 @@
 # WORKLOG
 
+## 2026-07-01
+
+- Aligned the local installer with Docker and CI ONNX Runtime install behavior:
+  - `install.sh` now runs `npm install` with
+    `ONNXRUNTIME_NODE_INSTALL_CUDA=skip` so local dependency installation avoids
+    downloading CUDA provider binaries.
+  - `tests/scripts/dockerfile-hardening.test.ts` now verifies Dockerfile, CI,
+    and local installer dependency installs use the supported environment
+    variable and avoid the deprecated npm CLI config flag.
+  - The locked `onnxruntime-node@1.21.0` install script documents
+    `ONNXRUNTIME_NODE_INSTALL_CUDA` and the `skip` value, matching the
+    Docker/CI hardening path:
+    https://github.com/microsoft/onnxruntime/blob/v1.21.0/js/node/script/install.js
+  - Spec and code-quality reviews approved the scoped diff.
+
+Verification:
+- `npx vitest run tests/scripts/dockerfile-hardening.test.ts` (5 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (1794 passed, 34 skipped across 79 files)
+- `git diff --check`
+
 ## 2026-06-30
 
 - Fixed Compose environment-flow wording drift:

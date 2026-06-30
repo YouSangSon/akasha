@@ -4,18 +4,17 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Compose Env Flow Drift
+## Current Loop — Local ONNX Runtime CUDA Install Skip
 
 Status:
-- `.env.example` now describes Compose config flow as `${VAR:-default}`
-  variable substitution instead of `env_file` substitution, matching
-  `compose.yaml` and `docs/configuration.md`.
-- Public docs drift coverage now guards the wording against regressing.
-- Spec review, focused docs drift test, typecheck, build, audit, and the
-  single-worker full suite passed.
+- `install.sh` now runs the dependency install with
+  `ONNXRUNTIME_NODE_INSTALL_CUDA=skip`, matching Dockerfile and CI installs.
+- `tests/scripts/dockerfile-hardening.test.ts` guards Docker, CI, and local
+  installer usage of the supported environment variable and rejects the npm
+  unknown-config flag form.
 
 Loop closeout:
-- Commit locally without pushing.
+- Controller review and final commit; do not push from this loop.
 
 ## Next Loop Candidates
 

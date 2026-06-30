@@ -86,7 +86,7 @@ ok "Compose services up"
 # ─────────────────────────────────────────────────────────────────────
 
 step "Installing Node deps"
-npm install
+ONNXRUNTIME_NODE_INSTALL_CUDA=skip npm install
 ok "Node modules installed"
 
 step "Building TypeScript"
