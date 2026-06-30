@@ -1390,6 +1390,25 @@ describe("createMemoryRepository (unit — no PG required)", () => {
     expect(mockPool.query).not.toHaveBeenCalled();
   });
 
+  it.each([undefined, null, 42, {}, []])(
+    "searchMemory rejects non-string direct queries before querying: %s",
+    async (query) => {
+      const mockPool = { query: vi.fn() };
+      const repo = createMemoryRepository(mockPool as never);
+
+      await expect(
+        repo.searchMemory({
+          query: query as never,
+          scopes: [{ scopeType: "project", scopeId: "proj-x" }],
+          organizationId: "org-a",
+          limit: 5,
+        }),
+      ).rejects.toThrow("search query must be a string");
+
+      expect(mockPool.query).not.toHaveBeenCalled();
+    },
+  );
+
   it.each([0, -1, 1.5, Number.NaN, 101])(
     "searchMemory rejects invalid direct limits before querying: %s",
     async (limit) => {
@@ -1445,15 +1464,32 @@ describe("createMemoryRepository (unit — no PG required)", () => {
     );
   });
 
-  it("searchMemory returns no rows for an empty lexical query", async () => {
+  it.each(["", "   "])(
+    "searchMemory returns no rows for an empty lexical query: %s",
+    async (query) => {
+      const mockPool = { query: vi.fn() };
+      const repo = createMemoryRepository(mockPool as never);
+
+      await expect(
+        repo.searchMemory({
+          query,
+          scopes: [{ scopeType: "project", scopeId: "proj-x" }],
+          limit: 5,
+        }),
+      ).resolves.toEqual([]);
+      expect(mockPool.query).not.toHaveBeenCalled();
+    },
+  );
+
+  it("searchMemory returns no rows for an empty lexical query before limit validation", async () => {
     const mockPool = { query: vi.fn() };
     const repo = createMemoryRepository(mockPool as never);
 
     await expect(
       repo.searchMemory({
-        query: "   ",
+        query: "",
         scopes: [{ scopeType: "project", scopeId: "proj-x" }],
-        limit: 5,
+        limit: 0,
       }),
     ).resolves.toEqual([]);
     expect(mockPool.query).not.toHaveBeenCalled();

@@ -2,6 +2,23 @@
 
 ## 2026-06-30
 
+- Hardened direct repository search query validation:
+  - `createMemoryRepository().searchMemory` now rejects non-string `query`
+    values before calling `.trim()`.
+  - Blank string and whitespace-only queries still return `[]` without SQL.
+  - Tests cover non-string direct queries before querying and preserve the
+    blank-query fast return before limit validation.
+  - Spec review found no issues; quality review found the blank-query/limit
+    ordering gap, which was covered and re-reviewed cleanly.
+
+Verification:
+- `npx vitest run tests/store/memory-repository.test.ts` (75 passed, 7 skipped)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (1047 passed, 34 skipped across 69 files)
+- `git diff --check`
+
 - Hardened direct scope identifier validation:
   - `requireProjectKey` and `requireUserScopeId` now reject non-string values
     before calling `.trim()`, while preserving existing missing and whitespace

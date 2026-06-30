@@ -273,6 +273,10 @@ export function createMemoryRepository(
         assertNonBlankText(input.organizationId, "organizationId");
       }
 
+      if (typeof input.query !== "string") {
+        throw new Error("search query must be a string");
+      }
+
       if (input.scopes.length === 0) {
         return [];
       }

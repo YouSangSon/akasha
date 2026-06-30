@@ -4,17 +4,14 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Direct Scope Identifier Type Guard
+## Current Loop — Repository Search Query Type Guard
 
 Status:
-- Direct scope identifier guards now reject non-string `projectKey` and
-  `userScopeId` values before calling `.trim()`.
-- Registry instrumentation validates provided scope identifiers before
-  logging/audit, so local scope validation failures do not trigger
-  service-backed audit resolution.
-- Existing missing/whitespace messages are preserved for handler-level required
-  checks.
-- Focused MCP/goal-run tests, typecheck, build, audit, full suite, review, and
+- Direct repository `searchMemory` now rejects non-string `query` values before
+  calling `.trim()`.
+- Blank string queries still return `[]` without SQL, and that ordering is
+  covered even when `limit` is invalid.
+- Focused repository tests, typecheck, build, audit, full suite, review, and
   diff whitespace checks passed.
 
 Loop closeout:
