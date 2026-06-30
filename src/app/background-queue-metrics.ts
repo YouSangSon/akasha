@@ -33,6 +33,8 @@ export function createBackgroundQueueMetricsCollector(
 ): BackgroundQueueMetricsCollector {
   return {
     async collect(now = new Date()) {
+      assertValidDate(now, "now");
+
       const collectedAt = now.toISOString();
       const [ingest, compaction] = await Promise.all([
         collectIngestBacklog(pool, collectedAt),
@@ -149,9 +151,22 @@ async function countRows(
 }
 
 function toNonNegativeInteger(value: string | number | null): number {
-  const numberValue = typeof value === "number" ? value : Number(value ?? 0);
-  if (!Number.isFinite(numberValue)) {
+  if (value === null) {
     return 0;
   }
+
+  const numberValue = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numberValue)) {
+    throw new Error("background queue count must be a finite number");
+  }
   return Math.max(0, Math.trunc(numberValue));
+}
+
+function assertValidDate(
+  value: unknown,
+  fieldName: string,
+): asserts value is Date {
+  if (!(value instanceof Date) || !Number.isFinite(value.getTime())) {
+    throw new Error(`${fieldName} must be a valid Date`);
+  }
 }

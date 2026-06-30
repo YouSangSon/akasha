@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid background queue metrics timestamps and non-finite count values are
+  rejected before metrics snapshots are reported.
 - Non-string direct HTTP metric methods are rejected before method
   normalization.
 - Invalid vector point inputs are rejected before vector ID construction or

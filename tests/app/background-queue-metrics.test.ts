@@ -135,4 +135,53 @@ describe("createBackgroundQueueMetricsCollector", () => {
       { queue: "compaction", state: "failed", count: 0 },
     ]);
   });
+
+  it("maps null count values to zero gauges", async () => {
+    const { pool } = makeQueryable(async () => ({ rows: [{ count: null }] }));
+
+    const collector = createBackgroundQueueMetricsCollector(pool);
+    const snapshot = await collector.collect(
+      new Date("2026-06-27T12:00:00.000Z"),
+    );
+
+    expect(snapshot.rows).toEqual([
+      { queue: "ingest", state: "pending", count: 0 },
+      { queue: "ingest", state: "due", count: 0 },
+      { queue: "ingest", state: "failed", count: 0 },
+      { queue: "compaction", state: "pending", count: 0 },
+      { queue: "compaction", state: "due", count: 0 },
+      { queue: "compaction", state: "failed", count: 0 },
+    ]);
+  });
+
+  it.each([
+    ["non-Date", "2026-06-27T12:00:00.000Z" as unknown as Date],
+    ["invalid Date", new Date("not-a-date")],
+  ])(
+    "rejects invalid collection time before querying: %s",
+    async (_label, now) => {
+      const { pool, query } = makeQueryable(async () => {
+        throw new Error("query should not be called");
+      });
+
+      const collector = createBackgroundQueueMetricsCollector(pool);
+
+      await expect(collector.collect(now)).rejects.toThrow(
+        "now must be a valid Date",
+      );
+      expect(query).not.toHaveBeenCalled();
+    },
+  );
+
+  it("rejects non-finite count values instead of reporting zero", async () => {
+    const { pool } = makeQueryable(async () => ({
+      rows: [{ count: "not-a-number" }],
+    }));
+
+    const collector = createBackgroundQueueMetricsCollector(pool);
+
+    await expect(
+      collector.collect(new Date("2026-06-27T12:00:00.000Z")),
+    ).rejects.toThrow("background queue count must be a finite number");
+  });
 });

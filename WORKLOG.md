@@ -2,6 +2,27 @@
 
 ## 2026-06-30
 
+- Hardened background queue metrics validation:
+  - `collect(now)` now rejects non-Date and invalid `Date` values before
+    timestamp serialization or database queries.
+  - Missing count rows and null count values still map to zero gauges.
+  - Non-finite count values now fail collection instead of being silently
+    reported as zero.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/app/background-queue-metrics.test.ts` (6 passed)
+- `npx vitest run tests/app/background-queue-metrics.test.ts tests/app/metrics.test.ts tests/app/server.test.ts tests/app/start-operator-server-metrics.test.ts`
+  (89 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1213 passed, 34 skipped
+  across 70 files)
+- `git diff --check`
+
 - Hardened HTTP metrics method validation:
   - `normalizeHttpMethod` now rejects non-string direct method values before
     uppercase normalization.
