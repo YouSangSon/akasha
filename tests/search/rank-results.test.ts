@@ -5,6 +5,8 @@ import {
   rankCandidates,
   rankResults,
   scoreSearchResult,
+  type RetrievedMemoryCandidate,
+  type ScoreSearchResultOptions,
 } from "../../src/search/rank-results.js";
 import type { SearchMemoryResult } from "../../src/types.js";
 
@@ -42,6 +44,21 @@ function createResult(
     },
   };
 }
+
+const callRankResults = (records: unknown) => () =>
+  rankResults(records as readonly SearchMemoryResult[]);
+
+const callNewestUpdatedAtFor = (records: unknown) => () =>
+  newestUpdatedAtFor(records as readonly SearchMemoryResult[]);
+
+const callScoreSearchResult = (record: unknown, options: unknown) => () =>
+  scoreSearchResult(
+    record as SearchMemoryResult,
+    options as ScoreSearchResultOptions,
+  );
+
+const callRankCandidates = (candidates: unknown) => () =>
+  rankCandidates(candidates as readonly RetrievedMemoryCandidate[]);
 
 describe("rankResults", () => {
   it("keeps all project-scoped records ahead of user-scoped records", () => {
@@ -231,5 +248,91 @@ describe("rankResults", () => {
     expect(() => newestUpdatedAtFor([])).toThrow(
       "records must contain at least one record",
     );
+  });
+
+  it("rejects non-array record collections before ranking", () => {
+    expect(callRankResults({})).toThrow("records must be an array");
+    expect(callNewestUpdatedAtFor({})).toThrow("records must be an array");
+  });
+
+  it.each([
+    [null, "records[0] must be an object"],
+    [
+      { id: 0 },
+      "records[0].id must be a positive safe integer",
+    ],
+    [
+      { scopeType: "workspace" },
+      'records[0].scopeType must be "project" or "user"',
+    ],
+    [
+      { memoryType: "task" },
+      'records[0].memoryType must be "decision", "summary", or "fact"',
+    ],
+    [{ content: null }, "records[0].content must be a string"],
+    [{ source: null }, "records[0].source must be an object"],
+    [
+      {
+        source: {
+          ...createResult({}).source,
+          sourceType: "ticket",
+        },
+      },
+      'records[0].source.sourceType must be "decision", "document", or "conversation"',
+    ],
+  ])("rejects invalid rank record field", (overrides, message) => {
+    const record =
+      overrides === null
+        ? null
+        : ({
+            ...createResult({}),
+            ...(overrides as Record<string, unknown>),
+          } as SearchMemoryResult);
+
+    expect(callRankResults([record])).toThrow(message);
+  });
+
+  it("rejects invalid scoreSearchResult options", () => {
+    expect(callScoreSearchResult(createResult({}), null)).toThrow(
+      "scoreSearchResult options must be an object",
+    );
+    expect(
+      callScoreSearchResult(createResult({}), {
+        newestUpdatedAt: Date.parse("2026-03-28T10:00:00.000Z"),
+        source: "manual",
+      }),
+    ).toThrow('source must be "vector", "lexical", or "hybrid"');
+    expect(
+      callScoreSearchResult(createResult({}), {
+        newestUpdatedAt: Date.parse("2026-03-28T10:00:00.000Z"),
+        vectorScore: "0.5",
+      }),
+    ).toThrow("vectorScore must be a finite number");
+    expect(
+      callScoreSearchResult(createResult({}), {
+        newestUpdatedAt: Date.parse("2026-03-28T10:00:00.000Z"),
+        lexicalScore: Number.POSITIVE_INFINITY,
+      }),
+    ).toThrow("lexicalScore must be a finite number");
+  });
+
+  it("rejects invalid rank candidate input before sorting", () => {
+    const validCandidate = buildRetrievedMemoryCandidate(createResult({}));
+
+    expect(callRankCandidates({})).toThrow("candidates must be an array");
+    expect(callRankCandidates([null])).toThrow(
+      "candidates[0] must be an object",
+    );
+    expect(callRankCandidates([{ ...validCandidate, scores: null }])).toThrow(
+      "candidates[0].scores must be an object",
+    );
+    expect(
+      callRankCandidates([
+        {
+          ...validCandidate,
+          scores: { ...validCandidate.scores, total: Number.NaN },
+        },
+      ]),
+    ).toThrow("candidates[0].scores.total must be a finite number");
   });
 });

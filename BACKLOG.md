@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid ranking records, candidates, and score options are rejected before
+  metadata scoring or candidate sorting.
 - Invalid repeat-attempt inputs, prior failures, thresholds, and embedding
   dimensions are rejected before cosine scoring.
 - Invalid retrieval inputs and corrupt vector hit memory IDs are rejected or

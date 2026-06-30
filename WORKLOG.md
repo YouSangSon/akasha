@@ -2,6 +2,32 @@
 
 ## 2026-06-30
 
+- Hardened ranking input validation:
+  - `rankResults`, `newestUpdatedAtFor`, `rankCandidates`, and
+    `scoreSearchResult` now reject invalid direct inputs before metadata
+    scoring, timestamp tie-break sorting, or score fusion.
+  - Ranked records must provide positive safe-integer IDs, valid project/user
+    scope, valid memory type, string content, and valid source type before
+    ranking weights are read.
+  - Candidate score totals and optional score inputs must be finite numbers,
+    and optional candidate source values must be valid.
+  - Existing project/user ordering, metadata weights, recency scoring, vector
+    and lexical score behavior, and canonical timestamp errors are preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/search/rank-results.test.ts` (22 passed)
+- `npx vitest run tests/search/rank-results.test.ts tests/search/retrieve-memory.test.ts tests/search/lexical-score.test.ts tests/mcp/server.test.ts`
+  (194 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1307 passed, 34 skipped
+  across 70 files)
+- `git diff --check`
+
 - Hardened repeat-attempt input validation:
   - `findRepeatAttempts` now rejects non-object direct inputs before reading
     embeddings, prior failures, or threshold values.
