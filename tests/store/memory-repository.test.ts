@@ -1052,6 +1052,23 @@ describe("createMemoryRepository (unit — no PG required)", () => {
     expect(mockPool.connect).not.toHaveBeenCalled();
   });
 
+  it("updateMemoryRecord rejects non-string tags before opening a transaction", async () => {
+    const mockPool = {
+      connect: vi.fn(),
+    };
+    const repo = createMemoryRepository(mockPool as never);
+
+    await expect(
+      repo.updateMemoryRecord({
+        id: 42,
+        organizationId: "org-a",
+        tags: ["ops", 42 as never],
+      }),
+    ).rejects.toThrow("tag must be a string");
+
+    expect(mockPool.connect).not.toHaveBeenCalled();
+  });
+
   it("updateMemoryRecord rejects whitespace-only content before updating the row", async () => {
     const clientQueryCalls: SqlQueryCall[] = [];
     const mockClient = {

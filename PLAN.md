@@ -4,13 +4,13 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Repository Search Query Type Guard
+## Current Loop — Repository Tag Entry Type Guard
 
 Status:
-- Direct repository `searchMemory` now rejects non-string `query` values before
+- Repository tag normalization now rejects non-string tag entries before
   calling `.trim()`.
-- Blank string queries still return `[]` without SQL, and that ordering is
-  covered even when `limit` is invalid.
+- Existing whitespace-only tag behavior, tag deduplication, and sorted
+  persistence behavior are preserved.
 - Focused repository tests, typecheck, build, audit, full suite, review, and
   diff whitespace checks passed.
 

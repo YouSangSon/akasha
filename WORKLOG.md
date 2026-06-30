@@ -2,6 +2,23 @@
 
 ## 2026-06-30
 
+- Hardened direct repository tag validation:
+  - Repository tag normalization now rejects non-string tag entries before
+    calling `.trim()`.
+  - Existing whitespace-only tag behavior, deduplication, and sorted
+    persistence are unchanged.
+  - Focused tests cover `updateMemoryRecord` rejecting non-string tags before
+    opening a transaction or pool connection.
+  - Spec and quality reviews found no issues.
+
+Verification:
+- `npx vitest run tests/store/memory-repository.test.ts` (76 passed, 7 skipped)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (1048 passed, 34 skipped across 69 files)
+- `git diff --check`
+
 - Hardened direct repository search query validation:
   - `createMemoryRepository().searchMemory` now rejects non-string `query`
     values before calling `.trim()`.

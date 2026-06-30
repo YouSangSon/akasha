@@ -1483,6 +1483,9 @@ function buildEntityRelationships(
 
 function normalizeTags(tags: readonly string[]): string[] {
   const trimmedTags = tags.map((tag) => {
+    if (typeof tag !== "string") {
+      throw new Error("tag must be a string");
+    }
     const trimmed = tag.trim();
     if (trimmed.length === 0) {
       throw new Error("tag must contain non-whitespace text");

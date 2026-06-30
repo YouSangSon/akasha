@@ -18,6 +18,7 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Non-string direct repository tag entries are rejected before transaction work.
 - Non-string direct repository search queries are rejected before lexical SQL
   work while blank queries keep returning no rows.
 - Non-string direct scope identifiers are rejected before scope resolution,
