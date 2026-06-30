@@ -17,7 +17,11 @@ import {
   POSTGRES_INTEGER_MAX,
   POSTGRES_INTEGER_MIN,
 } from "../../src/mcp/tool-utils.js";
-import type { ToolRegistry } from "../../src/mcp/types.js";
+import type {
+  CanonicalServices,
+  ToolRegistry,
+  WithCanonicalServices,
+} from "../../src/mcp/types.js";
 import type { MemoryRepository, SearchMemoryResult } from "../../src/types.js";
 import {
   goalRunRegistryStubs,
@@ -474,6 +478,59 @@ describe("createToolRegistry", () => {
     expect(retrieveMemory).not.toHaveBeenCalled();
   });
 
+  it("rejects non-string scope identifiers through direct retrieval paths", async () => {
+    const retrieveMemory = vi.fn();
+    const registry = createToolRegistry({ retrieveMemory });
+
+    await expect(
+      registry.search_memory({
+        projectKey: 42 as never,
+        query: "Postgres",
+      }),
+    ).rejects.toThrow(/projectKey must be a string/);
+    await expect(
+      registry.build_context_pack({
+        projectKey: "project-alpha",
+        userScopeId: 42 as never,
+        task: "continue work",
+      }),
+    ).rejects.toThrow(/userScopeId must be a string/);
+    await expect(
+      registry.search_memory({
+        projectKey: "project-alpha",
+        userScopeId: { id: "alice" } as never,
+        includeUser: false,
+        query: "Postgres",
+      }),
+    ).rejects.toThrow(/userScopeId must be a string/);
+
+    expect(retrieveMemory).not.toHaveBeenCalled();
+  });
+
+  it("rejects non-string add_memory scope identifiers before repository resolution", async () => {
+    const resolveRepository = vi.fn(() => createRepository());
+    const registry = createToolRegistry({ resolveRepository });
+
+    await expect(
+      registry.add_memory({
+        projectKey: 42 as never,
+        kind: "decision",
+        content: "Use Postgres for canonical memory state.",
+      }),
+    ).rejects.toThrow(/projectKey must be a string/);
+    await expect(
+      registry.add_memory({
+        projectKey: "project-alpha",
+        scope: "project",
+        userScopeId: { id: "alice" } as never,
+        kind: "decision",
+        content: "Use Postgres for canonical memory state.",
+      }),
+    ).rejects.toThrow(/userScopeId must be a string/);
+
+    expect(resolveRepository).not.toHaveBeenCalled();
+  });
+
   it("rejects whitespace-only add_memory scope identifiers before repository resolution", async () => {
     const resolveRepository = vi.fn(() => createRepository());
     const registry = createToolRegistry({ resolveRepository });
@@ -636,6 +693,110 @@ describe("createToolRegistry", () => {
     expect(services.embeddings.embed).not.toHaveBeenCalled();
     expect(services.vectorIndex.query).not.toHaveBeenCalled();
     expect(services.chunkRepository.createContextPackRun).not.toHaveBeenCalled();
+  });
+
+  it("rejects non-string governance scope identifiers before canonical service resolution", async () => {
+    const services = createCanonicalServices();
+    const resolveCanonicalServices = vi.fn(async () => services);
+    const registry = createToolRegistry({ resolveCanonicalServices });
+
+    for (const [label, call] of [
+      [
+        "reindex_memory",
+        () =>
+          registry.reindex_memory({
+            organizationId: "org-a",
+            projectKey: 42 as never,
+          }),
+      ],
+      [
+        "compact_memory",
+        () =>
+          registry.compact_memory({
+            organizationId: "org-a",
+            projectKey: 42 as never,
+          }),
+      ],
+      [
+        "list_memory",
+        () =>
+          registry.list_memory({
+            organizationId: "org-a",
+            projectKey: 42 as never,
+          }),
+      ],
+      [
+        "inspect_memory_graph",
+        () =>
+          registry.inspect_memory_graph({
+            organizationId: "org-a",
+            projectKey: 42 as never,
+          }),
+      ],
+    ] as const) {
+      await expect(call(), label).rejects.toThrow(/projectKey must be a string/);
+    }
+
+    expect(resolveCanonicalServices).not.toHaveBeenCalled();
+    expect(services.repository.listMemory).not.toHaveBeenCalled();
+    expect(services.repository.listMemoryForGovernance).not.toHaveBeenCalled();
+    expect(services.repository.inspectMemoryGraph).not.toHaveBeenCalled();
+    expect(services.embeddings.embedBatch).not.toHaveBeenCalled();
+  });
+
+  it("rejects non-string scope identifiers before canonical service resolution", async () => {
+    const services = createCanonicalServices();
+    const resolveCanonicalServices = vi.fn(async () => services);
+    const registry = createToolRegistry({ resolveCanonicalServices });
+
+    await expect(
+      registry.search_memory({
+        organizationId: "org-a",
+        projectKey: 42 as never,
+        query: "Postgres",
+      }),
+    ).rejects.toThrow(/projectKey must be a string/);
+    await expect(
+      registry.build_context_pack({
+        organizationId: "org-a",
+        projectKey: "project-alpha",
+        userScopeId: 42 as never,
+        task: "continue work",
+      }),
+    ).rejects.toThrow(/userScopeId must be a string/);
+
+    expect(resolveCanonicalServices).not.toHaveBeenCalled();
+    expect(services.embeddings.embed).not.toHaveBeenCalled();
+    expect(services.vectorIndex.query).not.toHaveBeenCalled();
+    expect(services.chunkRepository.createContextPackRun).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid scope identifiers before service-backed audit resolution", async () => {
+    const services = createCanonicalServices() as unknown as CanonicalServices;
+    const withCanonicalServicesSpy = vi.fn();
+    const withCanonicalServices: WithCanonicalServices = async <T>(
+      callback: (services: CanonicalServices) => Promise<T>,
+    ) => {
+      withCanonicalServicesSpy();
+      return callback(services);
+    };
+    const registry = createToolRegistry({ withCanonicalServices });
+
+    await expect(
+      registry.start_goal_run({
+        projectKey: 42 as never,
+        goal: "ship phase 1",
+      }),
+    ).rejects.toThrow(/projectKey must be a string/);
+    await expect(
+      registry.start_goal_run({
+        projectKey: " \n\t ",
+        goal: "ship phase 1",
+      }),
+    ).rejects.toThrow(/projectKey must contain non-whitespace text/);
+
+    expect(withCanonicalServicesSpy).not.toHaveBeenCalled();
+    expect(services.auditLog.record).not.toHaveBeenCalled();
   });
 
   it("reports selected memory ids only for records included after context pack caps", async () => {

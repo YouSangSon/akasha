@@ -2,6 +2,26 @@
 
 ## 2026-06-30
 
+- Hardened direct scope identifier validation:
+  - `requireProjectKey` and `requireUserScopeId` now reject non-string values
+    before calling `.trim()`, while preserving existing missing and whitespace
+    string behavior.
+  - Registry instrumentation validates provided `projectKey` and `userScopeId`
+    before logging/audit metadata is emitted, so local scope validation failures
+    do not trigger service-backed audit resolution.
+  - Direct tests cover retrieval, `add_memory`, governance, goal-run, and
+    service-backed audit pre-resolution paths.
+  - Review found one service-backed audit edge; follow-up review confirmed the
+    whitespace/non-string audit boundary is fixed.
+
+Verification:
+- `npx vitest run tests/mcp/server.test.ts tests/goal-run/goal-run-handlers.test.ts tests/mcp/tool-utils.test.ts` (161 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (1040 passed, 34 skipped across 69 files)
+- `git diff --check`
+
 - Hardened shared non-blank text validation:
   - `assertNonBlankText` now rejects non-string values with a field-specific
     string validation error before calling `.trim()`.

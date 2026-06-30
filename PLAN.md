@@ -4,17 +4,18 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Shared Non-Blank Text Type Guard
+## Current Loop — Direct Scope Identifier Type Guard
 
 Status:
-- The shared non-blank text guard now rejects non-string values before calling
-  `.trim()`.
-- Existing whitespace-only string behavior and messages are preserved.
-- Direct registry tests cover non-string memory content and tag entries before
-  canonical repository, embedding, or vector side effects.
-- Spec review and code-quality review found no issues.
-- Focused MCP tests, typecheck, build, audit, full suite, and diff whitespace
-  checks passed.
+- Direct scope identifier guards now reject non-string `projectKey` and
+  `userScopeId` values before calling `.trim()`.
+- Registry instrumentation validates provided scope identifiers before
+  logging/audit, so local scope validation failures do not trigger
+  service-backed audit resolution.
+- Existing missing/whitespace messages are preserved for handler-level required
+  checks.
+- Focused MCP/goal-run tests, typecheck, build, audit, full suite, review, and
+  diff whitespace checks passed.
 
 Loop closeout:
 - Commit locally; do not push.

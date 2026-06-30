@@ -47,8 +47,9 @@ function instrumentToolRegistry(input: {
   async function instrument<T>(
     toolName: string,
     toolInput: {
-      organizationId?: string;
-      projectKey?: string;
+      organizationId?: unknown;
+      projectKey?: unknown;
+      userScopeId?: unknown;
       scope?: string;
     },
     run: () => Promise<T>,
@@ -56,13 +57,15 @@ function instrumentToolRegistry(input: {
     if (toolInput.organizationId !== undefined) {
       assertNonBlankText(toolInput.organizationId, "organizationId");
     }
+    const projectKey = optionalStringField(toolInput.projectKey, "projectKey");
+    optionalStringField(toolInput.userScopeId, "userScopeId");
 
     const start = Date.now();
     const requestId = globalThis.crypto.randomUUID();
     const log = baseLogger.child({
       requestId,
       tool: toolName,
-      projectKey: toolInput.projectKey,
+      projectKey,
       scope: toolInput.scope,
     });
     log.info({ event: "tool.start" }, "tool invoked");
@@ -78,7 +81,7 @@ function instrumentToolRegistry(input: {
           organizationId: toolInput.organizationId ?? "default",
           actor: defaultActor,
           tool: toolName,
-          projectKey: toolInput.projectKey ?? null,
+          projectKey: projectKey ?? null,
           outcome: "ok",
           durationMs,
           requestId,
@@ -101,7 +104,7 @@ function instrumentToolRegistry(input: {
           organizationId: toolInput.organizationId ?? "default",
           actor: defaultActor,
           tool: toolName,
-          projectKey: toolInput.projectKey ?? null,
+          projectKey: projectKey ?? null,
           outcome: "error",
           errorMessage,
           durationMs,
@@ -202,4 +205,15 @@ function hasRepositoryOverrides(options: CreateToolRegistryOptions): boolean {
       options.userRepository ||
       options.resolveRepository,
   );
+}
+
+function optionalStringField(
+  value: unknown,
+  fieldName: string,
+): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  assertNonBlankText(value, fieldName);
+  return value;
 }

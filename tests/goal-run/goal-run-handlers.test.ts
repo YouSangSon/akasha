@@ -121,6 +121,34 @@ describe("goal-run handlers", () => {
     expect(goalRuns.list).not.toHaveBeenCalled();
   });
 
+  it("rejects non-string goal-run scope identifiers before service dispatch", async () => {
+    const goalRuns = goalRunServicesStub();
+    const registry = registryWith(goalRuns);
+
+    await expect(
+      registry.start_goal_run({
+        projectKey: 42 as never,
+        goal: "ship phase 1",
+      }),
+    ).rejects.toThrow(/projectKey must be a string/);
+    await expect(
+      registry.list_goal_runs({
+        scope: "user",
+        userScopeId: 42 as never,
+      }),
+    ).rejects.toThrow(/userScopeId must be a string/);
+    await expect(
+      registry.start_goal_run({
+        projectKey: "proj-x",
+        userScopeId: { id: "alice" } as never,
+        goal: "ship phase 1",
+      }),
+    ).rejects.toThrow(/userScopeId must be a string/);
+
+    expect(goalRuns.start).not.toHaveBeenCalled();
+    expect(goalRuns.list).not.toHaveBeenCalled();
+  });
+
   it("rejects invalid goal-run enum values before service dispatch", async () => {
     const goalRuns = goalRunServicesStub();
     const registry = registryWith(goalRuns);

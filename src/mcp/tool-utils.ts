@@ -32,10 +32,18 @@ export function formatMemoryIdentifier(record: {
 }
 
 export function requireProjectKey(
-  projectKey: string | undefined,
+  projectKey: unknown,
   scope: ScopeType,
 ): string {
-  if (projectKey === undefined || projectKey.trim().length === 0) {
+  if (projectKey === undefined) {
+    throw new Error(
+      `projectKey is required for ${scope} scope operations and must contain non-whitespace text`,
+    );
+  }
+  if (typeof projectKey !== "string") {
+    throw new Error("projectKey must be a string");
+  }
+  if (projectKey.trim().length === 0) {
     throw new Error(
       `projectKey is required for ${scope} scope operations and must contain non-whitespace text`,
     );
@@ -44,8 +52,14 @@ export function requireProjectKey(
   return projectKey;
 }
 
-export function requireUserScopeId(userScopeId: string | undefined): string {
-  if (userScopeId === undefined || userScopeId.trim().length === 0) {
+export function requireUserScopeId(userScopeId: unknown): string {
+  if (userScopeId === undefined) {
+    throw new Error("userScopeId could not be resolved to non-whitespace text");
+  }
+  if (typeof userScopeId !== "string") {
+    throw new Error("userScopeId must be a string");
+  }
+  if (userScopeId.trim().length === 0) {
     throw new Error("userScopeId could not be resolved to non-whitespace text");
   }
 

@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Non-string direct scope identifiers are rejected before scope resolution,
+  logging, audit, repository, or canonical service work.
 - Non-string non-blank text inputs are rejected before `.trim()` across shared
   guards.
 - Non-string direct goal-run optional notes are rejected before service
