@@ -4,15 +4,15 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Source Ref Parser Type Guard
+## Current Loop — Semantic Duplicate Numeric Guards
 
 Status:
-- `parseStoredPostgresSourceRef` now rejects non-string direct values before
-  JSON parsing, fallback logging, or returning metadata.
-- Valid JSON metadata, invalid JSON string fallback/logging, missing
-  `sourceRef` fallback, and missing `uri` behavior are preserved.
-- Focused parser tests, typecheck, build, audit, full suite, review, and diff
-  whitespace checks passed.
+- `findSemanticDuplicates` now rejects non-finite thresholds and validates
+  present embedding vectors before clustering.
+- `cosineSimilarity` now rejects non-finite vector values with context-rich
+  vector/index/value errors.
+- Focused semantic tests, typecheck, build, audit, full suite rerun, review,
+  and diff whitespace checks passed.
 
 Loop closeout:
 - Commit locally; do not push.

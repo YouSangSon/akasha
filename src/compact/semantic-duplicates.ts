@@ -33,6 +33,9 @@ export function cosineSimilarity(a: number[], b: number[]): number {
     return 0;
   }
 
+  assertFiniteVectorValues(a, "cosineSimilarity vector a");
+  assertFiniteVectorValues(b, "cosineSimilarity vector b");
+
   let dot = 0;
   let normA = 0;
   let normB = 0;
@@ -54,7 +57,7 @@ export function findSemanticDuplicates<T extends SemanticRecord>(
   embeddings: ReadonlyMap<number, number[]>,
   threshold: number = DEFAULT_THRESHOLD,
 ): DuplicateGroup<T>[] {
-  if (threshold <= 0 || threshold > 1) {
+  if (!Number.isFinite(threshold) || threshold <= 0 || threshold > 1) {
     throw new Error(
       `findSemanticDuplicates threshold must be in (0, 1], got ${threshold}`,
     );
@@ -69,6 +72,10 @@ export function findSemanticDuplicates<T extends SemanticRecord>(
       // Skip them rather than failing the whole compaction.
       continue;
     }
+    assertFiniteVectorValues(
+      recVec,
+      `findSemanticDuplicates embedding for record ${record.id}`,
+    );
 
     let joined = false;
     for (const cluster of clusters) {
@@ -108,4 +115,19 @@ function byImportanceDescThenIdAsc<T extends SemanticRecord>(
   const importanceDelta = (b.importance ?? 0) - (a.importance ?? 0);
   if (importanceDelta !== 0) return importanceDelta;
   return a.id - b.id;
+}
+
+function assertFiniteVectorValues(
+  vector: readonly number[],
+  context: string,
+): void {
+  for (let index = 0; index < vector.length; index += 1) {
+    const value = vector[index]!;
+    if (!Number.isFinite(value)) {
+      throw new Error(
+        `${context}: vector value at index ${index} must be a finite number, ` +
+          `got ${String(value)}`,
+      );
+    }
+  }
 }

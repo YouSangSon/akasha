@@ -34,6 +34,23 @@ describe("cosineSimilarity", () => {
   it("throws on length mismatch", () => {
     expect(() => cosineSimilarity([1, 0], [1, 0, 0])).toThrow(/length mismatch/);
   });
+
+  it("throws when either vector contains non-finite numbers", () => {
+    for (const value of [
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+    ]) {
+      expect(() => cosineSimilarity([1, value], [1, 0])).toThrow(
+        `cosineSimilarity vector a: vector value at index 1 ` +
+          `must be a finite number, got ${String(value)}`,
+      );
+      expect(() => cosineSimilarity([1, 0], [1, value])).toThrow(
+        `cosineSimilarity vector b: vector value at index 1 ` +
+          `must be a finite number, got ${String(value)}`,
+      );
+    }
+  });
 });
 
 describe("findSemanticDuplicates", () => {
@@ -116,6 +133,16 @@ describe("findSemanticDuplicates", () => {
     expect(groups[0]!.archive.map((r) => r.id)).toEqual([3]);
   });
 
+  it("rejects malformed embeddings even when no comparison is needed", () => {
+    const records = [{ id: 1, importance: 0 }];
+    const embeddings = new Map([[1, [Number.NaN]]]);
+
+    expect(() => findSemanticDuplicates(records, embeddings, 0.9)).toThrow(
+      "findSemanticDuplicates embedding for record 1: vector value at index 0 " +
+        "must be a finite number, got NaN",
+    );
+  });
+
   it("forms multiple clusters when there are multiple paraphrase groups", () => {
     const records = [
       { id: 1 }, { id: 2 },
@@ -142,5 +169,17 @@ describe("findSemanticDuplicates", () => {
     expect(() => findSemanticDuplicates([], new Map(), -0.1)).toThrow(
       /threshold/,
     );
+  });
+
+  it("rejects non-finite thresholds", () => {
+    for (const threshold of [
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+    ]) {
+      expect(() => findSemanticDuplicates([], new Map(), threshold)).toThrow(
+        `findSemanticDuplicates threshold must be in (0, 1], got ${String(threshold)}`,
+      );
+    }
   });
 });

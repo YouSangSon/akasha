@@ -2,6 +2,26 @@
 
 ## 2026-06-30
 
+- Hardened semantic duplicate numeric validation:
+  - `findSemanticDuplicates` now rejects non-finite thresholds before
+    clustering.
+  - Present embedding vectors are validated before clustering, including
+    singleton or first-record embeddings that would not otherwise be compared.
+  - `cosineSimilarity` now rejects non-finite vector values with vector side,
+    index, and value in the error.
+  - Reviews found a silent singleton malformed-embedding gap and missing
+    infinity threshold coverage; both were fixed and covered.
+
+Verification:
+- `npx vitest run tests/compact/semantic-duplicates.test.ts` (17 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run tests/scripts/backup-verify.test.ts -t "rejects existing array manifests before mutation"`
+  (1 passed after an initial full-suite timeout in that shell test)
+- `npm test` rerun (1097 passed, 34 skipped across 70 files)
+- `git diff --check`
+
 - Hardened source-ref parser validation:
   - `parseStoredPostgresSourceRef` now rejects non-string direct values before
     JSON parsing, fallback logging, or metadata return.

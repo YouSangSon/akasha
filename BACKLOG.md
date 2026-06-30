@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Non-finite semantic duplicate thresholds and embedding vectors are rejected
+  before clustering or cosine scoring.
 - Non-string direct source-ref parser values are rejected before JSON parsing,
   fallback logging, or metadata return.
 - Non-string direct lexical/entity helper inputs are rejected before string
