@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- `.env.example` describes Compose environment loading as variable
+  substitution, matching `compose.yaml` and the configuration docs.
 - Docker and CI installs skip onnxruntime-node CUDA provider downloads through
   `ONNXRUNTIME_NODE_INSTALL_CUDA=skip`, avoiding npm unknown-config flags.
 - Invalid CLI argv containers, argv entries, option containers, cwd values, and

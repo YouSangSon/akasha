@@ -137,6 +137,9 @@ small actual impact surface.
 
 ### Fixed
 
+- **Environment template now describes Docker Compose loading accurately** —
+  `.env.example` now refers to Compose variable substitution instead of
+  `env_file`, matching `compose.yaml` and the configuration guide.
 - **Docker and CI installs skip ONNX Runtime CUDA provider downloads without npm
   unknown-config flags** — Dockerfile `npm ci` stages and GitHub Actions now
   set `ONNXRUNTIME_NODE_INSTALL_CUDA=skip`, avoiding flaky GPU binary downloads

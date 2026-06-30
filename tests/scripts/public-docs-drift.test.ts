@@ -579,6 +579,19 @@ describe("public documentation drift checks", () => {
     }
   });
 
+  it("describes Compose environment flow as variable substitution", () => {
+    const envExample = read(".env.example");
+
+    expect(envExample).toContain("Compose uses");
+    expect(envExample).toContain("${VAR:-default} substitution");
+    expect(envExample).toContain("the app reads process.env");
+    expect(envExample).not.toContain("env_file substitution");
+    expect(read("docs/configuration.md")).toContain(
+      "docker compose substitution",
+    );
+    expect(read("docs/configuration.ko.md")).toContain("docker compose 치환");
+  });
+
   it("documents the native Prometheus metrics endpoint", () => {
     for (const path of [
       "docs/api-reference.md",

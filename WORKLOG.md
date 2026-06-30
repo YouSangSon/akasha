@@ -2,6 +2,23 @@
 
 ## 2026-06-30
 
+- Fixed Compose environment-flow wording drift:
+  - `.env.example` now says Compose reads `.env` through `${VAR:-default}`
+    substitution, matching `compose.yaml` and `docs/configuration.md`, instead
+    of incorrectly saying `env_file` substitution.
+  - `tests/scripts/public-docs-drift.test.ts` now guards that wording and the
+    matching English/Korean configuration-doc flow descriptions.
+  - Spec review passed.
+
+Verification:
+- `npx vitest run tests/scripts/public-docs-drift.test.ts` (23 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1793 passed, 34 skipped
+  across 79 files)
+- `git diff --check`
+
 - Stabilized Docker image dependency installs for local CPU-only ONNX Runtime:
   - `docker/app.Dockerfile` now sets
     `ONNXRUNTIME_NODE_INSTALL_CUDA=skip` on both the builder and runtime

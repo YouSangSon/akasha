@@ -128,6 +128,9 @@ CHANGELOG에서 명시적으로 표기합니다.
 
 ### Fixed
 
+- **환경 템플릿의 Docker Compose 로딩 설명을 실제 동작에 맞춤** —
+  `.env.example` 이 이제 `env_file` 이 아니라 Compose 변수 치환을 언급해
+  `compose.yaml` 및 설정 가이드와 일치합니다.
 - **Docker 및 CI install이 npm unknown-config flag 없이 ONNX Runtime CUDA
   provider 다운로드를 건너뜀** — Dockerfile의 `npm ci` 단계와 GitHub Actions가
   이제 `ONNXRUNTIME_NODE_INSTALL_CUDA=skip` 을 설정해, install script가 지원하는
