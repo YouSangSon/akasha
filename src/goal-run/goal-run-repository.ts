@@ -1,9 +1,16 @@
 import type { PgPool } from "../db/connection.js";
 import type {
+  CloseGoalRunInput,
   GoalRun,
   GoalRunIteration,
+  GoalRunIterationOutcome,
   GoalRunRepository,
+  GoalRunScopeType,
+  GoalRunStatus,
   GoalRunWithIterations,
+  ListGoalRunsInput,
+  RecordIterationInput,
+  StartGoalRunInput,
 } from "../types.js";
 import { assertNonBlankText } from "../store/memory-content.js";
 
@@ -78,9 +85,11 @@ const ITERATION_COLUMNS = `
 `;
 
 export function createGoalRunRepository(pool: PgPool): GoalRunRepository {
+  assertGoalRunPool(pool);
+
   return {
     async start(input) {
-      assertNonBlankText(input.organizationId, "organizationId");
+      assertStartInput(input);
 
       const result = await pool.query<GoalRunRow>(
         `
@@ -105,7 +114,7 @@ export function createGoalRunRepository(pool: PgPool): GoalRunRepository {
     },
 
     async recordIteration(input) {
-      assertNonBlankText(input.organizationId, "organizationId");
+      assertRecordIterationInput(input);
 
       const client = await pool.connect();
       try {
@@ -180,7 +189,7 @@ export function createGoalRunRepository(pool: PgPool): GoalRunRepository {
     },
 
     async get(input) {
-      assertNonBlankText(input.organizationId, "organizationId");
+      assertGetInput(input);
 
       const runResult = await pool.query<GoalRunRow>(
         `
@@ -214,7 +223,7 @@ export function createGoalRunRepository(pool: PgPool): GoalRunRepository {
     },
 
     async list(input) {
-      assertNonBlankText(input.organizationId, "organizationId");
+      assertListInput(input);
 
       const params: unknown[] = [
         input.organizationId,
@@ -255,10 +264,10 @@ export function createGoalRunRepository(pool: PgPool): GoalRunRepository {
 
 async function closeRun(
   pool: PgPool,
-  input: { organizationId: string; goalRunId: number; note?: string | null },
+  input: CloseGoalRunInput,
   status: "completed" | "abandoned",
 ): Promise<GoalRun> {
-  assertNonBlankText(input.organizationId, "organizationId");
+  assertCloseInput(input);
 
   const result = await pool.query<GoalRunRow>(
     `
@@ -329,4 +338,138 @@ function requireSingleRow<TRow>(row: TRow | undefined, label: string): TRow {
   }
 
   return row;
+}
+
+function assertGoalRunPool(value: unknown): asserts value is PgPool {
+  const candidate = assertObject(value, "goal run pool");
+  assertFunction(candidate.query, "goal run pool.query");
+  assertFunction(candidate.connect, "goal run pool.connect");
+}
+
+function assertStartInput(value: unknown): asserts value is StartGoalRunInput {
+  const candidate = assertObject(value, "goal run start input");
+  assertNonBlankText(candidate.organizationId, "organizationId");
+  assertGoalRunScopeType(candidate.scopeType, "scopeType");
+  assertNonBlankText(candidate.scopeId, "scopeId");
+  assertOptionalNonBlankStringOrNull(candidate.projectKey, "projectKey");
+  assertNonBlankText(candidate.goal, "goal");
+  assertOptionalNonBlankStringOrNull(
+    candidate.terminationCriteria,
+    "terminationCriteria",
+  );
+}
+
+function assertRecordIterationInput(
+  value: unknown,
+): asserts value is RecordIterationInput {
+  const candidate = assertObject(value, "goal run iteration input");
+  assertNonBlankText(candidate.organizationId, "organizationId");
+  assertPositiveSafeInteger(candidate.goalRunId, "goalRunId");
+  assertNonBlankText(candidate.attempt, "attempt");
+  assertGoalRunIterationOutcome(candidate.outcome, "outcome");
+  assertOptionalNonBlankStringOrNull(candidate.summary, "summary");
+  assertOptionalNonBlankStringOrNull(candidate.error, "error");
+  assertOptionalPositiveSafeIntegerArray(candidate.memoryIds, "memoryIds");
+}
+
+function assertGetInput(
+  value: unknown,
+): asserts value is { organizationId: string; goalRunId: number } {
+  const candidate = assertObject(value, "goal run get input");
+  assertNonBlankText(candidate.organizationId, "organizationId");
+  assertPositiveSafeInteger(candidate.goalRunId, "goalRunId");
+}
+
+function assertListInput(value: unknown): asserts value is ListGoalRunsInput {
+  const candidate = assertObject(value, "goal run list input");
+  assertNonBlankText(candidate.organizationId, "organizationId");
+  assertGoalRunScopeType(candidate.scopeType, "scopeType");
+  assertNonBlankText(candidate.scopeId, "scopeId");
+  if (candidate.status !== undefined) {
+    assertGoalRunStatus(candidate.status, "status");
+  }
+}
+
+function assertCloseInput(value: unknown): asserts value is CloseGoalRunInput {
+  const candidate = assertObject(value, "goal run close input");
+  assertNonBlankText(candidate.organizationId, "organizationId");
+  assertPositiveSafeInteger(candidate.goalRunId, "goalRunId");
+  assertOptionalNonBlankStringOrNull(candidate.note, "note");
+}
+
+function assertGoalRunScopeType(
+  value: unknown,
+  fieldName: string,
+): asserts value is GoalRunScopeType {
+  if (value !== "project" && value !== "user") {
+    throw new Error(`${fieldName} must be "project" or "user"`);
+  }
+}
+
+function assertGoalRunStatus(
+  value: unknown,
+  fieldName: string,
+): asserts value is GoalRunStatus {
+  if (value !== "active" && value !== "completed" && value !== "abandoned") {
+    throw new Error(`${fieldName} must be "active", "completed", or "abandoned"`);
+  }
+}
+
+function assertGoalRunIterationOutcome(
+  value: unknown,
+  fieldName: string,
+): asserts value is GoalRunIterationOutcome {
+  if (value !== "success" && value !== "failure" && value !== "partial") {
+    throw new Error(`${fieldName} must be "success", "failure", or "partial"`);
+  }
+}
+
+function assertOptionalNonBlankStringOrNull(
+  value: unknown,
+  fieldName: string,
+): void {
+  if (value === undefined || value === null) {
+    return;
+  }
+  assertNonBlankText(value, fieldName);
+}
+
+function assertOptionalPositiveSafeIntegerArray(
+  value: unknown,
+  fieldName: string,
+): void {
+  if (value === undefined) {
+    return;
+  }
+  if (!Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an array`);
+  }
+  for (const [index, item] of value.entries()) {
+    assertPositiveSafeInteger(item, `${fieldName}[${index}]`);
+  }
+}
+
+function assertPositiveSafeInteger(
+  value: unknown,
+  fieldName: string,
+): asserts value is number {
+  if (!Number.isSafeInteger(value) || (value as number) < 1) {
+    throw new Error(`${fieldName} must be a positive safe integer`);
+  }
+}
+
+function assertObject(
+  value: unknown,
+  fieldName: string,
+): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function assertFunction(value: unknown, fieldName: string): void {
+  if (typeof value !== "function") {
+    throw new Error(`${fieldName} must be a function`);
+  }
 }

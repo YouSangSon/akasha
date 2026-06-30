@@ -4,17 +4,18 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — DB Boundary Input Guards
+## Current Loop — Goal Run Repository Input Guards
 
 Status:
-- `createPgPool` now rejects malformed input and blank/non-string connection
-  strings before constructing a `pg.Pool`.
-- Migration helpers now reject malformed SQL read options, env objects/env
-  values, and migration pool handles before fallback or query work.
-- pgvector integration suites now defer real pool construction until `beforeAll`
-  so skipped suites remain skipped when `PGVECTOR_TEST_URL` is absent.
-- Focused DB/vector tests, typecheck, build, audit, and single-worker full suite
-  passed.
+- `createGoalRunRepository` now rejects malformed pool handles before returning
+  repository methods.
+- Start, iteration, get, list, complete, and abandon inputs now validate input
+  containers, organization IDs, run IDs, scope/status/outcome values, optional
+  text fields, and memory ID arrays before SQL or transactions.
+- Existing row mapping, active-run conflict behavior, iteration count bumping,
+  and active-run memory pinning behavior are preserved.
+- Focused goal-run repository tests, typecheck, build, audit, and single-worker
+  full suite passed.
 - Default parallel `npm test` remains timing-sensitive on unrelated server and
   backup shell tests under load, so full-suite verification used one worker.
 

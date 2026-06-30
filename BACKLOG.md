@@ -18,6 +18,9 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid goal-run repository pools, start/list/get/close inputs, iteration
+  inputs, scope/status/outcome values, optional text, and memory IDs are
+  rejected before SQL or transaction work.
 - Invalid DB pool factory inputs, migration helper options, migration env
   values, and migration pool handles are rejected before pool construction,
   fallback reads, or migration queries.

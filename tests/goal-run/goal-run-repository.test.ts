@@ -26,9 +26,27 @@ function runRow(overrides: Record<string, unknown> = {}) {
 }
 
 describe("createGoalRunRepository", () => {
+  it.each([
+    {
+      pool: null,
+      message: "goal run pool must be an object",
+    },
+    {
+      pool: { connect: vi.fn() },
+      message: "goal run pool.query must be a function",
+    },
+    {
+      pool: { query: vi.fn() },
+      message: "goal run pool.connect must be a function",
+    },
+  ])("rejects malformed pool input %#", ({ pool, message }) => {
+    expect(() => createGoalRunRepository(pool as never)).toThrow(message);
+  });
+
   it("start rejects whitespace-only organizationId before querying", async () => {
     const pool = {
       query: vi.fn(() => Promise.resolve({ rows: [runRow()] })),
+      connect: vi.fn(),
     };
     const repo = createGoalRunRepository(pool as never);
 
@@ -46,6 +64,51 @@ describe("createGoalRunRepository", () => {
     expect(pool.query).not.toHaveBeenCalled();
   });
 
+  it.each([
+    {
+      input: null,
+      message: "goal run start input must be an object",
+    },
+    {
+      input: {
+        organizationId: "org-a",
+        scopeType: "team",
+        scopeId: "proj-x",
+        goal: "ship phase 1",
+      },
+      message: 'scopeType must be "project" or "user"',
+    },
+    {
+      input: {
+        organizationId: "org-a",
+        scopeType: "project",
+        scopeId: "proj-x",
+        goal: " \n\t ",
+      },
+      message: "goal must contain non-whitespace text",
+    },
+    {
+      input: {
+        organizationId: "org-a",
+        scopeType: "project",
+        scopeId: "proj-x",
+        goal: "ship phase 1",
+        terminationCriteria: 123,
+      },
+      message: "terminationCriteria must be a string",
+    },
+  ])("start rejects malformed input %#", async ({ input, message }) => {
+    const pool = {
+      query: vi.fn(() => Promise.resolve({ rows: [runRow()] })),
+      connect: vi.fn(),
+    };
+    const repo = createGoalRunRepository(pool as never);
+
+    await expect(repo.start(input as never)).rejects.toThrow(message);
+
+    expect(pool.query).not.toHaveBeenCalled();
+  });
+
   it("start inserts a run and maps the row to camelCase", async () => {
     const calls: SqlQueryCall[] = [];
     const pool = {
@@ -53,6 +116,7 @@ describe("createGoalRunRepository", () => {
         calls.push({ sql, params: params ?? [] });
         return Promise.resolve({ rows: [runRow()] });
       }),
+      connect: vi.fn(),
     };
 
     const repo = createGoalRunRepository(pool as never);
@@ -82,7 +146,7 @@ describe("createGoalRunRepository", () => {
   });
 
   it("recordIteration rejects whitespace-only organizationId before opening a transaction", async () => {
-    const pool = { connect: vi.fn() };
+    const pool = { query: vi.fn(), connect: vi.fn() };
     const repo = createGoalRunRepository(pool as never);
 
     await expect(
@@ -93,6 +157,58 @@ describe("createGoalRunRepository", () => {
         outcome: "failure",
       }),
     ).rejects.toThrow(/organizationId/);
+
+    expect(pool.connect).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      input: null,
+      message: "goal run iteration input must be an object",
+    },
+    {
+      input: {
+        organizationId: "org-a",
+        goalRunId: 0,
+        attempt: "try A",
+        outcome: "failure",
+      },
+      message: "goalRunId must be a positive safe integer",
+    },
+    {
+      input: {
+        organizationId: "org-a",
+        goalRunId: 7,
+        attempt: "try A",
+        outcome: "retry",
+      },
+      message: 'outcome must be "success", "failure", or "partial"',
+    },
+    {
+      input: {
+        organizationId: "org-a",
+        goalRunId: 7,
+        attempt: "try A",
+        outcome: "failure",
+        memoryIds: [101, 0],
+      },
+      message: "memoryIds[1] must be a positive safe integer",
+    },
+    {
+      input: {
+        organizationId: "org-a",
+        goalRunId: 7,
+        attempt: "try A",
+        outcome: "failure",
+        summary: " \n\t ",
+      },
+      message: "summary must contain non-whitespace text",
+    },
+  ])("recordIteration rejects malformed input %#", async ({ input, message }) => {
+    const pool = { query: vi.fn(), connect: vi.fn() };
+    const repo = createGoalRunRepository(pool as never);
+
+    await expect(repo.recordIteration(input as never)).rejects.toThrow(message);
 
     expect(pool.connect).not.toHaveBeenCalled();
   });
@@ -126,7 +242,7 @@ describe("createGoalRunRepository", () => {
       }),
       release: vi.fn(),
     };
-    const pool = { connect: vi.fn().mockResolvedValue(client) };
+    const pool = { query: vi.fn(), connect: vi.fn().mockResolvedValue(client) };
 
     const repo = createGoalRunRepository(pool as never);
     const iteration = await repo.recordIteration({
@@ -160,7 +276,7 @@ describe("createGoalRunRepository", () => {
       }),
       release: vi.fn(),
     };
-    const pool = { connect: vi.fn().mockResolvedValue(client) };
+    const pool = { query: vi.fn(), connect: vi.fn().mockResolvedValue(client) };
 
     const repo = createGoalRunRepository(pool as never);
     await expect(
@@ -207,7 +323,7 @@ describe("createGoalRunRepository", () => {
       }),
       release: vi.fn(),
     };
-    const pool = { connect: vi.fn().mockResolvedValue(client) };
+    const pool = { query: vi.fn(), connect: vi.fn().mockResolvedValue(client) };
 
     const repo = createGoalRunRepository(pool as never);
     await repo.recordIteration({
@@ -223,6 +339,7 @@ describe("createGoalRunRepository", () => {
   it("get rejects whitespace-only organizationId before querying", async () => {
     const pool = {
       query: vi.fn(() => Promise.resolve({ rows: [] })),
+      connect: vi.fn(),
     };
     const repo = createGoalRunRepository(pool as never);
 
@@ -233,9 +350,24 @@ describe("createGoalRunRepository", () => {
     expect(pool.query).not.toHaveBeenCalled();
   });
 
+  it("get rejects invalid goalRunId before querying", async () => {
+    const pool = {
+      query: vi.fn(() => Promise.resolve({ rows: [] })),
+      connect: vi.fn(),
+    };
+    const repo = createGoalRunRepository(pool as never);
+
+    await expect(
+      repo.get({ organizationId: "org-a", goalRunId: 0 }),
+    ).rejects.toThrow("goalRunId must be a positive safe integer");
+
+    expect(pool.query).not.toHaveBeenCalled();
+  });
+
   it("get returns null when the run is not found for the org", async () => {
     const pool = {
       query: vi.fn(() => Promise.resolve({ rows: [] })),
+      connect: vi.fn(),
     };
     const repo = createGoalRunRepository(pool as never);
     const result = await repo.get({ organizationId: "org-a", goalRunId: 1 });
@@ -264,6 +396,7 @@ describe("createGoalRunRepository", () => {
           ],
         });
       }),
+      connect: vi.fn(),
     };
     const repo = createGoalRunRepository(pool as never);
     const result = await repo.get({ organizationId: "org-a", goalRunId: 7 });
@@ -274,6 +407,7 @@ describe("createGoalRunRepository", () => {
   it("list rejects whitespace-only organizationId before querying", async () => {
     const pool = {
       query: vi.fn(() => Promise.resolve({ rows: [] })),
+      connect: vi.fn(),
     };
     const repo = createGoalRunRepository(pool as never);
 
@@ -288,15 +422,49 @@ describe("createGoalRunRepository", () => {
     expect(pool.query).not.toHaveBeenCalled();
   });
 
+  it("list rejects invalid status before querying", async () => {
+    const pool = {
+      query: vi.fn(() => Promise.resolve({ rows: [] })),
+      connect: vi.fn(),
+    };
+    const repo = createGoalRunRepository(pool as never);
+
+    await expect(
+      repo.list({
+        organizationId: "org-a",
+        scopeType: "project",
+        scopeId: "proj-x",
+        status: "paused" as never,
+      }),
+    ).rejects.toThrow('status must be "active", "completed", or "abandoned"');
+
+    expect(pool.query).not.toHaveBeenCalled();
+  });
+
   it("complete rejects whitespace-only organizationId before querying", async () => {
     const pool = {
       query: vi.fn(() => Promise.resolve({ rows: [runRow()] })),
+      connect: vi.fn(),
     };
     const repo = createGoalRunRepository(pool as never);
 
     await expect(
       repo.complete({ organizationId: " \n\t ", goalRunId: 7, note: "done" }),
     ).rejects.toThrow(/organizationId/);
+
+    expect(pool.query).not.toHaveBeenCalled();
+  });
+
+  it("complete rejects malformed note before querying", async () => {
+    const pool = {
+      query: vi.fn(() => Promise.resolve({ rows: [runRow()] })),
+      connect: vi.fn(),
+    };
+    const repo = createGoalRunRepository(pool as never);
+
+    await expect(
+      repo.complete({ organizationId: "org-a", goalRunId: 7, note: " \n\t " }),
+    ).rejects.toThrow("note must contain non-whitespace text");
 
     expect(pool.query).not.toHaveBeenCalled();
   });
@@ -316,6 +484,7 @@ describe("createGoalRunRepository", () => {
           ],
         });
       }),
+      connect: vi.fn(),
     };
     const repo = createGoalRunRepository(okPool as never);
     const closed = await repo.complete({
@@ -329,7 +498,10 @@ describe("createGoalRunRepository", () => {
     expect(calls[0]?.sql).toContain("close_note = $4");
     expect(calls[0]?.params).toEqual([7, "org-a", "completed", "done"]);
 
-    const emptyPool = { query: vi.fn(() => Promise.resolve({ rows: [] })) };
+    const emptyPool = {
+      query: vi.fn(() => Promise.resolve({ rows: [] })),
+      connect: vi.fn(),
+    };
     const repo2 = createGoalRunRepository(emptyPool as never);
     await expect(
       repo2.abandon({ organizationId: "org-a", goalRunId: 7 }),

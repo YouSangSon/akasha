@@ -2,6 +2,31 @@
 
 ## 2026-06-30
 
+- Hardened goal-run repository input validation:
+  - `createGoalRunRepository` now rejects malformed pool handles before
+    returning repository methods.
+  - Start/list/get/close paths now reject malformed direct input containers,
+    missing or blank required text, invalid scope/status values, invalid run
+    IDs, and invalid optional text before query construction.
+  - Iteration recording now rejects malformed direct inputs, invalid run IDs,
+    invalid outcomes, blank attempt/optional text, and invalid memory ID arrays
+    before opening a transaction.
+  - Existing row mapping, active-run conflict behavior, iteration count bumping,
+    transaction rollback behavior, and active-run memory pinning behavior are
+    preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/goal-run/goal-run-repository.test.ts` (27 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1630 passed, 34 skipped
+  across 71 files)
+- `git diff --check`
+
 - Hardened DB boundary input validation:
   - `createPgPool` now rejects malformed input containers and blank/non-string
     connection strings before constructing a `pg.Pool`.
