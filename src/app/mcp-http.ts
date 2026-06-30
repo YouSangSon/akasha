@@ -5,6 +5,10 @@ import { createMcpServer } from "../mcp/server.js";
 import type { ToolName } from "../mcp/tool-schemas.js";
 import type { McpToolAuthorizer, ToolRegistry } from "../mcp/types.js";
 import {
+  assertFunction,
+  assertObject,
+} from "../mcp/tool-registry-validation.js";
+import {
   authenticateBearer,
   type BearerToken,
   type OAuthTokenVerifier,
@@ -36,6 +40,8 @@ const ORGANIZATION_MISMATCH_ERROR =
 export async function handleMcpHttpRequest(
   options: HandleMcpHttpRequestOptions,
 ): Promise<void> {
+  assertHandleMcpHttpRequestOptions(options);
+
   const {
     req,
     res,
@@ -150,6 +156,75 @@ export async function handleMcpHttpRequest(
     if (cleanupInFinally) {
       await cleanup();
     }
+  }
+}
+
+function assertHandleMcpHttpRequestOptions(
+  value: unknown,
+): asserts value is HandleMcpHttpRequestOptions {
+  const candidate = assertObject(value, "MCP HTTP request options");
+  const req = assertObject(candidate.req, "req");
+  assertObject(req.headers, "req.headers");
+
+  const res = assertObject(candidate.res, "res");
+  assertFunction(res.writeHead, "res.writeHead");
+  assertFunction(res.end, "res.end");
+  assertFunction(res.setHeader, "res.setHeader");
+  assertFunction(res.once, "res.once");
+
+  assertObject(candidate.registry, "registry");
+  assertArray(candidate.bearerTokens, "bearerTokens");
+  assertNullableObject(candidate.oauthTokenVerifier, "oauthTokenVerifier");
+  if (candidate.oauthTokenVerifier !== null) {
+    assertFunction(
+      candidate.oauthTokenVerifier.verify,
+      "oauthTokenVerifier.verify",
+    );
+  }
+  assertNullableObject(candidate.rateLimiter, "rateLimiter");
+  if (candidate.rateLimiter !== null) {
+    assertFunction(candidate.rateLimiter.check, "rateLimiter.check");
+  }
+
+  const logger = assertObject(candidate.logger, "logger");
+  assertFunction(logger.error, "logger.error");
+
+  if (
+    candidate.oauthProtectedResource !== undefined &&
+    candidate.oauthProtectedResource !== null
+  ) {
+    assertObject(candidate.oauthProtectedResource, "oauthProtectedResource");
+  }
+
+  if (candidate.allowedHostnames !== undefined) {
+    assertStringArray(candidate.allowedHostnames, "allowedHostnames");
+  }
+}
+
+function assertArray(value: unknown, fieldName: string): asserts value is unknown[] {
+  if (!Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an array`);
+  }
+}
+
+function assertStringArray(
+  value: unknown,
+  fieldName: string,
+): asserts value is string[] {
+  assertArray(value, fieldName);
+  for (const [index, item] of value.entries()) {
+    if (typeof item !== "string") {
+      throw new Error(`${fieldName}[${index}] must be a string`);
+    }
+  }
+}
+
+function assertNullableObject(
+  value: unknown,
+  fieldName: string,
+): asserts value is Record<string, unknown> | null {
+  if (value !== null) {
+    assertObject(value, fieldName);
   }
 }
 

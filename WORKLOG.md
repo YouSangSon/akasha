@@ -2,6 +2,29 @@
 
 ## 2026-06-30
 
+- Hardened MCP HTTP request handler input validation:
+  - `handleMcpHttpRequest` now rejects malformed direct options, request
+    headers, response handles, registry handles, bearer token lists, OAuth
+    verifier handles, rate limiter handles, logger handles, OAuth metadata
+    handles, and allowed hostnames before request dispatch.
+  - Existing method, host, origin, auth, rate-limit, and MCP transport behavior
+    are preserved.
+  - A read-only explorer subagent confirmed the minimal boundary gap; separate
+    spec and code-quality reviewer subagents passed the final diff.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/app/mcp-http-boundary.test.ts tests/app/mcp-http.test.ts`
+  (30 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1738 passed, 34 skipped
+  across 77 files)
+- `git diff --check`
+
 - Hardened MCP server construction input validation:
   - `createMcpServer` now rejects malformed direct options, invalid shared
     registry options, malformed injected registry handles, and invalid

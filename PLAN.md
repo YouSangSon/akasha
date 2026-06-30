@@ -4,17 +4,15 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — MCP Server Construction Input Guards
+## Current Loop — MCP HTTP Request Input Guards
 
 Status:
-- `createMcpServer` now rejects malformed server construction options before
-  reading registry wiring fields.
-- `resolveStdioCwd` now rejects malformed direct env/fallback inputs and
-  invalid fallback cwd values before stdio startup.
-- Existing default server construction, injected registry schema-only tests,
-  and valid cwd behavior are preserved.
-- Focused MCP server construction/cwd tests, typecheck, build, audit, and
-  single-worker full suite passed.
+- `handleMcpHttpRequest` now rejects malformed direct option containers and
+  invalid req/res/auth/rate-limit/logger handles before destructuring.
+- Existing method, host, origin, auth, rate-limit, and MCP transport behavior
+  are preserved.
+- Focused MCP HTTP boundary/transport tests, typecheck, build, audit,
+  subagent spec/code-quality reviews, and single-worker full suite passed.
 - Default parallel `npm test` remains timing-sensitive on unrelated server and
   backup shell tests under load, so full-suite verification used one worker.
 

@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid MCP HTTP request handler options and req/res/auth/rate-limit/logger
+  handles are rejected before request dispatch or transport wiring.
 - Invalid MCP server construction options and stdio cwd env/fallback inputs are
   rejected before server wiring or stdio startup.
 - Invalid MCP registry construction options and direct handler construction
