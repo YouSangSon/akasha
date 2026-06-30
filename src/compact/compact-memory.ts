@@ -98,7 +98,7 @@ export function buildCompactionPlan(
   };
 }
 
-function assertBuildCompactionPlanInput(
+export function assertBuildCompactionPlanInput(
   input: unknown,
 ): asserts input is BuildCompactionPlanInput {
   if (typeof input !== "object" || input === null || Array.isArray(input)) {

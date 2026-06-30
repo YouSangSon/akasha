@@ -31,6 +31,7 @@ import type {
   MemoryArchiveRepository,
 } from "../store/memory-archive-repository.js";
 import {
+  assertBuildCompactionPlanInput,
   buildCompactionPlan,
   type BuildCompactionPlanInput,
 } from "./compact-memory.js";
@@ -101,10 +102,12 @@ export async function applyCompaction(
   input: Readonly<ApplyCompactionInput>,
   deps: Readonly<ApplyCompactionDeps>,
 ): Promise<ApplyCompactionResult> {
-  assertNonBlankText(input.organizationId, "organizationId");
+  assertApplyCompactionInput(input);
+  assertApplyCompactionDeps(deps);
 
-  const startedAt = (deps.now ?? (() => new Date()))();
+  const startedAt = nowFromDeps(deps);
   const idempotencyKey = (deps.generateRunId ?? randomUUID)();
+  assertNonBlankText(idempotencyKey, "compactionRunId");
 
   // Optional: semantic dedup REPLACES exact match when threshold is set
   // (semantic with threshold ≤ 1.0 subsumes exact match anyway). Embedding
@@ -288,7 +291,7 @@ export async function applyCompaction(
     qdrantFailed: qdrantFailedRecords,
   });
 
-  const endedAt = (deps.now ?? (() => new Date()))();
+  const endedAt = nowFromDeps(deps);
 
   return {
     ...plan,
@@ -362,7 +365,7 @@ function emptyStats(
   deps: ApplyCompactionDeps,
   startedAt: Date,
 ): ApplyStats {
-  const endedAt = (deps.now ?? (() => new Date()))();
+  const endedAt = nowFromDeps(deps);
   return {
     archived: 0,
     skipped: 0,
@@ -370,6 +373,133 @@ function emptyStats(
     qdrantPointsPending: 0,
     durationMs: endedAt.getTime() - startedAt.getTime(),
   };
+}
+
+function assertApplyCompactionInput(
+  input: unknown,
+): asserts input is ApplyCompactionInput {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    throw new Error("applyCompaction input must be an object");
+  }
+
+  assertBuildCompactionPlanInput(input);
+
+  const candidate = input as Record<string, unknown>;
+  assertNonBlankText(candidate.organizationId, "organizationId");
+  assertNonBlankText(candidate.actor, "actor");
+  assertOptionalSemanticDedupThreshold(candidate.semanticDedupThreshold);
+}
+
+function assertApplyCompactionDeps(
+  deps: unknown,
+): asserts deps is ApplyCompactionDeps {
+  const candidate = assertObject(deps, "applyCompaction deps");
+  const archiveRepository = assertObject(
+    candidate.archiveRepository,
+    "deps.archiveRepository",
+  );
+  const vectorIndex = assertObject(candidate.vectorIndex, "deps.vectorIndex");
+  const logger = assertObject(candidate.logger, "deps.logger");
+
+  for (const method of [
+    "countRecentApplyRuns",
+    "createCompactionRun",
+    "applyCompactionRecord",
+    "markQdrantStatus",
+    "completeCompactionRun",
+  ]) {
+    assertFunction(
+      archiveRepository[method],
+      `deps.archiveRepository.${method}`,
+    );
+  }
+
+  assertFunction(vectorIndex.delete, "deps.vectorIndex.delete");
+
+  for (const method of ["info", "warn", "error"]) {
+    assertFunction(logger[method], `deps.logger.${method}`);
+  }
+
+  if (candidate.embeddings !== undefined) {
+    const embeddings = assertObject(candidate.embeddings, "deps.embeddings");
+    assertFunction(embeddings.embedBatch, "deps.embeddings.embedBatch");
+  }
+  assertOptionalFunction(candidate.generateRunId, "deps.generateRunId");
+  assertOptionalFunction(candidate.now, "deps.now");
+  assertOptionalApplyRateLimit(candidate.applyRateLimit);
+}
+
+function assertOptionalSemanticDedupThreshold(value: unknown): void {
+  if (value === undefined) {
+    return;
+  }
+  if (
+    typeof value !== "number" ||
+    !Number.isFinite(value) ||
+    value <= 0 ||
+    value > 1
+  ) {
+    throw new Error("semanticDedupThreshold must be in (0, 1]");
+  }
+}
+
+function assertOptionalApplyRateLimit(value: unknown): void {
+  if (value === undefined) {
+    return;
+  }
+
+  const rateLimit = assertObject(value, "deps.applyRateLimit");
+  assertNonNegativeFiniteNumber(
+    rateLimit.windowMs,
+    "deps.applyRateLimit.windowMs",
+  );
+  assertPositiveSafeInteger(
+    rateLimit.maxRuns,
+    "deps.applyRateLimit.maxRuns",
+  );
+}
+
+function assertObject(
+  value: unknown,
+  fieldName: string,
+): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function assertFunction(value: unknown, fieldName: string): void {
+  if (typeof value !== "function") {
+    throw new Error(`${fieldName} must be a function`);
+  }
+}
+
+function assertOptionalFunction(value: unknown, fieldName: string): void {
+  if (value === undefined) {
+    return;
+  }
+  assertFunction(value, fieldName);
+}
+
+function assertNonNegativeFiniteNumber(value: unknown, fieldName: string): void {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    throw new Error(`${fieldName} must be a non-negative finite number`);
+  }
+}
+
+function assertPositiveSafeInteger(value: unknown, fieldName: string): void {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
+    throw new Error(`${fieldName} must be a positive safe integer`);
+  }
+}
+
+function nowFromDeps(deps: ApplyCompactionDeps): Date {
+  const value = (deps.now ?? (() => new Date()))();
+  if (!(value instanceof Date) || !Number.isFinite(value.getTime())) {
+    throw new Error("deps.now result must be a valid Date");
+  }
+  return value;
 }
 
 async function computeSemanticGroups(

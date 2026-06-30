@@ -12,6 +12,8 @@ import type {
 } from "../../src/store/memory-archive-repository.js";
 
 const NOW = new Date("2026-04-25T12:00:00.000Z");
+const callApplyCompaction = (input: unknown, deps: unknown) =>
+  applyCompaction(input as ApplyCompactionInput, deps as ApplyCompactionDeps);
 
 function makeRecord(overrides: Partial<SearchMemoryResult> = {}): SearchMemoryResult {
   return {
@@ -137,7 +139,195 @@ function makeDeps(
   };
 }
 
+function expectNoApplySideEffects(
+  repo: MemoryArchiveRepository,
+  vectorIndex: ReturnType<typeof makeVectorIndex>,
+): void {
+  expect(repo.countRecentApplyRuns).not.toHaveBeenCalled();
+  expect(repo.createCompactionRun).not.toHaveBeenCalled();
+  expect(repo.applyCompactionRecord).not.toHaveBeenCalled();
+  expect(repo.markQdrantStatus).not.toHaveBeenCalled();
+  expect(repo.completeCompactionRun).not.toHaveBeenCalled();
+  expect(vectorIndex.delete).not.toHaveBeenCalled();
+}
+
 describe("applyCompaction (dry-run)", () => {
+  it.each([undefined, null, "input", 12, true, []])(
+    "rejects non-object direct input",
+    async (input) => {
+      const { repo } = makeRepoMocks();
+      const qdrant = makeVectorIndex();
+      const embeddings = {
+        embed: vi.fn(),
+        embedBatch: vi.fn().mockResolvedValue([]),
+      };
+      const generateRunId = vi.fn(() => TEST_RUN_ID);
+      const now = vi.fn(() => NOW);
+
+      await expect(
+        callApplyCompaction(
+          input,
+          makeDeps(repo, qdrant, { embeddings, generateRunId, now }),
+        ),
+      ).rejects.toThrow("applyCompaction input must be an object");
+
+      expect(now).not.toHaveBeenCalled();
+      expect(generateRunId).not.toHaveBeenCalled();
+      expect(embeddings.embedBatch).not.toHaveBeenCalled();
+      expectNoApplySideEffects(repo, qdrant);
+    },
+  );
+
+  it.each([
+    [{ records: null }, "records must be an array"],
+    [{ organizationId: null }, "organizationId must be a string"],
+    [
+      { organizationId: " \n\t " },
+      "organizationId must contain non-whitespace text",
+    ],
+    [{ actor: null }, "actor must be a string"],
+    [{ actor: "" }, "actor must contain non-whitespace text"],
+    [
+      { semanticDedupThreshold: 0 },
+      "semanticDedupThreshold must be in (0, 1]",
+    ],
+    [
+      { semanticDedupThreshold: 1.01 },
+      "semanticDedupThreshold must be in (0, 1]",
+    ],
+    [
+      { semanticDedupThreshold: Number.NaN },
+      "semanticDedupThreshold must be in (0, 1]",
+    ],
+  ])("rejects invalid direct input field", async (overrides, message) => {
+    const { repo } = makeRepoMocks();
+    const qdrant = makeVectorIndex();
+    const embeddings = {
+      embed: vi.fn(),
+      embedBatch: vi.fn().mockResolvedValue([]),
+    };
+    const generateRunId = vi.fn(() => TEST_RUN_ID);
+    const now = vi.fn(() => NOW);
+
+    await expect(
+      callApplyCompaction(
+        makeInput(overrides as Partial<ApplyCompactionInput>),
+        makeDeps(repo, qdrant, { embeddings, generateRunId, now }),
+      ),
+    ).rejects.toThrow(message);
+
+    expect(now).not.toHaveBeenCalled();
+    expect(generateRunId).not.toHaveBeenCalled();
+    expect(embeddings.embedBatch).not.toHaveBeenCalled();
+    expectNoApplySideEffects(repo, qdrant);
+  });
+
+  it.each<[(deps: ApplyCompactionDeps) => unknown, string]>([
+    [() => null, "applyCompaction deps must be an object"],
+    [
+      (deps) => ({ ...deps, archiveRepository: null }),
+      "deps.archiveRepository must be an object",
+    ],
+    [
+      (deps) => ({
+        ...deps,
+        archiveRepository: {
+          ...deps.archiveRepository,
+          countRecentApplyRuns: null,
+        },
+      }),
+      "deps.archiveRepository.countRecentApplyRuns must be a function",
+    ],
+    [
+      (deps) => ({
+        ...deps,
+        vectorIndex: { ...deps.vectorIndex, delete: null },
+      }),
+      "deps.vectorIndex.delete must be a function",
+    ],
+    [
+      (deps) => ({
+        ...deps,
+        logger: { ...deps.logger, warn: null },
+      }),
+      "deps.logger.warn must be a function",
+    ],
+    [
+      (deps) => ({
+        ...deps,
+        embeddings: { embed: vi.fn(), embedBatch: null },
+      }),
+      "deps.embeddings.embedBatch must be a function",
+    ],
+    [
+      (deps) => ({ ...deps, generateRunId: "id" }),
+      "deps.generateRunId must be a function",
+    ],
+    [(deps) => ({ ...deps, now: "now" }), "deps.now must be a function"],
+    [
+      (deps) => ({ ...deps, applyRateLimit: null }),
+      "deps.applyRateLimit must be an object",
+    ],
+    [
+      (deps) => ({
+        ...deps,
+        applyRateLimit: { windowMs: -1, maxRuns: 1 },
+      }),
+      "deps.applyRateLimit.windowMs must be a non-negative finite number",
+    ],
+    [
+      (deps) => ({
+        ...deps,
+        applyRateLimit: { windowMs: 1, maxRuns: 0 },
+      }),
+      "deps.applyRateLimit.maxRuns must be a positive safe integer",
+    ],
+  ])("rejects invalid direct deps", async (makeInvalidDeps, message) => {
+    const { repo } = makeRepoMocks();
+    const qdrant = makeVectorIndex();
+    const baseDeps = makeDeps(repo, qdrant);
+
+    await expect(
+      callApplyCompaction(makeInput(), makeInvalidDeps(baseDeps)),
+    ).rejects.toThrow(message);
+
+    expectNoApplySideEffects(repo, qdrant);
+  });
+
+  it("rejects invalid generated run ids before side effects", async () => {
+    const { repo } = makeRepoMocks();
+    const qdrant = makeVectorIndex();
+    const generateRunId = vi.fn(() => " \n\t ");
+
+    await expect(
+      applyCompaction(
+        makeInput(),
+        makeDeps(repo, qdrant, { generateRunId }),
+      ),
+    ).rejects.toThrow("compactionRunId must contain non-whitespace text");
+
+    expect(generateRunId).toHaveBeenCalledOnce();
+    expectNoApplySideEffects(repo, qdrant);
+  });
+
+  it("rejects invalid injected time values before generated ids or side effects", async () => {
+    const { repo } = makeRepoMocks();
+    const qdrant = makeVectorIndex();
+    const generateRunId = vi.fn(() => TEST_RUN_ID);
+    const now = vi.fn(() => new Date("not-a-date"));
+
+    await expect(
+      applyCompaction(
+        makeInput(),
+        makeDeps(repo, qdrant, { generateRunId, now }),
+      ),
+    ).rejects.toThrow("deps.now result must be a valid Date");
+
+    expect(now).toHaveBeenCalledOnce();
+    expect(generateRunId).not.toHaveBeenCalled();
+    expectNoApplySideEffects(repo, qdrant);
+  });
+
   it("rejects whitespace-only organizationId before side effects", async () => {
     const { repo, createCompactionRun, applyCompactionRecord } = makeRepoMocks();
     const qdrant = makeVectorIndex();

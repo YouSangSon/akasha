@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid apply compaction inputs, dependencies, rate-limit config, generated
+  run IDs, and injected times are rejected before apply side effects.
 - Invalid unarchive compaction inputs and archive IDs are rejected before
   repository, chunking, embedding, or vector side effects.
 - Invalid compaction plan inputs, records, semantic override groups, and

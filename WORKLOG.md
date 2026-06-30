@@ -2,6 +2,34 @@
 
 ## 2026-06-30
 
+- Hardened apply compaction input validation:
+  - `applyCompaction` now rejects non-object direct input before generated run
+    IDs, semantic embedding, rate-limit checks, archive repository calls, or
+    Qdrant deletes.
+  - The apply path now reuses compaction-plan input validation before semantic
+    embedding can read record content.
+  - Apply-specific validation covers organization ID, actor, semantic threshold,
+    dependency shape, optional embedding client, optional rate-limit config,
+    generated run IDs, and injected clock results.
+  - Malformed direct calls are covered with no-side-effect assertions across
+    generated IDs, embeddings, archive repository calls, and vector deletes.
+  - Existing dry-run, apply, replay, rate-limit, duplicate/decay, semantic
+    fallback, Qdrant-pending, and PG-failure behavior is preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/compact/apply-compaction.test.ts` (41 passed)
+- `npx vitest run tests/compact/apply-compaction.test.ts tests/compact/compact-memory.test.ts tests/compact/semantic-duplicates.test.ts tests/compact/unarchive-compaction.test.ts tests/mcp/server.test.ts tests/app/server.test.ts`
+  (323 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1405 passed, 34 skipped
+  across 70 files)
+- `git diff --check`
+
 - Hardened unarchive compaction input validation:
   - `unarchiveCompaction` now rejects non-object direct inputs before reading
     archive IDs or starting restore work.
