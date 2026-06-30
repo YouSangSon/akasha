@@ -4,15 +4,15 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Service Config Env Type Guard
+## Current Loop — Lexical Entity Helper Type Guards
 
 Status:
-- `resolveServiceConfig({ env })` now rejects non-string env values before
-  string normalization, integer parsing, or returning config fields.
-- Existing defaults, whitespace-only string errors, invalid enum strings, and
-  provider/backend branch behavior are preserved.
-- Focused config tests, typecheck, build, audit, full suite, review, and diff
-  whitespace checks passed.
+- Exported lexical and entity helpers now reject malformed direct text inputs
+  before string normalization, regex matching, or scoring field access.
+- Existing valid string tokenization, scoring, entity extraction, and entity
+  overlap behavior are preserved.
+- Focused search/entity tests, typecheck, build, audit, full suite, review, and
+  diff whitespace checks passed.
 
 Loop closeout:
 - Commit locally; do not push.

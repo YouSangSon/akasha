@@ -36,6 +36,12 @@ describe("entity extraction", () => {
     );
   });
 
+  it("rejects direct non-string text inputs before extraction", () => {
+    expect(() =>
+      extractEntityMentions(["QDRANT"] as unknown as string),
+    ).toThrow("extractEntityMentions text must be a string");
+  });
+
   it("scores overlap by normalized entity identity", () => {
     const overlap = entityOverlapScore(
       "Why did QDRANT_SNAPSHOT_TIMEOUT happen in docs/operations.md?",
@@ -46,5 +52,17 @@ describe("entity extraction", () => {
     expect(overlap.matched.map((mention) => mention.normalized)).toEqual(
       expect.arrayContaining(["qdrant_snapshot_timeout", "docs/operations.md"]),
     );
+  });
+
+  it("rejects direct non-string left text inputs before overlap scoring", () => {
+    expect(() =>
+      entityOverlapScore(123 as unknown as string, "docs/operations.md"),
+    ).toThrow("entityOverlapScore leftText must be a string");
+  });
+
+  it("rejects direct non-string right text inputs before overlap scoring", () => {
+    expect(() =>
+      entityOverlapScore("docs/operations.md", null as unknown as string),
+    ).toThrow("entityOverlapScore rightText must be a string");
   });
 });

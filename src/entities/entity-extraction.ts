@@ -46,6 +46,8 @@ const ENTITY_PATTERNS: readonly {
 ];
 
 export function extractEntityMentions(text: string): EntityMention[] {
+  assertStringInput(text, "extractEntityMentions text");
+
   const mentions = new Map<string, EntityMention>();
 
   for (const { kind, pattern } of ENTITY_PATTERNS) {
@@ -71,6 +73,9 @@ export function entityOverlapScore(
   leftText: string,
   rightText: string,
 ): { score: number; matched: EntityMention[] } {
+  assertStringInput(leftText, "entityOverlapScore leftText");
+  assertStringInput(rightText, "entityOverlapScore rightText");
+
   const left = extractEntityMentions(leftText);
   const rightByKey = new Map(
     extractEntityMentions(rightText).map((mention) => [
@@ -90,6 +95,15 @@ export function entityOverlapScore(
     score: Math.min(1, matched.length / left.length),
     matched,
   };
+}
+
+function assertStringInput(
+  value: unknown,
+  fieldName: string,
+): asserts value is string {
+  if (typeof value !== "string") {
+    throw new Error(`${fieldName} must be a string`);
+  }
 }
 
 function normalizeEntity(text: string, kind: EntityKind): string {

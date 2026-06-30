@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Non-string direct lexical/entity helper inputs are rejected before string
+  normalization, regex matching, or scoring field access.
 - Non-string service config environment values are rejected before string
   normalization, integer parsing, or config field assignment.
 - Non-string configured `LOG_LEVEL` values are rejected before log-level

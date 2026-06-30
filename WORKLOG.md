@@ -2,6 +2,25 @@
 
 ## 2026-06-30
 
+- Hardened direct lexical/entity helper validation:
+  - Exported lexical helpers now reject non-string direct query/value inputs
+    before lowercasing, trimming, tokenization, or scoring.
+  - `scoreLexicalMatch` now rejects malformed direct record inputs before
+    reading scoring text fields.
+  - Exported entity helpers now reject non-string direct text inputs before
+    regex matching or entity overlap work.
+  - Quality review found one malformed-record gap in `scoreLexicalMatch`; a
+    scoped record/source/text-field guard and tests fixed it.
+
+Verification:
+- `npx vitest run tests/search/lexical-score.test.ts tests/entities/entity-extraction.test.ts`
+  (15 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (1092 passed, 34 skipped across 70 files)
+- `git diff --check`
+
 - Hardened service-config environment validation:
   - `resolveServiceConfig({ env })` now rejects non-string env values before
     `.trim()`, `.toLowerCase()`, integer parsing, or returning config fields.

@@ -12,6 +12,9 @@ export function scoreLexicalMatch(
   query: string,
   record: SearchMemoryResult,
 ): LexicalMatch {
+  assertStringInput(query, "scoreLexicalMatch query");
+  assertLexicalRecord(record);
+
   const terms = tokenizeLexicalQuery(query);
   if (terms.length === 0) {
     return { score: 0, matchedTerms: [] };
@@ -67,6 +70,8 @@ export function scoreLexicalMatch(
 }
 
 export function tokenizeLexicalQuery(query: string): string[] {
+  assertStringInput(query, "tokenizeLexicalQuery query");
+
   const seen = new Set<string>();
   const terms: string[] = [];
   const matches = normalizeForLexical(query).match(/[\p{L}\p{N}][\p{L}\p{N}_-]*/gu) ?? [];
@@ -83,7 +88,55 @@ export function tokenizeLexicalQuery(query: string): string[] {
 }
 
 export function normalizeForLexical(value: string): string {
+  assertStringInput(value, "normalizeForLexical value");
+
   return value.toLocaleLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function assertStringInput(
+  value: unknown,
+  fieldName: string,
+): asserts value is string {
+  if (typeof value !== "string") {
+    throw new Error(`${fieldName} must be a string`);
+  }
+}
+
+function assertLexicalRecord(
+  record: unknown,
+): asserts record is SearchMemoryResult {
+  if (!isRecord(record)) {
+    throw new Error("scoreLexicalMatch record must be an object");
+  }
+  if (!isRecord(record.source)) {
+    throw new Error("scoreLexicalMatch record.source must be an object");
+  }
+
+  assertStringInput(record.content, "scoreLexicalMatch record.content");
+  assertOptionalStringInput(record.title, "scoreLexicalMatch record.title");
+  assertOptionalStringInput(record.summary, "scoreLexicalMatch record.summary");
+  assertOptionalStringInput(
+    record.source.title,
+    "scoreLexicalMatch record.source.title",
+  );
+  assertOptionalStringInput(
+    record.source.sourceRef,
+    "scoreLexicalMatch record.source.sourceRef",
+  );
+  assertOptionalStringInput(
+    record.source.externalId,
+    "scoreLexicalMatch record.source.externalId",
+  );
+}
+
+function assertOptionalStringInput(value: unknown, fieldName: string): void {
+  if (value !== undefined && value !== null) {
+    assertStringInput(value, fieldName);
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 function countOccurrences(text: string, term: string): number {

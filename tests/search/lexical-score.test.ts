@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  normalizeForLexical,
   scoreLexicalMatch,
   tokenizeLexicalQuery,
 } from "../../src/search/lexical-score.js";
@@ -14,6 +15,18 @@ describe("lexical scoring", () => {
     ]);
   });
 
+  it("rejects direct non-string normalize inputs", () => {
+    expect(() => normalizeForLexical(123 as unknown as string)).toThrow(
+      "normalizeForLexical value must be a string",
+    );
+  });
+
+  it("rejects direct non-string query inputs while tokenizing", () => {
+    expect(() =>
+      tokenizeLexicalQuery({ query: "retry" } as unknown as string),
+    ).toThrow("tokenizeLexicalQuery query must be a string");
+  });
+
   it("scores records by query coverage and title/summary evidence", () => {
     const record = makeRecord({
       title: "Qdrant retry cleanup",
@@ -25,6 +38,36 @@ describe("lexical scoring", () => {
 
     expect(match.matchedTerms).toEqual(["qdrant", "retry", "cleanup"]);
     expect(match.score).toBeGreaterThan(0.7);
+  });
+
+  it("rejects direct non-string query inputs while scoring", () => {
+    expect(() =>
+      scoreLexicalMatch(false as unknown as string, makeRecord()),
+    ).toThrow("scoreLexicalMatch query must be a string");
+  });
+
+  it("rejects malformed records while scoring", () => {
+    expect(() =>
+      scoreLexicalMatch("retry", null as unknown as SearchMemoryResult),
+    ).toThrow("scoreLexicalMatch record must be an object");
+  });
+
+  it("rejects records without source objects while scoring", () => {
+    expect(() =>
+      scoreLexicalMatch("retry", {
+        ...makeRecord(),
+        source: undefined,
+      } as unknown as SearchMemoryResult),
+    ).toThrow("scoreLexicalMatch record.source must be an object");
+  });
+
+  it("rejects records with non-string text fields while scoring", () => {
+    expect(() =>
+      scoreLexicalMatch("retry", {
+        ...makeRecord(),
+        content: 123,
+      } as unknown as SearchMemoryResult),
+    ).toThrow("scoreLexicalMatch record.content must be a string");
   });
 
   it("returns zero for records with no lexical overlap", () => {
