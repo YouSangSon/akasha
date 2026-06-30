@@ -6,6 +6,10 @@ import {
   type ServiceToolName,
   validateToolInput,
 } from "../../mcp/tool-schemas.js";
+import {
+  assertFunction,
+  assertObject,
+} from "../../mcp/tool-registry-validation.js";
 import type { ToolRegistry } from "../../mcp/types.js";
 import { SecretDetectedError } from "../../store/secret-scrub.js";
 import type { BearerToken } from "../middleware/bearer-auth.js";
@@ -77,8 +81,15 @@ export function resolveOrganizationId(
   conflict: boolean;
   validationError?: string;
 } {
-  const headerValue = req.headers["x-organization-id"];
-  if (countRawHeader(req, "x-organization-id") > 1) {
+  const request = assertObject(req, "req");
+  const headers = assertObject(request.headers, "req.headers");
+  const rawHeaders = assertOptionalStringArray(
+    request.rawHeaders,
+    "req.rawHeaders",
+  );
+
+  const headerValue = headers["x-organization-id"];
+  if (countRawHeader(rawHeaders, "x-organization-id") > 1) {
     return {
       organizationId: undefined,
       conflict: false,
@@ -136,8 +147,10 @@ export function resolveOrganizationId(
   return { organizationId: callerOrg, conflict: false };
 }
 
-function countRawHeader(req: IncomingMessage, headerName: string): number {
-  const rawHeaders = req.rawHeaders ?? [];
+function countRawHeader(
+  rawHeaders: readonly string[],
+  headerName: string,
+): number {
   let count = 0;
   for (let i = 0; i < rawHeaders.length; i += 2) {
     if (rawHeaders[i]?.toLowerCase() === headerName) {
@@ -145,6 +158,27 @@ function countRawHeader(req: IncomingMessage, headerName: string): number {
     }
   }
   return count;
+}
+
+function assertOptionalStringArray(
+  value: unknown,
+  fieldName: string,
+): readonly string[] {
+  if (value === undefined) {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an array`);
+  }
+  for (const [index, item] of value.entries()) {
+    if (typeof item !== "string") {
+      throw new Error(`${fieldName}[${index}] must be a string`);
+    }
+  }
+  if (value.length % 2 !== 0) {
+    throw new Error(`${fieldName} must contain header name/value pairs`);
+  }
+  return value;
 }
 
 function buildHandler<K extends ServiceToolName>(toolName: K, ctx: RouteContext) {
@@ -255,9 +289,26 @@ function normalizeUnresolvedOrganizationId(
 }
 
 export function createMemoryRoutes(ctx: RouteContext): Route[] {
+  assertRouteContext(ctx);
+
   return TOOL_ROUTES.map((route) => ({
     method: route.method,
     path: route.path,
     handle: buildHandler(route.name, ctx),
   }));
+}
+
+function assertRouteContext(value: unknown): asserts value is RouteContext {
+  const candidate = assertObject(value, "memory route context");
+  assertObject(candidate.registry, "registry");
+
+  const logger = assertObject(candidate.logger, "logger");
+  assertFunction(logger.error, "logger.error");
+
+  if (
+    candidate.oauthProtectedResource !== undefined &&
+    candidate.oauthProtectedResource !== null
+  ) {
+    assertObject(candidate.oauthProtectedResource, "oauthProtectedResource");
+  }
 }

@@ -2,6 +2,33 @@
 
 ## 2026-06-30
 
+- Hardened JSON HTTP route input validation:
+  - `createMemoryRoutes` now rejects malformed direct route contexts, registry
+    objects, logger handles, and OAuth metadata handles before route
+    construction.
+  - `resolveOrganizationId` now rejects malformed direct requests, request
+    header maps, and raw-header arrays before organization header resolution.
+  - Existing JSON HTTP behavior, organization resolution semantics, and
+    partial-registry route construction are preserved.
+  - A worker subagent implemented the patch; spec and code-quality reviewers
+    passed after an explicit regression test preserved partial-registry route
+    construction.
+  - The first single-worker full-suite run hit the known timing-sensitive
+    backup manifest shell test timeout; the focused backup case passed on
+    rerun, and the full single-worker suite passed on rerun.
+
+Verification:
+- `npx vitest run tests/app/memory-routes-boundary.test.ts tests/mcp/resolve-org.test.ts tests/app/server.test.ts`
+  (98 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run tests/scripts/backup-verify.test.ts -t "rejects existing null manifests before mutation" --maxWorkers=1 --minWorkers=1`
+  (1 passed, 59 skipped)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1752 passed, 34 skipped
+  across 78 files)
+- `git diff --check`
+
 - Hardened MCP HTTP request handler input validation:
   - `handleMcpHttpRequest` now rejects malformed direct options, request
     headers, response handles, registry handles, bearer token lists, OAuth

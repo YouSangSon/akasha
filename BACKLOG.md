@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid JSON HTTP route construction contexts and organization-resolution
+  request/header inputs are rejected before route dispatch or header access.
 - Invalid MCP HTTP request handler options and req/res/auth/rate-limit/logger
   handles are rejected before request dispatch or transport wiring.
 - Invalid MCP server construction options and stdio cwd env/fallback inputs are
