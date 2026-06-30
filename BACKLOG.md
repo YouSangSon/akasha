@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid vector point inputs are rejected before vector ID construction or
+  payload metadata assembly.
 - Non-string direct secret-scrubber content is rejected before regex scanning
   or secret-detection error construction.
 - Invalid exact-duplicate records are rejected before content normalization,

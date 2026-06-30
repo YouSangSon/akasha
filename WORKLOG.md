@@ -2,6 +2,32 @@
 
 ## 2026-06-30
 
+- Hardened vector point input validation:
+  - `buildVectorPoint` now rejects non-object direct inputs before property
+    reads.
+  - `chunkId` and `memoryRecordId` must be positive safe integers before vector
+    IDs or payload metadata are built.
+  - Vectors must be non-empty arrays of finite numbers before upsert payloads
+    are constructed.
+  - Required payload fields must be strings; `projectKey`, `title`, and
+    `summary` must be strings or null where applicable; tags must be string
+    arrays.
+  - Existing organization-id validation is preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/vector/point-builder.test.ts` (25 passed)
+- `npx vitest run tests/vector/point-builder.test.ts tests/vector/organization-id.test.ts tests/vector/qdrant-index.test.ts tests/store/canonical-indexing.test.ts tests/compact/ingest-sweeper.test.ts tests/compact/unarchive-compaction.test.ts`
+  (108 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1203 passed, 34 skipped
+  across 70 files)
+- `git diff --check`
+
 - Hardened secret scrubber input validation:
   - `scanForSecrets` now rejects non-string direct content before regex
     scanning.
