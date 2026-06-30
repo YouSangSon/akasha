@@ -3,6 +3,7 @@ import {
   buildOAuthInsufficientScopeHeader,
   buildOAuthWwwAuthenticateHeader,
   buildProtectedResourceMetadataUrl,
+  isOAuthProtectedResourceMetadataPath,
   loadOAuthProtectedResourceConfig,
 } from "../../src/app/oauth-protected-resource.js";
 
@@ -157,6 +158,13 @@ describe("OAuth protected resource challenge helpers", () => {
     );
   });
 
+  it("returns false for non-string metadata paths", () => {
+    expect(isOAuthProtectedResourceMetadataPath(undefined)).toBe(false);
+    expect(
+      isOAuthProtectedResourceMetadataPath(12 as unknown as string),
+    ).toBe(false);
+  });
+
   it("builds a Bearer challenge with metadata and scope parameters", () => {
     const config = loadOAuthProtectedResourceConfig({
       MCP_OAUTH_AUTHORIZATION_SERVERS: "https://auth.example.com",
@@ -169,6 +177,32 @@ describe("OAuth protected resource challenge helpers", () => {
     );
   });
 
+  it("rejects invalid Bearer challenge config inputs", () => {
+    const config = loadOAuthProtectedResourceConfig({
+      MCP_OAUTH_AUTHORIZATION_SERVERS: "https://auth.example.com",
+      MCP_OAUTH_RESOURCE_URL: "https://akasha.example.com/mcp",
+    })!;
+
+    expect(() =>
+      buildOAuthWwwAuthenticateHeader(null as unknown as typeof config),
+    ).toThrow("OAuth protected resource config must be an object");
+    expect(() =>
+      buildOAuthWwwAuthenticateHeader({
+        ...config,
+        metadata: null,
+      } as unknown as typeof config),
+    ).toThrow("metadata must be an object");
+    expect(() =>
+      buildOAuthWwwAuthenticateHeader({
+        ...config,
+        metadata: {
+          ...config.metadata,
+          scopes_supported: ["akasha:memory", 12],
+        },
+      } as unknown as typeof config),
+    ).toThrow("metadata.scopes_supported[1] must be a string");
+  });
+
   it("builds an insufficient_scope Bearer challenge", () => {
     const config = loadOAuthProtectedResourceConfig({
       MCP_OAUTH_AUTHORIZATION_SERVERS: "https://auth.example.com",
@@ -179,5 +213,19 @@ describe("OAuth protected resource challenge helpers", () => {
     expect(buildOAuthInsufficientScopeHeader(config!, "akasha:write")).toBe(
       'Bearer error="insufficient_scope", resource_metadata="https://akasha.example.com/.well-known/oauth-protected-resource/mcp", scope="akasha:write"',
     );
+  });
+
+  it("rejects invalid insufficient_scope and metadata URL inputs", () => {
+    const config = loadOAuthProtectedResourceConfig({
+      MCP_OAUTH_AUTHORIZATION_SERVERS: "https://auth.example.com",
+      MCP_OAUTH_RESOURCE_URL: "https://akasha.example.com/mcp",
+    })!;
+
+    expect(() =>
+      buildOAuthInsufficientScopeHeader(config, 12 as unknown as string),
+    ).toThrow("scope must be a string");
+    expect(() =>
+      buildProtectedResourceMetadataUrl(12 as unknown as string),
+    ).toThrow("resource must be a string");
   });
 });

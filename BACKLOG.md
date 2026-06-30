@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid OAuth protected-resource helper inputs are rejected before challenge
+  header formatting or metadata URL construction.
 - Invalid MCP utility primitive inputs are rejected before identifier
   formatting, limit normalization, memory-kind conversion, or summarization.
 - Invalid user-scope resolver inputs are rejected before environment, git, or

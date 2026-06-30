@@ -75,6 +75,9 @@ export function isOAuthProtectedResourceMetadataPath(
   if (!url) {
     return false;
   }
+  if (typeof url !== "string") {
+    return false;
+  }
   const path = parseRequestPath(url);
   return path === WELL_KNOWN_BASE || path === `${WELL_KNOWN_BASE}/mcp`;
 }
@@ -114,6 +117,7 @@ export function setOAuthInsufficientScopeHeader(
 export function buildOAuthWwwAuthenticateHeader(
   config: OAuthProtectedResourceConfig,
 ): string {
+  assertOAuthProtectedResourceConfig(config);
   const scope = config.metadata.scopes_supported.join(" ");
   return `Bearer resource_metadata="${quoteAuthParam(config.metadataUrl)}", scope="${quoteAuthParam(scope)}"`;
 }
@@ -122,10 +126,13 @@ export function buildOAuthInsufficientScopeHeader(
   config: OAuthProtectedResourceConfig,
   scope: string,
 ): string {
+  assertOAuthProtectedResourceConfig(config);
+  assertString(scope, "scope");
   return `Bearer error="insufficient_scope", resource_metadata="${quoteAuthParam(config.metadataUrl)}", scope="${quoteAuthParam(scope)}"`;
 }
 
 export function buildProtectedResourceMetadataUrl(resource: string): string {
+  assertString(resource, "resource");
   const parsed = new URL(resource);
   const path = parsed.pathname === "/mcp" ? "/mcp" : "";
   return `${parsed.origin}${WELL_KNOWN_BASE}${path}`;
@@ -212,6 +219,43 @@ function assertSupportedResourceUrl(resource: string): void {
     throw new Error(
       `Invalid MCP_OAUTH_RESOURCE_URL: path must be "/" or "/mcp"`,
     );
+  }
+}
+
+function assertOAuthProtectedResourceConfig(
+  config: unknown,
+): asserts config is OAuthProtectedResourceConfig {
+  if (typeof config !== "object" || config === null || Array.isArray(config)) {
+    throw new Error("OAuth protected resource config must be an object");
+  }
+
+  const candidate = config as Record<string, unknown>;
+  assertString(candidate.metadataUrl, "metadataUrl");
+
+  if (
+    typeof candidate.metadata !== "object" ||
+    candidate.metadata === null ||
+    Array.isArray(candidate.metadata)
+  ) {
+    throw new Error("metadata must be an object");
+  }
+
+  const metadata = candidate.metadata as Record<string, unknown>;
+  if (!Array.isArray(metadata.scopes_supported)) {
+    throw new Error("metadata.scopes_supported must be an array");
+  }
+
+  for (const [index, scope] of metadata.scopes_supported.entries()) {
+    assertString(scope, `metadata.scopes_supported[${index}]`);
+  }
+}
+
+function assertString(
+  value: unknown,
+  fieldName: string,
+): asserts value is string {
+  if (typeof value !== "string") {
+    throw new Error(`${fieldName} must be a string`);
   }
 }
 

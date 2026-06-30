@@ -2,6 +2,33 @@
 
 ## 2026-06-30
 
+- Hardened OAuth protected-resource helper validation:
+  - Bearer challenge builders now reject invalid direct config inputs before
+    header formatting.
+  - Challenge configs must provide object metadata, string metadata URL, and
+    string `scopes_supported` entries.
+  - Insufficient-scope challenges now reject non-string direct scope values
+    before auth-param escaping.
+  - Metadata URL construction now rejects non-string direct resource values
+    before `URL` parsing.
+  - Metadata path checks now return false for non-string direct inputs.
+  - Existing metadata generation, well-known URL derivation, challenge
+    formatting, and auth-param escaping behavior is preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/app/oauth-protected-resource.test.ts` (16 passed)
+- `npx vitest run tests/app/oauth-protected-resource.test.ts tests/app/oauth-token-auth.test.ts tests/app/mcp-http.test.ts tests/app/server.test.ts`
+  (120 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1334 passed, 34 skipped
+  across 70 files)
+- `git diff --check`
+
 - Hardened MCP utility primitive validation:
   - `formatMemoryIdentifier` now rejects non-object records, blank scope
     fields, and non-positive/non-safe IDs before formatting.
