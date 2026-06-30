@@ -3,6 +3,10 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { writeLifecycleInit } from "./lifecycle/init.js";
 import { createToolRegistry, type ToolRegistry } from "./mcp/server.js";
+import {
+  assertNonBlankString,
+  assertObject,
+} from "./mcp/tool-registry-validation.js";
 
 export type ParsedCliArgs =
   | {
@@ -43,7 +47,13 @@ export type ParsedCliArgs =
       command: "restore-smoke";
     };
 
+type RunCliOptions = {
+  registry?: ToolRegistry;
+  cwd?: string;
+};
+
 export function parseCliArgs(argv: string[]): ParsedCliArgs {
+  assertStringArray(argv, "argv");
   const [command, ...rest] = argv;
 
   if (command === "backup-verify" || command === "restore-smoke") {
@@ -130,15 +140,13 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
 
 export async function runCli(
   argv: string[] = process.argv.slice(2),
-  options: {
-    registry?: ToolRegistry;
-    cwd?: string;
-  } = {},
+  options: RunCliOptions = {},
 ): Promise<string> {
   const parsed = parseCliArgs(argv);
-  const cwd = options.cwd ?? process.cwd();
+  const normalizedOptions = normalizeRunCliOptions(options);
+  const cwd = normalizedOptions.cwd ?? process.cwd();
   const getRegistry = () =>
-    options.registry ??
+    normalizedOptions.registry ??
     createToolRegistry({
       cwd,
     });
@@ -195,6 +203,39 @@ export async function runCli(
     case "backup-verify":
     case "restore-smoke":
       return JSON.stringify(parsed, null, 2);
+  }
+}
+
+function normalizeRunCliOptions(options: RunCliOptions): RunCliOptions {
+  const candidate = assertObject(options, "CLI options");
+  const cwd = candidate.cwd;
+  const registry = candidate.registry;
+
+  if (cwd !== undefined) {
+    assertNonBlankString(cwd, "cwd");
+  }
+  if (registry !== undefined) {
+    assertObject(registry, "registry");
+  }
+
+  return {
+    cwd,
+    registry: registry as ToolRegistry | undefined,
+  };
+}
+
+function assertStringArray(
+  value: unknown,
+  fieldName: string,
+): asserts value is string[] {
+  if (!Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an array`);
+  }
+
+  for (const [index, entry] of value.entries()) {
+    if (typeof entry !== "string") {
+      throw new Error(`${fieldName}[${index}] must be a string`);
+    }
   }
 }
 

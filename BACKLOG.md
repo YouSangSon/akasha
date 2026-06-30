@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid CLI argv containers, argv entries, option containers, cwd values, and
+  registry containers are rejected before command parsing or dispatch.
 - Invalid operator server construction options, injected config/logger/auth
   handles, metrics handles, and OAuth metadata handles are rejected before HTTP
   server wiring or startup.

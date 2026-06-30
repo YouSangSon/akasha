@@ -2,6 +2,26 @@
 
 ## 2026-06-30
 
+- Hardened CLI direct input validation:
+  - `parseCliArgs` now rejects malformed direct argv containers and non-string
+    argv entries before command parsing.
+  - `runCli` now rejects malformed direct option containers, non-string or
+    blank cwd values, and malformed registry containers before command
+    dispatch.
+  - Omitted options, registry-free commands, and command-specific partial
+    registry objects remain supported.
+  - A worker subagent implemented the scoped patch; final verification passed
+    focused CLI coverage, typecheck, build, audit, and the single-worker full
+    suite.
+
+Verification:
+- `npx vitest run tests/cli.test.ts` (30 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1790 passed, 34 skipped
+  across 79 files)
+
 - Hardened operator server option validation:
   - `createOperatorServer` and `startOperatorServer` now reject malformed
     direct option containers, injected service config shapes, registry

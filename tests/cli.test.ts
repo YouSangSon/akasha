@@ -18,6 +18,27 @@ describe("parseCliArgs", () => {
     expect(typeof module.createToolRegistry).toBe("function");
   });
 
+  it("rejects malformed direct argv before command parsing", () => {
+    for (const input of [null, "pack", { 0: "pack" }]) {
+      expect(() => parseCliArgs(input as never)).toThrow(
+        "argv must be an array",
+      );
+    }
+
+    expect(() => parseCliArgs([42] as never)).toThrow(
+      "argv[0] must be a string",
+    );
+    expect(() =>
+      parseCliArgs([
+        "pack",
+        "--project",
+        42,
+        "--task",
+        "continue work",
+      ] as never),
+    ).toThrow("argv[2] must be a string");
+  });
+
   it("parses the pack command", () => {
     const parsed = parseCliArgs([
       "pack",
@@ -270,6 +291,65 @@ describe("parseCliArgs", () => {
     expect(() =>
       parseCliArgs(["pack", "--task", "continue work"]),
     ).toThrow("Missing required --project argument");
+  });
+
+  it("rejects malformed direct runCli options before dispatch", async () => {
+    for (const options of [null, "bad-options", []]) {
+      await expect(
+        runCli(["backup-verify"], options as never),
+      ).rejects.toThrow("CLI options must be an object");
+    }
+  });
+
+  it("rejects malformed direct cwd values before dispatch", async () => {
+    const cases = [
+      { options: { cwd: 42 as never }, message: "cwd must be a string" },
+      {
+        options: { cwd: " \n\t " },
+        message: "cwd must contain non-whitespace text",
+      },
+    ] as const;
+
+    for (const testCase of cases) {
+      await expect(
+        runCli(["backup-verify"], testCase.options),
+      ).rejects.toThrow(testCase.message);
+    }
+  });
+
+  it("rejects malformed direct registry containers before dispatch", async () => {
+    for (const registry of [null, "bad-registry", []]) {
+      await expect(
+        runCli(["backup-verify"], { registry: registry as never }),
+      ).rejects.toThrow("registry must be an object");
+    }
+  });
+
+  it("preserves omitted options for registry-free commands", async () => {
+    await expect(runCli(["backup-verify"])).resolves.toBe(
+      JSON.stringify({ command: "backup-verify" }, null, 2),
+    );
+  });
+
+  it("accepts command-specific partial registry objects", async () => {
+    const registry = {
+      build_context_pack: vi.fn().mockResolvedValue({
+        packMarkdown: "# Context Pack",
+      }),
+    };
+
+    const output = await runCli(
+      ["pack", "--project", "project-alpha", "--task", "continue work"],
+      { registry: registry as never },
+    );
+
+    expect(registry.build_context_pack).toHaveBeenCalledWith({
+      projectKey: "project-alpha",
+      userScopeId: undefined,
+      organizationId: undefined,
+      task: "continue work",
+    });
+    expect(output).toBe("# Context Pack");
   });
 
   it("runs the reindex command instead of echoing parsed arguments", async () => {
