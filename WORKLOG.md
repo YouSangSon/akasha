@@ -2,6 +2,26 @@
 
 ## 2026-06-30
 
+- Hardened local embedding client input validation:
+  - `createLocalEmbeddingClient` now rejects malformed direct input containers
+    and invalid dimensions before allocating deterministic vectors.
+  - `embed` and `embedBatch` now reject malformed direct text input before
+    hashing.
+  - Existing deterministic vector generation, configured dimensions,
+    L2-normalization, empty-batch behavior, and batch ordering are preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/embedding/local-embedding.test.ts` (11 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1686 passed, 34 skipped
+  across 73 files)
+- `git diff --check`
+
 - Hardened transformers embedding client input validation:
   - `createTransformersEmbeddingClient` now rejects malformed direct input
     containers, blank/non-string model values, and invalid injected extractor

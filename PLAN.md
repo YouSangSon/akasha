@@ -4,18 +4,17 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Transformers Embedding Client Input Guards
+## Current Loop — Local Embedding Client Input Guards
 
 Status:
-- `createTransformersEmbeddingClient` now rejects malformed client input,
-  blank/non-string model values, and invalid injected extractor factories before
-  model loading.
+- `createLocalEmbeddingClient` now rejects malformed client input and invalid
+  dimensions before allocating deterministic vectors.
 - Single-text and batch embedding methods now reject malformed direct text
-  input before loading or calling the extractor.
-- Injected extractor factory results are validated before use so malformed
-  factories fail explicitly.
-- Focused transformers embedding tests, typecheck, build, audit, and
-  single-worker full suite passed.
+  input before hashing.
+- Existing deterministic vector generation, configured dimensions, L2
+  normalization, and batch ordering behavior are preserved.
+- Focused local embedding tests, typecheck, build, audit, and single-worker
+  full suite passed.
 - Default parallel `npm test` remains timing-sensitive on unrelated server and
   backup shell tests under load, so full-suite verification used one worker.
 

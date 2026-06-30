@@ -21,13 +21,11 @@ export type LocalEmbeddingClientInput = {
 export function createLocalEmbeddingClient(
   input: LocalEmbeddingClientInput,
 ): EmbeddingProvider {
-  if (input.dimensions <= 0 || !Number.isInteger(input.dimensions)) {
-    throw new Error(
-      `local embedding dimensions must be a positive integer, got ${input.dimensions}`,
-    );
-  }
+  assertLocalEmbeddingClientInput(input);
 
   async function embedOne(inputText: string): Promise<number[]> {
+    assertNonBlankText(inputText, "inputText");
+
     const dims = input.dimensions;
     const floats: number[] = new Array(dims);
 
@@ -60,10 +58,59 @@ export function createLocalEmbeddingClient(
   return {
     embed: embedOne,
     async embedBatch(inputs: string[]): Promise<number[][]> {
+      assertEmbeddingInputBatch(inputs);
+
       // SHA-256 is pure CPU — no per-call overhead, so batching is just N
       // sequential hashes. Kept here to satisfy the EmbeddingProvider contract
       // and to keep call-site shape uniform across providers.
       return Promise.all(inputs.map(embedOne));
     },
   };
+}
+
+function assertLocalEmbeddingClientInput(
+  value: unknown,
+): asserts value is LocalEmbeddingClientInput {
+  const candidate = assertObject(value, "local embedding client input");
+  if (
+    typeof candidate.dimensions !== "number"
+    || !Number.isSafeInteger(candidate.dimensions)
+    || candidate.dimensions < 1
+  ) {
+    throw new Error(
+      `local embedding dimensions must be a positive integer, got ${String(candidate.dimensions)}`,
+    );
+  }
+}
+
+function assertEmbeddingInputBatch(value: unknown): asserts value is string[] {
+  if (!Array.isArray(value)) {
+    throw new Error("inputs must be an array");
+  }
+
+  for (const [index, input] of value.entries()) {
+    assertNonBlankText(input, `inputs[${index}]`);
+  }
+}
+
+function assertObject(
+  value: unknown,
+  fieldName: string,
+): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function assertNonBlankText(
+  value: unknown,
+  fieldName: string,
+): asserts value is string {
+  if (typeof value !== "string") {
+    throw new Error(`${fieldName} must be a string`);
+  }
+  if (value.trim().length === 0) {
+    throw new Error(`${fieldName} must contain non-whitespace text`);
+  }
 }
