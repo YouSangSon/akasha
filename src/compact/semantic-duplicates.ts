@@ -24,6 +24,9 @@ export type SemanticRecord = {
 const DEFAULT_THRESHOLD = 0.95;
 
 export function cosineSimilarity(a: number[], b: number[]): number {
+  assertVectorArray(a, "cosineSimilarity vector a");
+  assertVectorArray(b, "cosineSimilarity vector b");
+
   if (a.length !== b.length) {
     throw new Error(
       `cosineSimilarity: vector length mismatch (${a.length} vs ${b.length})`,
@@ -57,6 +60,9 @@ export function findSemanticDuplicates<T extends SemanticRecord>(
   embeddings: ReadonlyMap<number, number[]>,
   threshold: number = DEFAULT_THRESHOLD,
 ): DuplicateGroup<T>[] {
+  assertSemanticRecords(records);
+  assertEmbeddingMap(embeddings);
+
   if (!Number.isFinite(threshold) || threshold <= 0 || threshold > 1) {
     throw new Error(
       `findSemanticDuplicates threshold must be in (0, 1], got ${threshold}`,
@@ -67,7 +73,7 @@ export function findSemanticDuplicates<T extends SemanticRecord>(
 
   for (const record of records) {
     const recVec = embeddings.get(record.id);
-    if (!recVec) {
+    if (recVec === undefined) {
       // Records without an embedding cannot be clustered semantically.
       // Skip them rather than failing the whole compaction.
       continue;
@@ -117,10 +123,72 @@ function byImportanceDescThenIdAsc<T extends SemanticRecord>(
   return a.id - b.id;
 }
 
-function assertFiniteVectorValues(
-  vector: readonly number[],
+function assertSemanticRecords(
+  records: unknown,
+): asserts records is readonly SemanticRecord[] {
+  if (!Array.isArray(records)) {
+    throw new Error("records must be an array");
+  }
+
+  for (const [index, record] of records.entries()) {
+    assertSemanticRecord(record, index);
+  }
+}
+
+function assertSemanticRecord(
+  record: unknown,
+  index: number,
+): asserts record is SemanticRecord {
+  const prefix = `records[${index}]`;
+
+  if (typeof record !== "object" || record === null || Array.isArray(record)) {
+    throw new Error(`${prefix} must be an object`);
+  }
+
+  const candidate = record as Record<string, unknown>;
+  assertPositiveSafeInteger(candidate.id, `${prefix}.id`);
+  if (
+    candidate.importance !== undefined &&
+    (typeof candidate.importance !== "number" ||
+      !Number.isFinite(candidate.importance))
+  ) {
+    throw new Error(`${prefix}.importance must be a finite number`);
+  }
+}
+
+function assertEmbeddingMap(
+  embeddings: unknown,
+): asserts embeddings is ReadonlyMap<number, number[]> {
+  if (
+    typeof embeddings !== "object" ||
+    embeddings === null ||
+    typeof (embeddings as { get?: unknown }).get !== "function"
+  ) {
+    throw new Error("embeddings must be a map");
+  }
+}
+
+function assertPositiveSafeInteger(value: unknown, fieldName: string): void {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
+    throw new Error(`${fieldName} must be a positive safe integer`);
+  }
+}
+
+function assertVectorArray(
+  vector: unknown,
   context: string,
-): void {
+): asserts vector is readonly number[] {
+  if (!Array.isArray(vector)) {
+    throw new Error(`${context} must be an array`);
+  }
+}
+
+function assertFiniteVectorValues(
+  vector: unknown,
+  context: string,
+): asserts vector is readonly number[] {
+  assertVectorArray(vector, context);
+
   for (let index = 0; index < vector.length; index += 1) {
     const value = vector[index]!;
     if (!Number.isFinite(value)) {

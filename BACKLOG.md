@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Invalid semantic duplicate records, embedding maps, and vectors are rejected
+  before cosine scoring or clustering.
 - Invalid OAuth protected-resource helper inputs are rejected before challenge
   header formatting or metadata URL construction.
 - Invalid MCP utility primitive inputs are rejected before identifier

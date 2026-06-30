@@ -2,6 +2,33 @@
 
 ## 2026-06-30
 
+- Hardened semantic duplicate input validation:
+  - `cosineSimilarity` now rejects non-array direct vector inputs before
+    reading lengths.
+  - `findSemanticDuplicates` now rejects non-array record collections,
+    malformed records, non-positive/non-safe record IDs, and non-finite
+    importance values before clustering.
+  - Embeddings must be supplied through a map-like object, and explicit
+    embedding values must be arrays of finite numbers.
+  - Missing embeddings still skip records, but malformed embedding values now
+    fail before semantic grouping.
+  - Existing cosine scoring, default threshold, missing-embedding skip behavior,
+    and highest-importance/lowest-id keep rule are preserved.
+  - Full-suite verification used a single worker because the default parallel
+    suite is currently timing-sensitive in unrelated server startup and backup
+    shell tests under load.
+
+Verification:
+- `npx vitest run tests/compact/semantic-duplicates.test.ts` (20 passed)
+- `npx vitest run tests/compact/semantic-duplicates.test.ts tests/compact/apply-compaction.test.ts tests/compact/compact-memory.test.ts tests/goal-run/find-repeat-attempts.test.ts`
+  (66 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npx vitest run --maxWorkers=1 --minWorkers=1` (1337 passed, 34 skipped
+  across 70 files)
+- `git diff --check`
+
 - Hardened OAuth protected-resource helper validation:
   - Bearer challenge builders now reject invalid direct config inputs before
     header formatting.

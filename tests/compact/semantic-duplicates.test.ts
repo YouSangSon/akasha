@@ -35,6 +35,15 @@ describe("cosineSimilarity", () => {
     expect(() => cosineSimilarity([1, 0], [1, 0, 0])).toThrow(/length mismatch/);
   });
 
+  it("throws when direct vector inputs are not arrays", () => {
+    expect(() =>
+      cosineSimilarity("vector" as unknown as number[], []),
+    ).toThrow("cosineSimilarity vector a must be an array");
+    expect(() =>
+      cosineSimilarity([], "vector" as unknown as number[]),
+    ).toThrow("cosineSimilarity vector b must be an array");
+  });
+
   it("throws when either vector contains non-finite numbers", () => {
     for (const value of [
       Number.NaN,
@@ -141,6 +150,49 @@ describe("findSemanticDuplicates", () => {
       "findSemanticDuplicates embedding for record 1: vector value at index 0 " +
         "must be a finite number, got NaN",
     );
+  });
+
+  it("rejects invalid semantic duplicate records before clustering", () => {
+    expect(() =>
+      findSemanticDuplicates({} as unknown as [], new Map(), 0.9),
+    ).toThrow("records must be an array");
+    expect(() =>
+      findSemanticDuplicates([null as never], new Map(), 0.9),
+    ).toThrow("records[0] must be an object");
+    expect(() =>
+      findSemanticDuplicates([{ id: 0 }], new Map(), 0.9),
+    ).toThrow("records[0].id must be a positive safe integer");
+    expect(() =>
+      findSemanticDuplicates(
+        [{ id: 1, importance: Number.POSITIVE_INFINITY }],
+        new Map(),
+        0.9,
+      ),
+    ).toThrow("records[0].importance must be a finite number");
+  });
+
+  it("rejects invalid embedding maps and vectors before clustering", () => {
+    expect(() =>
+      findSemanticDuplicates(
+        [{ id: 1 }],
+        {} as ReadonlyMap<number, number[]>,
+        0.9,
+      ),
+    ).toThrow("embeddings must be a map");
+    expect(() =>
+      findSemanticDuplicates(
+        [{ id: 1 }],
+        new Map([[1, "vector" as unknown as number[]]]),
+        0.9,
+      ),
+    ).toThrow("findSemanticDuplicates embedding for record 1 must be an array");
+    expect(() =>
+      findSemanticDuplicates(
+        [{ id: 1 }],
+        new Map([[1, null as unknown as number[]]]),
+        0.9,
+      ),
+    ).toThrow("findSemanticDuplicates embedding for record 1 must be an array");
   });
 
   it("forms multiple clusters when there are multiple paraphrase groups", () => {

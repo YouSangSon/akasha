@@ -4,18 +4,19 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — OAuth Helper Input Guards
+## Current Loop — Semantic Duplicate Input Guards
 
 Status:
-- OAuth protected-resource challenge helpers now reject invalid direct config,
-  scope, and resource inputs before header formatting or metadata URL building.
-- Challenge config must provide object metadata, string metadata URL, and
-  string scope entries.
-- Metadata path checks return false for non-string direct inputs.
-- Existing metadata generation, path matching, challenge formatting, and
-  escaping behavior is preserved.
-- Focused OAuth helper and adjacent app auth/server tests, typecheck, build,
-  audit, single-worker full suite, and diff checks passed.
+- `cosineSimilarity` now rejects non-array direct vectors before length reads.
+- `findSemanticDuplicates` now rejects invalid record collections, record IDs,
+  importance values, embedding maps, and malformed embedding vectors before
+  clustering.
+- Missing embeddings still skip records, but explicit malformed embedding
+  values now fail before semantic grouping.
+- Existing cosine scoring, default threshold, missing-embedding skip behavior,
+  and highest-importance/lowest-id keep rule are preserved.
+- Focused semantic duplicate and adjacent compaction/goal-repeat tests,
+  typecheck, build, audit, single-worker full suite, and diff checks passed.
 - Default parallel `npm test` remains timing-sensitive on unrelated server and
   backup shell tests under load, so full-suite verification used one worker.
 
