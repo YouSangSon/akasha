@@ -125,6 +125,9 @@ export function buildLifecycleFiles(
 
 function normalizeLifecycleInput(input: LifecycleInitInput) {
   assertNonBlankText(input.repoDir, "repoDir");
+  if (typeof input.projectKey !== "string") {
+    throw new Error("projectKey must be a string");
+  }
   if (!input.projectKey.trim()) {
     throw new Error("projectKey is required for lifecycle init.");
   }

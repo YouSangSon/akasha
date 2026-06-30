@@ -18,6 +18,8 @@ experience, documentation, features.
 
 ## Done In This Branch
 
+- Non-string direct lifecycle init project keys are rejected before generated
+  file writes.
 - Non-string vector organization IDs are rejected before Qdrant or pgvector
   backend calls.
 - Non-string direct repository title and summary values are rejected before

@@ -2,6 +2,23 @@
 
 ## 2026-06-30
 
+- Hardened direct lifecycle init project-key validation:
+  - `writeLifecycleInit` now rejects non-string `projectKey` values before
+    calling `.trim()`.
+  - Existing whitespace-only lifecycle project-key behavior and CLI parsing are
+    unchanged.
+  - Focused tests cover non-string and whitespace-only direct lifecycle inputs
+    before `.akasha` files are written.
+  - Spec and quality reviews found no issues.
+
+Verification:
+- `npx vitest run tests/cli.test.ts` (24 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (1057 passed, 34 skipped across 70 files)
+- `git diff --check`
+
 - Hardened vector organization scope validation:
   - Vector organization ID guards now reject non-string values before calling
     `.trim()`.

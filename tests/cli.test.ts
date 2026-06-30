@@ -598,6 +598,7 @@ describe("parseCliArgs", () => {
   it("rejects whitespace-only direct lifecycle init inputs before writing files", async () => {
     const cases = [
       { field: "repoDir", input: { repoDir: " \n\t " } },
+      { field: "projectKey", input: { projectKey: " \n\t " } },
       { field: "outDir", input: { outDir: " \n\t " } },
       { field: "organizationId", input: { organizationId: " \n\t " } },
       { field: "userScopeId", input: { userScopeId: " \n\t " } },
@@ -618,6 +619,20 @@ describe("parseCliArgs", () => {
       expect(fs.existsSync(path.join(tmpDir, ".akasha"))).toBe(false);
       expectDirectoryToBeEmpty(tmpDir);
     }
+  });
+
+  it("rejects non-string direct lifecycle init projectKey before writing files", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "akasha-init-"));
+
+    await expect(
+      writeLifecycleInit({
+        repoDir: tmpDir,
+        projectKey: 42 as never,
+      }),
+    ).rejects.toThrow("projectKey must be a string");
+
+    expect(fs.existsSync(path.join(tmpDir, ".akasha"))).toBe(false);
+    expectDirectoryToBeEmpty(tmpDir);
   });
 
   it("runs remember with --content-file without putting content in argv", async () => {
