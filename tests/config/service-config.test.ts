@@ -8,6 +8,13 @@ const BASE_ENV = {
   QDRANT_API_KEY: "local-qdrant-key",
 };
 
+function envWith(overrides: Record<string, unknown>): NodeJS.ProcessEnv {
+  return {
+    ...BASE_ENV,
+    ...overrides,
+  } as unknown as NodeJS.ProcessEnv;
+}
+
 describe("resolveServiceConfig", () => {
   it("parses Postgres, Qdrant, OpenAI, and optional backup settings when EMBEDDING_PROVIDER=openai is set explicitly", () => {
     const config = resolveServiceConfig({
@@ -70,6 +77,116 @@ describe("resolveServiceConfig", () => {
       }),
     ).toThrow("Invalid PORT: not-a-port");
   });
+
+  it.each([
+    ["HOST", { HOST: 123 }, "Invalid HOST: expected string"],
+    ["PORT", { PORT: 8787 }, "Invalid PORT: expected string"],
+    [
+      "VECTOR_BACKEND",
+      { VECTOR_BACKEND: 123 },
+      "Invalid VECTOR_BACKEND: expected string",
+    ],
+    [
+      "EMBEDDING_PROVIDER",
+      { EMBEDDING_PROVIDER: 123 },
+      "Invalid EMBEDDING_PROVIDER: expected string",
+    ],
+    [
+      "DATABASE_URL",
+      { DATABASE_URL: 123 },
+      "Invalid DATABASE_URL: expected string",
+    ],
+    ["QDRANT_URL", { QDRANT_URL: 123 }, "Invalid QDRANT_URL: expected string"],
+    [
+      "QDRANT_API_KEY",
+      { QDRANT_API_KEY: 123 },
+      "Invalid QDRANT_API_KEY: expected string",
+    ],
+    [
+      "OPENAI_API_KEY",
+      { OPENAI_API_KEY: 123 },
+      "Invalid OPENAI_API_KEY: expected string",
+    ],
+    [
+      "EMBEDDING_DIMENSIONS",
+      { EMBEDDING_DIMENSIONS: 384 },
+      "Invalid EMBEDDING_DIMENSIONS: expected string",
+    ],
+    [
+      "TRANSFORMERS_EMBEDDING_MODEL",
+      { TRANSFORMERS_EMBEDDING_MODEL: 123 },
+      "Invalid TRANSFORMERS_EMBEDDING_MODEL: expected string",
+    ],
+    [
+      "OPENAI_EMBEDDING_MODEL",
+      {
+        EMBEDDING_PROVIDER: "openai",
+        OPENAI_API_KEY: "test-openai-key",
+        OPENAI_EMBEDDING_MODEL: 123,
+      },
+      "Invalid OPENAI_EMBEDDING_MODEL: expected string",
+    ],
+    [
+      "EMBEDDING_MODEL",
+      { EMBEDDING_PROVIDER: "local", EMBEDDING_MODEL: 123 },
+      "Invalid EMBEDDING_MODEL: expected string",
+    ],
+    [
+      "QDRANT_COLLECTION_NAME",
+      { QDRANT_COLLECTION_NAME: 123 },
+      "Invalid QDRANT_COLLECTION_NAME: expected string",
+    ],
+    [
+      "inactive QDRANT_URL",
+      { VECTOR_BACKEND: "pgvector", QDRANT_URL: 123 },
+      "Invalid QDRANT_URL: expected string",
+    ],
+    [
+      "inactive QDRANT_API_KEY",
+      { VECTOR_BACKEND: "pgvector", QDRANT_API_KEY: 123 },
+      "Invalid QDRANT_API_KEY: expected string",
+    ],
+    ["BACKUP_DIR", { BACKUP_DIR: 123 }, "Invalid BACKUP_DIR: expected string"],
+    [
+      "BACKUP_TARGET_HOST",
+      { BACKUP_TARGET_HOST: 123 },
+      "Invalid BACKUP_TARGET_HOST: expected string",
+    ],
+    [
+      "BACKUP_ENCRYPTION_KEY_FILE",
+      { BACKUP_ENCRYPTION_KEY_FILE: 123 },
+      "Invalid BACKUP_ENCRYPTION_KEY_FILE: expected string",
+    ],
+  ])("rejects non-string %s", (_name, overrides, expected) => {
+    expect(() =>
+      resolveServiceConfig({
+        env: envWith(overrides),
+      }),
+    ).toThrow(expected);
+  });
+
+  it.each([
+    ["POSTGRES_USER", { POSTGRES_USER: 123 }],
+    ["POSTGRES_PASSWORD", { POSTGRES_PASSWORD: 123 }],
+    ["POSTGRES_DB", { POSTGRES_DB: 123 }],
+  ])(
+    "rejects non-string fallback %s when DATABASE_URL is absent",
+    (name, overrides) => {
+      expect(() =>
+        resolveServiceConfig({
+          env: {
+            DATABASE_URL: undefined,
+            POSTGRES_USER: "memory",
+            POSTGRES_PASSWORD: "memory",
+            POSTGRES_DB: "memory_os",
+            QDRANT_URL: "http://qdrant:6333",
+            QDRANT_API_KEY: "local-qdrant-key",
+            ...overrides,
+          } as unknown as NodeJS.ProcessEnv,
+        }),
+      ).toThrow(`Invalid ${name}: expected string`);
+    },
+  );
 
   it.each([
     ["DATABASE_URL", { DATABASE_URL: " \n\t " }],

@@ -2,6 +2,25 @@
 
 ## 2026-06-30
 
+- Hardened service-config environment validation:
+  - `resolveServiceConfig({ env })` now rejects non-string env values before
+    `.trim()`, `.toLowerCase()`, integer parsing, or returning config fields.
+  - Existing defaults, whitespace-only string errors, invalid enum strings,
+    numeric string parsing, provider branches, and vector-backend branches are
+    preserved.
+  - Focused tests cover required, optional, provider-specific, inactive
+    pgvector Qdrant, and fallback Postgres env values.
+  - Spec and quality reviews found no behavioral issues; review noted
+    non-number malformed values share the same guarded branch.
+
+Verification:
+- `npx vitest run tests/config/service-config.test.ts` (59 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (1083 passed, 34 skipped across 70 files)
+- `git diff --check`
+
 - Hardened logger level validation:
   - `resolveLogLevel` now rejects non-string configured `LOG_LEVEL` values
     before calling `.toLowerCase()`.

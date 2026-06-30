@@ -36,7 +36,7 @@ export function resolveServiceConfig(
   input: ResolveServiceConfigInput = {},
 ): ServiceConfig {
   const env = input.env ?? process.env;
-  const host = env.HOST ?? "127.0.0.1";
+  const host = envString(env.HOST, "HOST") ?? "127.0.0.1";
   const port = parsePort(env.PORT);
   const databaseUrl = resolveDatabaseUrl(env);
 
@@ -51,7 +51,9 @@ export function resolveServiceConfig(
   // VECTOR_BACKEND selects the vector-search adapter.
   //   "qdrant"   — default; requires QDRANT_URL + QDRANT_API_KEY.
   //   "pgvector" — Postgres-only deploy; reuses the existing PG pool.
-  const vectorBackendRaw = (env.VECTOR_BACKEND ?? "qdrant").toLowerCase();
+  const vectorBackendRaw = (
+    envString(env.VECTOR_BACKEND, "VECTOR_BACKEND") ?? "qdrant"
+  ).toLowerCase();
   if (vectorBackendRaw !== "qdrant" && vectorBackendRaw !== "pgvector") {
     throw new Error(
       `Unsupported VECTOR_BACKEND: ${vectorBackendRaw} (expected "qdrant" or "pgvector")`,
@@ -59,7 +61,9 @@ export function resolveServiceConfig(
   }
   const vectorBackend: "qdrant" | "pgvector" = vectorBackendRaw;
 
-  const providerRaw = (env.EMBEDDING_PROVIDER ?? "transformers").toLowerCase();
+  const providerRaw = (
+    envString(env.EMBEDDING_PROVIDER, "EMBEDDING_PROVIDER") ?? "transformers"
+  ).toLowerCase();
   if (
     providerRaw !== "openai" &&
     providerRaw !== "local" &&
@@ -74,7 +78,7 @@ export function resolveServiceConfig(
   const openAiApiKey =
     provider === "openai"
       ? requireEnv(env.OPENAI_API_KEY, "OPENAI_API_KEY")
-      : env.OPENAI_API_KEY ?? "";
+      : envString(env.OPENAI_API_KEY, "OPENAI_API_KEY") ?? "";
 
   const dimensions =
     provider === "openai"
@@ -114,8 +118,8 @@ export function resolveServiceConfig(
         collectionName: qdrantCollectionName,
       }
     : {
-        url: env.QDRANT_URL ?? "",
-        apiKey: env.QDRANT_API_KEY ?? "",
+        url: envString(env.QDRANT_URL, "QDRANT_URL") ?? "",
+        apiKey: envString(env.QDRANT_API_KEY, "QDRANT_API_KEY") ?? "",
         collectionName: qdrantCollectionName,
       };
   const backupDirectory = envOrDefault(
@@ -156,43 +160,56 @@ export function resolveServiceConfig(
   };
 }
 
-function requireEnv(value: string | undefined, name: string): string {
-  if (!value || value.trim().length === 0) {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-
-  return value;
-}
-
-function envOrDefault(
-  value: string | undefined,
-  name: string,
-  fallback: string,
-): string {
-  if (value === undefined) {
-    return fallback;
-  }
-  if (value.trim().length === 0) {
-    throw new Error(`Invalid ${name}: expected non-empty string`);
-  }
-  return value;
-}
-
-function optionalEnv(
-  value: string | undefined,
-  name: string,
-): string | undefined {
+function envString(value: unknown, name: string): string | undefined {
   if (value === undefined) {
     return undefined;
   }
-  if (value.trim().length === 0) {
-    throw new Error(`Invalid ${name}: expected non-empty string`);
+  if (typeof value !== "string") {
+    throw new Error(`Invalid ${name}: expected string`);
   }
   return value;
 }
 
-function parsePort(value: string | undefined): number {
-  const raw = value ?? "8787";
+function requireEnv(value: unknown, name: string): string {
+  const raw = envString(value, name);
+  if (!raw || raw.trim().length === 0) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+
+  return raw;
+}
+
+function envOrDefault(
+  value: unknown,
+  name: string,
+  fallback: string,
+): string {
+  const raw = envString(value, name);
+  if (raw === undefined) {
+    return fallback;
+  }
+  if (raw.trim().length === 0) {
+    throw new Error(`Invalid ${name}: expected non-empty string`);
+  }
+  return raw;
+}
+
+function optionalEnv(
+  value: unknown,
+  name: string,
+): string | undefined {
+  const raw = envString(value, name);
+  if (raw === undefined) {
+    return undefined;
+  }
+  if (raw.trim().length === 0) {
+    throw new Error(`Invalid ${name}: expected non-empty string`);
+  }
+  return raw;
+}
+
+function parsePort(value: unknown): number {
+  const raw = envString(value, "PORT") ?? "8787";
   let port: number;
   try {
     port = parsePlainDecimalPositiveInt(raw);
@@ -208,16 +225,17 @@ function parsePort(value: string | undefined): number {
 }
 
 function parsePositiveInt(
-  value: string | undefined,
+  value: unknown,
   fallback: number,
 ): number {
-  if (value === undefined) {
+  const raw = envString(value, "EMBEDDING_DIMENSIONS");
+  if (raw === undefined) {
     return fallback;
   }
   try {
-    return parsePlainDecimalPositiveInt(value);
+    return parsePlainDecimalPositiveInt(raw);
   } catch {
-    throw new Error(`expected positive integer, got "${value}"`);
+    throw new Error(`expected positive integer, got "${raw}"`);
   }
 }
 

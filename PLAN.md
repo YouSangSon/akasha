@@ -4,14 +4,14 @@ This file is the durable continuation plan for ongoing Akasha improvement work.
 Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale in
 `DECISIONS.md`.
 
-## Current Loop — Logger Log Level Type Guard
+## Current Loop — Service Config Env Type Guard
 
 Status:
-- `resolveLogLevel` now rejects non-string configured `LOG_LEVEL` values before
-  calling `.toLowerCase()`.
-- Existing default, supported-level, uppercase normalization, and invalid-string
-  behavior are preserved.
-- Focused logger tests, typecheck, build, audit, full suite, review, and diff
+- `resolveServiceConfig({ env })` now rejects non-string env values before
+  string normalization, integer parsing, or returning config fields.
+- Existing defaults, whitespace-only string errors, invalid enum strings, and
+  provider/backend branch behavior are preserved.
+- Focused config tests, typecheck, build, audit, full suite, review, and diff
   whitespace checks passed.
 
 Loop closeout:
