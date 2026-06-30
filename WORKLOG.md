@@ -46,6 +46,23 @@ Verification:
 
 ## 2026-06-29
 
+- Hardened direct numeric array input validation:
+  - Direct `record_iteration` registry calls now reject configured non-array
+    `memoryIds` before canonical service resolution.
+  - `memoryIds: undefined` still preserves the existing no-memory-links
+    behavior, and arrays still validate entries as positive safe integers.
+  - The shared positive-integer array guard also keeps `unarchive_memory`
+    archive-id handling compatible with its existing array check.
+  - Spec review and code-quality review found no issues.
+
+Verification:
+- `npx vitest run tests/goal-run/goal-run-handlers.test.ts tests/mcp/server.test.ts` (146 passed)
+- `npm run typecheck`
+- `npm run build`
+- `npm audit --audit-level=moderate` (0 vulnerabilities)
+- `npm test` (1031 passed, 34 skipped across 69 files)
+- `git diff --check`
+
 - Hardened direct governance tag input validation:
   - Direct `update_memory` and `tag_memory` registry calls now reject configured
     non-array `tags` before canonical service resolution.

@@ -1140,6 +1140,9 @@ function assertPositiveIntegerArray(
   if (values === undefined) {
     return;
   }
+  if (!Array.isArray(values)) {
+    throw new Error(`${fieldName} must be an array`);
+  }
   for (const value of values) {
     assertPositiveInteger(value, fieldName);
   }

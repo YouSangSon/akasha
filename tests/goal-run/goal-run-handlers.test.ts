@@ -205,6 +205,15 @@ describe("goal-run handlers", () => {
     const goalRuns = goalRunServicesStub();
     const registry = registryWith(goalRuns);
 
+    await expect(
+      registry.record_iteration({
+        goalRunId: 7,
+        attempt: "try A",
+        outcome: "failure",
+        memoryIds: "11" as never,
+      }),
+    ).rejects.toThrow(/memoryIds must be an array/);
+
     for (const memoryIds of [
       [0],
       [-1],

@@ -109,6 +109,8 @@ experience, documentation, features.
   rate limiting, or transport work.
 - Non-array direct governance tag inputs are rejected before canonical service
   or repository work.
+- Non-array direct iteration memory links are rejected before canonical service
+  or repository work.
 - Invalid direct repository search/list/graph limits are rejected before SQL
   work.
 - Invalid direct audit repository limits are rejected before SQL work.
