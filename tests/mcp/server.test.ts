@@ -1880,9 +1880,10 @@ describe("createToolRegistry", () => {
       }),
     ).rejects.toThrow(/point id update failed/);
 
-    expect(services.vectorIndex.delete).toHaveBeenCalledWith(["chunk:701"], {
-      organizationId: "org-a",
-    });
+    expect(services.vectorIndex.delete).toHaveBeenCalledWith(
+      ["00000000-0000-8000-8000-0000000002bd"],
+      { organizationId: "org-a" },
+    );
     expect(services.ingestJobs.markQdrantPending).toHaveBeenCalledWith(
       expect.objectContaining({
         jobId: 801,

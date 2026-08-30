@@ -485,10 +485,13 @@ describe("runIngestSweep", () => {
       { organizationId: job.organizationId },
     );
     expect(vectorIndex.upsert).toHaveBeenCalledWith(
-      [expect.objectContaining({ id: `chunk:${chunk.id}` })],
+      [expect.objectContaining({ id: "00000000-0000-8000-8000-000000000064" })],
     );
     expect(updatePointIds).toHaveBeenCalledWith([
-      { chunkId: chunk.id, qdrantPointId: `chunk:${chunk.id}` },
+      {
+        chunkId: chunk.id,
+        qdrantPointId: "00000000-0000-8000-8000-000000000064",
+      },
     ]);
     expect(markQdrantCompleted).toHaveBeenCalledWith(job.id);
   });

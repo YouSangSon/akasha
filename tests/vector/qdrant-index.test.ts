@@ -1277,6 +1277,9 @@ describe("createQdrantVectorIndex — point building (upsert)", () => {
 });
 
 describe("createQdrantVectorIndex — delete", () => {
+  const pointId1 = "00000000-0000-8000-8000-000000000001";
+  const pointId2 = "00000000-0000-8000-8000-000000000002";
+
   it("calls Qdrant delete with point ids when organizationId is omitted", async () => {
     const client = {
       query: vi.fn(),
@@ -1287,8 +1290,10 @@ describe("createQdrantVectorIndex — delete", () => {
     };
     const index = createQdrantVectorIndex(client as never, "memory_chunks_v1");
 
-    await index.delete(["chunk:1", "chunk:2"]);
-    expect(client.delete).toHaveBeenCalledWith("memory_chunks_v1", { points: ["chunk:1", "chunk:2"] });
+    await index.delete([pointId1, pointId2]);
+    expect(client.delete).toHaveBeenCalledWith("memory_chunks_v1", {
+      points: [pointId1, pointId2],
+    });
   });
 
   it("treats empty organizationId as legacy unscoped Qdrant delete", async () => {
@@ -1301,9 +1306,11 @@ describe("createQdrantVectorIndex — delete", () => {
     };
     const index = createQdrantVectorIndex(client as never, "memory_chunks_v1");
 
-    await index.delete(["chunk:1", "chunk:2"], { organizationId: "" });
+    await index.delete([pointId1, pointId2], { organizationId: "" });
 
-    expect(client.delete).toHaveBeenCalledWith("memory_chunks_v1", { points: ["chunk:1", "chunk:2"] });
+    expect(client.delete).toHaveBeenCalledWith("memory_chunks_v1", {
+      points: [pointId1, pointId2],
+    });
   });
 
   it("calls Qdrant delete with id and organization filters when organizationId is provided", async () => {
@@ -1316,12 +1323,12 @@ describe("createQdrantVectorIndex — delete", () => {
     };
     const index = createQdrantVectorIndex(client as never, "memory_chunks_v1");
 
-    await index.delete(["chunk:1", "chunk:2"], { organizationId: "org-a" });
+    await index.delete([pointId1, pointId2], { organizationId: "org-a" });
 
     expect(client.delete).toHaveBeenCalledWith("memory_chunks_v1", {
       filter: {
         must: [
-          { has_id: ["chunk:1", "chunk:2"] },
+          { has_id: [pointId1, pointId2] },
           { key: "organization_id", match: { value: "org-a" } },
         ],
       },
@@ -1338,12 +1345,12 @@ describe("createQdrantVectorIndex — delete", () => {
     };
     const index = createQdrantVectorIndex(client as never, "memory_chunks_v1");
 
-    await index.delete(["chunk:1"], { organizationId: " org-a " });
+    await index.delete([pointId1], { organizationId: " org-a " });
 
     expect(client.delete).toHaveBeenCalledWith("memory_chunks_v1", {
       filter: {
         must: [
-          { has_id: ["chunk:1"] },
+          { has_id: [pointId1] },
           { key: "organization_id", match: { value: "org-a" } },
         ],
       },

@@ -44,7 +44,7 @@ export function buildVectorPoint(input: VectorPointInput): VectorPoint {
   const embeddingVersion = input.embeddingVersion.trim();
 
   return {
-    id: `chunk:${input.chunkId}`,
+    id: toVectorPointId(input.chunkId),
     vector: input.vector,
     payload: {
       chunk_id: input.chunkId,
@@ -62,6 +62,11 @@ export function buildVectorPoint(input: VectorPointInput): VectorPoint {
       embedding_version: embeddingVersion,
     },
   };
+}
+
+function toVectorPointId(chunkId: number): string {
+  const hex = chunkId.toString(16).padStart(15, "0");
+  return `00000000-0000-8${hex.slice(0, 3)}-8000-${hex.slice(3)}`;
 }
 
 function assertVectorPointInput(
