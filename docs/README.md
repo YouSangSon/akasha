@@ -15,6 +15,7 @@ Reference documentation for Akasha operators and contributors.
 | [security.md](security.md) | [security.ko.md](security.ko.md) | Auth model, secret scrubber, org isolation, threat model |
 | [troubleshooting.md](troubleshooting.md) | [troubleshooting.ko.md](troubleshooting.ko.md) | Common failure modes and resolution steps |
 | [self-hosted-operations.md](self-hosted-operations.md) | [self-hosted-operations.ko.md](self-hosted-operations.ko.md) | Backup, restore, and smoke-test runbook for self-hosted deployments |
+| [CODEX-NAVIGATION-GUIDE.md](CODEX-NAVIGATION-GUIDE.md) | [CODEX-NAVIGATION-GUIDE.ko.md](CODEX-NAVIGATION-GUIDE.ko.md) | Repository ownership, contract packets, and verification scope for Codex |
 
 ## Migrations
 

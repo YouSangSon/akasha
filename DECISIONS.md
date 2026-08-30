@@ -1,5 +1,52 @@
 # DECISIONS
 
+## 2026-08-31 — Gate Product Value Before More Architecture Extraction
+
+Decision: make `goal.md` the canonical objective and require evidence in
+`GATES.md` that the default stack retrieves relevant project and user memory and
+reduces real client input tokens without outcome regression.
+
+Why:
+- The implementation exposes durable storage, search, context packs, and MCP
+  integration, but presence of those surfaces does not prove retrieval quality
+  or token savings.
+- The prior transformers + pgvector fixture passed aggregate recall but missed
+  both user-scope answers, and its small context pack was larger than raw memory.
+- Further transport/module extraction would not resolve those product-value
+  failures.
+
+Implementation:
+- Regression smoke thresholds are recall@5 >= 0.90, MRR@5 >= 0.55,
+  user-scope recall@5 = 1.00, cross-org leakage = 0, and pinned-runner warmed
+  p50/p95 <= 100/250 ms.
+- Codex and Claude are evaluated separately with paired successful on/off runs;
+  the token target is a median reduction of at least 15% with no success loss
+  or required-decision omission.
+- Code intelligence, external deployment, paid execution, and credential
+  changes remain outside the local implementation scope.
+
+Tradeoff:
+- The initial quality gate is a regression smoke anchored to a small corpus,
+  not enough for a broad product claim. `GATES.md` records the larger evidence
+  bar separately.
+
+## 2026-08-31 — Use Chunk-Derived UUID Vector Point IDs
+
+Decision: encode each positive safe `memory_chunks.id` injectively in a
+deterministic UUIDv8-shaped string and use that literal in both Qdrant and
+pgvector.
+
+Why:
+- Qdrant 1.13.2 rejects the previous arbitrary `chunk:<id>` strings.
+- The chunk ID is already the global canonical identity, so hashing, random
+  UUIDs, and a SQL migration are unnecessary.
+- A shared builder keeps add, refresh, retry, reindex, rollback, and unarchive
+  paths consistent.
+
+Tradeoff:
+- Legacy points converge through record-scoped reindex. Delete failures are not
+  converted to silent success because that could falsely report cleanup.
+
 ## 2026-07-05 — Split Compact Tool Handler
 
 Decision: move the `compact_memory` service tool adapter into

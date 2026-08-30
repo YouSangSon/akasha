@@ -10,7 +10,10 @@ experience, documentation, features.
 
 ## P1
 
-- None currently known.
+- Add a checked-in, org-scoped default `transformers + Qdrant` retrieval gate at
+  `k=5` that measures project recall, MRR, user-scope recall, cross-org leakage,
+  and warmed latency. The current OpenAI/legacy-anonymous eval cannot serve as
+  this gate.
 
 ## P2
 

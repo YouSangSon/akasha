@@ -1,5 +1,29 @@
 # WORKLOG
 
+## 2026-08-31
+
+- Reproduced the default Qdrant write blocker: Qdrant 1.13.2 rejects arbitrary
+  string point IDs.
+- Added one deterministic, injective UUIDv8-shaped mapping in the shared vector
+  point builder and removed the unarchive-only ID override.
+- Verified canonical write, retry, rollback, delete, reindex, and recovery
+  expectations; created local checkpoint `e8f9136` without pushing.
+- Reconstructed `goal.md`, `GATES.md`, `CONTEXT.md`, and `DESIGN.md` around
+  measurable Codex/Claude relevance and context-token value.
+- Added the paired Codex navigation guide and updated documentation indexes.
+- Recorded current RED gates instead of promoting partial results: user-scope
+  retrieval, context/token value, dependency audit, and admin UI truth/a11y.
+
+Verification so far:
+- Focused UUID batch: 6 files, 449 tests passed.
+- `npm run typecheck` passed.
+- `npm run build` passed.
+- Full suite: 83 files passed, one skipped; 2,580 tests passed, 34 skipped.
+- Documentation drift: 1 file, 48 tests passed.
+- `git diff --check` passed.
+- `npm audit --audit-level=moderate` remains RED: 12 reported nodes before the
+  planned lockfile refresh.
+
 ## 2026-07-05
 
 - 11:49 KST - Split compact tool handler:
