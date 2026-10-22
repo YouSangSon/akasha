@@ -1,4 +1,4 @@
-FROM node:22-alpine AS builder
+FROM node:22-bookworm-slim AS builder
 
 WORKDIR /app
 
@@ -8,14 +8,16 @@ RUN ONNXRUNTIME_NODE_INSTALL_CUDA=skip npm ci
 COPY . .
 RUN npm run build
 
-FROM node:22-alpine AS runner
+FROM node:22-bookworm-slim AS runner
 
 WORKDIR /app
 
-RUN apk add --no-cache curl
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends curl ca-certificates libgomp1 \
+  && rm -rf /var/lib/apt/lists/*
 
-RUN addgroup -S -g 10001 akasha \
-  && adduser -S -D -H -u 10001 -G akasha akasha \
+RUN groupadd --gid 10001 akasha \
+  && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin akasha \
   && mkdir -p /var/lib/developer-memory-os/backups
 
 COPY package.json package-lock.json* ./

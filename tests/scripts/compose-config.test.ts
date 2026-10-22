@@ -57,6 +57,6 @@ describe("compose app service contract", () => {
   it("installs curl in the runtime image for the Compose readiness probe", () => {
     const dockerfile = read("docker/app.Dockerfile");
 
-    expect(dockerfile).toContain("apk add --no-cache curl");
+    expect(dockerfile).toContain("apt-get install -y --no-install-recommends curl ca-certificates libgomp1");
   });
 });

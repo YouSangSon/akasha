@@ -26,8 +26,8 @@ describe("docker/app.Dockerfile hardening", () => {
     .filter((line) => line === "npm install" || line.endsWith(" npm install"));
 
   it("runs the runtime image as the non-root akasha user", () => {
-    expect(dockerfile).toContain("addgroup -S -g 10001 akasha");
-    expect(dockerfile).toContain("adduser -S -D -H -u 10001 -G akasha akasha");
+    expect(dockerfile).toContain("groupadd --gid 10001 akasha");
+    expect(dockerfile).toContain("useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin akasha");
     expect(dockerfile).toContain("USER akasha");
   });
 
