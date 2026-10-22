@@ -7,6 +7,7 @@ import type {
   MemoryArchiveRepository,
   PendingQdrantCleanup,
 } from "../../src/store/memory-archive-repository.js";
+import type { VectorIndex } from "../../src/vector/vector-index.js";
 
 const SILENT_LOGGER = {
   info: vi.fn(),
@@ -46,13 +47,7 @@ function makeRepoWithPending(
 }
 
 function makeVectorIndex(
-  overrides: Partial<{
-    delete: ReturnType<typeof vi.fn>;
-    deleteByRecordIds: ReturnType<typeof vi.fn>;
-    upsert: ReturnType<typeof vi.fn>;
-    query: ReturnType<typeof vi.fn>;
-    ensureCollection: ReturnType<typeof vi.fn>;
-  }> = {},
+  overrides: Partial<VectorIndex> = {},
 ) {
   return {
     delete: overrides.delete ?? vi.fn().mockResolvedValue(undefined),

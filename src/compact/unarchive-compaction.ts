@@ -239,8 +239,8 @@ async function restoreOne(
       );
     }
 
-    const points: VectorPoint[] = storedChunks.map((chunk, index) => ({
-      ...buildVectorPoint({
+    const points: VectorPoint[] = storedChunks.map((chunk, index) =>
+      buildVectorPoint({
         chunkId: chunk.id,
         vector: embeddings[index] ?? [],
         memoryRecordId: restoredRecord.id,
@@ -256,8 +256,7 @@ async function restoreOne(
         updatedAt: restoredRecord.updatedAt,
         embeddingVersion: chunk.embeddingVersion,
       }),
-      id: `memory:${restoredRecord.id}:chunk:${chunk.id}`,
-    }));
+    );
 
     if (points.length > 0) {
       await deps.vectorIndex.upsert(points);

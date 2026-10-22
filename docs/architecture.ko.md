@@ -350,6 +350,11 @@ run id 등).
 Qdrant `must` / SQL `WHERE`) 은 각 어댑터 내부에 캡슐화 — Qdrant 또는
 pgvector SQL 방언이 오케스트레이션 코드에 누출되지 않음.
 
+`buildVectorPoint` 는 양의 safe-integer chunk ID에서 단사적으로 유도한
+결정론적 UUIDv8 형태 point ID를 각 chunk에 부여합니다. 이 리터럴 ID는 Qdrant와
+pgvector가 그대로 공유하고 재시도·재인덱싱에도 안정적이며 SQL 마이그레이션은
+필요 없습니다. 재인덱싱은 legacy point ID를 수렴시킵니다.
+
 ### Postgres 단독 배포
 
 `VECTOR_BACKEND=pgvector` 설정으로 Qdrant 서비스 없이 단일 Postgres 인스턴스

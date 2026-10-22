@@ -144,14 +144,13 @@ const EXPECTED_PACKAGE_OVERRIDES = {
   esbuild: "^0.28.1",
 } as const;
 
-const EXPECTED_ESBUILD_LOCK_VERSION = "0.28.1";
+const EXPECTED_ESBUILD_LOCK_VERSION = "0.28.2";
 
 const EXPECTED_LOCKFILE_INSTALL_SCRIPT_PACKAGES = [
   "node_modules/esbuild",
   "node_modules/fsevents",
   "node_modules/onnxruntime-node",
   "node_modules/protobufjs",
-  "node_modules/sharp",
 ] as const;
 
 const DISALLOWED_PACKAGE_LIFECYCLE_SCRIPTS = [
@@ -588,6 +587,9 @@ describe("package manifest publish surface", () => {
   it("keeps contributor verification scripts stable", () => {
     const packageJson = readPackageJson();
 
+    expect(packageJson.scripts?.["audit:dependencies"]).toBe(
+      "npm audit --audit-level=moderate",
+    );
     expect(packageJson.scripts?.typecheck).toBe("tsc --noEmit");
     expect(packageJson.scripts?.test).toBe("vitest run");
   });

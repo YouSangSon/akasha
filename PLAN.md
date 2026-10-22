@@ -6,10 +6,16 @@ Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale i
 
 ## Current State
 
-Branch: `docs/contract-architecture-baseline`.
+Branch: `main`.
+
+Canonical goal: `goal.md`. Local base is `origin/main` at `1bd4234`; the latest
+local checkpoint is `e8f9136 fix(vector): use qdrant-compatible point ids`.
+`GATES.md` is the current evidence ledger. Product-value gates take precedence
+over additional architecture extraction.
 
 Recent completed architecture-goal commits; run `git log -1 --oneline` for the
 newest local commit:
+- `e8f9136 fix(vector): use qdrant-compatible point ids`
 - `dd014b9 refactor(compact): split compact tool handler`
 - `54de9f6 refactor(store): split reindex tool handler`
 - `1e93de7 refactor(compact): split unarchive tool handler`
@@ -75,6 +81,10 @@ Current structure:
   shapes.
 
 Completed in this branch:
+- The shared point builder now gives every chunk a deterministic,
+  Qdrant-compatible UUIDv8-shaped identity. Canonical writes, retries, reindex,
+  and unarchive reuse it; `reindex_memory` removes legacy record points before
+  repopulating them.
 - `CONTRACTS.md` freezes the public contract inventory.
 - `src/app/middleware/organization-resolution.ts` owns JSON HTTP
   `organizationId` precedence while `src/app/routes/memory.ts` keeps the
@@ -115,18 +125,38 @@ Completed in this branch:
   handlers.
 
 Known issues:
-- No open P0/P1/P2 backlog item is known from current repo evidence.
+- Default Qdrant + transformers retrieval quality is not gated by a durable,
+  org-scoped eval. The prior pgvector run missed both user-scope answers.
+- Real Codex/Claude token reduction is unmeasured; a small context pack was
+  larger than its raw-memory comparison.
+- The dependency audit is red until the lockfile refresh and residual `sharp`
+  risk are handled.
+- The admin shell reports some no-op or pending operations as unconditional
+  success and needs a focused trust/accessibility pass.
 - The target architecture is still a staged transition, not a completed module
   split.
 - Customer-specific modules and MSA extraction seams are not yet implemented.
 
 ## Next Loop Candidates
 
-- Extract one more HTTP or tool-dispatch boundary only when a focused contract
-  test can prove behavior stayed stable.
-- Shape a first customer/module boundary around an existing capability without
-  changing tool names or input/output shapes.
-- Add characterization coverage for the next chosen boundary before moving code.
+Execute in this order and close each bounded owner before changing scope:
+
+1. Reuse the existing canonical-service bootstrap to create an org-scoped,
+   `k=5` transformers + Qdrant retrieval gate with project/user/leakage slices
+   and warmed latency reporting.
+2. Fix the ranking root cause exposed by that gate without changing public
+   request/response contracts, then rerun the same fixture.
+3. Refresh supported dependency versions inside existing manifest ranges;
+   validate the default text embedding, MCP transports, Qdrant integration, and
+   full closeout before documenting residual `sharp` risk.
+4. Make admin update/tag/archive status truthful and cover native confirmation,
+   focus, live status, and narrow-screen error wrapping with focused tests.
+5. Build the fixed-SHA Codex/Claude A/B harness locally. Stop before paid client
+   execution or credential/config changes and request the specific authority.
+6. Run backup/restore, full closeout, claim review, and owned-resource cleanup.
+
+Additional transport or module extraction stays behind these product-value
+gates unless it is required to fix a measured failure.
 
 ## Target Architecture
 
@@ -204,12 +234,13 @@ Rollback:
 ## Continuation Handoff
 
 Before each resume:
-- Read `AGENTS.md`, `README.md`, `CONTRIBUTING.md`, `docs/architecture.md`,
+- Read `AGENTS.md`, `goal.md`, `GATES.md`, `CONTEXT.md`, `DESIGN.md`,
+  `README.md`, `CONTRIBUTING.md`, `docs/CODEX-NAVIGATION-GUIDE.md`, `docs/architecture.md`,
   `docs/configuration.md`, `docs/api-reference.md`, `docs/README.md`,
   `CONTRACTS.md`, this file, `BACKLOG.md`, `DECISIONS.md`, and recent
   `WORKLOG.md`.
 - Check `git status --short --branch` and `git log -1 --oneline`.
-- Pick one candidate loop, write or run the smallest contract check, make the
+- Pick the first red/not-run in-scope gate, write or run the smallest contract check, make the
   internal change, rerun checks, update durable docs, and create a local commit.
 - Do not push, merge, deploy, change credentials, run paid work, or make
   destructive migrations without explicit approval.

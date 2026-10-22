@@ -157,15 +157,15 @@ describe("canonical indexing", () => {
     ]);
     expect(vectorIndex.upsert).toHaveBeenCalledWith(
       expect.arrayContaining([
-        expect.objectContaining({ id: "chunk:701" }),
-        expect.objectContaining({ id: "chunk:702" }),
-        expect.objectContaining({ id: "chunk:703" }),
+        expect.objectContaining({ id: "00000000-0000-8000-8000-0000000002bd" }),
+        expect.objectContaining({ id: "00000000-0000-8000-8000-0000000002be" }),
+        expect.objectContaining({ id: "00000000-0000-8000-8000-0000000002bf" }),
       ]),
     );
     expect(chunkRepository.updatePointIds).toHaveBeenCalledWith([
-      { chunkId: 701, qdrantPointId: "chunk:701" },
-      { chunkId: 702, qdrantPointId: "chunk:702" },
-      { chunkId: 703, qdrantPointId: "chunk:703" },
+      { chunkId: 701, qdrantPointId: "00000000-0000-8000-8000-0000000002bd" },
+      { chunkId: 702, qdrantPointId: "00000000-0000-8000-8000-0000000002be" },
+      { chunkId: 703, qdrantPointId: "00000000-0000-8000-8000-0000000002bf" },
     ]);
     expect(ingestJobs.markCompleted).toHaveBeenCalledWith(801);
 
@@ -481,7 +481,9 @@ describe("canonical indexing", () => {
     ).rejects.toBe(updateError);
 
     expect(vectorIndex.upsert).toHaveBeenCalledOnce();
-    expect(vectorIndex.delete).toHaveBeenCalledWith(["chunk:904"]);
+    expect(vectorIndex.delete).toHaveBeenCalledWith([
+      "00000000-0000-8000-8000-000000000388",
+    ]);
     expect(repository.deleteMemoryRecord).toHaveBeenCalledWith(506, "default");
     expect(ingestJobs.markQdrantCompleted).not.toHaveBeenCalled();
     expect(ingestJobs.markCompleted).not.toHaveBeenCalled();
@@ -1125,20 +1127,20 @@ describe("canonical indexing", () => {
     expect(vectorIndex.upsert).toHaveBeenNthCalledWith(
       1,
       expect.arrayContaining([
-        expect.objectContaining({ id: "chunk:701" }),
-        expect.objectContaining({ id: "chunk:702" }),
+        expect.objectContaining({ id: "00000000-0000-8000-8000-0000000002bd" }),
+        expect.objectContaining({ id: "00000000-0000-8000-8000-0000000002be" }),
       ]),
     );
     expect(vectorIndex.upsert).toHaveBeenNthCalledWith(
       2,
-      [expect.objectContaining({ id: "chunk:703" })],
+      [expect.objectContaining({ id: "00000000-0000-8000-8000-0000000002bf" })],
     );
     expect(chunkRepository.updatePointIds).toHaveBeenNthCalledWith(1, [
-      { chunkId: 701, qdrantPointId: "chunk:701" },
-      { chunkId: 702, qdrantPointId: "chunk:702" },
+      { chunkId: 701, qdrantPointId: "00000000-0000-8000-8000-0000000002bd" },
+      { chunkId: 702, qdrantPointId: "00000000-0000-8000-8000-0000000002be" },
     ]);
     expect(chunkRepository.updatePointIds).toHaveBeenNthCalledWith(2, [
-      { chunkId: 703, qdrantPointId: "chunk:703" },
+      { chunkId: 703, qdrantPointId: "00000000-0000-8000-8000-0000000002bf" },
     ]);
   });
 

@@ -99,13 +99,7 @@ function makeChunkRepo(
 }
 
 function makeVectorIndex(
-  overrides: Partial<{
-    upsert: ReturnType<typeof vi.fn>;
-    query: ReturnType<typeof vi.fn>;
-    delete: ReturnType<typeof vi.fn>;
-    deleteByRecordIds: ReturnType<typeof vi.fn>;
-    ensureCollection: ReturnType<typeof vi.fn>;
-  }> = {},
+  overrides: Partial<RunIngestSweepInput["vectorIndex"]> = {},
 ) {
   return {
     upsert: overrides.upsert ?? vi.fn().mockResolvedValue(undefined),
@@ -118,10 +112,7 @@ function makeVectorIndex(
 }
 
 function makeEmbeddings(
-  overrides: Partial<{
-    embed: ReturnType<typeof vi.fn>;
-    embedBatch: ReturnType<typeof vi.fn>;
-  }> = {},
+  overrides: Partial<RunIngestSweepInput["embeddings"]> = {},
 ) {
   return {
     embed: overrides.embed ?? vi.fn(),
@@ -485,10 +476,13 @@ describe("runIngestSweep", () => {
       { organizationId: job.organizationId },
     );
     expect(vectorIndex.upsert).toHaveBeenCalledWith(
-      [expect.objectContaining({ id: `chunk:${chunk.id}` })],
+      [expect.objectContaining({ id: "00000000-0000-8000-8000-000000000064" })],
     );
     expect(updatePointIds).toHaveBeenCalledWith([
-      { chunkId: chunk.id, qdrantPointId: `chunk:${chunk.id}` },
+      {
+        chunkId: chunk.id,
+        qdrantPointId: "00000000-0000-8000-8000-000000000064",
+      },
     ]);
     expect(markQdrantCompleted).toHaveBeenCalledWith(job.id);
   });

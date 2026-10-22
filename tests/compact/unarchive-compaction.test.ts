@@ -492,7 +492,7 @@ describe("unarchiveCompaction (failure isolation)", () => {
       error: "chunk update failed",
     });
     expect(deps.vectorIndex.delete).toHaveBeenCalledWith(
-      ["memory:999:chunk:7000"],
+      ["00000000-0000-8000-8000-000000001b58"],
       { organizationId: "org-a" },
     );
     expect(repo.deleteRestoredCanonicalRecord).toHaveBeenCalledWith(999, "org-a");

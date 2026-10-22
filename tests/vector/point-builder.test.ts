@@ -31,7 +31,7 @@ describe("buildVectorPoint", () => {
   it("produces the expected id and metadata payload", () => {
     const point = buildVectorPoint(buildInput());
 
-    expect(point.id).toBe("chunk:15");
+    expect(point.id).toBe("00000000-0000-8000-8000-00000000000f");
     expect(point.vector).toEqual([0.1, 0.2, 0.3]);
     expect(point.payload).toEqual({
       chunk_id: 15,
@@ -48,6 +48,22 @@ describe("buildVectorPoint", () => {
       updated_at: "2026-03-29T00:00:00.000Z",
       embedding_version: "v1",
     });
+  });
+
+  it("derives a stable Qdrant-compatible UUIDv8 id from each chunk id", () => {
+    const first = buildVectorPoint(buildInput({ chunkId: 1 }));
+    const repeated = buildVectorPoint(buildInput({ chunkId: 1 }));
+    const largest = buildVectorPoint(
+      buildInput({ chunkId: Number.MAX_SAFE_INTEGER }),
+    );
+
+    expect(first.id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+    expect(first.id).toBe("00000000-0000-8000-8000-000000000001");
+    expect(repeated.id).toBe(first.id);
+    expect(largest.id).toBe("00000000-0000-801f-8000-ffffffffffff");
+    expect(largest.id).not.toBe(first.id);
   });
 
   it("accepts null projectKey", () => {

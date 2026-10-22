@@ -355,6 +355,11 @@ Both adapters implement the `VectorIndex` interface
 `WHERE`) is encapsulated inside each adapter so no Qdrant or pgvector
 SQL dialect leaks into orchestration code.
 
+`buildVectorPoint` assigns every chunk a deterministic UUIDv8-shaped point ID,
+injectively derived from its positive safe-integer chunk ID. The literal ID is
+shared by Qdrant and pgvector and is stable across retries and reindexing; no
+SQL migration is required. Reindexing converges legacy point IDs.
+
 ### Postgres-only deploy
 
 Set `VECTOR_BACKEND=pgvector` to run Akasha on a single Postgres

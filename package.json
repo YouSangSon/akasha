@@ -62,6 +62,7 @@
     "LICENSE"
   ],
   "scripts": {
+    "audit:dependencies": "npm audit --audit-level=moderate",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "build": "npm run clean && tsc -p tsconfig.json",
     "prepack": "npm run build",
@@ -84,9 +85,9 @@
     "restore:smoke": "node dist/scripts/restore-smoke.js"
   },
   "dependencies": {
-    "@huggingface/transformers": "^3.0.0",
+    "@huggingface/transformers": "^4.3.1",
     "@modelcontextprotocol/sdk": "^1.28.0",
-    "@qdrant/js-client-rest": "^1.13.0",
+    "@qdrant/js-client-rest": "~1.14.1",
     "jose": "^6.2.3",
     "openai": "^4.0.0",
     "pg": "^8.0.0",
@@ -97,7 +98,7 @@
     "@types/node": "^22.20.0",
     "tsx": "^4.22.4",
     "typescript": "^5.8.0",
-    "vitest": "^3.2.0"
+    "vitest": "^4.1.12"
   },
   "overrides": {
     "esbuild": "^0.28.1"
