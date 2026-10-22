@@ -1938,7 +1938,8 @@ describe.skipIf(!HAS_TEST_URL)("ingest sweeper recovery — integration against 
     };
     const hits = await vectorIndex.query(fakeVector, filter, 5);
     expect(hits.length).toBeGreaterThanOrEqual(1);
-    expect(hits[0].id).toBe(`chunk:${chunkId}`);
+    expect(hits[0].id).toMatch(/^00000000-0000-8[0-9a-f]{3}-8000-[0-9a-f]{12}$/);
+    expect(hits[0].payload.chunk_id).toBe(chunkId);
     // pgvector adapter converts memory_record_id to Number (BIGINT→string in
     // node-postgres, then Number() in the adapter). Compare as number.
     expect(hits[0].payload.memory_record_id).toBe(Number(recordId));
