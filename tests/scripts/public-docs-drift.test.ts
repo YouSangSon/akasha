@@ -897,6 +897,10 @@ describe("public documentation drift checks", () => {
       expect(bullet).toContain("non-JSON");
       expect(bullet).toContain("HTTP status");
       expect(bullet).toContain("JSON `null`");
+      expect(bullet).toContain("no-op");
+      expect(bullet).toContain("pending-cleanup");
+      expect(bullet).toContain("confirmation");
+      expect(bullet).toContain("focus");
     }
   });
 

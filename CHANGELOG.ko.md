@@ -37,7 +37,11 @@ CHANGELOG에서 명시적으로 표기합니다.
 - Memory governance UI: 정적 `/admin/memory` 셸이 load/save/tag/archive 실패를
   화면의 status text로 표시하고, API error message를 우선 사용하며, non-JSON
   실패에는 HTTP status를 포함하고, non-finite numeric form 값이 JSON `null` 로
-  전송되지 않게 합니다.
+  전송되지 않게 합니다. update/tag/archive의 no-op 및 pending-cleanup 결과도
+  사실대로 표시하고, archive 전에 native confirmation을 요구하며, list rerender
+  뒤 focus를 복원하고, 좁은 화면에서 줄바꿈되는 live status/count region을
+  사용합니다. 보관된 항목의 비활성 상세 컨트롤에도 실제 `archived` 상태를
+  표시합니다.
 - PR #19: `/mcp` 의 MCP Streamable HTTP, MCP resources, MCP prompts, typed
   result를 쓰는 클라이언트용 structured MCP tool output 추가.
 - 문서: 공개 문서가 descriptor 공유 검증, non-root 컨테이너 런타임 기본값,

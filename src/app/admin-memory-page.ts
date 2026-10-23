@@ -30,6 +30,7 @@ export function renderMemoryAdminPage(): string {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      flex-wrap: wrap;
       gap: 16px;
       padding: 16px 24px;
       border-bottom: 1px solid var(--line);
@@ -148,9 +149,11 @@ export function renderMemoryAdminPage(): string {
       opacity: .55;
     }
     .status {
+      min-width: 0;
       min-height: 20px;
       color: var(--muted);
       font-size: 13px;
+      overflow-wrap: anywhere;
     }
     .status.error { color: var(--danger); }
     .layout {
@@ -233,7 +236,7 @@ export function renderMemoryAdminPage(): string {
 <body>
   <header>
     <h1>Akasha Memory Admin</h1>
-    <div id="status" class="status" role="status"></div>
+    <div id="status" class="status" role="status" aria-live="polite" aria-atomic="true"></div>
   </header>
   <main>
     <aside>
@@ -268,7 +271,7 @@ export function renderMemoryAdminPage(): string {
     </aside>
     <section>
       <div class="toolbar">
-        <div class="count" id="count">0 memories</div>
+        <div class="count" id="count" role="status" aria-live="polite" aria-atomic="true">0 memories</div>
         <div class="actions">
           <button id="reload" type="button">Reload</button>
         </div>
@@ -354,6 +357,7 @@ export function renderMemoryAdminPage(): string {
       countEl.textContent = state.memories.length + (state.memories.length === 1 ? " memory" : " memories");
       listEl.replaceChildren();
       if (state.memories.length === 0) {
+        state.selectedId = null;
         const empty = document.createElement("div");
         empty.className = "empty";
         empty.textContent = "No records";
@@ -361,14 +365,19 @@ export function renderMemoryAdminPage(): string {
         renderDetail(null);
         return;
       }
+      const selectedMemory = state.memories.find((memory) => memory.id === state.selectedId) || state.memories[0];
+      state.selectedId = selectedMemory.id;
       for (const memory of state.memories) {
         const button = document.createElement("button");
         button.type = "button";
         button.className = "memory-item";
+        button.dataset.memoryId = String(memory.id);
         button.setAttribute("aria-current", String(memory.id === state.selectedId));
         button.addEventListener("click", () => {
           state.selectedId = memory.id;
-          renderList();
+          for (const item of listEl.querySelectorAll(".memory-item")) {
+            item.setAttribute("aria-current", String(item === button));
+          }
           renderDetail(memory);
         });
         const title = document.createElement("strong");
@@ -380,7 +389,7 @@ export function renderMemoryAdminPage(): string {
         button.append(title, meta);
         listEl.append(button);
       }
-      renderDetail(state.memories.find((memory) => memory.id === state.selectedId) || state.memories[0]);
+      renderDetail(selectedMemory);
     }
 
     function pill(text) {
@@ -424,7 +433,7 @@ export function renderMemoryAdminPage(): string {
         '<label>Tags<input name="tags"></label>',
         '<label>Importance<input name="importance" type="number"></label>',
         '<div class="actions">',
-        '<button class="primary" type="submit">Save</button>',
+        '<button class="primary" type="submit" data-action="save">Save</button>',
         '<button type="button" data-action="tag">Apply tags</button>',
         '<button class="danger" type="button" data-action="archive">Archive</button>',
         '</div>',
@@ -437,6 +446,7 @@ export function renderMemoryAdminPage(): string {
       form.elements.tags.value = (memory.tags || []).join(", ");
       form.elements.importance.value = memory.importance ?? "";
       if (memory.durability === "archived") {
+        form.elements.durability.add(new Option("archived", "archived", true, true));
         form.elements.durability.disabled = true;
         form.querySelector("[data-action='archive']").disabled = true;
       }
@@ -457,11 +467,26 @@ export function renderMemoryAdminPage(): string {
       return value.split(",").map((tag) => tag.trim()).filter(Boolean);
     }
 
+    function focusAfterRefresh(memoryId, action) {
+      const actionButton = state.selectedId === memoryId
+        ? detailEl.querySelector('[data-action="' + action + '"]')
+        : null;
+      if (actionButton && !actionButton.disabled) {
+        actionButton.focus();
+        return;
+      }
+      const memoryButton = listEl.querySelector('[data-memory-id="' + memoryId + '"]');
+      (memoryButton || listEl.querySelector(".memory-item") || $("reload")).focus();
+    }
+
     async function loadMemories() {
       setStatus("Loading...");
       const data = await post("/v1/memory/list", scopePayload());
+      const selectedId = state.selectedId;
       state.memories = data.memories || [];
-      state.selectedId = state.memories[0]?.id ?? null;
+      state.selectedId = state.memories.some((memory) => memory.id === selectedId)
+        ? selectedId
+        : state.memories[0]?.id ?? null;
       renderList();
       setStatus("Loaded");
     }
@@ -481,8 +506,16 @@ export function renderMemoryAdminPage(): string {
       }
       const importance = numberInputValue(form.elements.importance, null);
       if (importance !== null) payload.importance = importance;
-      await post("/v1/memory/update", payload);
+      const result = await post("/v1/memory/update", payload);
+      if (!result || typeof result.updated !== "boolean") {
+        throw new Error("update response has invalid updated status");
+      }
       await loadMemories();
+      focusAfterRefresh(memoryId, "save");
+      if (result.updated !== true) {
+        setStatus("Not saved: memory was not found in this organization.");
+        return;
+      }
       setStatus("Saved");
     }
 
@@ -493,19 +526,49 @@ export function renderMemoryAdminPage(): string {
         memoryId,
         tags: tagsFrom(form.elements.tags.value)
       };
-      await post("/v1/memory/tag", payload);
+      const result = await post("/v1/memory/tag", payload);
+      if (!result || typeof result.updated !== "boolean") {
+        throw new Error("tag response has invalid updated status");
+      }
       await loadMemories();
+      focusAfterRefresh(memoryId, "tag");
+      if (result.updated !== true) {
+        setStatus("Not tagged: memory was not found in this organization.");
+        return;
+      }
       setStatus("Tagged");
     }
 
     async function archiveMemory(memoryId) {
+      if (!window.confirm("Archive memory #" + memoryId + "?")) {
+        setStatus("Archive cancelled");
+        return;
+      }
       setStatus("Archiving...");
       const payload = {
         organizationId: inputValue("organizationId") || undefined,
         memoryId
       };
-      await post("/v1/memory/delete", payload);
+      const result = await post("/v1/memory/delete", payload);
+      if (
+        !result ||
+        typeof result.archived !== "boolean" ||
+        !Number.isSafeInteger(result.qdrantPointsPending) ||
+        result.qdrantPointsPending < 0
+      ) {
+        throw new Error("archive response has invalid status");
+      }
       await loadMemories();
+      focusAfterRefresh(memoryId, "archive");
+      if (result.archived !== true) {
+        setStatus("Not archived: memory was not found or is already archived.");
+        return;
+      }
+      if (result.qdrantPointsPending > 0) {
+        const pending = result.qdrantPointsPending;
+        setStatus("Archived; " + pending + " vector " + (pending === 1 ? "point" : "points") + " pending cleanup");
+        return;
+      }
       setStatus("Archived");
     }
 
