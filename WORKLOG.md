@@ -2,6 +2,14 @@
 
 ## 2026-10-23
 
+- Corrected delivery scope against the user's implementation/portfolio request:
+  Claude is not currently used and is not a delivery blocker. Client benchmark
+  thresholds and both measured outcomes remain unchanged. Split passing CI from
+  required local verification and confirmed cleanup from the unresolved historic
+  deletion. A fresh seven-case local recheck timed out while load rose from 54
+  to 140 on 10 CPUs; three exact leftover directories were preserved and removed
+  after open-handle checks. No full rerun, timeout change, or new model evaluation.
+
 - Real PostgreSQL/Qdrant admin validation exposed a sequential archive invariant
   violation: Save preserved canonical `archived` but recreated its vector.
   Shared refresh now performs scoped cleanup only; reindex keeps its full cleanup

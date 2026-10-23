@@ -14,11 +14,12 @@ The completed MCP Codex baseline has
 reduction is 0.35%, below the 15% product gate. `GATES.md` owns the current
 measurement, host-prompt audit, and verification boundaries.
 
-The user does not yet use Claude Code; keep that client unverified without
-requesting credentials or enabling paid calls. The implementation/evaluation
-delivery and the unmet product-value goal are separate. Existing UI, retrieval,
-and recovery evidence remains valid within its recorded scope. The earlier
-anonymous-volume deletion still has unknown impact.
+The user does not currently use Claude Code; it remains unverified and outside
+this delivery scope. The user requested usable implementation and truthful
+evidence, not a guaranteed positive result for each product hypothesis. Existing
+UI, retrieval, and recovery evidence remains valid within its recorded scope.
+Required local checks and the earlier anonymous-volume deletion's unknown impact
+remain engineering closeout issues; the scope correction does not waive them.
 
 The existing CLI-to-prompt workflow now has a separate `cli-prefetch` profile.
 At `d459e20`, a complete fresh comparison passed 18/18 answers and reduced total
@@ -177,22 +178,21 @@ Known issues:
 
 Execute in this order and close each bounded owner before changing scope:
 
-1. Preserve PR #32's real database/UI and archived-index receipts, including its
-   final CI/merge evidence and local failures. Keep PR #27's fixture-backed
-   browser checks separate from the later database-backed verification.
-2. Keep the core receipts: PR #26's five CI jobs, the 2026-10-23 owned
-   backup/restore proof, and corpus-v3 preflight at `fab19fe` (all required
-   scoped seeds across three tasks, no foreign leakage or model calls).
-3. Preserve the real Codex baseline at `fe24b4d`: 18/18 correct, no omission
-   or leakage, but median input-token reduction only 0.35% (15% gate RED).
-   The source audit confirms global AGENTS/skill loading and compact structured
-   MCP output, but not their token contributions. Keep user instructions and
-   public result fields intact; do not relabel cached tokens or discard this run.
-4. Claude remains unverified and the user does not yet use Claude Code. Keep
-   paid API calls disabled; Codex subscription checks are not billing prevention.
-5. Resolve the delivery boundary with the user before marking the goal complete:
-   the current implementation/evaluation unit is delivered, while the 15% product
-   bar and original two-client proof remain unmet.
+1. Resolve required local test failures from the failed cases and current host
+   conditions, then run the final local suite once. Preserve earlier failures
+   and distinguish them from passing CI and real DB/UI verification.
+2. Verify current task-owned cleanup separately from the historical anonymous
+   volume deletion. That incident needs an exact ownership link or identified
+   data impact and any necessary recovery; current absence proves neither.
+3. Preserve both Codex outcomes: the MCP 15% gate remains RED at 0.35%, and the
+   separate CLI-prefetch profile passed at 53.40%. Do not change user safety
+   instructions, public result fields, cached-token accounting, or the thresholds
+   to manufacture a pass. New model runs require a concrete hypothesis.
+4. Keep the existing portfolio artifacts attributable and validate their hashes
+   and local links after a meaningful update. Claude stays unverified; do not
+   request its login or enable paid calls for this delivery.
+5. Audit completion against the current user goal. Report remaining safety and
+   validation gaps without treating unavailable Claude proof as a blocker.
 
 Additional transport or module extraction stays behind these product-value
 gates unless it is required to fix a measured failure.

@@ -1,6 +1,22 @@
 # DECISIONS
 
+## 2026-10-23 — Separate User Delivery From Client Research Outcomes
+
+The current user request is usable implementation, required verification, Git
+delivery, safe owned-resource cleanup, and truthful portfolio evidence. The user
+does not currently use Claude Code. The earlier two-client research objective
+therefore does not govern completion of this delivery. `goal.md` now reflects
+the user request; Claude remains unverified and is not a delivery blocker.
+
+Retain the 15% benchmark threshold, the failed MCP result, and the separate
+successful CLI-prefetch result. A negative experiment is valid evidence, not a
+passed benchmark. This scope correction does not waive required local checks,
+public contracts, data preservation, or the unresolved anonymous-volume incident.
+
 ## 2026-08-31 — Gate Product Value Before More Architecture Extraction
+
+Superseded for delivery scope by the 2026-10-23 decision above. The research
+protocol, thresholds, and historical findings below remain unchanged.
 
 Decision: make `goal.md` the canonical objective and require evidence in
 `GATES.md` that the default stack retrieves relevant project and user memory and
