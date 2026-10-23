@@ -16,11 +16,6 @@ const SAFE_SOURCE_PATHS = [
 ] as const;
 const FOREIGN_SENTINEL_MARKERS = ["orbital_sentinel_9bce"] as const;
 const SHARED_PROMPT_SUFFIX = "Return exactly one JSON object matching the supplied schema. The claims object must contain exactly the requested claim keys and string values.";
-const GENERIC_OUTPUT_SCHEMA = {
-  type: "object", additionalProperties: false, required: ["claims"],
-  properties: { claims: { type: "object", additionalProperties: { type: "string" } } },
-} as const;
-
 const ANSWER_KEYS: Readonly<Record<string, { alternatives: readonly string[]; required: readonly string[]; contradictions: readonly string[] }>> = {
   canonical_store: { alternatives: ["postgres", "postgresql"], required: [], contradictions: ["qdrant is canonical", "qdrant is the canonical"] },
   vector_recovery: { alternatives: ["rebuild", "rebuilt", "reindex"], required: [], contradictions: ["cannot be rebuilt"] },
@@ -299,12 +294,16 @@ export function buildClientPrompt(
   text(options.rawCanonicalContext, "rawCanonicalContext");
   return `${prefix}Raw canonical context:\n${options.rawCanonicalContext}\n\n${SHARED_PROMPT_SUFFIX}`;
 }
-export async function createClientWorkspace(): Promise<ClientWorkspace> {
+export async function createClientWorkspace(claimKeys: readonly string[] = []): Promise<ClientWorkspace> {
   const rootDir = await mkdtemp(path.join(os.tmpdir(), "akasha-client-ab-"));
   const cwd = path.join(rootDir, "client");
   const schemaPath = path.join(cwd, "result.schema.json");
   await mkdir(cwd);
-  await writeFile(schemaPath, `${JSON.stringify(GENERIC_OUTPUT_SCHEMA)}\n`, { mode: 0o600 });
+  const schema = {
+    type: "object", additionalProperties: false, required: ["claims"],
+    properties: { claims: { type: "object", additionalProperties: false, required: [...claimKeys], properties: Object.fromEntries(claimKeys.map((key) => [key, { type: "string" }])) } },
+  };
+  await writeFile(schemaPath, `${JSON.stringify(schema)}\n`, { mode: 0o600 });
   return { rootDir, cwd, schemaPath };
 }
 export function verifyToolTrace(condition: ClientCondition, toolCalls: readonly ToolCall[], expectedArguments?: Record<string, unknown>, allowedMemoryIds: readonly string[] = []): void {
@@ -521,7 +520,7 @@ export async function buildClientCommand(input: { vendor: ClientVendor; conditio
   }
   const maxBudget = input.maxBudgetUsd ?? 0.20;
   if (!Number.isFinite(maxBudget) || maxBudget <= 0 || maxBudget > 0.20) throw new Error("Claude client A/B budget must be a positive amount no greater than USD 0.20");
-  const args = ["--print", "--bare", "--restricted", "--permission-mode", "dontAsk", "--strict-mcp-config", "--no-session-persistence", "--verbose", "--output-format", "stream-json", "--json-schema", JSON.stringify(GENERIC_OUTPUT_SCHEMA), "--max-budget-usd", String(maxBudget), "--model", input.expectedModel, "--tools", ""];
+  const args = ["--print", "--bare", "--restricted", "--permission-mode", "dontAsk", "--strict-mcp-config", "--no-session-persistence", "--verbose", "--output-format", "stream-json", "--json-schema", await readFile(input.workspace.schemaPath, "utf8"), "--max-budget-usd", String(maxBudget), "--model", input.expectedModel, "--tools", ""];
   if (input.effort !== undefined) args.push("--effort", input.effort);
   if (mcpServer === undefined) {
     args.push("--tools", "");
@@ -801,7 +800,7 @@ export async function runClientAb(input: ClientAbRunInput): Promise<ClientAbRunS
   try {
     for (const entry of clientAbRunPlan(input.experiment)) {
       runIndex += 1;
-      const workspace = await createClientWorkspace();
+      const workspace = await createClientWorkspace(entry.task.claimKeys);
       const resultPath = conditionResultPath(input.resultDir, input.vendor, entry.task.id, entry.repeat, entry.condition);
       let executionStarted = false;
       let outcomeWritten = false;

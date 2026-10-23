@@ -96,8 +96,8 @@ describe("client A/B evaluation harness", () => {
     ).toThrow("tracked staged or unstaged changes");
   });
 
-  it("creates a client cwd containing only the generic output schema", async () => {
-    const workspace = await createClientWorkspace();
+  it("creates only a strict task schema with the same requested fields for each client", async () => {
+    const workspace = await createClientWorkspace(["canonical_store", "vector_recovery"]);
     tempRoots.push(workspace.rootDir);
     const entries = await (await import("node:fs/promises")).readdir(workspace.cwd);
 
@@ -105,7 +105,11 @@ describe("client A/B evaluation harness", () => {
     expect(JSON.parse(await readFile(workspace.schemaPath, "utf8"))).toMatchObject({
       type: "object",
       required: ["claims"],
+      additionalProperties: false,
+      properties: { claims: { type: "object", additionalProperties: false, required: ["canonical_store", "vector_recovery"], properties: { canonical_store: { type: "string" }, vector_recovery: { type: "string" } } } },
     });
+    const command = await buildClientCommand({ vendor: "claude", condition: "off", workspace, prompt: "task", expectedModel: "test" });
+    expect(JSON.parse(command.args[command.args.indexOf("--json-schema") + 1]!)).toEqual(JSON.parse(await readFile(workspace.schemaPath, "utf8")));
   });
 
   it("does not configure Akasha for the off command while requiring it for on", async () => {
