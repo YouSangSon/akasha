@@ -148,6 +148,7 @@ async function main(): Promise<void> {
         allowedMemoryIds: preflight.allowedMemoryIds,
       });
       process.stdout.write(`${JSON.stringify({ mode: args.executeSubscription ? "subscription" : "paid", preflight, summary })}\n`);
+      process.exitCode = summary.aggregate.passed ? 0 : 1;
       return;
     }
     process.stdout.write(`${JSON.stringify({ mode: "preflight", preflight, paidExecution: false })}\n`);

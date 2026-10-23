@@ -225,6 +225,7 @@ describe("client A/B evaluation harness", () => {
 
     expect(aggregateClientPairs("codex", pairs)).toMatchObject({ pairCount: 9, medianInputTokenReduction: 0.2, passed: true });
     expect(() => aggregateClientPairs("codex", [...pairs, { ...pairs[0]!, vendor: "claude" as const }])).toThrow("must not mix vendors");
+    expect(aggregateClientPairs("codex", pairs.map((pair) => ({ ...pair, on: { success: true, inputTokens: 199 } })))).toMatchObject({ allPairsSuccessful: true, passed: false });
   });
 
   it("uses a deterministic 18-call plan, stdin-only prompts, isolated MCP env, and atomic paired evidence", async () => {
