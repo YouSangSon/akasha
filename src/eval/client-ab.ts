@@ -327,7 +327,7 @@ function contextPackMemoryIds(value: unknown): string[] | undefined {
 function textResultMemoryIds(content: unknown): string[] | undefined {
   const textContent = typeof content === "string" ? content : Array.isArray(content)
     ? content.filter((block) => typeof block === "object" && block !== null && block.type === "text").map((block) => block.text).join("\n") : "";
-  try { return contextPackMemoryIds(JSON.parse(textContent)); } catch { return undefined; }
+  try { return contextPackMemoryIds(JSON.parse(textContent)); } catch (_error: unknown) { return undefined; }
 }
 function jsonLines(value: string, label: string): Record<string, unknown>[] {
   const lines = value.split("\n").filter((line) => line.trim());
@@ -528,7 +528,7 @@ export async function buildClientCommand(input: { vendor: ClientVendor; conditio
 function signalOwnedChild(child: ReturnType<typeof spawn>, signal: NodeJS.Signals): void {
   if (child.pid === undefined) return;
   if (process.platform !== "win32") {
-    try { process.kill(-child.pid, signal); return; } catch (error) {
+    try { process.kill(-child.pid, signal); return; } catch (error: unknown) {
       if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
     }
   }
