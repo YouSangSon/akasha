@@ -156,8 +156,12 @@ Execute in this order and close each bounded owner before changing scope:
 2. Keep the core receipts: PR #26's five CI jobs, the 2026-10-23 owned
    backup/restore proof, and corpus-v3 preflight at `fab19fe` (all required
    scoped seeds across three tasks, no foreign leakage or model calls).
-3. Keep real Codex/Claude A/B token and outcome claims unverified until the
-   required execution authority and enforceable spend limits exist.
+3. Preserve the real Codex baseline at `fe24b4d`: 18/18 correct, no omission
+   or leakage, but median input-token reduction only 0.35% (15% gate RED).
+   Investigate common prompt overhead and tool-round-trip cost before proposing
+   another controlled variant; do not relabel cached tokens or discard this run.
+4. Claude remains unverified because its local CLI is not logged in. Keep paid
+   API calls disabled; Codex subscription checks are not billing prevention.
 
 Additional transport or module extraction stays behind these product-value
 gates unless it is required to fix a measured failure.

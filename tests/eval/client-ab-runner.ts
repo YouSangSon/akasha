@@ -6,7 +6,7 @@ import { createToolRegistry } from "../../src/mcp/tool-registry.js";
 import {
   assertPaidClientExecutionAllowed,
   prepareClientAbExperiment,
-  runPaidClientAb,
+  runClientAb,
   seedAndPreflightClientAb,
   type ClientVendor,
   type LiveMcpServer,
@@ -17,7 +17,7 @@ const EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
 
 export type ClientAbRunnerArgs = {
   sha: string; fixturePath: string; client?: ClientVendor; model?: string; effort?: string;
-  resultDir: string; maxBudgetUsd?: number; executePaid: boolean; preflight: boolean;
+  resultDir: string; maxBudgetUsd?: number; executePaid: boolean; executeSubscription: boolean; preflight: boolean;
 };
 
 function requireValue(args: readonly string[], index: number, flag: string): string {
@@ -38,14 +38,16 @@ export function parseClientAbArgs(args: readonly string[]): ClientAbRunnerArgs {
   let resultDir = "artifacts/client-ab";
   let maxBudgetUsd: number | undefined;
   let executePaid = false;
+  let executeSubscription = false;
   let preflight = false;
   const seen = new Set<string>();
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
-    if (arg === "--execute-paid" || arg === "--preflight") {
+    if (arg === "--execute-paid" || arg === "--execute-subscription" || arg === "--preflight") {
       if (seen.has(arg)) throw new Error(`client A/B runner repeats ${arg}`);
       seen.add(arg);
       if (arg === "--execute-paid") executePaid = true;
+      else if (arg === "--execute-subscription") executeSubscription = true;
       else preflight = true;
       continue;
     }
@@ -67,10 +69,11 @@ export function parseClientAbArgs(args: readonly string[]): ClientAbRunnerArgs {
     else maxBudgetUsd = decimal(value, "--max-budget-usd");
   }
   if (sha === undefined || !FULL_SHA.test(sha)) throw new Error("client A/B runner requires --sha <full-lowercase-40-character-sha>");
-  if (executePaid && (client === undefined || model === undefined)) throw new Error("paid client A/B runner requires --client and --model");
+  if ((executePaid || executeSubscription) && (client === undefined || model === undefined)) throw new Error("client A/B runner requires --client and --model");
+  if (executeSubscription && (executePaid || client !== "codex" || effort === undefined)) throw new Error("subscription mode requires Codex, explicit --effort, and no paid mode");
   if (maxBudgetUsd !== undefined && client !== "claude") throw new Error("client A/B runner --max-budget-usd is valid only with --client claude");
   if (maxBudgetUsd !== undefined && maxBudgetUsd > 0.20) throw new Error("client A/B runner --max-budget-usd must be no greater than USD 0.20");
-  return { sha, fixturePath, client, model, effort, resultDir, maxBudgetUsd, executePaid, preflight };
+  return { sha, fixturePath, client, model, effort, resultDir, maxBudgetUsd, executePaid, executeSubscription, preflight };
 }
 function mcpEnvironment(env: NodeJS.ProcessEnv): Record<string, string> {
   const names = [
@@ -121,7 +124,7 @@ async function main(): Promise<void> {
     fixturePath: path.posix.normalize(args.fixturePath),
   });
   const resultDir = path.resolve(process.cwd(), args.resultDir);
-  if (args.preflight || args.executePaid) {
+  if (args.preflight || args.executePaid || args.executeSubscription) {
     if (args.executePaid) assertPaidClientExecutionAllowed(process.env, true);
     assertLocalPreflightEnvironment(process.env);
     await mkdir(path.dirname(resultDir), { recursive: true });
@@ -131,8 +134,8 @@ async function main(): Promise<void> {
       registry,
       resultPath: path.join(resultDir, "preflight.json"),
     }));
-    if (args.executePaid) {
-      const summary = await runPaidClientAb({
+    if (args.executePaid || args.executeSubscription) {
+      const summary = await runClientAb({
         experiment,
         vendor: args.client!,
         model: args.model!,
@@ -140,10 +143,12 @@ async function main(): Promise<void> {
         maxBudgetUsd: args.maxBudgetUsd,
         resultDir: path.join(resultDir, args.client!),
         mcpServer: mcpServer(),
-        executePaid: true,
+        executePaid: args.executePaid,
+        executeSubscription: args.executeSubscription,
         allowedMemoryIds: preflight.allowedMemoryIds,
       });
-      process.stdout.write(`${JSON.stringify({ mode: "paid", preflight, summary })}\n`);
+      process.stdout.write(`${JSON.stringify({ mode: args.executeSubscription ? "subscription" : "paid", preflight, summary })}\n`);
+      process.exitCode = summary.aggregate.passed ? 0 : 1;
       return;
     }
     process.stdout.write(`${JSON.stringify({ mode: "preflight", preflight, paidExecution: false })}\n`);

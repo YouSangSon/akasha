@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promise
 import os from "node:os";
 import { isDeepStrictEqual } from "node:util";
 import path from "node:path";
+import { createInterface } from "node:readline";
 import { chunkText } from "../chunk/chunk-text.js";
 import type { ToolRegistry } from "../mcp/types.js";
 
@@ -15,11 +16,6 @@ const SAFE_SOURCE_PATHS = [
 ] as const;
 const FOREIGN_SENTINEL_MARKERS = ["orbital_sentinel_9bce"] as const;
 const SHARED_PROMPT_SUFFIX = "Return exactly one JSON object matching the supplied schema. The claims object must contain exactly the requested claim keys and string values.";
-const GENERIC_OUTPUT_SCHEMA = {
-  type: "object", additionalProperties: false, required: ["claims"],
-  properties: { claims: { type: "object", additionalProperties: { type: "string" } } },
-} as const;
-
 const ANSWER_KEYS: Readonly<Record<string, { alternatives: readonly string[]; required: readonly string[]; contradictions: readonly string[] }>> = {
   canonical_store: { alternatives: ["postgres", "postgresql"], required: [], contradictions: ["qdrant is canonical", "qdrant is the canonical"] },
   vector_recovery: { alternatives: ["rebuild", "rebuilt", "reindex"], required: [], contradictions: ["cannot be rebuilt"] },
@@ -100,7 +96,8 @@ export type ClientExecutor = (command: ClientCommand) => Promise<{ stdout: strin
 export type ClientAbRunInput = {
   experiment: ClientAbExperiment; vendor: ClientVendor; model: string; resultDir: string;
   mcpServer: LiveMcpServer; executePaid: boolean; allowedMemoryIds: readonly string[]; env?: NodeJS.ProcessEnv;
-  effort?: string; maxBudgetUsd?: number;
+  effort?: string; maxBudgetUsd?: number; executeSubscription?: boolean;
+  readSubscriptionStatus?: () => Promise<CodexSubscriptionStatus>;
   execute?: ClientExecutor; getCliVersion?: (binary: string) => Promise<string>;
 };
 
@@ -297,12 +294,16 @@ export function buildClientPrompt(
   text(options.rawCanonicalContext, "rawCanonicalContext");
   return `${prefix}Raw canonical context:\n${options.rawCanonicalContext}\n\n${SHARED_PROMPT_SUFFIX}`;
 }
-export async function createClientWorkspace(): Promise<ClientWorkspace> {
+export async function createClientWorkspace(claimKeys: readonly string[] = []): Promise<ClientWorkspace> {
   const rootDir = await mkdtemp(path.join(os.tmpdir(), "akasha-client-ab-"));
   const cwd = path.join(rootDir, "client");
   const schemaPath = path.join(cwd, "result.schema.json");
   await mkdir(cwd);
-  await writeFile(schemaPath, `${JSON.stringify(GENERIC_OUTPUT_SCHEMA)}\n`, { mode: 0o600 });
+  const schema = {
+    type: "object", additionalProperties: false, required: ["claims"],
+    properties: { claims: { type: "object", additionalProperties: false, required: [...claimKeys], properties: Object.fromEntries(claimKeys.map((key) => [key, { type: "string" }])) } },
+  };
+  await writeFile(schemaPath, `${JSON.stringify(schema)}\n`, { mode: 0o600 });
   return { rootDir, cwd, schemaPath };
 }
 export function verifyToolTrace(condition: ClientCondition, toolCalls: readonly ToolCall[], expectedArguments?: Record<string, unknown>, allowedMemoryIds: readonly string[] = []): void {
@@ -362,7 +363,7 @@ export function parseCodexEvents(value: string): ClientUsage {
     if (event.type !== "item.completed") return [];
     object(event.item, "Codex item.completed item");
     if (event.item.type === "mcp_tool_call") {
-      if (event.item.status !== "completed" || event.item.error != null) throw new Error("Codex MCP tool call did not complete successfully");
+      if (event.item.status !== "completed" || event.item.error != null) throw new Error("Codex MCP tool call did not complete successfully", { cause: event.item });
       const result = event.item.result;
       object(result, "Codex MCP result");
       const selectedMemoryIds = result.structured_content != null ? contextPackMemoryIds(result.structured_content) : textResultMemoryIds(result.content);
@@ -481,14 +482,18 @@ export function aggregateClientPairs(vendor: ClientVendor, pairs: readonly Clien
 
 export type LiveMcpServer = { command: string; args: readonly string[]; env?: Record<string, string> };
 export type ClientCommand = { binary: string; args: string[]; env: NodeJS.ProcessEnv; cwd: string; stdin: string; finalOutputPath: string };
-function clientEnvironment(vendor: ClientVendor): NodeJS.ProcessEnv {
+// Account RPC has no --ignore-user-config; pin its auth store and service URL to the exec path.
+const CODEX_SUBSCRIPTION_CONFIG = ["-c", 'model_provider="openai"', "-c", 'cli_auth_credentials_store="file"', "-c", 'chatgpt_base_url="https://chatgpt.com/backend-api/"'];
+function clientEnvironment(vendor: ClientVendor, subscription = false): NodeJS.ProcessEnv {
   const auth = vendor === "codex"
-    ? { OPENAI_API_KEY: process.env.OPENAI_API_KEY, CODEX_API_KEY: process.env.CODEX_API_KEY, CODEX_HOME: process.env.CODEX_HOME }
+    ? { ...(!subscription ? { OPENAI_API_KEY: process.env.OPENAI_API_KEY, CODEX_API_KEY: process.env.CODEX_API_KEY } : {}), CODEX_HOME: process.env.CODEX_HOME }
     : { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY };
   return { PATH: process.env.PATH, HOME: process.env.HOME, LANG: process.env.LANG, LC_ALL: process.env.LC_ALL, NO_COLOR: "1", ...auth };
 }
 function mcpConfigOverrides(server: LiveMcpServer): string[] {
   const overrides = [
+    'mcp_servers.akasha.enabled_tools=["build_context_pack"]',
+    'mcp_servers.akasha.tools.build_context_pack.approval_mode="approve"',
     `mcp_servers.akasha.command=${JSON.stringify(server.command)}`,
     `mcp_servers.akasha.args=${JSON.stringify(server.args)}`,
   ];
@@ -498,23 +503,25 @@ function mcpConfigOverrides(server: LiveMcpServer): string[] {
   }
   return overrides;
 }
-export async function buildClientCommand(input: { vendor: ClientVendor; condition: ClientCondition; workspace: ClientWorkspace; prompt: string; expectedModel: string; effort?: string; maxBudgetUsd?: number; mcpServer?: LiveMcpServer }): Promise<ClientCommand> {
+export async function buildClientCommand(input: { vendor: ClientVendor; condition: ClientCondition; workspace: ClientWorkspace; prompt: string; expectedModel: string; effort?: string; maxBudgetUsd?: number; mcpServer?: LiveMcpServer; executeSubscription?: boolean }): Promise<ClientCommand> {
   text(input.expectedModel, "expectedModel");
   if (input.condition === "on" && input.mcpServer === undefined) throw new Error("client A/B on condition requires an Akasha MCP server configuration");
   const finalOutputPath = path.join(input.workspace.cwd, "final-output.json");
   const mcpServer = input.condition === "on" ? input.mcpServer : undefined;
   if (input.vendor === "codex") {
     const args = ["exec", "--ephemeral", "--skip-git-repo-check", "--ignore-user-config", "--ignore-rules", "--sandbox", "read-only", "--json", "--model", input.expectedModel, "--output-schema", input.workspace.schemaPath, "--output-last-message", finalOutputPath];
+    if (input.executeSubscription) args.push(...CODEX_SUBSCRIPTION_CONFIG, "-c", 'forced_login_method="chatgpt"');
+    args.push("-c", "features.shell_tool=false", "-c", 'web_search="disabled"');
     if (input.effort !== undefined) args.push("-c", `model_reasoning_effort=${JSON.stringify(input.effort)}`);
     if (mcpServer !== undefined) {
       for (const override of mcpConfigOverrides(mcpServer)) args.push("-c", override);
     }
     args.push("--");
-    return { binary: "codex", args, env: clientEnvironment("codex"), cwd: input.workspace.cwd, stdin: input.prompt, finalOutputPath };
+    return { binary: "codex", args, env: clientEnvironment("codex", input.executeSubscription), cwd: input.workspace.cwd, stdin: input.prompt, finalOutputPath };
   }
   const maxBudget = input.maxBudgetUsd ?? 0.20;
   if (!Number.isFinite(maxBudget) || maxBudget <= 0 || maxBudget > 0.20) throw new Error("Claude client A/B budget must be a positive amount no greater than USD 0.20");
-  const args = ["--print", "--bare", "--restricted", "--permission-mode", "dontAsk", "--strict-mcp-config", "--no-session-persistence", "--verbose", "--output-format", "stream-json", "--json-schema", JSON.stringify(GENERIC_OUTPUT_SCHEMA), "--max-budget-usd", String(maxBudget), "--model", input.expectedModel, "--tools", ""];
+  const args = ["--print", "--bare", "--restricted", "--permission-mode", "dontAsk", "--strict-mcp-config", "--no-session-persistence", "--verbose", "--output-format", "stream-json", "--json-schema", await readFile(input.workspace.schemaPath, "utf8"), "--max-budget-usd", String(maxBudget), "--model", input.expectedModel, "--tools", ""];
   if (input.effort !== undefined) args.push("--effort", input.effort);
   if (mcpServer === undefined) {
     args.push("--tools", "");
@@ -534,7 +541,7 @@ function signalOwnedChild(child: ReturnType<typeof spawn>, signal: NodeJS.Signal
   }
   child.kill(signal);
 }
-export async function runClientCommand(command: ClientCommand, timeoutMs = 120_000): Promise<{ stdout: string; stderr: string }> {
+export async function runClientCommand(command: ClientCommand, timeoutMs = 120_000, exchange?: (line: string) => string | null | undefined): Promise<{ stdout: string; stderr: string }> {
   positive(timeoutMs, "client A/B timeoutMs");
   return await new Promise((resolve, reject) => {
     const child = spawn(command.binary, command.args, { cwd: command.cwd, env: command.env, shell: false, detached: process.platform !== "win32", stdio: ["pipe", "pipe", "pipe"] });
@@ -551,13 +558,23 @@ export async function runClientCommand(command: ClientCommand, timeoutMs = 120_0
     const onInterrupt = () => stop("client A/B client command interrupted");
     for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) process.on(signal, onInterrupt);
     const timer = setTimeout(() => stop("client A/B client command timed out"), timeoutMs);
+    const lines = exchange === undefined ? undefined : createInterface({ input: child.stdout });
+    lines?.on("line", (line) => {
+      try {
+        const reply = exchange!(line);
+        if (reply === null) child.stdin.end();
+        else if (reply !== undefined) child.stdin.write(reply);
+      } catch (error: unknown) { stop(error instanceof Error ? error.message : "Codex account query failed"); }
+    });
     const cleanup = () => {
+      lines?.close();
       clearTimeout(timer);
       clearTimeout(escalation);
       for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) process.removeListener(signal, onInterrupt);
     };
     child.stdin.on("error", () => stop("client A/B client stdin failed"));
-    child.stdin.end(command.stdin);
+    if (exchange === undefined) child.stdin.end(command.stdin);
+    else child.stdin.write(command.stdin);
     child.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString("utf8"); });
     child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString("utf8"); });
     child.once("error", (error) => { stopped = error; });
@@ -566,7 +583,7 @@ export async function runClientCommand(command: ClientCommand, timeoutMs = 120_0
       signalOwnedChild(child, "SIGKILL");
       cleanup();
       if (stopped) { reject(stopped); return; }
-      if (code !== 0) { reject(new Error(`client A/B client command failed with exit code ${code ?? "signal"}`)); return; }
+      if (code !== 0) { reject(new Error(`client A/B client command failed with exit code ${code ?? "signal"}`, { cause: { stdout, stderr } })); return; }
       resolve({ stdout, stderr });
     });
   });
@@ -698,8 +715,56 @@ function observedCodexModel(stdout: string): string | null {
       : undefined;
   return candidate ?? null;
 }
-function assertCodexHardCap(input: ClientAbRunInput): void {
-  if (input.execute === undefined) throw new Error("Codex local CLI exposes no documented 2M hard token cap; paid Codex A/B execution fails closed");
+export type CodexSubscriptionStatus = { checkedAt: string; weeklyRemainingPercent: number; creditBalance: string };
+export function parseCodexSubscriptionStatus(account: unknown, usage: unknown): CodexSubscriptionStatus {
+  object(account, "Codex account response");
+  object(account.account, "Codex authenticated account");
+  if (account.account.type !== "chatgpt" || account.requiresOpenaiAuth !== true) throw new Error("Codex subscription evaluation requires ChatGPT authentication");
+  object(usage, "Codex usage response");
+  if (usage.ordinaryUsageAllowed !== true) throw new Error("Codex included usage permission is unavailable or exhausted");
+  const buckets = usage.rateLimitsByLimitId;
+  const limits = typeof buckets === "object" && buckets !== null && !Array.isArray(buckets)
+    ? (buckets as Record<string, unknown>).codex : usage.rateLimits;
+  object(limits, "Codex rate limits");
+  if (limits.limitId !== "codex" || limits.spendControlReached !== false || limits.rateLimitReachedType != null) throw new Error("Codex usage limit state is unavailable or reached");
+  const windows = [limits.primary, limits.secondary].filter((window) => window != null);
+  let weeklyRemainingPercent: number | undefined;
+  for (const window of windows) {
+    object(window, "Codex usage window");
+    if (typeof window.usedPercent !== "number" || !Number.isFinite(window.usedPercent) || window.usedPercent < 0 || window.usedPercent >= 100) throw new Error("Codex usage window is unavailable or exhausted");
+    if (window.windowDurationMins === 10080) weeklyRemainingPercent = 100 - window.usedPercent;
+  }
+  if (weeklyRemainingPercent === undefined || weeklyRemainingPercent <= 1) throw new Error("Codex weekly remaining usage is unavailable or at most 1%");
+  object(limits.credits, "Codex credits");
+  const creditBalance = limits.credits.balance;
+  if (typeof creditBalance !== "string" || !/^\d+(?:\.\d+)?$/.test(creditBalance)) throw new Error("Codex credit balance is unavailable");
+  return { checkedAt: new Date().toISOString(), weeklyRemainingPercent, creditBalance };
+}
+function creditDeclined(previous: string, current: string): boolean {
+  const [beforeWhole, beforeFraction = ""] = previous.split(".");
+  const [afterWhole, afterFraction = ""] = current.split(".");
+  const scale = Math.max(beforeFraction.length, afterFraction.length);
+  return BigInt(afterWhole! + afterFraction.padEnd(scale, "0")) < BigInt(beforeWhole! + beforeFraction.padEnd(scale, "0"));
+}
+export async function readCodexSubscriptionStatus(execute = runClientCommand): Promise<CodexSubscriptionStatus> {
+  const rpc = (id: number, method: string, params: unknown) => `${JSON.stringify({ id, method, params })}\n`;
+  let account: unknown;
+  let status: CodexSubscriptionStatus | undefined;
+  await execute({
+    binary: "codex", args: ["app-server", "--stdio", ...CODEX_SUBSCRIPTION_CONFIG],
+    env: clientEnvironment("codex", true), cwd: os.tmpdir(), finalOutputPath: "",
+    stdin: rpc(1, "initialize", { clientInfo: { name: "akasha_client_eval", version: "1.0.0" }, capabilities: { experimentalApi: false } }),
+  }, 60_000, (line) => {
+    const event: unknown = JSON.parse(line);
+    object(event, "Codex account event");
+    if (event.error !== undefined) throw new Error("Codex account or usage query failed");
+    if (event.id === 1) return '{"method":"initialized"}\n' + rpc(2, "account/read", { refreshToken: false });
+    if (event.id === 2) { account = event.result; return rpc(3, "account/rateLimits/read", {}); }
+    if (event.id === 3) { status = parseCodexSubscriptionStatus(account, event.result); return null; }
+    return undefined;
+  });
+  if (status === undefined) throw new Error("Codex subscription status is unavailable");
+  return status;
 }
 function assertClientAuthentication(input: ClientAbRunInput): void {
   if (input.execute !== undefined || input.vendor !== "claude") return;
@@ -707,11 +772,15 @@ function assertClientAuthentication(input: ClientAbRunInput): void {
     throw new Error("Claude paid client A/B execution requires ANTHROPIC_API_KEY; no alternate credential source is accepted in bare mode");
   }
 }
-export async function runPaidClientAb(input: ClientAbRunInput): Promise<ClientAbRunSummary> {
-  assertPaidClientExecutionAllowed(input.env ?? process.env, input.executePaid);
+export async function runClientAb(input: ClientAbRunInput): Promise<ClientAbRunSummary> {
+  if (input.executeSubscription) {
+    if (input.executePaid || input.vendor !== "codex" || !input.effort) throw new Error("subscription evaluation requires Codex, explicit effort, and no paid mode");
+  } else {
+    assertPaidClientExecutionAllowed(input.env ?? process.env, input.executePaid);
+    if (input.vendor === "codex" && input.execute === undefined) throw new Error("paid Codex A/B execution fails closed; use the explicit subscription mode");
+  }
   text(input.model, "client A/B model");
   text(input.resultDir, "client A/B resultDir");
-  if (input.vendor === "codex") assertCodexHardCap(input);
   assertClientAuthentication(input);
   await mkdir(path.dirname(input.resultDir), { recursive: true });
   await mkdir(input.resultDir);
@@ -719,12 +788,23 @@ export async function runPaidClientAb(input: ClientAbRunInput): Promise<ClientAb
   const getCliVersion = input.getCliVersion ?? cliVersion;
   const version = await getCliVersion(input.vendor);
   const outcomes = new Map<string, ClientConditionResult>();
+  const usageChecks: CodexSubscriptionStatus[] = [];
+  const checkSubscription = async () => {
+    if (!input.executeSubscription) return;
+    const status = await (input.readSubscriptionStatus ?? readCodexSubscriptionStatus)();
+    const previous = usageChecks.at(-1);
+    usageChecks.push(status);
+    await writeResultAtomically(path.join(input.resultDir, "codex-subscription-usage.json"), usageChecks);
+    if (previous !== undefined && creditDeclined(previous.creditBalance, status.creditBalance)) throw new Error("Codex credits declined during this evaluation; further execution stopped");
+  };
   let runIndex = 0;
   try {
     for (const entry of clientAbRunPlan(input.experiment)) {
       runIndex += 1;
-      const workspace = await createClientWorkspace();
+      const workspace = await createClientWorkspace(entry.task.claimKeys);
       const resultPath = conditionResultPath(input.resultDir, input.vendor, entry.task.id, entry.repeat, entry.condition);
+      let executionStarted = false;
+      let outcomeWritten = false;
       try {
         const prompt = buildClientPrompt(entry.task, entry.condition, {
           rawCanonicalContext: input.experiment.rawCanonicalContext,
@@ -738,8 +818,11 @@ export async function runPaidClientAb(input: ClientAbRunInput): Promise<ClientAb
           expectedModel: input.model,
           effort: input.effort,
           maxBudgetUsd: input.maxBudgetUsd,
+          executeSubscription: input.executeSubscription,
           mcpServer: entry.condition === "on" ? input.mcpServer : undefined,
         });
+        await checkSubscription();
+        executionStarted = true;
         const executed = await execute(command);
         const parsed = input.vendor === "codex"
           ? parseCodexEvents(executed.stdout)
@@ -758,17 +841,21 @@ export async function runPaidClientAb(input: ClientAbRunInput): Promise<ClientAb
           toolCalls: parsed.toolCalls, grade, model: { requested: input.model, observed }, cliVersion: version,
         };
         await writeResultAtomically(resultPath, outcome);
+        outcomeWritten = true;
         if (!outcome.success) throw new Error(`client A/B ${entry.task.id} ${entry.condition} answer failed grading`);
         outcomes.set(`${entry.task.id}:${entry.repeat}:${entry.condition}`, outcome);
       } catch (error: unknown) {
-        await writeResultAtomically(resultPath, {
+        // Keep raw diagnostics local for debugging; summaries never include client logs.
+        if (error instanceof Error && error.cause !== undefined) await writeResultAtomically(`${resultPath}.private-diagnostics`, error.cause);
+        if (!outcomeWritten) await writeResultAtomically(resultPath, {
           vendor: input.vendor, taskId: entry.task.id, repeat: entry.repeat, condition: entry.condition, runIndex,
           success: false, cliVersion: version,
           error: error instanceof Error ? error.message : "client A/B condition failed",
         });
         throw error;
       } finally {
-        await rm(workspace.rootDir, { recursive: true, force: true });
+        try { if (executionStarted) await checkSubscription(); }
+        finally { await rm(workspace.rootDir, { recursive: true, force: true }); }
       }
     }
     const pairs: ClientPair[] = input.experiment.tasks.flatMap((task) => [1, 2, 3].map((repeat) => {
