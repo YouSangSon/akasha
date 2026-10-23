@@ -6,9 +6,10 @@ Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale i
 
 ## Current State
 
-Core, admin UI, and guarded Codex evaluation changes are merged through
-[PR #30](https://github.com/YouSangSon/akasha/pull/30), main `dd20bbd`.
-All five final CI jobs passed at `f1c7d56`. The completed MCP Codex baseline has
+The latest implementation delivery is
+[PR #32](https://github.com/YouSangSon/akasha/pull/32), merged as `183433b`.
+All five final CI jobs passed at `b98c397`; its tree matches the merge.
+The completed MCP Codex baseline has
 18/18 correct answers and no omissions/leakage, but median total input-token
 reduction is 0.35%, below the 15% product gate. `GATES.md` owns the current
 measurement, host-prompt audit, and verification boundaries.
@@ -23,14 +24,19 @@ The existing CLI-to-prompt workflow now has a separate `cli-prefetch` profile.
 At `d459e20`, a complete fresh comparison passed 18/18 answers and reduced total
 input tokens by a median 53.40%; nine actual CLI outputs matched fresh scoped DB
 receipts. A prior sleep-interrupted attempt remains recorded separately.
-`GATES.md` owns the protocol and measurement limits. Typecheck/build/audit passed;
-the serial full suite passed 2,648 tests with 35 skips and one existing backup
-test timeout, which passed alone without changing its 15-second limit. Both owned
-evaluation stacks were removed; final CI and merge receipts belong with the PR
-and the existing portfolio evidence bundle.
-The MCP failure, unavailable Claude proof, and historical cleanup uncertainty remain.
+`GATES.md` owns the protocol and measurement limits. Both owned evaluation
+stacks were removed; the existing portfolio bundle retains their receipts.
 
-CLI lifecycle follow-up `3b30134` closes command-owned services after draining
+Real Postgres/Qdrant admin verification then exposed archived records regaining
+vectors after Save. PR #32 fixes shared refresh, reindex, and pending ingest
+retry paths. Actual UI Save/Tag and API/retry lifecycle checks passed, and the
+owned UI database stack was removed. Final CI passed 2,667 tests on each Node
+version with 35 skips; the local full run's seven timeouts and failed isolated
+recheck remain separate evidence. Concurrent archive/index races and automatic
+retry after a committed edit's cleanup failure remain outside this fix.
+`GATES.md` owns the detailed verification boundaries and remaining red gates.
+
+Merged CLI lifecycle follow-up PR #31 (`3b30134`) closes command-owned services after draining
 best-effort audit writes and releases pools when service initialization fails.
 An isolated Postgres + Qdrant + transformers process smoke preserved exact pack
 output and audit rows, covered successful writes/reindex and failure paths, and
@@ -171,8 +177,9 @@ Known issues:
 
 Execute in this order and close each bounded owner before changing scope:
 
-1. Preserve the browser-verified admin UI receipts with PR #27's CI and merge
-   evidence. Static assertions are not browser behavior or database E2E evidence.
+1. Preserve PR #32's real database/UI and archived-index receipts, including its
+   final CI/merge evidence and local failures. Keep PR #27's fixture-backed
+   browser checks separate from the later database-backed verification.
 2. Keep the core receipts: PR #26's five CI jobs, the 2026-10-23 owned
    backup/restore proof, and corpus-v3 preflight at `fab19fe` (all required
    scoped seeds across three tasks, no foreign leakage or model calls).

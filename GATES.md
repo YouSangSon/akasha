@@ -133,8 +133,10 @@ pinned runner; shared CI reports it without failing the build.
 
 ## Next Gate
 
-Implementation and evaluation changes are merged through PR #31; the current
-archived-index unit has local DB/UI and passing CI evidence in [PR #32](https://github.com/YouSangSon/akasha/pull/32). The supplemental
+Implementation and evaluation changes are merged through
+[PR #32](https://github.com/YouSangSon/akasha/pull/32) at `183433b`. Its archived-index
+unit has local DB/UI evidence and five passing CI jobs at `b98c397`, whose tree
+matches the merge. Local timeout/cleanup failures remain recorded separately. The supplemental
 CLI-prefetch run now passes its 15% bar, while the MCP baseline still fails it.
 Preserve both results and the source audit above. The user does not yet use Claude Code,
 so its proof remains external to this completed evaluation unit. The original
