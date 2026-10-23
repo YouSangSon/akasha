@@ -36,56 +36,56 @@ export async function bootstrapCanonicalServices(): Promise<CanonicalServices> {
 
   try {
     await runMigrations(pool);
+
+    let vectorIndex: CanonicalServices["vectorIndex"];
+
+    if (config.vectorBackend === "pgvector") {
+      const pgVectorIndex = createPgVectorIndex(pool);
+      await pgVectorIndex.ensureCollection(config.embedding.dimensions);
+      vectorIndex = pgVectorIndex;
+    } else {
+      const qdrantClient = createQdrantClient({
+        url: config.qdrant.url,
+        apiKey: config.qdrant.apiKey,
+      });
+      const qdrantVectorIndex = createQdrantVectorIndex(
+        qdrantClient,
+        config.qdrant.collectionName,
+      );
+      await qdrantVectorIndex.ensureCollection(config.embedding.dimensions);
+      vectorIndex = qdrantVectorIndex;
+    }
+
+    return {
+      config: {
+        qdrant: {
+          collectionName: config.qdrant.collectionName,
+        },
+        embedding: config.embedding,
+      },
+      repository: createMemoryRepository(pool),
+      chunkRepository: createMemoryChunkRepository(pool),
+      ingestJobs: createIngestJobRepository(pool),
+      auditLog: createAuditLogRepository(pool),
+      archiveRepository: createMemoryArchiveRepository(pool),
+      goalRuns: createGoalRunRepository(pool),
+      embeddings: createEmbeddingProvider({
+        config: {
+          provider: config.embedding.provider,
+          model: config.embedding.model,
+          dimensions: config.embedding.dimensions,
+        },
+        openaiApiKey: config.openai.apiKey,
+      }),
+      vectorIndex,
+      close: async () => {
+        await pool.end();
+      },
+    };
   } catch (error: unknown) {
     await pool.end().catch(() => undefined);
     throw error;
   }
-
-  let vectorIndex: CanonicalServices["vectorIndex"];
-
-  if (config.vectorBackend === "pgvector") {
-    const pgVectorIndex = createPgVectorIndex(pool);
-    await pgVectorIndex.ensureCollection(config.embedding.dimensions);
-    vectorIndex = pgVectorIndex;
-  } else {
-    const qdrantClient = createQdrantClient({
-      url: config.qdrant.url,
-      apiKey: config.qdrant.apiKey,
-    });
-    const qdrantVectorIndex = createQdrantVectorIndex(
-      qdrantClient,
-      config.qdrant.collectionName,
-    );
-    await qdrantVectorIndex.ensureCollection(config.embedding.dimensions);
-    vectorIndex = qdrantVectorIndex;
-  }
-
-  return {
-    config: {
-      qdrant: {
-        collectionName: config.qdrant.collectionName,
-      },
-      embedding: config.embedding,
-    },
-    repository: createMemoryRepository(pool),
-    chunkRepository: createMemoryChunkRepository(pool),
-    ingestJobs: createIngestJobRepository(pool),
-    auditLog: createAuditLogRepository(pool),
-    archiveRepository: createMemoryArchiveRepository(pool),
-    goalRuns: createGoalRunRepository(pool),
-    embeddings: createEmbeddingProvider({
-      config: {
-        provider: config.embedding.provider,
-        model: config.embedding.model,
-        dimensions: config.embedding.dimensions,
-      },
-      openaiApiKey: config.openai.apiKey,
-    }),
-    vectorIndex,
-    close: async () => {
-      await pool.end();
-    },
-  };
 }
 
 export type CanonicalServicesResolverOptions = Pick<
