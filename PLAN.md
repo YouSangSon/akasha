@@ -18,8 +18,9 @@ The user does not currently use Claude Code; it remains unverified and outside
 this delivery scope. The user requested usable implementation and truthful
 evidence, not a guaranteed positive result for each product hypothesis. Existing
 UI, retrieval, and recovery evidence remains valid within its recorded scope.
-Required local checks and the earlier anonymous-volume deletion's unknown impact
-remain engineering closeout issues; the scope correction does not waive them.
+Required local checks passed in the existing Podman Linux environment on a clean
+fixed checkout; earlier macOS failures retain their own scope. The anonymous-volume
+deletion's unknown impact remains a closeout issue; scope correction does not waive it.
 
 The existing CLI-to-prompt workflow now has a separate `cli-prefetch` profile.
 At `d459e20`, a complete fresh comparison passed 18/18 answers and reduced total
@@ -178,9 +179,10 @@ Known issues:
 
 Execute in this order and close each bounded owner before changing scope:
 
-1. Resolve required local test failures from the failed cases and current host
-   conditions, then run the final local suite once. Preserve earlier failures
-   and distinguish them from passing CI and real DB/UI verification.
+1. Preserve the fixed-checkout Linux verification: required typecheck/build/audit,
+   seven focused cases, and one full suite (2667 passed, 35 skipped). Reuse it only
+   for unchanged source/dependencies; keep earlier macOS failures and CI/DB evidence
+   separate. Subsequent documentation-only changes need their focused checks.
 2. Verify current task-owned cleanup separately from the historical anonymous
    volume deletion. That incident needs an exact ownership link or identified
    data impact and any necessary recovery; current absence proves neither.

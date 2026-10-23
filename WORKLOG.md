@@ -8,7 +8,11 @@
   required local verification and confirmed cleanup from the unresolved historic
   deletion. A fresh seven-case local recheck timed out while load rose from 54
   to 140 on 10 CPUs; three exact leftover directories were preserved and removed
-  after open-handle checks. No full rerun, timeout change, or new model evaluation.
+  after open-handle checks. The existing Podman Linux environment then passed
+  typecheck/build/audit, all seven focused cases, and one full suite (2667 passed,
+  35 skipped) on clean `e937ef7`; no timeout change or new model evaluation. Its
+  exact container/clone were removed with logs retained. Earlier macOS failures
+  and the historical deletion's unknown impact remain explicit.
 
 - Real PostgreSQL/Qdrant admin validation exposed a sequential archive invariant
   violation: Save preserved canonical `archived` but recreated its vector.
