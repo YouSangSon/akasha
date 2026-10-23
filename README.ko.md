@@ -37,7 +37,7 @@ ONNX로 텍스트를 로컬에서 임베딩합니다. 모델 파일은 처음 �
 | 운영할 서비스 줄이기 | `VECTOR_BACKEND=pgvector`로 Qdrant 대신 Postgres에 벡터 저장 |
 | 에이전트가 기억하는 내용 검토하기 | 레코드 조회·수정·태그 지정·보관을 위한 메모리 UI |
 
-이름은 *아카식 레코드(Akashic records)*에서 따왔습니다. 에이전트가 기억할
+이름은 <em>아카식 레코드(Akashic records)</em>에서 따왔습니다. 에이전트가 기억할
 가치가 있는 것을 적어 두는 공간이라는 뜻입니다.
 
 [DeusData/codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp)
