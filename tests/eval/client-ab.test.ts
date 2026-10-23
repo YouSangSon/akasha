@@ -14,8 +14,10 @@ import {
   parseClaudeStream,
   parseCodexFinalOutput,
   parseCodexEvents,
+  parseCodexSubscriptionStatus,
+  readCodexSubscriptionStatus,
   prepareClientAbExperiment,
-  runPaidClientAb,
+  runClientAb,
   runClientCommand,
   seedAndPreflightClientAb,
   verifyToolTrace,
@@ -32,6 +34,7 @@ afterAll(() => {
 });
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await Promise.all(tempRoots.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
@@ -229,19 +232,22 @@ describe("client A/B evaluation harness", () => {
       if (prompt.includes("default_language")) return { claims: { default_language: "korean", logging_rule: "never_log_raw_memory_content" } };
       return { claims: { source_diversity: "preserve_source_diversity", chunk_policy: "800_tokens_120_overlap" } };
     };
-    await expect(runPaidClientAb({
+    await expect(runClientAb({
       experiment, vendor: "codex", model: "codex-test", resultDir,
       mcpServer: { command: "node", args: [] }, executePaid: true,
       env: { AKASHA_ALLOW_PAID_CLIENT_EVAL: "1" }, allowedMemoryIds: ["1"],
     })).rejects.toThrow("paid Codex A/B execution fails closed");
 
-    const summary = await runPaidClientAb({
+    vi.stubEnv("OPENAI_API_KEY", "must-not-reach-subscription");
+    vi.stubEnv("CODEX_API_KEY", "must-not-reach-subscription");
+    const readSubscriptionStatus = vi.fn(async () => ({ checkedAt: new Date().toISOString(), weeklyRemainingPercent: 80, creditBalance: "12.0000000000" }));
+    const summary = await runClientAb({
       experiment,
       vendor: "codex",
       model: "codex-test",
       resultDir,
       mcpServer: { command: "node", args: ["server.js"], env: { DMO_CWD: repoDir, DATABASE_URL: "postgres://secret.invalid/never-client" } },
-      executePaid: true,
+      executePaid: false, executeSubscription: true, effort: "medium", readSubscriptionStatus,
       env: { AKASHA_ALLOW_PAID_CLIENT_EVAL: "1" },
       allowedMemoryIds: ["1"],
       getCliVersion: async () => "codex 0.test",
@@ -257,11 +263,13 @@ describe("client A/B evaluation harness", () => {
     });
 
     expect(calls).toHaveLength(18);
+    expect(readSubscriptionStatus).toHaveBeenCalledTimes(36);
+    expect(calls.every((call) => call.env.OPENAI_API_KEY === undefined && call.env.CODEX_API_KEY === undefined && call.args.includes('forced_login_method="chatgpt"') && call.args.includes('model_provider="openai"'))).toBe(true);
     expect(calls.map((call) => call.condition)).toEqual(["off", "on", "on", "off", "off", "on", "off", "on", "on", "off", "off", "on", "off", "on", "on", "off", "off", "on"]);
     expect(calls.every((call) => !call.args.some((arg) => arg.includes("Raw canonical context")) && call.stdin.includes("Return exactly one JSON object"))).toBe(true);
     expect(calls.every((call) => !call.stdin.includes("alpha.canonical-pg") && call.env.DATABASE_URL === undefined)).toBe(true);
     expect(summary.aggregate).toMatchObject({ pairCount: 9, passed: true, medianInputTokenReduction: 0.2 });
-    expect(await (await import("node:fs/promises")).readdir(resultDir)).toHaveLength(19);
+    expect(await (await import("node:fs/promises")).readdir(resultDir)).toHaveLength(20);
   });
 
   it("persists a failing condition and summary failure without retrying", async () => {
@@ -272,7 +280,7 @@ describe("client A/B evaluation harness", () => {
     const resultDir = path.join(resultRoot, "run");
     let calls = 0;
 
-    await expect(runPaidClientAb({
+    await expect(runClientAb({
       experiment, vendor: "codex", model: "codex-test", resultDir,
       mcpServer: { command: "node", args: ["server.js"] }, executePaid: true,
       env: { AKASHA_ALLOW_PAID_CLIENT_EVAL: "1" }, allowedMemoryIds: ["1"],
@@ -319,10 +327,47 @@ describe("client A/B evaluation harness", () => {
     expect(JSON.parse(await readFile(resultPath, "utf8"))).toMatchObject({ sourceSha: sha, foreignLeakageCount: 0 });
   });
 
+  it("fails closed on non-subscription auth, unavailable usage, exhausted limits, or missing credits", () => {
+    const account = { account: { type: "chatgpt" }, requiresOpenaiAuth: true };
+    const limits = { limitId: "codex", primary: { usedPercent: 10, windowDurationMins: 10080 }, secondary: null, credits: { balance: "12.0000000000" }, spendControlReached: false, rateLimitReachedType: null };
+    const usage = { ordinaryUsageAllowed: true, rateLimits: limits };
+    expect(parseCodexSubscriptionStatus(account, usage)).toMatchObject({ weeklyRemainingPercent: 90, creditBalance: "12.0000000000" });
+    for (const type of ["apiKey", "chatgptAuthTokens", "amazonBedrock"]) expect(() => parseCodexSubscriptionStatus({ ...account, account: { type } }, usage)).toThrow("ChatGPT authentication");
+    for (const patch of [{ ordinaryUsageAllowed: null }, { ordinaryUsageAllowed: false }, { rateLimitsByLimitId: {} }, { rateLimits: { ...limits, credits: null } }, { rateLimits: { ...limits, spendControlReached: null } }, { rateLimits: { ...limits, primary: null } }, { rateLimits: { ...limits, primary: { usedPercent: 99, windowDurationMins: 10080 } } }, { rateLimits: { ...limits, secondary: { usedPercent: 100, windowDurationMins: 300 } } }]) {
+      expect(() => parseCodexSubscriptionStatus(account, { ...usage, ...patch })).toThrow();
+    }
+  });
+
+  it.each(["initial-unavailable", "after-unavailable", "credit-decline", "client-failure"])("stops subscription calls and keeps evidence on %s", async (failure) => {
+    const { repoDir, sha } = await makeTrackedFixtureRepo();
+    const experiment = prepareClientAbExperiment({ repoDir, sha, fixturePath: "fixture.json" });
+    const resultDir = path.join(repoDir, "results");
+    const readSubscriptionStatus = vi.fn(async () => {
+      const call = readSubscriptionStatus.mock.calls.length;
+      if (failure === "initial-unavailable" || (failure === "after-unavailable" && call === 2)) throw new Error("usage unavailable");
+      return { checkedAt: new Date().toISOString(), weeklyRemainingPercent: 80, creditBalance: failure === "credit-decline" && call === 2 ? "12.0000000000" : "12.0000000001" };
+    });
+    const execute = vi.fn(async () => {
+      if (failure === "client-failure") throw new Error("client failed");
+      return { stdout: '{"type":"turn.completed","usage":{"input_tokens":200,"cached_input_tokens":0}}\n', stderr: "", finalOutput: '{"claims":{"canonical_store":"postgres","vector_recovery":"rebuild_from_postgres"}}' };
+    });
+    await expect(runClientAb({ experiment, vendor: "codex", model: "codex-test", effort: "medium", resultDir, mcpServer: { command: "node", args: [] }, executePaid: false, executeSubscription: true, allowedMemoryIds: ["1"], execute, readSubscriptionStatus, getCliVersion: async () => "test" })).rejects.toThrow();
+    expect(execute).toHaveBeenCalledTimes(failure === "initial-unavailable" ? 0 : 1);
+    expect(readSubscriptionStatus).toHaveBeenCalledTimes(failure === "initial-unavailable" ? 1 : 2);
+    expect(JSON.parse(await readFile(path.join(resultDir, "codex-failure.json"), "utf8"))).toMatchObject({ status: "failed" });
+    await expect(readFile(path.join(resultDir, "codex-summary.json"))).rejects.toThrow("ENOENT");
+    if (failure === "credit-decline" || failure === "after-unavailable") expect(JSON.parse(await readFile(path.join(resultDir, "codex-canonical-state-r1-off.json"), "utf8"))).toMatchObject({ success: true });
+  });
+
   it("requires both paid guards and strictly parses paid/preflight runner options", () => {
     expect(() => assertPaidClientExecutionAllowed({}, true)).toThrow("AKASHA_ALLOW_PAID_CLIENT_EVAL=1");
     expect(() => assertPaidClientExecutionAllowed({ AKASHA_ALLOW_PAID_CLIENT_EVAL: "1" }, false)).toThrow("--execute-paid");
     const sha = "a".repeat(40);
+    expect(parseClientAbArgs(["--sha", sha, "--execute-subscription", "--client", "codex", "--model", "codex-test", "--effort", "medium"])).toMatchObject({ executeSubscription: true, executePaid: false });
+    for (const extra of [["--execute-paid"], [], ["--effort", "medium"]]) {
+      const client = extra.length === 1 ? "codex" : "claude";
+      expect(() => parseClientAbArgs(["--sha", sha, "--execute-subscription", "--client", client, "--model", "test", ...extra])).toThrow();
+    }
     expect(parseClientAbArgs(["--sha", sha])).toMatchObject({ executePaid: false, preflight: false });
     expect(parseClientAbArgs(["--sha", sha, "--preflight"])).toMatchObject({ preflight: true });
     expect(parseClientAbArgs(["--sha", sha, "--execute-paid", "--client", "claude", "--model", "claude-test", "--max-budget-usd", "0.20"])).toMatchObject({ executePaid: true, client: "claude", maxBudgetUsd: 0.2 });
@@ -349,10 +394,35 @@ describe("client A/B evaluation harness", () => {
     await writeFile(path.join(resultDir, "codex-summary.json"), old);
     const execute = vi.fn();
     const getCliVersion = vi.fn();
-    await expect(runPaidClientAb({ experiment, vendor: "codex", model: "codex-test", resultDir, mcpServer: { command: "node", args: [] }, executePaid: true, env: { AKASHA_ALLOW_PAID_CLIENT_EVAL: "1" }, allowedMemoryIds: ["1"], execute, getCliVersion })).rejects.toThrow("EEXIST");
+    await expect(runClientAb({ experiment, vendor: "codex", model: "codex-test", resultDir, mcpServer: { command: "node", args: [] }, executePaid: true, env: { AKASHA_ALLOW_PAID_CLIENT_EVAL: "1" }, allowedMemoryIds: ["1"], execute, getCliVersion })).rejects.toThrow("EEXIST");
     expect(execute).not.toHaveBeenCalled();
     expect(getCliVersion).not.toHaveBeenCalled();
     expect(await readFile(path.join(resultDir, "codex-summary.json"), "utf8")).toBe(old);
+  });
+
+  it.each(["success", "rpc-error", "malformed", "api-auth"])("exchanges account RPC with an owned child and closes on %s", async (scenario) => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "akasha-client-ab-rpc-"));
+    tempRoots.push(cwd);
+    const seen: string[] = [];
+    vi.stubEnv("OPENAI_API_KEY", "never-pass-api-key");
+    vi.stubEnv("CODEX_API_KEY", "never-pass-api-key");
+    const query = readCodexSubscriptionStatus(async (command, timeout, exchange) => {
+      expect(command.env.OPENAI_API_KEY).toBeUndefined();
+      expect(command.env.CODEX_API_KEY).toBeUndefined();
+      expect(command.args).toEqual(expect.arrayContaining(['model_provider="openai"', 'cli_auth_credentials_store="file"', 'chatgpt_base_url="https://chatgpt.com/backend-api/"']));
+      const usage = { ordinaryUsageAllowed: true, rateLimits: { limitId: "codex", primary: { usedPercent: 10, windowDurationMins: 10080 }, credits: { balance: "12.00" }, spendControlReached: false } };
+      const script = `const r=require("node:readline").createInterface({input:process.stdin});r.on("line",line=>{const m=JSON.parse(line); if(!m.id)return; if(m.id===2 && ${JSON.stringify(scenario)}==="malformed"){console.log("invalid json");return;} if(m.id===2 && ${JSON.stringify(scenario)}==="rpc-error"){console.log(JSON.stringify({id:2,error:{code:1}}));return;} console.log(JSON.stringify({id:m.id,result:m.id===1?{}:m.id===2?{account:{type:${JSON.stringify(scenario === "api-auth" ? "apiKey" : "chatgpt")}},requiresOpenaiAuth:true}:${JSON.stringify(usage)}}));});`;
+      seen.push(JSON.parse(command.stdin).method);
+      return runClientCommand({ ...command, binary: process.execPath, args: ["-e", script], cwd }, Math.min(timeout!, 5000), (line) => {
+        const reply = exchange!(line);
+        if (reply) for (const request of reply.trim().split("\n")) seen.push(JSON.parse(request).method);
+        return reply;
+      });
+    });
+    if (scenario === "success") {
+      await expect(query).resolves.toMatchObject({ weeklyRemainingPercent: 90, creditBalance: "12.00" });
+      expect(seen).toEqual(["initialize", "initialized", "account/read", "account/rateLimits/read"]);
+    } else await expect(query).rejects.toThrow();
   });
 
   it.skipIf(process.platform === "win32")("waits for an owned SIGTERM-resistant child to close after timeout", async () => {

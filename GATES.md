@@ -14,8 +14,30 @@ Last updated: 2026-10-23 KST. Valid states are `GREEN`, `RED`, `NOT RUN`, and
 | Warm retrieval latency | On the pinned local runner after warm-up: p50 <= 100 ms and p95 <= 250 ms; cold start reported separately | same eval, at least 60 measured queries | 2026-10-22 local run, 60 samples: p50 17.89 ms, p95 72.89 ms, max 143.18 ms; latency enforcement disabled on this shared host | GREEN |
 | Free client preflight | Fixed clean SHA, exact required scoped seed identities, no foreign-organization leakage | `AKASHA_EVAL_MODE=client-ab ./tests/eval/run-default-stack.sh` | 2026-10-23 at `fab19fe`, corpus v3: 82 seeded records, all 3 tasks retained required seeds/anchors, leakage 0; no model client called | GREEN |
 | Context value | Required-decision omission = 0 and context-pack tokenizer count is lower than the defined raw/baseline context | context-pack fixture plus tokenizer report | Free corpus-v3 preflight: 19225 raw words versus 1696–1811 pack words, with required seeds retained. Word estimates do not prove tokenizer or real-client savings | RED |
-| Codex A/B | Paired successful runs have median input-token reduction >= 15%, no success-rate loss, omission/leakage = 0 | fixed-SHA off/on harness, three tasks x three repeats | Local harness implemented; actual Codex CLI execution fails closed because no documented hard token cap is enforceable. No paid run | EXTERNAL |
+| Codex A/B | Paired successful runs have median input-token reduction >= 15%, no success-rate loss, omission/leakage = 0 | fixed-SHA off/on harness, three tasks x three repeats | Explicit ChatGPT subscription mode checks included-usage permission, weekly remaining usage, and credit balance before/after each call; real paired results still pending | NOT RUN |
 | Claude A/B | Same per-client bar as Codex; never combine vendor token counts | fixed-SHA off/on harness, three tasks x three repeats | Local harness implemented; no paid run authorized. Claude budget flag is a per-call soft threshold, not a total hard cap | EXTERNAL |
+
+For an explicitly authorized Codex subscription evaluation on a clean commit:
+
+```sh
+AKASHA_EVAL_MODE=client-ab AKASHA_CLIENT_AB_EXECUTE_SUBSCRIPTION=1 \
+AKASHA_CLIENT_AB_CLIENT=codex AKASHA_CLIENT_AB_MODEL=gpt-6.1-sol \
+AKASHA_CLIENT_AB_EFFORT=medium AKASHA_CLIENT_AB_RESULT_DIR=artifacts/client-ab-subscription \
+./tests/eval/run-default-stack.sh
+```
+
+This path uses the existing file-backed ChatGPT login, never forwards API keys,
+and pins the auth store/service URL for both the account query and model client.
+It requires live included-usage permission and weekly remaining usage above 1%;
+unavailable usage, exhausted limits, or a new credit decline stops further calls.
+The credit baseline starts with this run, not a historical balance. Checks run
+before and after every call, including failures; finished condition evidence is
+retained without a successful run summary when a stop condition occurs. These
+observations do not guarantee billing prevention. Claude subscription execution
+is not implemented; the existing paid mode still requires separate authorization.
+The protocol is verified against Codex CLI 0.163.0 and its generated account types;
+see the official [account API](https://learn.chatgpt.com/docs/app-server) and
+[authentication settings](https://learn.chatgpt.com/docs/auth).
 
 The retrieval thresholds are regression-smoke minima anchored to the existing
 20-query result, not evidence of broad product quality. A publishable product

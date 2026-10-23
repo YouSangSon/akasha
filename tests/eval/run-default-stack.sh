@@ -78,8 +78,15 @@ fi
 
 sha=$(git rev-parse HEAD)
 result_dir=${AKASHA_CLIENT_AB_RESULT_DIR:-artifacts/client-ab}
-if [ "${AKASHA_CLIENT_AB_EXECUTE_PAID:-0}" = "1" ]; then
-  : "${AKASHA_ALLOW_PAID_CLIENT_EVAL:?set AKASHA_ALLOW_PAID_CLIENT_EVAL=1 for paid client A/B evaluation}"
+if [ "${AKASHA_CLIENT_AB_EXECUTE_PAID:-0}" = "1" ] || [ "${AKASHA_CLIENT_AB_EXECUTE_SUBSCRIPTION:-0}" = "1" ]; then
+  execution_flag=--execute-paid
+  if [ "${AKASHA_CLIENT_AB_EXECUTE_SUBSCRIPTION:-0}" = "1" ]; then
+    [ "${AKASHA_CLIENT_AB_EXECUTE_PAID:-0}" != "1" ] || { echo "client execution modes are mutually exclusive" >&2; exit 1; }
+    execution_flag=--execute-subscription
+  else
+    : "${AKASHA_ALLOW_PAID_CLIENT_EVAL:?set AKASHA_ALLOW_PAID_CLIENT_EVAL=1 for paid client A/B evaluation}"
+  fi
+  : "${AKASHA_CLIENT_AB_EFFORT:?set AKASHA_CLIENT_AB_EFFORT explicitly}"
   : "${AKASHA_CLIENT_AB_CLIENT:?set AKASHA_CLIENT_AB_CLIENT to codex or claude}"
   : "${AKASHA_CLIENT_AB_MODEL:?set AKASHA_CLIENT_AB_MODEL for paid client A/B evaluation}"
   npm run build
@@ -90,7 +97,7 @@ if [ "${AKASHA_CLIENT_AB_EXECUTE_PAID:-0}" = "1" ]; then
   QDRANT_COLLECTION_NAME="$collection_name" \
   VECTOR_BACKEND=qdrant \
   EMBEDDING_PROVIDER=transformers \
-  ./node_modules/.bin/tsx tests/eval/client-ab-runner.ts --sha "$sha" --preflight --execute-paid --client "$AKASHA_CLIENT_AB_CLIENT" --model "$AKASHA_CLIENT_AB_MODEL" --result-dir "$result_dir"
+  ./node_modules/.bin/tsx tests/eval/client-ab-runner.ts --sha "$sha" --preflight "$execution_flag" --effort "$AKASHA_CLIENT_AB_EFFORT" --client "$AKASHA_CLIENT_AB_CLIENT" --model "$AKASHA_CLIENT_AB_MODEL" --result-dir "$result_dir"
   exit 0
 fi
 
