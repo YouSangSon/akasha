@@ -6,17 +6,18 @@ Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale i
 
 ## Current State
 
-PR #26 is merged into `main` at `5e7770f`, following PR #25 at `79c7fd6`.
-All five PR #26 CI jobs passed, including real default-stack retrieval.
-PR #27 owns the admin UI changes. Local browser validation now covers
-archive approval, pending cleanup, no-op, focus fallback, and desktop/mobile
-layouts. The archived durability label was corrected after visual inspection.
-Its CI checks and merge record own integration status; see `GATES.md` for the
-fixture boundary.
+Core, admin UI, and guarded Codex evaluation changes are merged through
+[PR #28](https://github.com/YouSangSon/akasha/pull/28), main `61534fc`.
+All five final CI jobs passed at `abd64a4`. The completed Codex baseline has
+18/18 correct answers and no omissions/leakage, but median total input-token
+reduction is 0.35%, below the 15% product gate. `GATES.md` owns the current
+measurement, host-prompt audit, and verification boundaries.
 
-Canonical goal: `goal.md`; current evidence: `GATES.md`. Remaining work covers
-retrieval ranking, local recovery, the fixed-SHA client evaluation harness, UI
-verification, and portfolio evidence. Paid client execution remains unauthorized.
+The user does not yet use Claude Code; keep that client unverified without
+requesting credentials or enabling paid calls. The implementation/evaluation
+delivery and the unmet product-value goal are separate. Existing UI, retrieval,
+and recovery evidence remains valid within its recorded scope. The earlier
+anonymous-volume deletion still has unknown impact.
 
 Recent completed architecture-goal commits; run `git log -1 --oneline` for the
 newest local commit:
@@ -141,8 +142,8 @@ Completed in this branch:
   handlers.
 
 Known issues:
-- Real Codex/Claude token reduction is unmeasured; a small context pack was
-  larger than its raw-memory comparison.
+- Real Codex token reduction is measured but below the 15% bar. Claude remains
+  unverified; exact attribution of common-prompt and tool-round-trip cost is open.
 - The target architecture is still a staged transition, not a completed module
   split.
 - Customer-specific modules and MSA extraction seams are not yet implemented.
@@ -158,10 +159,14 @@ Execute in this order and close each bounded owner before changing scope:
    scoped seeds across three tasks, no foreign leakage or model calls).
 3. Preserve the real Codex baseline at `fe24b4d`: 18/18 correct, no omission
    or leakage, but median input-token reduction only 0.35% (15% gate RED).
-   Investigate common prompt overhead and tool-round-trip cost before proposing
-   another controlled variant; do not relabel cached tokens or discard this run.
-4. Claude remains unverified because its local CLI is not logged in. Keep paid
-   API calls disabled; Codex subscription checks are not billing prevention.
+   The source audit confirms global AGENTS/skill loading and compact structured
+   MCP output, but not their token contributions. Keep user instructions and
+   public result fields intact; do not relabel cached tokens or discard this run.
+4. Claude remains unverified and the user does not yet use Claude Code. Keep
+   paid API calls disabled; Codex subscription checks are not billing prevention.
+5. Resolve the delivery boundary with the user before marking the goal complete:
+   the current implementation/evaluation unit is delivered, while the 15% product
+   bar and original two-client proof remain unmet.
 
 Additional transport or module extraction stays behind these product-value
 gates unless it is required to fix a measured failure.

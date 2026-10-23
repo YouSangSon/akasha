@@ -7,7 +7,7 @@ Last updated: 2026-10-23 KST. Valid states are `GREEN`, `RED`, `NOT RUN`, and
 
 | Gate | Passing bar | Reproducible check | Current evidence | State |
 | --- | --- | --- | --- | --- |
-| Public contract and organization isolation | 20 service tools, three MCP-only tools, envelopes, auth precedence, and org filters remain characterized | `npm test -- tests/mcp tests/app tests/store tests/vector --reporter=dot` plus full suite | PR #27 (`65b3653`): all five CI jobs passed; UI and core work are merged as `1ec8fe1` | GREEN |
+| Public contract and organization isolation | 20 service tools, three MCP-only tools, envelopes, auth precedence, and org filters remain characterized | `npm test -- tests/mcp tests/app tests/store tests/vector --reporter=dot` plus full suite | PR #28 (`abd64a4`): all five CI jobs passed; implementation is merged as `61534fc` | GREEN |
 | Cross-backend point identity | Every positive safe chunk ID maps injectively to a Qdrant-compatible ID; all write/recovery paths share it | focused vector/store/compact/MCP tests and real Qdrant smoke | Commit `e8f9136`; six focused files, 449 tests passed; Qdrant 1.13.2 accepted the UUID form in an owned local smoke | GREEN |
 | Default stack flow | Pinned Postgres + Qdrant 1.13.2 + transformers completes org-scoped write, search, and context pack from one checked-in command | `./tests/eval/run-default-stack.sh` | 2026-10-22 local run: real write/search/context-pack passed; scoped containers and volumes removed | GREEN |
 | Default retrieval quality | At `k=5`: recall >= 0.90, MRR >= 0.55, user-scope recall = 1.00, cross-org leakage = 0 | pinned default-stack eval after warm-up | 2026-10-22 Qdrant 1.13.2 + transformers 4.3.1, 20 unique queries x 3 repeats (60 samples): recall 1.00, MRR 0.7267, user recall 1.00, leakage 0, misses 0 | GREEN |
@@ -15,7 +15,7 @@ Last updated: 2026-10-23 KST. Valid states are `GREEN`, `RED`, `NOT RUN`, and
 | Free client preflight | Fixed clean SHA, exact required scoped seed identities, no foreign-organization leakage | `AKASHA_EVAL_MODE=client-ab ./tests/eval/run-default-stack.sh` | 2026-10-23 at `fab19fe`, corpus v3: 82 seeded records, all 3 tasks retained required seeds/anchors, leakage 0; no model client called | GREEN |
 | Context value | Required-decision omission = 0 and context-pack tokenizer count is lower than the defined raw/baseline context | context-pack fixture plus tokenizer report | Required seeds retained in corpus-v3 preflight; real Codex on/off succeeds but median total input-token reduction is only 0.35%, below the product bar | RED |
 | Codex A/B | Paired successful runs have median input-token reduction >= 15%, no success-rate loss, omission/leakage = 0 | fixed-SHA off/on harness, three tasks x three repeats | 2026-10-23 at `fe24b4d`, CLI 0.163.0, requested `gpt-6.1-sol` / medium: 18/18 successful, omission/leakage 0; median input-token reduction **0.35%**, below 15%. No new credit decline observed | RED |
-| Claude A/B | Same per-client bar as Codex; never combine vendor token counts | fixed-SHA off/on harness, three tasks x three repeats | No actual run: local Claude Code reports loggedIn=false. Paid/API execution is not authorized | EXTERNAL |
+| Claude A/B | Same per-client bar as Codex; never combine vendor token counts | fixed-SHA off/on harness, three tasks x three repeats | No actual run: the user does not yet use Claude Code; local CLI is not logged in. Paid/API execution is not authorized | EXTERNAL |
 
 For an explicitly authorized Codex subscription evaluation on a clean commit:
 
@@ -47,8 +47,25 @@ were 576,427 off and 573,546 on; on-side cached input was 242,048 tokens and
 remains included in the input totals. CLI events did not report the observed
 model, so the receipt records the requested model and leaves observed model null.
 This is a negative token-savings result, not a passing product-value claim.
-Next investigate client prompt overhead and the added tool round trip without
-changing the metric or discarding this baseline.
+A read-only audit of CLI 0.163.0 confirms that `--ignore-user-config` leaves an
+empty User configuration layer, from which global skill roots are still derived;
+the app-server separately installs the global AGENTS provider. `--ignore-rules`
+only excludes execpolicy `.rules` files. The temporary working directory therefore
+does not make this a global-instruction-free benchmark. Sources: [configuration
+loader](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/config/src/loader/mod.rs#L520-L528),
+[skill roots](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/ext/skills/src/host_roots.rs#L95-L116),
+and [global instructions](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/app-server/src/message_processor.rs#L370-L372).
+
+The [direct MCP adapter](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/protocol/src/models.rs#L2414-L2448)
+prefers non-null `structuredContent` and serializes it compactly for this JSON-only
+tool result. It does not append the equivalent text content too. Minifying the
+text fallback would therefore not reduce this Codex input. The structured result
+itself includes Markdown plus section records, as required by the existing public
+contract. Exact per-request prompt contributions were not captured, so neither
+host instructions nor result redundancy is proven to dominate the measured cost.
+Do not remove user instructions or public response fields to manufacture a pass;
+retain this host-profile baseline and require a concrete hypothesis before another
+model run.
 
 The retrieval thresholds are regression-smoke minima anchored to the existing
 20-query result, not evidence of broad product quality. A publishable product
@@ -64,7 +81,7 @@ pinned runner; shared CI reports it without failing the build.
 | Focused retrieval batch | Shared ranking, cutoff, eval safety, and real default stack pass | 2026-08-31: 3 focused files, 67 passed and 2 eval tests skipped; real eval 4/4 passed | GREEN |
 | Typecheck | `npm run typecheck` | 2026-10-23 passed on Node 24.14.0 | GREEN |
 | Build | `npm run build` | 2026-10-23 passed in the successful owned restore run | GREEN |
-| Full test suite | No new failure; skips reported | Subscription evaluator local suite at `fe24b4d`: 2637 passed, 35 skipped. PR #27 CI baseline: Node 22/24 each 2628 passed, separate PostgreSQL 246, pgvector 115, default retrieval 5 passed | GREEN |
+| Full test suite | No new failure; skips reported | PR #28 final CI at `abd64a4`: Node 22/24 each 2637 passed, 35 skipped; PostgreSQL 246, pgvector 115, default retrieval 5 passed. [Run](https://github.com/YouSangSon/akasha/actions/runs/39909684034) | GREEN |
 | Diff hygiene | `git diff --check` and staged review | 2026-10-23 core diff passed; final UI diff checked separately before commit | GREEN |
 | Dependency security | No unmitigated reachable critical/high advisory | PR #25: native npm audit reports 0 vulnerabilities, no exception policy. This is not an OS-image vulnerability assessment | GREEN |
 | Admin UI truth and accessibility | no-op/pending results are truthful; archive confirmation and keyboard/status basics pass | 2026-10-23 real shell/HTTP + in-memory fixture: auth/error/loading/empty, save/tag success + no-op, native archive cancellation/approval, pending cleanup, archive no-op, selection retention and focus fallback passed. Desktop and 390x844 mobile visually inspected; no horizontal overflow. Archived detail shows archived with durability/archive controls disabled. No database E2E or screen-reader test; integration evidence belongs to PR #27 | GREEN |
@@ -74,10 +91,12 @@ pinned runner; shared CI reports it without failing the build.
 
 ## Next Gate
 
-Core and UI changes are merged through PR #27. Codex's actual task-success
+Implementation and evaluation changes are merged through PR #28. Codex's actual task-success
 checks pass, but its measured input-token reduction fails the 15% bar. Preserve
-that baseline while auditing client prompt and tool-round-trip overhead. Claude
-still needs its own authorized authenticated run. Paid execution, credential
+that baseline and the source audit above. The user does not yet use Claude Code,
+so its proof remains external to this completed evaluation unit. The original
+product goal is still unmet; do not mark it complete or lower its passing bar
+without a scope decision. Paid execution, credential
 changes, and deployment are not authorized.
 
 Free client preflight: from a clean, committed checkout, run
