@@ -12,7 +12,11 @@
   310/310. API docs describe committed-edit failure and concurrency boundaries.
   The test fixture's initial wrong pagination cursor caused a worker OOM; correcting
   it to `afterChunkId` produced the expected RED before the production change.
-  See `GATES.md` for final validation and remaining product/cleanup limitations.
+  The local full run retained seven timeouts; isolated recheck still had four
+  timeout/cleanup failures under heavy host load. Source `1631146` then passed all
+  five CI jobs, including 2667 tests on both Node 22/24, 35 skips each. No timeout
+  or check was weakened. Owned DB resources and exact failed-test leftovers were
+  removed after evidence capture. See `GATES.md` for remaining limitations.
 
 - Resumed browser validation completed archive approval with pending cleanup,
   successful archive, archive no-op, and focus fallback to the next record or
