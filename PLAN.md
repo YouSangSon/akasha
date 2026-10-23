@@ -146,9 +146,10 @@ Known issues:
 
 Execute in this order and close each bounded owner before changing scope:
 
-1. Finish the free fixed-SHA client preflight. The 2026-10-23 owned
-   backup/restore proof passed through the restored app's authenticated MCP;
-   scoped containers, volumes, and networks were removed.
+1. Complete CI/main integration for the core changes. The 2026-10-23 owned
+   backup/restore proof and free client preflight passed. At `fab19fe`, corpus
+   v3 retained all required scoped seeds across three tasks without foreign
+   leakage or model calls. The preflight preserves each seed's memory kind.
 2. Verify the admin UI when browser control is available, then complete final
    checks, PR/main integration, portfolio evidence, and exact resource cleanup.
 3. Keep real Codex/Claude A/B token and outcome claims unverified until the

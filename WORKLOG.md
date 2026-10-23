@@ -23,8 +23,13 @@
   successful restore run), native dependency audit with zero findings, staged
   diff hygiene, and the full suite (87 files; 2628 passed, 35 skipped). Local
   database/eval skips remain distinct from the real-stack evidence and CI.
-- Free fixed-SHA preflight remains pending. The current UI browser check
-  remains stopped pending a usable authorized browser
+- The first free fixed-SHA preflight exposed flattened seed metadata: decisions
+  and summaries were all inserted as facts, unlike the tracked source corpus.
+  Corpus v3 preserves original kinds. Its run at `fab19fe` passed all three
+  tasks over 82 seeded records with required seeds/anchors retained and zero
+  foreign leakage. Raw/pack word estimates are not client-token measurements.
+  The 19 harness cases and typecheck passed after this correction.
+- The current UI browser check remains stopped pending a usable authorized browser
   session. No paid model run, external deployment, or token-saving result.
 
 ## 2026-08-31

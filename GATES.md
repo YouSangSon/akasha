@@ -12,7 +12,8 @@ Last updated: 2026-10-23 KST. Valid states are `GREEN`, `RED`, `NOT RUN`, and
 | Default stack flow | Pinned Postgres + Qdrant 1.13.2 + transformers completes org-scoped write, search, and context pack from one checked-in command | `./tests/eval/run-default-stack.sh` | 2026-10-22 local run: real write/search/context-pack passed; scoped containers and volumes removed | GREEN |
 | Default retrieval quality | At `k=5`: recall >= 0.90, MRR >= 0.55, user-scope recall = 1.00, cross-org leakage = 0 | pinned default-stack eval after warm-up | 2026-10-22 Qdrant 1.13.2 + transformers 4.3.1, 20 unique queries x 3 repeats (60 samples): recall 1.00, MRR 0.7267, user recall 1.00, leakage 0, misses 0 | GREEN |
 | Warm retrieval latency | On the pinned local runner after warm-up: p50 <= 100 ms and p95 <= 250 ms; cold start reported separately | same eval, at least 60 measured queries | 2026-10-22 local run, 60 samples: p50 17.89 ms, p95 72.89 ms, max 143.18 ms; latency enforcement disabled on this shared host | GREEN |
-| Context value | Required-decision omission = 0 and context-pack tokenizer count is lower than the defined raw/baseline context | context-pack fixture plus tokenizer report | Small prior corpus produced a pack 1.35x the raw memory characters; no tokenizer measurement | RED |
+| Free client preflight | Fixed clean SHA, exact required scoped seed identities, no foreign-organization leakage | `AKASHA_EVAL_MODE=client-ab ./tests/eval/run-default-stack.sh` | 2026-10-23 at `fab19fe`, corpus v3: 82 seeded records, all 3 tasks retained required seeds/anchors, leakage 0; no model client called | GREEN |
+| Context value | Required-decision omission = 0 and context-pack tokenizer count is lower than the defined raw/baseline context | context-pack fixture plus tokenizer report | Free corpus-v3 preflight: 19225 raw words versus 1696–1811 pack words, with required seeds retained. Word estimates do not prove tokenizer or real-client savings | RED |
 | Codex A/B | Paired successful runs have median input-token reduction >= 15%, no success-rate loss, omission/leakage = 0 | fixed-SHA off/on harness, three tasks x three repeats | Local harness implemented; actual Codex CLI execution fails closed because no documented hard token cap is enforceable. No paid run | EXTERNAL |
 | Claude A/B | Same per-client bar as Codex; never combine vendor token counts | fixed-SHA off/on harness, three tasks x three repeats | Local harness implemented; no paid run authorized. Claude budget flag is a per-call soft threshold, not a total hard cap | EXTERNAL |
 
@@ -40,8 +41,8 @@ pinned runner; shared CI reports it without failing the build.
 
 ## Next Gate
 
-Complete free fixed-SHA preflight, then final checks
-and integration. Interactive UI validation requires an available browser
+Complete CI and integration for the verified core changes. Interactive UI
+validation requires an available browser
 session. Real client token reduction and task-success claims remain external;
 paid execution, credential changes, and deployment are not authorized.
 
