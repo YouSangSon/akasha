@@ -3,6 +3,15 @@
 Last updated: 2026-10-23 KST. Valid states are `GREEN`, `RED`, `NOT RUN`, and
 `EXTERNAL`. A green local gate is not client, deployment, or production proof.
 
+The current delivery scope is defined in `goal.md` from the user's implementation
+and portfolio request. Public contracts, organization isolation, default-stack
+behavior, required checks, and safe resource/data handling remain mandatory.
+Client efficacy benchmarks retain their own thresholds and measured results;
+neither a positive result for every hypothesis nor Claude execution is required
+for this delivery. Claude remains unverified because the user does not use it.
+This distinction does not turn a RED benchmark or an unresolved safety incident
+GREEN. The scope correction is recorded in `DECISIONS.md`.
+
 ## Product And Contract Gates
 
 | Gate | Passing bar | Reproducible check | Current evidence | State |
@@ -122,13 +131,15 @@ pinned runner; shared CI reports it without failing the build.
 | Focused retrieval batch | Shared ranking, cutoff, eval safety, and real default stack pass | 2026-08-31: 3 focused files, 67 passed and 2 eval tests skipped; real eval 4/4 passed | GREEN |
 | Typecheck | `npm run typecheck` | 2026-10-23 passed on Node 24.14.0 | GREEN |
 | Build | `npm run build` | 2026-10-23 passed in the successful owned restore run | GREEN |
-| Full test suite | No new failure; skips reported | PR #32 source `1631146`: [CI](https://github.com/YouSangSon/akasha/actions/runs/39959790002) passed all five jobs; Node 22/24 each 2667 passed, 35 skipped, PostgreSQL 246, pgvector 115, default retrieval 5. Local full run retained seven 15-second timeouts and a partial isolated recheck under high host load; no timeout was raised | GREEN |
+| CI full test suite | All required CI jobs pass; skips reported | PR #32 source `1631146`: [CI](https://github.com/YouSangSon/akasha/actions/runs/39959790002) passed all five jobs; Node 22/24 each 2667 passed, 35 skipped, PostgreSQL 246, pgvector 115, default retrieval 5. PR #33 [CI](https://github.com/YouSangSon/akasha/actions/runs/39963573637) also passed all five jobs with unchanged implementation source | GREEN |
+| Required local full suite | Local `npm test` passes on the final implementation; no timeout or cleanup failure | Existing local Podman, Debian 12 arm64, Node 22.23.4: clean fixed checkout `e937ef7`, lockfile `npm ci`, typecheck/build/audit passed (0 vulnerabilities), then network detached. Previously failing seven cases passed; one full run passed 2667 with 35 expected DB/eval skips. HEAD, tracked tree, and lock hash stayed unchanged. Earlier macOS timeouts/`ENOTEMPTY` under high load remain recorded; Linux success is not a macOS pass | GREEN |
 | Diff hygiene | `git diff --check` and staged review | 2026-10-23 core diff passed; final UI diff checked separately before commit | GREEN |
 | Dependency security | No unmitigated reachable critical/high advisory | PR #32 source `1631146`: both Node CI jobs report 0 npm-audit vulnerabilities, no exception policy. This is not an OS-image vulnerability assessment | GREEN |
-| Admin UI truth and accessibility | no-op/pending results are truthful; archive confirmation and keyboard/status basics pass | 2026-10-23 real admin + HTTP + owned PostgreSQL/Qdrant/transformers: auth, empty/loading, invalid save, save/tag persistence, org/user isolation, controlled archive cancel/approve, reload, desktop/mobile passed. Archived Save exposed vector resurrection, now corrected and rechecked against DB/index snapshots; fixture-only no-op/pending proof remains separate. No screen-reader test | GREEN |
+| Admin UI truth and accessibility | no-op/pending results are truthful; archive confirmation and keyboard/status basics pass | 2026-10-23 real admin + HTTP + owned PostgreSQL/Qdrant/transformers: auth, empty, invalid save, save/tag persistence, org/user isolation, controlled archive cancel/approve, reload, desktop/mobile passed. Archived Save exposed vector resurrection, now corrected and rechecked against DB/index snapshots; loading/no-op/pending proof comes from the separate fixture-backed checks. No screen-reader test | GREEN |
 | Archived index maintenance | Observed archived records stay out of vector refresh, reindex, and pending ingest retries | Six new regression cases; four focused files, 310 tests passed. Actual UI Save/Tag, HTTP reindex/reactivation/rearchive/search, and a rearmed real ingest retry passed. Concurrent archive/index races remain outside this sequential fix | GREEN |
 | Backup/restore | Owned local backup, restore, and data/index smoke pass for the default backend | 2026-10-23 owned run passed: Postgres dump + Qdrant snapshot, identical point ID/payload/vector, authenticated restored-app search + selected scoped ID/content in the context pack | GREEN |
-| Owned-resource cleanup | No test process, temporary container, volume, or fixture remains | Owned real-DB UI project `akasha-ui-db-20261023-1235` removed after named-mount ownership verification; no containers, volumes, networks, listener ports, or owned UI tabs remain. Earlier anonymous-volume deletion impact remains unknown | RED |
+| Confirmed owned-resource cleanup | Identified task-owned resources are removed after ownership and use checks | Owned real-DB UI project `akasha-ui-db-20261023-1235` and its listener/UI resources were removed after ownership checks. Three failed-test directories were preserved privately then removed after open-handle checks. The subsequent Linux validator's exact container/bind mount and clean clone were verified, removed, and logs retained; the preexisting image/VM were preserved. This does not establish safety of the earlier deletion | GREEN |
+| Historical deletion incident | Exact ownership or identified data impact and required recovery established | Earlier anonymous volume `d11530edf3ec7e875503f64d81a35dafc634cdee2509804cc83d02608ba51dab` was removed without an exact ownership receipt. Retained metadata and timestamp proximity do not prove ownership or absence of data loss. Current resource cleanup cannot close this incident | RED |
 | Deployment and production | Explicit deploy, effective config/image, rollout, smoke, rollback, and operating evidence | No external deployment authorized or observed | EXTERNAL |
 
 ## Next Gate
@@ -136,13 +147,14 @@ pinned runner; shared CI reports it without failing the build.
 Implementation and evaluation changes are merged through
 [PR #32](https://github.com/YouSangSon/akasha/pull/32) at `183433b`. Its archived-index
 unit has local DB/UI evidence and five passing CI jobs at `b98c397`, whose tree
-matches the merge. Local timeout/cleanup failures remain recorded separately. The supplemental
+matches the merge. A subsequent fixed-checkout local Linux run passed all required
+commands and 2667 tests; prior macOS timeout/cleanup failures remain recorded separately. The supplemental
 CLI-prefetch run now passes its 15% bar, while the MCP baseline still fails it.
-Preserve both results and the source audit above. The user does not yet use Claude Code,
-so its proof remains external to this completed evaluation unit. The original
-product goal is still unmet; do not mark it complete or lower its passing bar
-without a scope decision. Paid execution, credential
-changes, and deployment are not authorized.
+Preserve both results and the source audit above. Claude stays outside the current
+delivery scope and unverified. The historical deletion incident still needs exact
+ownership or identified impact/recovery evidence before overall closeout. The failed MCP
+benchmark remains a negative result, not a delivery-scope approval request.
+Paid execution, credential changes, and deployment are not authorized.
 
 Free client preflight: from a clean, committed checkout, run
 `AKASHA_EVAL_MODE=client-ab ./tests/eval/run-default-stack.sh`. It records the

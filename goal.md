@@ -1,18 +1,27 @@
 # Goal
 
-Prove with reproducible local evidence that Akasha's default
-`transformers + Qdrant` stack helps Codex and Claude recover the right durable
-project and user knowledge while reducing input context tokens without lowering
-task success or omitting required decisions. Complete the goal only when the
-default write-search-context-pack flow works end to end; a fixed, org-scoped
-corpus passes the retrieval and latency thresholds recorded in `GATES.md`;
-controlled Akasha-on/off runs for both clients report task success, required
-decision recall, and input-token deltas; public transports, 20 service tools,
-three MCP-only tools, `organizationId` semantics, and migrations `001-015`
-remain compatible; security, error handling, accessibility, tests, and product
-claims match the evidence. Keep repository symbol and call-graph indexing,
-external deployment or production-performance proof, paid model calls,
-credential changes, and external publication outside this goal unless the user
-explicitly authorizes them. Resume in the order `goal.md` → `GATES.md` →
-`PLAN.md`, and never promote partial or local-only evidence to client,
-deployment, or production proof.
+Deliver a usable Akasha implementation and reproducible verification evidence
+for the user's portfolio. Preserve completed work and public transports,
+20 service tools, three MCP-only tools, `organizationId` semantics, and
+migrations `001-015`. Verify the default `transformers + Qdrant` flow, actual
+user-facing success/error paths, relevant accessibility and responsive states,
+security, data integrity, and the repository's required checks. Commit and merge
+verified units, remove only proven task-owned temporary resources and merged
+branches, and preserve attributable results in the existing portfolio bundle.
+
+The user's delivery request does not require a positive outcome for every
+product hypothesis. Keep the registered client benchmarks and their thresholds
+unchanged: the MCP reduction result remains below its 15% bar, while CLI prefetch
+is a separate measured workflow. Report both without claiming general savings.
+The user does not currently use Claude Code, so Claude execution is outside this
+delivery scope and remains unverified; it is not a reason to block Codex work.
+The earlier two-client research objective is retained in `DECISIONS.md` as history.
+
+`GATES.md` owns verification status and unresolved safety incidents. Do not claim
+safe resource cleanup or data preservation for an unverified deletion, or call
+the delivery complete while required checks or material safety work remain.
+Paid model execution, credential changes, external deployment, and unsupported
+production or sales claims remain excluded. The user has authorized in-scope
+commit, push, PR creation, and main merge after required verification.
+Resume in the order `goal.md` → `GATES.md` → `PLAN.md`; distinguish local, CI,
+merged, deployed, and production evidence.
