@@ -4,6 +4,8 @@ import { pathToFileURL } from "node:url";
 import { parseCliArgs, type ParsedCliArgs } from "./cli-args.js";
 import { writeLifecycleInit } from "./lifecycle/init.js";
 import { createToolRegistry, type ToolRegistry } from "./mcp/server.js";
+import { bootstrapCanonicalServices } from "./mcp/canonical-services.js";
+import type { CanonicalServices } from "./mcp/types.js";
 import {
   assertNonBlankString,
   assertObject,
@@ -23,12 +25,47 @@ export async function runCli(
   const parsed = parseCliArgs(argv);
   const normalizedOptions = normalizeRunCliOptions(options);
   const cwd = normalizedOptions.cwd ?? process.cwd();
+  let services: Promise<CanonicalServices> | undefined;
+  const operations: Promise<unknown>[] = [];
   const getRegistry = () =>
     normalizedOptions.registry ??
     createToolRegistry({
       cwd,
+      withCanonicalServices: (callback) => {
+        services ??= bootstrapCanonicalServices();
+        const operation = services.then(callback);
+        operations.push(operation);
+        return operation;
+      },
     });
 
+  let commandFailed = false;
+  let commandError: unknown;
+  try {
+    return await dispatchCli(parsed, getRegistry, cwd);
+  } catch (error: unknown) {
+    commandFailed = true;
+    commandError = error;
+    throw error;
+  } finally {
+    // Instrumentation starts best-effort audit writes before dispatch settles.
+    await Promise.allSettled(operations);
+    try {
+      await services?.then((value) => value.close?.(), () => undefined);
+    } catch (closeError: unknown) {
+      if (commandFailed) {
+        throw new AggregateError([commandError, closeError], "CLI command and cleanup failed");
+      }
+      throw new Error("CLI command completed, but service cleanup failed", { cause: closeError });
+    }
+  }
+}
+
+async function dispatchCli(
+  parsed: ParsedCliArgs,
+  getRegistry: () => ToolRegistry,
+  cwd: string,
+): Promise<string> {
   switch (parsed.command) {
     case "pack": {
       const registry = getRegistry();
@@ -120,6 +157,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     })
     .catch((error: unknown) => {
       console.error(error);
-      process.exit(1);
+      process.exitCode = 1;
     });
 }

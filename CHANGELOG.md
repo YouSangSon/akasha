@@ -11,6 +11,9 @@ changes; CHANGELOG entries call those out explicitly.
 
 ## [Unreleased]
 
+- CLI commands now drain their audit writes and close their own Postgres pool
+  before exiting, avoiding the default 30-second idle wait. Failed service
+  initialization also releases the pool after migration or vector setup errors.
 - Retrieval now uses project scope only to break equal scores, so relevant user
   memory can outrank unrelated project metadata. A real transformers + Qdrant
   regression gate checks user recall and organization isolation in CI.
