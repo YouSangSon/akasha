@@ -1776,6 +1776,45 @@ describe("createToolRegistry", () => {
     });
   });
 
+  it.each(["update_memory", "tag_memory"] as const)("%s keeps edited archived memories out of the vector index", async (tool) => {
+    const services = createCanonicalServices();
+    const memory = {
+      ...createRecord({ id: 501, organizationId: "org-a", memoryType: "decision",
+        content: "Edited archived content", sourceType: "conversation", externalId: "archived:manual" }),
+      durability: "archived" as const,
+    };
+    services.repository.updateMemoryRecord.mockResolvedValueOnce(memory);
+    const registry = createToolRegistry({ resolveCanonicalServices: async () => services });
+
+    const result = tool === "update_memory"
+      ? await registry.update_memory({ organizationId: "org-a", memoryId: 501, content: memory.content })
+      : await registry.tag_memory({ organizationId: "org-a", memoryId: 501, tags: ["reviewed"] });
+
+    expect(result).toMatchObject({ ok: true, updated: true, memory: { durability: "archived" } });
+    expect(services.vectorIndex.deleteByRecordIds).toHaveBeenCalledWith([501], { organizationId: "org-a" });
+    expect(services.vectorIndex.upsert).not.toHaveBeenCalled();
+    expect(services.embeddings.embedBatch).not.toHaveBeenCalled();
+    expect(services.chunkRepository.replaceChunksForRecordWithPendingIngest).not.toHaveBeenCalled();
+    expect(services.chunkRepository.replaceChunksForRecord).not.toHaveBeenCalled();
+  });
+
+  it("reports archived refresh cleanup failure without creating replacement vectors", async () => {
+    const services = createCanonicalServices();
+    services.repository.updateMemoryRecord.mockResolvedValueOnce({
+      ...createRecord({ id: 501, organizationId: "org-a", memoryType: "decision",
+        content: "Archived content", sourceType: "conversation", externalId: "archived:manual" }),
+      durability: "archived",
+    });
+    services.vectorIndex.deleteByRecordIds.mockRejectedValueOnce(new Error("cleanup unavailable"));
+    const registry = createToolRegistry({ resolveCanonicalServices: async () => services });
+
+    await expect(registry.update_memory({ organizationId: "org-a", memoryId: 501, durability: "archived" }))
+      .rejects.toThrow("cleanup unavailable");
+    expect(services.vectorIndex.upsert).not.toHaveBeenCalled();
+    expect(services.embeddings.embedBatch).not.toHaveBeenCalled();
+    expect(services.chunkRepository.replaceChunksForRecordWithPendingIngest).not.toHaveBeenCalled();
+  });
+
   it("does not delete existing index state when update_memory embedding refresh fails", async () => {
     const services = createCanonicalServices();
     services.repository.updateMemoryRecord.mockResolvedValueOnce(

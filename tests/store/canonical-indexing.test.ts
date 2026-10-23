@@ -982,6 +982,42 @@ describe("canonical indexing", () => {
     });
   });
 
+  it("reindex cleans archived-only pages and indexes only active chunks on later mixed pages", async () => {
+    const chunks = [0, 1, 2, 3].map((index) => ({
+      id: 701 + index, memoryRecordId: 501 + index, chunkIndex: 0,
+      content: `Chunk ${index}`, startOffset: 0, endOffset: 7, embeddingVersion: "v1",
+      organizationId: "org-a", scopeType: "project" as const, scopeId: "project-alpha",
+      projectKey: "project-alpha", durability: index === 3 ? "durable" : "archived",
+      kind: "fact", updatedAt: "2026-03-29T00:00:00.000Z",
+    }));
+    const chunkRepository = {
+      listChunks: vi.fn().mockImplementation(async (_org, _scopes, options) =>
+        chunks.filter((chunk) => chunk.id > (options.afterChunkId ?? 0)).slice(0, options.limit)),
+      updatePointIds: vi.fn().mockResolvedValue(undefined),
+    };
+    const embeddings = { embed: vi.fn(), embedBatch: vi.fn().mockImplementation(async (texts: string[]) => texts.map(() => [0.1, 0.2])) };
+    const vectorIndex = {
+      upsert: vi.fn(), query: vi.fn(), delete: vi.fn(),
+      deleteByRecordIds: vi.fn(), ensureCollection: vi.fn(),
+    };
+
+    await expect(reindexCanonicalMemory({ chunkRepository: chunkRepository as never,
+      embeddings, vectorIndex, organizationId: "org-a",
+      scopes: [{ scopeType: "project", scopeId: "project-alpha" }], batchSize: 2,
+    })).resolves.toEqual({ chunkCount: 1 });
+    expect(vectorIndex.deleteByRecordIds.mock.calls).toEqual([
+      [[501, 502], { organizationId: "org-a" }],
+      [[503, 504], { organizationId: "org-a" }],
+    ]);
+    expect(embeddings.embedBatch).toHaveBeenCalledExactlyOnceWith(["Chunk 3"]);
+    expect(vectorIndex.upsert).toHaveBeenCalledExactlyOnceWith([
+      expect.objectContaining({ payload: expect.objectContaining({ memory_record_id: 504, durability: "durable" }) }),
+    ]);
+    expect(chunkRepository.updatePointIds).toHaveBeenCalledExactlyOnceWith([
+      { chunkId: 704, qdrantPointId: "00000000-0000-8000-8000-0000000002c0" },
+    ]);
+  });
+
   it("reindexes stored chunks in pages without deleting a record after partial upsert", async () => {
     const chunks = [
       {
