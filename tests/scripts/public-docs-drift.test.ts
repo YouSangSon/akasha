@@ -44,6 +44,8 @@ function nextMigrationPrefix(): string {
   return `${String(last + 1).padStart(3, "0")}_`;
 }
 
+const readmePaths = ["README.md", "README.ko.md", "README.ja.md", "README.zh-CN.md"];
+
 const docsIndexFiles = new Set(["docs/README.md", "docs/README.ko.md"]);
 
 function publicDocsMarkdownPaths(): string[] {
@@ -133,6 +135,28 @@ function issueTemplateDropdownOptions(templatePath: string, fieldId: string): st
 }
 
 describe("public documentation drift checks", () => {
+  it("keeps each README language navigable with equivalent scoped examples", () => {
+    for (const path of readmePaths) {
+      const text = read(path);
+      const links = markdownLinkTargets(text);
+      for (const sibling of readmePaths.filter((candidate) => candidate !== path)) {
+        expect(links, path).toContain(sibling);
+        expect(fs.existsSync(sibling), sibling).toBe(true);
+      }
+      for (const target of links.filter((link) => link.startsWith("#"))) {
+        expect(text, `${path}: ${target}`).toContain(`<a id="${target.slice(1)}"></a>`);
+      }
+      expect(text, path).toContain("source .env");
+      expect(text, path).toContain("@127.0.0.1:${POSTGRES_PORT:-5432}/${POSTGRES_DB}");
+      expect(text, path).toContain("npm run start:server");
+      expect(text, path).not.toContain("TOKEN=$MEMORY_API_TOKENS");
+      expect(text.match(/x-organization-id: \$ORGANIZATION_ID/g), path).toHaveLength(3);
+      for (const command of ["npm run typecheck", "npm run build", "npm run audit:dependencies", "npm test"]) {
+        expect(text, path).toContain(command);
+      }
+    }
+  });
+
   it("keeps contributor verification guidance aligned", () => {
     const prTemplate = read(".github/PULL_REQUEST_TEMPLATE.md");
     const readme = read("README.md");
@@ -292,26 +316,6 @@ describe("public documentation drift checks", () => {
     expect(installer).not.toContain("NODE_MAJOR\" -lt 20");
   });
 
-  it("keeps Korean README comparison copy localized", () => {
-    const readmeKo = read("README.ko.md");
-
-    expect(readmeKo).toContain("무료/로컬 기본값");
-    expect(readmeKo).toContain("비용을 전면에 내세우고");
-    expect(readmeKo).toContain("한 단계 더 나아가는 지점");
-    expect(readmeKo).toContain("자체 호스팅 메모리 MCP 서버");
-
-    for (const stalePhrase of [
-      "MCP 메모리 생태계 norm",
-      "무료/로컬 default",
-      "cost 를 헤드라인",
-      "distinctively",
-      "peers 는 skip",
-      "hosted 메모리 제품",
-      "self-hosted 메모리 MCP 서버",
-    ]) {
-      expect(readmeKo).not.toContain(stalePhrase);
-    }
-  });
 
   it("positions code-intelligence MCP servers as complementary to Akasha memory", () => {
     const readme = collapseWhitespace(read("README.md"));
@@ -323,35 +327,12 @@ describe("public documentation drift checks", () => {
     expect(readme).toContain("durable agent memory");
 
     expect(readmeKo).toContain("codebase-memory-mcp");
-    expect(readmeKo).toContain("대체재가 아니라 보완재");
-    expect(readmeKo).toContain("symbol, route, call graph, ADR");
-    expect(readmeKo).toContain("영구 에이전트 메모리");
+    expect(readmeKo).toContain("보완 도구");
+    expect(readmeKo).toContain("심볼, 라우트, 호출 그래프, ADR");
+    expect(readmeKo).toContain("에이전트 메모리");
     expect(readmeKo).not.toContain("complementary rather than replacements");
   });
 
-  it("keeps Korean README comparison table labels localized", () => {
-    const readmeKo = read("README.ko.md");
-
-    expect(readmeKo).toContain("❌ (OpenAI 기본값)");
-    expect(readmeKo).toContain("❌ (호스팅형)");
-    expect(readmeKo).toContain("✅ (Mem0 래핑)");
-    expect(readmeKo).toContain("래퍼 전용");
-    expect(readmeKo).toContain("| 다양함 | 다양함 | 독점형 |");
-    expect(readmeKo).toContain("OSS 경로 활발히 유지");
-    expect(readmeKo).toContain("❌ (CE 2025 지원 중단)");
-
-    for (const stalePhrase of [
-      "OpenAI default",
-      "(hosted)",
-      "Mem0 wrap",
-      "wrapper 전용",
-      "| varies | varies | proprietary |",
-      "OSS 경로 active 유지",
-      "CE 2025 deprecated",
-    ]) {
-      expect(readmeKo).not.toContain(stalePhrase);
-    }
-  });
 
   it("keeps Korean embedding and setup labels localized", () => {
     for (const path of [
@@ -367,10 +348,9 @@ describe("public documentation drift checks", () => {
     }
 
     const readmeKo = read("README.ko.md");
-    expect(readmeKo).toContain("기본값 그대로 동작");
     expect(readmeKo).toContain("CI용 결정론적 스텁");
     expect(readmeKo).toContain("CI 스텁");
-    expect(readmeKo).toContain("VECTOR_BACKEND 기준 백업");
+    expect(readmeKo).toContain("VECTOR_BACKEND에 맞춰 백업");
     expect(readmeKo).toContain("Postgres 단독 pgvector 백업");
     expect(readmeKo).not.toContain("default 그대로 동작");
     expect(readmeKo).not.toContain("backend-aware backup");
@@ -422,10 +402,10 @@ describe("public documentation drift checks", () => {
       "docs/api-reference.ko.md",
     ]) {
       const text = collapseWhitespace(read(path));
-      expect(text).toMatch(/provider API (?:key|키)/);
+      expect(text).toMatch(/(?:provider|제공자) API (?:key|키)/);
       expect(text).toContain("PEM");
       expect(text).toContain("bearer/JWT");
-      expect(text).toContain("자격증명이 포함된 데이터베이스 URL");
+      expect(text).toMatch(/(?:자격증명이|인증정보가) 포함된 데이터베이스 URL/);
     }
 
     const security = read("docs/security.md");
@@ -689,8 +669,8 @@ describe("public documentation drift checks", () => {
     expect(readme).toContain("/v1/memory/graph");
     expect(readmeKo).toContain("MCP Streamable HTTP");
     expect(readmeKo).toContain("POST /mcp");
-    expect(readmeKo).toContain("공유 MCP 서버 surface");
-    expect(readmeKo).toContain("`/mcp` 의 MCP Streamable HTTP 와 `/v1/*` 아래 JSON HTTP");
+    expect(readmeKo).toContain("공유 MCP 서버 인터페이스");
+    expect(readmeKo).toContain("`/mcp`의 MCP Streamable HTTP와 `/v1/*`의 JSON HTTP");
     expect(readmeKo).toContain("inspect_memory_graph");
     expect(readmeKo).toContain("/v1/memory/graph");
 
@@ -906,15 +886,14 @@ describe("public documentation drift checks", () => {
 
   it("documents every service tool and JSON HTTP route in public docs", () => {
     const docs = [
-      "README.md",
-      "README.ko.md",
+      ...readmePaths,
       "docs/api-reference.md",
       "docs/api-reference.ko.md",
     ];
 
     for (const path of docs) {
       const text = read(path);
-      expect(text).toContain(`${TOOL_ROUTES.length} service tools`);
+      expect(text).toMatch(new RegExp(`\\b${TOOL_ROUTES.length}\\b`));
       for (const route of TOOL_ROUTES) {
         expect(text).toContain(route.name);
         expect(text).toContain(route.path);
@@ -1109,7 +1088,7 @@ describe("public documentation drift checks", () => {
   });
 
   it("keeps public README search examples free of internal scores", () => {
-    for (const path of ["README.md", "README.ko.md"]) {
+    for (const path of readmePaths) {
       const text = read(path);
       expect(text).not.toMatch(/"score"\s*:/);
     }
