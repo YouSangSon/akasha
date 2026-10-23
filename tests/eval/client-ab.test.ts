@@ -80,6 +80,8 @@ describe("client A/B evaluation harness", () => {
     expect(onPrompt).not.toContain("alpha.canonical-pg");
     expect(offPrompt).not.toContain("foreign-sentinel");
     expect(experiment.targetRecords.length).toBeGreaterThanOrEqual(80);
+    expect(experiment.targetRecords.find((record) => record.seedKey === "alice.korean-default")).toMatchObject({ kind: "decision" });
+    expect(experiment.targetRecords.find((record) => record.seedKey === "alpha.no-content-logging")).toMatchObject({ kind: "summary" });
   });
 
   it("rejects a tracked change after the fixture SHA was pinned", async () => {
@@ -292,7 +294,8 @@ describe("client A/B evaluation harness", () => {
     const memories = new Map<string, { id: string; content: string }>();
     let sequence = 0;
     const registry = {
-      add_memory: async (input: { content: string; scope: "project" | "user"; projectKey: string; userScopeId?: string }) => {
+      add_memory: async (input: { content: string; kind: string; scope: "project" | "user"; projectKey: string; userScopeId?: string }) => {
+        expect(input.kind).toBe(experiment.seedRecords.find((record) => record.content === input.content)!.kind);
         const memoryId = String(++sequence);
         const contextId = `${input.scope}:${input.scope === "project" ? input.projectKey : input.userScopeId}:${memoryId}`;
         memories.set(contextId, { id: contextId, content: input.content });

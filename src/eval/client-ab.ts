@@ -52,7 +52,7 @@ type Fixture = {
   foreignSentinel: { id: string; content: string }; tasks: FixtureTask[];
 };
 export type PreparedClientRecord = {
-  id: string; scope: "project" | "user"; content: string; sourceRef: string; organizationId: string;
+  id: string; scope: "project" | "user"; kind: "decision" | "fact" | "summary"; content: string; sourceRef: string; organizationId: string;
   chunks: readonly string[]; seedKey?: string;
 };
 export type PreparedClientTask = FixtureTask & { contextRecords: readonly PreparedClientRecord[] };
@@ -194,18 +194,19 @@ function parseFixture(value: unknown): Fixture {
   };
 }
 
-function parseSeeds(source: string): Array<{ seedKey: string; scope: "project" | "user"; content: string }> {
-  const output: Array<{ seedKey: string; scope: "project" | "user"; content: string }> = [];
-  const pattern = /seedKey:\s*"([^"\\]+)"[\s\S]*?scopeType:\s*"(project|user)"[\s\S]*?content:\s*\n\s*"((?:[^"\\]|\\.)*)"/g;
+function parseSeeds(source: string): Array<{ seedKey: string; scope: "project" | "user"; kind: PreparedClientRecord["kind"]; content: string }> {
+  const output: Array<{ seedKey: string; scope: "project" | "user"; kind: PreparedClientRecord["kind"]; content: string }> = [];
+  const pattern = /seedKey:\s*"([^"\\]+)"[\s\S]*?scopeType:\s*"(project|user)"[\s\S]*?memoryType:\s*"(decision|fact|summary)"[\s\S]*?content:\s*\n\s*"((?:[^"\\]|\\.)*)"/g;
   for (const match of source.matchAll(pattern)) {
     const seedKey = match[1];
     const scope = match[2];
-    const encoded = match[3];
-    if (seedKey === undefined || encoded === undefined || (scope !== "project" && scope !== "user")) throw new Error("client A/B seed source contains an invalid entry");
+    const kind = match[3];
+    const encoded = match[4];
+    if (seedKey === undefined || encoded === undefined || (scope !== "project" && scope !== "user") || (kind !== "decision" && kind !== "fact" && kind !== "summary")) throw new Error("client A/B seed source contains an invalid entry");
     let content: unknown;
     try { content = JSON.parse(`"${encoded}"`); } catch (_error: unknown) { throw new Error(`client A/B seed ${seedKey} has invalid string content`); }
     text(content, `client A/B seed ${seedKey} content`);
-    output.push({ seedKey, scope, content });
+    output.push({ seedKey, scope, kind, content });
   }
   if (output.length !== 14 || new Set(output.map((entry) => entry.seedKey)).size !== 14) throw new Error("client A/B must use exactly 14 tracked SEED_ENTRIES");
   return output;
@@ -222,7 +223,7 @@ function documentRecords(repoDir: string, sha: string, fixture: Fixture): Prepar
     if (chunks.length === 0) throw new Error(`client A/B tracked source ${sourcePath} produced no chunks`);
     for (const chunk of chunks) {
       records.push(makeRecord({
-        id: `doc:${sourcePath}:${chunk.chunkIndex}`, scope: "project", content: chunk.content,
+        id: `doc:${sourcePath}:${chunk.chunkIndex}`, scope: "project", kind: "fact", content: chunk.content,
         sourceRef: `${sourcePath}#chunk-${chunk.chunkIndex}`, organizationId: fixture.organizationId,
       }, fixture.chunking));
     }
@@ -231,7 +232,7 @@ function documentRecords(repoDir: string, sha: string, fixture: Fixture): Prepar
 }
 function seedRecords(repoDir: string, sha: string, fixture: Fixture): PreparedClientRecord[] {
   return parseSeeds(readTracked(repoDir, sha, fixture.seedSourcePath)).map((entry) => makeRecord({
-    id: `seed:${entry.seedKey}`, seedKey: entry.seedKey, scope: entry.scope, content: entry.content,
+    id: `seed:${entry.seedKey}`, seedKey: entry.seedKey, scope: entry.scope, kind: entry.kind, content: entry.content,
     sourceRef: fixture.seedSourcePath, organizationId: fixture.organizationId,
   }, fixture.chunking));
 }
@@ -271,7 +272,7 @@ export function prepareClientAbExperiment(input: { repoDir: string; sha: string;
     return { ...task, contextRecords };
   });
   const foreignRecord = makeRecord({
-    id: fixture.foreignSentinel.id, scope: "project", content: fixture.foreignSentinel.content,
+    id: fixture.foreignSentinel.id, scope: "project", kind: "fact", content: fixture.foreignSentinel.content,
     sourceRef: "foreign-sentinel", organizationId: fixture.foreignOrganizationId,
   }, fixture.chunking);
   return {
@@ -603,7 +604,7 @@ export async function seedAndPreflightClientAb(input: {
         projectKey: input.experiment.projectKey,
         scope: record.scope,
         userScopeId: record.scope === "user" ? input.experiment.userScopeId : undefined,
-        kind: "fact",
+        kind: record.kind,
         content: record.content,
       });
       const scopeId = record.scope === "project" ? input.experiment.projectKey : input.experiment.userScopeId;
@@ -628,7 +629,7 @@ export async function seedAndPreflightClientAb(input: {
         throw new Error(`client A/B preflight for ${task.id} leaked the foreign sentinel`);
       }
       if (requiredMemoryIds.some((memoryId) => !selectedMemoryIds.includes(memoryId))) {
-        throw new Error(`client A/B preflight for ${task.id} missed a required seed memory`);
+        throw new Error(`client A/B preflight for ${task.id} missed a required seed memory; required=${requiredMemoryIds.join(",")} selected=${selectedMemoryIds.join(",")}`);
       }
       const normalizedPack = normalize(pack.packMarkdown);
       for (const key of task.claimKeys) {

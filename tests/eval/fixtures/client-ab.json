@@ -1,6 +1,6 @@
 {
   "version": 3,
-  "corpusVersion": 2,
+  "corpusVersion": 3,
   "organizationId": "akasha-client-ab-target",
   "foreignOrganizationId": "akasha-client-ab-foreign",
   "projectKey": "akasha-client-ab-project",
