@@ -91,6 +91,8 @@ const EXPECTED_PACKAGE_FILES = [
   "!docs/superpowers/",
   "README.md",
   "README.ko.md",
+  "README.ja.md",
+  "README.zh-CN.md",
   "CHANGELOG.md",
   "CHANGELOG.ko.md",
   "CODE_OF_CONDUCT.md",

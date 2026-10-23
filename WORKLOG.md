@@ -1,5 +1,19 @@
 # WORKLOG
 
+## 2026-10-24
+
+- Aligned English/Korean README presentation and added complete Japanese and
+  Simplified Chinese editions with the same sections, navigation, examples, and
+  capability limits. The npm allowlist includes all four. Host launch examples
+  explicitly load `.env` and derive the loopback Postgres URL; HTTP examples use
+  one token and an organization ID. Detailed references remain English/Korean.
+- Local documentation/package checks passed 86 tests; typecheck, build, and npm
+  package dry-run passed (135 files). Four-language command parity, relative
+  links, and anchors were checked. Runtime sources, dependency lock, and CI
+  commands are unchanged from the previously verified local Linux full suite;
+  its scope and earlier macOS failures remain separate. Historical volume
+  deletion impact is still unresolved.
+
 ## 2026-10-23
 
 - Corrected delivery scope against the user's implementation/portfolio request:

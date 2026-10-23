@@ -11,6 +11,9 @@ changes; CHANGELOG entries call those out explicitly.
 
 ## [Unreleased]
 
+- Docs: align the English and Korean README layout, add complete Japanese and
+  Simplified Chinese editions, and include all four in the npm package. Quick-start
+  examples load `.env` explicitly and send one bearer token with an organization ID.
 - CLI commands now drain their audit writes and close their own Postgres pool
   before exiting, avoiding the default 30-second idle wait. Failed service
   initialization also releases the pool after migration or vector setup errors.

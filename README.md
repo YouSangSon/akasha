@@ -1,48 +1,44 @@
-> **English** | [한국어](README.ko.md)
+<div align="center">
 
-# Akasha
+# 🧠 Akasha
+
+**Persistent memory for AI coding agents.**
+
+Keep decisions, constraints, and summaries across sessions.<br/>
+Self-hosted storage, local embeddings, and MCP access for your coding workflow.
 
 [![CI](https://github.com/YouSangSon/akasha/actions/workflows/ci.yml/badge.svg)](https://github.com/YouSangSon/akasha/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-compatible-blue.svg)](https://modelcontextprotocol.io/)
 [![Node](https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg)](https://nodejs.org/)
 
-**Persistent memory for AI coding agents — free, local, self-hosted.**
+**English** · [한국어](README.ko.md) · [日本語](README.ja.md) · [简体中文](README.zh-CN.md)
 
-Attach it to Claude Code, Codex CLI, or any MCP client and the agent
-gains durable, searchable memory across sessions: decisions, constraints,
-summaries. Postgres for canonical state, Qdrant for vector search, ONNX
-embeddings running locally — **no API key required**, `$0` cost, your
-data stays on your box.
+[Overview](#overview) · [Quick start](#quick-start) · [Features](#features) · [Memory UI](#memory-ui) · [Architecture](#architecture) · [Documentation](#documentation)
 
-> Named after the *Akashic records* — the mythical compendium of all
-> knowledge. Akasha is where your agents write down what's worth remembering.
+</div>
 
-## How does it compare?
+---
 
-| | **Akasha** | doobidoo/mcp-memory-service | coleam00/mcp-mem0 | mem0ai/mem0 | letta-ai/letta | getzep/zep |
-|---|---|---|---|---|---|---|
-| **Free out of the box** | ✅ | ✅ | ❌ (OpenAI) | ❌ (OpenAI default) | ❌ (hosted) | ❌ (Cloud SaaS) |
-| **Data stays on your box** | ✅ | ✅ | partial (OpenAI calls) | partial (OpenAI calls) | ❌ (Letta Cloud) | ❌ (Zep Cloud) |
-| **MCP-native protocol** | ✅ | ✅ | ✅ (wraps Mem0) | wrapper only | wrapper only | ❌ |
-| **Multi-tenant out of the box** | ✅ (`organization_id`, token-org binding, SQL + vector filters) | ❌ | inherits Mem0 | ✅ | ✅ | ✅ |
-| **Postgres + vector backend** | ✅ (Qdrant default; pgvector option for Postgres-only deploy) | SQLite-vec | Supabase + pgvector | varies | varies | proprietary |
-| **OSS path actively maintained** | ✅ | ✅ | ✅ (template repo) | ✅ | ✅ | ❌ (CE deprecated 2025) |
+<a id="overview"></a>
+## At a glance
 
-The MCP memory ecosystem norm is *free/local default* — doobidoo (1.7k★) headlines
-`$0` cost, and the convergent free embedding model (`all-MiniLM-L6-v2`) is what
-Akasha uses too. Where Akasha distinctively goes further: a
-**Postgres canonical store separate from the vector index** (so a Qdrant
-collection rebuild loses 0 data and reindex is one tool call), **org-scoped
-multi-tenancy at the SQL and vector layers** (peers either skip it or rely on
-the upstream framework), and **MCP-native rather than wrapper** (no shim
-between the protocol and the memory engine). For deployments where running a
-second service is inconvenient, set `VECTOR_BACKEND=pgvector` to store vectors
-in Postgres itself — no Qdrant required.
+Akasha gives MCP clients a shared place to save and retrieve durable context.
+Postgres stores the canonical records; Qdrant or pgvector provides a rebuildable
+search index. The default `transformers` provider embeds text locally with ONNX,
+without an embedding API key. Model files are downloaded on first use; client
+subscriptions, optional paid APIs, and hosting costs are separate.
 
-If you need a hosted memory product with a polished UI, look at Mem0 or Letta.
-If you need a self-hosted memory MCP server with no API key required, this is
-that.
+| Need | What Akasha provides |
+|------|----------------------|
+| Resume work in a fresh session | Searchable decisions and task-specific context packs |
+| Keep control of stored memory | Self-hosted Postgres, org-scoped reads/writes, and an audit trail |
+| Repair the search index | Rebuild vectors from canonical Postgres chunks |
+| Run fewer services | `VECTOR_BACKEND=pgvector` stores vectors in Postgres instead of Qdrant |
+| Review what an agent remembers | A memory UI to inspect, edit, tag, and archive records |
+
+Named after the *Akashic records*: a place for agents to write down what is worth
+remembering.
 
 Code-intelligence MCP servers such as
 [DeusData/codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp)
@@ -51,25 +47,68 @@ routes, call graph, and ADRs for structural code questions; Akasha stores
 durable agent memory: decisions, constraints, summaries, org-scoped audit
 trails, and context packs that follow work across sessions and clients.
 
+<a id="quick-start"></a>
+## Quick start
+
+Requires Docker (for Postgres + Qdrant) and Node.js ≥ 22.
+
+```bash
+git clone https://github.com/YouSangSon/akasha.git
+cd akasha
+
+# 1. Copy the local development template and review its credentials.
+#    OPENAI_API_KEY is only needed with EMBEDDING_PROVIDER=openai.
+cp .env.example .env
+${EDITOR:-nano} .env
+
+# 2. Bring up Postgres + Qdrant + run migrations + build.
+./install.sh
+
+# 3. Add the generated configuration to your MCP client:
+cat .akasha/mcp/claude-desktop.json
+cat .akasha/mcp/codex.toml
+
+# Optional lifecycle helpers for hosts that support session hooks:
+.akasha/hooks/session-start.sh "continue implementation"
+printf '%s\n' "Summary: durable outcome ..." | .akasha/hooks/session-end.sh
+```
+
+The installer prepares the database, build, and client snippets; it does not
+start the HTTP server or export `.env` into your next terminal. For HTTP examples and the memory UI, keep this running
+in a separate terminal:
+
+```bash
+set -a
+source .env
+set +a
+export DATABASE_URL="${DATABASE_URL:-postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${POSTGRES_PORT:-5432}/${POSTGRES_DB}}"
+npm run start:server
+```
+
+See [client integration recipes](docs/integrations.md) for configuration details.
+Default Compose credentials are for local development; replace them before
+exposing the service to other machines.
+
+<a id="features"></a>
 ## Features
 
-Beyond the free/local/multi-tenant basics above, Akasha is built to be
-operated in production:
+The implementation includes the following controls. Deployment readiness still
+depends on your configuration, backups, and workload checks:
 
 - **Canonical store, derived index.** Postgres holds the truth; the vector
-  index is rebuildable. A wiped vector index costs 0 data — one
-  `reindex_memory` tool call re-embeds Postgres chunks in bounded pages.
-- **Crash-safe ingest.** Writes record a write-ahead intent before touching the
-  vector store; a background sweeper retries any upsert that failed mid-flight
-  (visibility-timeout claim, `FOR UPDATE SKIP LOCKED`). No silent index drift.
+  index is rebuildable while the canonical records and chunks remain intact.
+  `reindex_memory` re-embeds those chunks in bounded pages; it is not a backup.
+- **Recoverable ingest.** Writes record a write-ahead intent before touching the
+  vector store. Enable the ingest sweeper to retry pending work after an
+  interrupted write (visibility-timeout claim, `FOR UPDATE SKIP LOCKED`).
 - **Secrets scrubbed at write.** Content is scanned before it ever lands —
   provider API keys, PEM blocks, bearer/JWT tokens, and credentialed database
   URLs are rejected (`SecretDetectedError`) rather than persisted.
 - **Compaction with a dry run.** Exact + semantic dedup and time-decay archival
   are previewed by default (`dryRun: true`); apply is idempotent and
   rate-limited. Archived records are restorable via `unarchive_memory`.
-- **Audited and rate-limited.** Every tool call lands in an org-scoped audit log;
-  per-token rate limits protect the HTTP API.
+- **Audit and rate-limit controls.** Tool calls attempt an org-scoped audit write;
+  audit failures are logged. Configurable per-token HTTP limits are process-local.
 - **Dual MCP transports plus JSON HTTP.** MCP clients can use stdio or
   Streamable HTTP at `POST /mcp`; scripts and non-MCP clients can keep using
   JSON HTTP under `/v1/*`.
@@ -81,7 +120,16 @@ operated in production:
 - **Pluggable vector backend.** Qdrant by default, or `VECTOR_BACKEND=pgvector`
   to run on Postgres alone.
 
-## Why
+<a id="memory-ui"></a>
+## Memory UI
+
+Open [http://localhost:8787/admin/memory](http://localhost:8787/admin/memory)
+after starting the HTTP server. Enter one configured bearer token and its
+organization ID, load the records, then inspect, edit, tag, or archive a memory.
+The page uses the authenticated API and asks for confirmation before archiving.
+See [memory governance](docs/operations.md) for the operator workflow.
+
+## Tools and API
 
 Conversations with coding agents lose context the moment the session ends.
 Akasha is the place those agents save what's worth remembering and
@@ -100,7 +148,7 @@ the connected client advertises those capabilities.
 | `search_memory` | Hybrid vector + lexical scope-filtered retrieval | `POST /v1/memory/search` |
 | `build_context_pack` | Generate a compact pack to seed a new session | `POST /v1/memory/context-pack` |
 | `compact_memory` | Prune duplicates and decayed records (apply or dry-run) | `POST /v1/memory/compact` |
-| `reindex_memory` | Rebuild the vector index from Postgres (0 data loss) | `POST /v1/memory/reindex` |
+| `reindex_memory` | Rebuild vectors from retained Postgres chunks | `POST /v1/memory/reindex` |
 | `list_memory` | Review canonical records with tag / archived filters | `POST /v1/memory/list` |
 | `inspect_memory_graph` | Inspect persisted entity mentions and relationships | `POST /v1/memory/graph` |
 | `update_memory` | Edit one canonical record and refresh its vector state | `POST /v1/memory/update` |
@@ -124,34 +172,8 @@ suggest a memory kind and summary.
 
 Multi-tenant (`organization_id` per record), bearer-token authenticated,
 audit-logged, and rate-limited. Designed to run as a single-user MCP server
-on your laptop or a multi-team backend in your infra. Personal users can
-ignore orgs entirely — see
+on your laptop or a multi-team backend in your infra. Personal users can use a single org label consistently — see
 [Personal / single-tenant use](docs/configuration.md#personal--single-tenant-use).
-
-## Quick start
-
-Requires Docker (for Postgres + Qdrant) and Node.js ≥ 22.
-
-```bash
-git clone https://github.com/YouSangSon/akasha.git
-cd akasha
-
-# 1. Copy the env template (defaults work — OPENAI_API_KEY only needed if
-#    you set EMBEDDING_PROVIDER=openai later).
-cp .env.example .env
-${EDITOR:-nano} .env
-
-# 2. Bring up Postgres + Qdrant + run migrations + build.
-./install.sh
-
-# 3. Point your MCP client at the generated config snippets:
-cat .akasha/mcp/claude-desktop.json
-cat .akasha/mcp/codex.toml
-
-# Optional lifecycle helpers for hosts that support session hooks:
-.akasha/hooks/session-start.sh "continue implementation"
-printf '%s\n' "Summary: durable outcome ..." | .akasha/hooks/session-end.sh
-```
 
 ## Worked example
 
@@ -160,11 +182,15 @@ over the HTTP API (the MCP tools take the same fields). Responses are
 abbreviated for illustration.
 
 ```bash
-TOKEN=$MEMORY_API_TOKENS   # from your .env
+# Enter ONE configured token, without its optional :org suffix.
+read -r -s -p "API token: " TOKEN
+printf '\n'
+ORGANIZATION_ID=default   # use the token's bound org if it has one
 
 # 1. Save a memory.
 curl -sX POST http://localhost:8787/v1/memory \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -H "x-organization-id: $ORGANIZATION_ID" \
   -d '{"projectKey":"checkout","kind":"decision",
        "content":"Use idempotency keys on POST /charge to make retries safe."}'
 # → {"success":true,"data":{"ok":true,"memoryId":"project:checkout:42",
@@ -173,6 +199,7 @@ curl -sX POST http://localhost:8787/v1/memory \
 # 2. Search semantically — no keyword match needed.
 curl -sX POST http://localhost:8787/v1/memory/search \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -H "x-organization-id: $ORGANIZATION_ID" \
   -d '{"projectKey":"checkout","query":"how do we avoid double-charging?"}'
 # → {"success":true,"data":{"ok":true,"results":[
 #      {"id":42,"memoryType":"decision",
@@ -181,10 +208,12 @@ curl -sX POST http://localhost:8787/v1/memory/search \
 # 3. Build a context pack to paste into a new agent session.
 curl -sX POST http://localhost:8787/v1/memory/context-pack \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -H "x-organization-id: $ORGANIZATION_ID" \
   -d '{"projectKey":"checkout","task":"add refund endpoint"}'
 # → data.packMarkdown is ready to drop into your prompt.
 ```
 
+<a id="architecture"></a>
 ## Architecture
 
 | Layer | Responsibility |
@@ -217,10 +246,14 @@ Everything else has sensible defaults. See [.env.example](.env.example) for the
 complete list and [docs/configuration.md](docs/configuration.md) for types,
 defaults, and examples.
 
+<a id="documentation"></a>
 ## Documentation
 
-Full operator and contributor docs live in [`docs/`](docs/README.md). Every
-page has a Korean (`*.ko.md`) mirror.
+This README is available in English, Korean, Japanese, and Simplified Chinese
+with the same section order, examples, and capability scope. Detailed operator
+and contributor documentation is maintained in English and Korean under
+[`docs/`](docs/README.md). Japanese and Chinese README links use the English
+reference pages.
 
 | Topic | Description |
 |-------|-------------|
@@ -256,6 +289,19 @@ snapshot. With `VECTOR_BACKEND=pgvector`, logical vector data lives in Postgres,
 so `backup:create` skips `scripts/snapshot-qdrant.sh` and does not require
 `QDRANT_URL`. Set `BACKUP_ENCRYPTION_KEY_FILE` to encrypt backup artifacts with
 AES-256-GCM before any off-host copy.
+
+## Status and limits
+
+- The default setup runs locally; a passing CI badge is not proof of a production
+  deployment. Current verification and unresolved delivery items are recorded in
+  [GATES.md](https://github.com/YouSangSon/akasha/blob/main/GATES.md).
+- Token savings depend on the client and workflow. Controlled MCP and CLI
+  evaluations have separate results; they do not guarantee general savings,
+  lower latency, or lower cost. See [evaluation evidence](https://github.com/YouSangSon/akasha/blob/main/GATES.md).
+- Secret detection rejects known patterns; it cannot identify every possible
+  secret. Keep credentials out of memory content.
+- A rebuilt vector index does not recover deleted canonical data. Use tested
+  backups and the [restore runbook](docs/self-hosted-operations.md).
 
 ## Contributing & security
 
