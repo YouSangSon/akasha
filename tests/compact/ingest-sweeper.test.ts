@@ -450,6 +450,32 @@ describe("runIngestSweep", () => {
     expect(vectorIndex.upsert).not.toHaveBeenCalled();
   });
 
+  it.each([false, true])("does not reinsert archived chunks during a pending retry (cleanup failure: %s)", async (cleanupFails) => {
+    const job = makeJob({ organizationId: "org-a" });
+    const { repo, markQdrantCompleted, markQdrantPending } = makeIngestJobRepo([job]);
+    const chunkRepo = makeChunkRepo([makeChunk({ durability: "archived" })]);
+    const vectorIndex = makeVectorIndex();
+    if (cleanupFails) vi.mocked(vectorIndex.deleteByRecordIds).mockRejectedValueOnce(new Error("cleanup unavailable"));
+    const embeddings = makeEmbeddings({ embedBatch: vi.fn().mockResolvedValue([[0.1, 0.2]]) });
+
+    const result = await runIngestSweep({ ingestJobs: repo, chunkRepository: chunkRepo,
+      embeddings, vectorIndex, logger: SILENT_LOGGER, now: () => NOW });
+
+    expect(vectorIndex.deleteByRecordIds).toHaveBeenCalledWith([job.memoryRecordId], { organizationId: "org-a" });
+    expect(vectorIndex.upsert).not.toHaveBeenCalled();
+    expect(embeddings.embedBatch).not.toHaveBeenCalled();
+    expect(chunkRepo.updatePointIds).not.toHaveBeenCalled();
+    if (cleanupFails) {
+      expect(result).toEqual({ scanned: 1, completed: 0, retried: 1, failed: 0 });
+      expect(markQdrantCompleted).not.toHaveBeenCalled();
+      expect(markQdrantPending).toHaveBeenCalledWith(expect.objectContaining({ jobId: job.id, attempts: 1, nextRetryAt: new Date(NOW.getTime() + nextRetryDelayMs(1)) }));
+    } else {
+      expect(result).toEqual({ scanned: 1, completed: 1, retried: 0, failed: 0 });
+      expect(markQdrantCompleted).toHaveBeenCalledWith(job.id);
+      expect(markQdrantPending).not.toHaveBeenCalled();
+    }
+  });
+
   it("embeds chunks, upserts to vector index, updates point ids, and marks completed on success", async () => {
     const job = makeJob({ id: 1, memoryRecordId: 10, qdrantAttempts: 0 });
     const chunk = makeChunk({ id: 100, memoryRecordId: 10 });

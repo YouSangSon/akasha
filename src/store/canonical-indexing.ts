@@ -401,6 +401,13 @@ export async function refreshCanonicalMemoryIndex(input: {
   const organizationId = input.record.organizationId ?? "default";
   assertNonBlankText(organizationId, "organizationId");
 
+  if (input.record.durability === "archived") {
+    await input.vectorIndex.deleteByRecordIds([input.record.id], {
+      organizationId,
+    });
+    return { chunkCount: 0 };
+  }
+
   const chunks = chunkText({
     text: input.record.content,
     targetTokens: input.embedding.targetTokens,
@@ -667,7 +674,10 @@ export async function reindexCanonicalMemory(input: {
   // a page has been reinserted is unsafe when one memory record spans pages: a
   // later delete for that same record could erase vectors inserted earlier.
   let chunkCount = 0;
-  await forEachReindexChunkPage(reindexInput, batchSize, async (chunks) => {
+  await forEachReindexChunkPage(reindexInput, batchSize, async (page) => {
+    const chunks = page.filter((chunk) => chunk.durability !== "archived");
+    if (chunks.length === 0) return;
+
     const embeddings = await input.embeddings.embedBatch(
       chunks.map((chunk) => chunk.content),
     );

@@ -2,6 +2,18 @@
 
 ## 2026-10-23
 
+- Real PostgreSQL/Qdrant admin validation exposed a sequential archive invariant
+  violation: Save preserved canonical `archived` but recreated its vector.
+  Shared refresh now performs scoped cleanup only; reindex keeps its full cleanup
+  pass and filters archived chunks only during insertion; pending ingest retries
+  clean archived records and complete without embedding. Six regressions reproduce
+  the three entry points and cleanup failures. Actual Save/Tag, reindex, latest-body
+  reactivation/rearchive/search, and a rearmed real retry passed; focused tests passed
+  310/310. API docs describe committed-edit failure and concurrency boundaries.
+  The test fixture's initial wrong pagination cursor caused a worker OOM; correcting
+  it to `afterChunkId` produced the expected RED before the production change.
+  See `GATES.md` for final validation and remaining product/cleanup limitations.
+
 - Resumed browser validation completed archive approval with pending cleanup,
   successful archive, archive no-op, and focus fallback to the next record or
   Reload. Isolated HTTP logs contain exactly IDs 1, 2, and 3. Desktop and

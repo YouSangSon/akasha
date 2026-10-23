@@ -314,6 +314,10 @@ MCP stdio: `reindex_memory`
 `pgvector`) 에 upsert. `EMBEDDING_PROVIDER` 또는 `OPENAI_EMBEDDING_MODEL`
 변경 후 사용.
 
+저장된 chunk가 있는 범위 내 레코드는 보관 여부와 관계없이 기존 vector를
+정리합니다. 활성 chunk만 다시 임베딩하고 `chunkCount`에 포함합니다.
+보관 레코드만 있는 범위는 정리 후 0을 반환합니다.
+
 ---
 
 ### list_memory — governance 목록 조회
@@ -442,8 +446,16 @@ HTTP: `POST /v1/memory/update`
 MCP stdio: `update_memory`
 
 canonical Postgres row를 수정하고, 전달된 경우 tag를 교체하며, entity mention과
-vector 상태를 갱신합니다. 임베딩/vector 실패 시 인덱스 작업을 조용히 잃지 않고
-due ingest retry marker를 남깁니다.
+vector 상태를 갱신합니다. 활성 레코드는 vector 쓰기 전에 chunk 교체와 pending
+ingest marker를 원자적으로 저장합니다. 교체 전 임베딩 실패는 새 marker 없이
+오류로 반환됩니다.
+
+보관 레코드의 검색 필드 수정과 `tag_memory`는 조직 범위의 vector만 삭제합니다.
+임베딩, chunk 교체, 새 ingest job 생성은 수행하지 않습니다. 이 정리가 실패하면
+canonical 수정은 이미 반영된 상태로 오류를 반환하므로 같은 작업을 재시도하거나
+재색인해야 합니다. durability를 `durable` 또는 `ephemeral`로 되돌리면 최신 저장
+본문을 색인합니다. 이 순차 처리 보완은 동시에 실행되는 보관·색인 작업을 두
+저장소에 걸쳐 동기화하는 기능을 추가하지 않습니다.
 
 ---
 

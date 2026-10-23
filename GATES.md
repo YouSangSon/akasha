@@ -122,17 +122,19 @@ pinned runner; shared CI reports it without failing the build.
 | Focused retrieval batch | Shared ranking, cutoff, eval safety, and real default stack pass | 2026-08-31: 3 focused files, 67 passed and 2 eval tests skipped; real eval 4/4 passed | GREEN |
 | Typecheck | `npm run typecheck` | 2026-10-23 passed on Node 24.14.0 | GREEN |
 | Build | `npm run build` | 2026-10-23 passed in the successful owned restore run | GREEN |
-| Full test suite | No new failure; skips reported | PR #28 final CI at `abd64a4`: Node 22/24 each 2637 passed, 35 skipped; PostgreSQL 246, pgvector 115, default retrieval 5 passed. [Run](https://github.com/YouSangSon/akasha/actions/runs/39909684034) | GREEN |
+| Full test suite | No new failure; skips reported | Current archived-index unit: local serial run 2660 passed, 35 skipped, seven 15-second timeouts. Isolated recheck passed three but retained four timeout/cleanup failures under high host load; CI remains required. Typecheck/build, 310 focused tests, and 48 docs checks passed | RED |
 | Diff hygiene | `git diff --check` and staged review | 2026-10-23 core diff passed; final UI diff checked separately before commit | GREEN |
 | Dependency security | No unmitigated reachable critical/high advisory | PR #25: native npm audit reports 0 vulnerabilities, no exception policy. This is not an OS-image vulnerability assessment | GREEN |
-| Admin UI truth and accessibility | no-op/pending results are truthful; archive confirmation and keyboard/status basics pass | 2026-10-23 real shell/HTTP + in-memory fixture: auth/error/loading/empty, save/tag success + no-op, native archive cancellation/approval, pending cleanup, archive no-op, selection retention and focus fallback passed. Desktop and 390x844 mobile visually inspected; no horizontal overflow. Archived detail shows archived with durability/archive controls disabled. No database E2E or screen-reader test; integration evidence belongs to PR #27 | GREEN |
+| Admin UI truth and accessibility | no-op/pending results are truthful; archive confirmation and keyboard/status basics pass | 2026-10-23 real admin + HTTP + owned PostgreSQL/Qdrant/transformers: auth, empty/loading, invalid save, save/tag persistence, org/user isolation, controlled archive cancel/approve, reload, desktop/mobile passed. Archived Save exposed vector resurrection, now corrected and rechecked against DB/index snapshots; fixture-only no-op/pending proof remains separate. No screen-reader test | GREEN |
+| Archived index maintenance | Observed archived records stay out of vector refresh, reindex, and pending ingest retries | Six new regression cases; four focused files, 310 tests passed. Actual UI Save/Tag, HTTP reindex/reactivation/rearchive/search, and a rearmed real ingest retry passed. Concurrent archive/index races remain outside this sequential fix | GREEN |
 | Backup/restore | Owned local backup, restore, and data/index smoke pass for the default backend | 2026-10-23 owned run passed: Postgres dump + Qdrant snapshot, identical point ID/payload/vector, authenticated restored-app search + selected scoped ID/content in the context pack | GREEN |
-| Owned-resource cleanup | No test process, temporary container, volume, or fixture remains | 2026-10-23 restore projects `15810` have no remaining containers, volumes, or networks. One earlier anonymous-volume deletion lacked conclusive ownership evidence; its impact remains unknown | RED |
+| Owned-resource cleanup | No test process, temporary container, volume, or fixture remains | Owned real-DB UI project `akasha-ui-db-20261023-1235` removed after named-mount ownership verification; no containers, volumes, networks, listener ports, or owned UI tabs remain. Earlier anonymous-volume deletion impact remains unknown | RED |
 | Deployment and production | Explicit deploy, effective config/image, rollout, smoke, rollback, and operating evidence | No external deployment authorized or observed | EXTERNAL |
 
 ## Next Gate
 
-Implementation and evaluation changes are merged through PR #28. The supplemental
+Implementation and evaluation changes are merged through PR #31; the current
+archived-index unit has local DB/UI evidence recorded above. The supplemental
 CLI-prefetch run now passes its 15% bar, while the MCP baseline still fails it.
 Preserve both results and the source audit above. The user does not yet use Claude Code,
 so its proof remains external to this completed evaluation unit. The original

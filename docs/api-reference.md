@@ -316,6 +316,10 @@ Recompute embeddings for existing chunks and upsert to the configured vector
 backend (`qdrant` or `pgvector`). Use after changing `EMBEDDING_PROVIDER` or
 `OPENAI_EMBEDDING_MODEL`.
 
+Cleanup covers all scoped records with stored chunks, including archived ones.
+Only active chunks are re-embedded and counted in `chunkCount`; an archived-only
+scope returns zero after cleanup.
+
 ---
 
 ### list_memory — governance list
@@ -444,8 +448,16 @@ HTTP: `POST /v1/memory/update`
 MCP stdio: `update_memory`
 
 Updates the canonical Postgres row, replaces tags when supplied, refreshes
-entity mentions, and refreshes vector state. Embedding/vector failures leave a
-due ingest retry marker instead of silently dropping index work.
+entity mentions, and refreshes vector state. Active records use atomic chunk
+replacement with a pending ingest marker before vector writes. Embedding failures
+before that replacement propagate without creating a new marker.
+
+For archived records, searchable-field updates and `tag_memory` remove scoped
+vectors without embedding, replacing chunks, or creating a new ingest job.
+If this cleanup fails, the canonical edit remains committed and the error is
+returned; retry the operation or reindex to recover. Changing durability back
+to `durable` or `ephemeral` indexes the latest stored body. These sequential
+operations do not add a cross-database fence against concurrent archive/index work.
 
 ---
 

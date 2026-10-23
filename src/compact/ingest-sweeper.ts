@@ -106,6 +106,14 @@ async function sweepOne(
       return "completed";
     }
 
+    if (chunks.every((chunk) => chunk.durability === "archived")) {
+      await input.vectorIndex.deleteByRecordIds([job.memoryRecordId], {
+        organizationId,
+      });
+      await input.ingestJobs.markQdrantCompleted(job.id);
+      return "completed";
+    }
+
     const embeddings = await input.embeddings.embedBatch(
       chunks.map((chunk) => chunk.content),
     );
