@@ -47,10 +47,10 @@ describe("CI workflow hygiene", () => {
       /      - name: Checkout\n        uses: actions\/checkout@v4\n\n      - name: Setup Node\n/g,
     );
 
-    expect(checkoutThenSetupNodeSteps).toHaveLength(3);
+    expect(checkoutThenSetupNodeSteps).toHaveLength(4);
   });
 
-  it("runs a moderate-or-higher dependency audit in CI", () => {
+  it("runs the fail-closed dependency audit policy in CI", () => {
     const auditStepIndex = ciWorkflow.indexOf(
       "      - name: Audit dependencies\n",
     );
@@ -58,7 +58,7 @@ describe("CI workflow hygiene", () => {
 
     expect(ciWorkflow).toContain("      - name: Audit dependencies\n");
     expect(ciWorkflow).toContain(
-      "        run: npm audit --audit-level=moderate\n",
+      "        run: npm run audit:dependencies\n",
     );
     expect(auditStepIndex).toBeLessThan(typecheckStepIndex);
   });
@@ -68,7 +68,7 @@ describe("CI workflow hygiene", () => {
       /      - name: Install\n(?:        # [^\n]+\n)*        run: ONNXRUNTIME_NODE_INSTALL_CUDA=skip npm ci\n/g,
     );
 
-    expect(installSteps).toHaveLength(3);
+    expect(installSteps).toHaveLength(4);
   });
 
   it("installs dependencies after setting up Node in every job", () => {
@@ -76,7 +76,7 @@ describe("CI workflow hygiene", () => {
       /      - name: Setup Node\n        uses: actions\/setup-node@v4\n        with:\n(?:          [^\n]+\n)+\n      - name: Install\n(?:        # [^\n]+\n)*        run: ONNXRUNTIME_NODE_INSTALL_CUDA=skip npm ci\n/g,
     );
 
-    expect(setupThenInstallSteps).toHaveLength(3);
+    expect(setupThenInstallSteps).toHaveLength(4);
   });
 
   it("keeps the main CI Node matrix on supported runtime lines", () => {
@@ -95,16 +95,17 @@ describe("CI workflow hygiene", () => {
       /      - name: Setup Node\n        uses: actions\/setup-node@v4\n        with:\n(?:          [^\n]+\n)+/g,
     );
 
-    expect(setupNodeSteps).toHaveLength(3);
+    expect(setupNodeSteps).toHaveLength(4);
     expect(
       setupNodeSteps?.filter((step) => step.includes("          cache: npm\n")),
-    ).toHaveLength(3);
+    ).toHaveLength(4);
   });
 
   it("runs backend integration jobs on the minimum supported Node version", () => {
     for (const [jobId, nextJobId] of [
       ["pg-integration", "pgvector-integration"],
-      ["pgvector-integration", undefined],
+      ["pgvector-integration", "default-retrieval-eval"],
+      ["default-retrieval-eval", undefined],
     ] as const) {
       const jobStart = ciWorkflow.indexOf(`  ${jobId}:\n`);
       const nextJobStart =
@@ -172,10 +173,14 @@ describe("CI workflow hygiene", () => {
 
   it("keeps the pgvector integration job focused on the pgvector suite", () => {
     const pgvectorJobStart = ciWorkflow.indexOf("  pgvector-integration:\n");
+    const retrievalJobStart = ciWorkflow.indexOf(
+      "  default-retrieval-eval:\n",
+    );
 
     expect(pgvectorJobStart).toBeGreaterThanOrEqual(0);
+    expect(retrievalJobStart).toBeGreaterThan(pgvectorJobStart);
 
-    const pgvectorJob = ciWorkflow.slice(pgvectorJobStart);
+    const pgvectorJob = ciWorkflow.slice(pgvectorJobStart, retrievalJobStart);
 
     expect(pgvectorJob).toContain("      - name: Run pgvector integration suite\n");
     expect(pgvectorJob).toContain(
@@ -185,6 +190,21 @@ describe("CI workflow hygiene", () => {
       "        run: npx vitest run tests/vector/pgvector-index.integration.test.ts\n",
     );
     expect(pgvectorJob).not.toContain("        run: npm test\n");
+  });
+
+  it("pins the default retrieval gate to the characterized stack", () => {
+    const retrievalJobStart = ciWorkflow.indexOf(
+      "  default-retrieval-eval:\n",
+    );
+    const retrievalJob = ciWorkflow.slice(retrievalJobStart);
+
+    expect(retrievalJobStart).toBeGreaterThanOrEqual(0);
+    expect(retrievalJob).toContain("        image: qdrant/qdrant:v1.13.2\n");
+    expect(retrievalJob).toContain("          RUN_EVAL: \"1\"\n");
+    expect(retrievalJob).toContain("          EMBEDDING_PROVIDER: transformers\n");
+    expect(retrievalJob).toContain(
+      "        run: npx vitest run tests/eval/retrieval.eval.test.ts --reporter=verbose\n",
+    );
   });
 
   it("waits for database service containers to pass health checks", () => {
@@ -200,6 +220,7 @@ describe("CI workflow hygiene", () => {
       "typecheck-and-test",
       "pg-integration",
       "pgvector-integration",
+      "default-retrieval-eval",
     ]) {
       expect(ciWorkflow).toMatch(
         new RegExp(

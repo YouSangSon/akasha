@@ -244,7 +244,7 @@ npm run dev:cli       # CLI in watch mode
 npm run lifecycle:init -- --project my-project --organization-id default
 npm run typecheck     # tsc --noEmit
 npm run build         # clean dist/ and compile TypeScript
-npm audit --audit-level=moderate
+npm run audit:dependencies
 npm test              # vitest run
 npm run db:migrate    # apply pending migrations
 npm run backup:create # backend-aware backup for VECTOR_BACKEND

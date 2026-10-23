@@ -6,12 +6,12 @@ Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale i
 
 ## Current State
 
-Branch: `main`.
+Branch: `codex/goal-value-gates`. PR #25 is merged into `main` at
+`79c7fd6`; its Node 22/24, PostgreSQL, and pgvector CI jobs passed.
 
-Canonical goal: `goal.md`. Local base is `origin/main` at `1bd4234`; the latest
-local checkpoint is `e8f9136 fix(vector): use qdrant-compatible point ids`.
-`GATES.md` is the current evidence ledger. Product-value gates take precedence
-over additional architecture extraction.
+Canonical goal: `goal.md`; current evidence: `GATES.md`. Remaining work covers
+retrieval ranking, local recovery, the fixed-SHA client evaluation harness, UI
+verification, and portfolio evidence. Paid client execution remains unauthorized.
 
 Recent completed architecture-goal commits; run `git log -1 --oneline` for the
 newest local commit:
@@ -81,6 +81,17 @@ Current structure:
   shapes.
 
 Completed in this branch:
+- A destructive-safety-guarded default-stack eval now gates real transformers +
+  Qdrant retrieval at `k=5`, including user scope, organization leakage, warm
+  latency, and context-pack flow. The post-fix local run reached recall 1.00,
+  MRR 0.7267, user recall 1.00, and zero leakage across 60 samples.
+- Shared ranking now treats project scope as a score-tie breaker and gives
+  vector/lexical relevance enough range to outrank unrelated metadata while
+  preserving the existing metadata, recency, and generic-note weights.
+- Supported lockfile dependencies are refreshed. The Qdrant client is limited
+  to compatible 1.14.x patches for the bundled 1.13.2 server. Transformers
+  4.3.1 and the refreshed lockfile pass native npm audit with no exceptions;
+  the non-root Debian image supplies the glibc required by ONNX.
 - The shared point builder now gives every chunk a deterministic,
   Qdrant-compatible UUIDv8-shaped identity. Canonical writes, retries, reindex,
   and unarchive reuse it; `reindex_memory` removes legacy record points before
@@ -125,14 +136,8 @@ Completed in this branch:
   handlers.
 
 Known issues:
-- Default Qdrant + transformers retrieval quality is not gated by a durable,
-  org-scoped eval. The prior pgvector run missed both user-scope answers.
 - Real Codex/Claude token reduction is unmeasured; a small context pack was
   larger than its raw-memory comparison.
-- The dependency audit is red until the lockfile refresh and residual `sharp`
-  risk are handled.
-- The admin shell reports some no-op or pending operations as unconditional
-  success and needs a focused trust/accessibility pass.
 - The target architecture is still a staged transition, not a completed module
   split.
 - Customer-specific modules and MSA extraction seams are not yet implemented.
@@ -141,19 +146,14 @@ Known issues:
 
 Execute in this order and close each bounded owner before changing scope:
 
-1. Reuse the existing canonical-service bootstrap to create an org-scoped,
-   `k=5` transformers + Qdrant retrieval gate with project/user/leakage slices
-   and warmed latency reporting.
-2. Fix the ranking root cause exposed by that gate without changing public
-   request/response contracts, then rerun the same fixture.
-3. Refresh supported dependency versions inside existing manifest ranges;
-   validate the default text embedding, MCP transports, Qdrant integration, and
-   full closeout before documenting residual `sharp` risk.
-4. Make admin update/tag/archive status truthful and cover native confirmation,
-   focus, live status, and narrow-screen error wrapping with focused tests.
-5. Build the fixed-SHA Codex/Claude A/B harness locally. Stop before paid client
-   execution or credential/config changes and request the specific authority.
-6. Run backup/restore, full closeout, claim review, and owned-resource cleanup.
+1. Complete CI/main integration for the core changes. The 2026-10-23 owned
+   backup/restore proof and free client preflight passed. At `fab19fe`, corpus
+   v3 retained all required scoped seeds across three tasks without foreign
+   leakage or model calls. The preflight preserves each seed's memory kind.
+2. Verify the admin UI when browser control is available, then complete final
+   checks, PR/main integration, portfolio evidence, and exact resource cleanup.
+3. Keep real Codex/Claude A/B token and outcome claims unverified until the
+   required execution authority and enforceable spend limits exist.
 
 Additional transport or module extraction stays behind these product-value
 gates unless it is required to fix a measured failure.

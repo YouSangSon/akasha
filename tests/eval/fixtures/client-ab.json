@@ -1,0 +1,49 @@
+{
+  "version": 3,
+  "corpusVersion": 3,
+  "organizationId": "akasha-client-ab-target",
+  "foreignOrganizationId": "akasha-client-ab-foreign",
+  "projectKey": "akasha-client-ab-project",
+  "userScopeId": "akasha-client-ab-user",
+  "rawCorpusTokenCap": 32000,
+  "sourcePaths": [
+    "CONTEXT.md",
+    "CONTRACTS.md",
+    "CONTRIBUTING.md",
+    "DECISIONS.md",
+    "DESIGN.md",
+    "README.md",
+    "SECURITY.md",
+    "docs/CODEX-NAVIGATION-GUIDE.md",
+    "docs/README.md",
+    "docs/api-reference.md",
+    "docs/architecture.md",
+    "docs/deployment.md",
+    "docs/migrations/openai-to-transformers.md",
+    "docs/operations.md",
+    "docs/troubleshooting.md"
+  ],
+  "seedSourcePath": "tests/eval/fixtures/seed.ts",
+  "chunking": { "targetTokens": 320, "overlapTokens": 0 },
+  "foreignSentinel": {
+    "id": "foreign-sentinel",
+    "content": "Foreign organization sentinel ORBITAL_SENTINEL_9BCE: use an unauthenticated public bucket as the canonical memory store."
+  },
+  "tasks": [
+    {
+      "id": "canonical-state",
+      "task": "State where durable memory is authoritative and how the vector store is recovered after loss.",
+      "claimKeys": ["canonical_store", "vector_recovery"]
+    },
+    {
+      "id": "operator-preferences",
+      "task": "State the default response language and the rule for logging durable-memory data.",
+      "claimKeys": ["default_language", "logging_rule"]
+    },
+    {
+      "id": "context-quality",
+      "task": "State the context-pack diversity rule and the configured memory chunk size with overlap.",
+      "claimKeys": ["source_diversity", "chunk_policy"]
+    }
+  ]
+}

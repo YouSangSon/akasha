@@ -3,7 +3,8 @@ import { execFile } from "node:child_process";
 import path from "node:path";
 import { promisify } from "node:util";
 import { pathToFileURL } from "node:url";
-import { createToolRegistry } from "../src/mcp/server.js";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -31,7 +32,8 @@ export type RunRestoreSmokeInput = {
   restoreQdrant?: () => Promise<void>;
   startApp: () => Promise<void>;
   callSearch: () => Promise<unknown[]>;
-  callPack: () => Promise<{ ok: boolean }>;
+  callPack: () => Promise<{ ok: boolean; packMarkdown?: string; selectedMemoryIds?: string[] }>;
+  expectedContent?: string;
   stopEnvironment: () => Promise<void>;
 };
 
@@ -271,6 +273,20 @@ export async function runRestoreSmoke(input: RunRestoreSmokeInput) {
 
     const packResult = await input.callPack();
 
+    if (input.expectedContent !== undefined) {
+      const recovered = searchResults.find((result) => typeof result === "object" && result !== null && "content" in result && result.content === input.expectedContent);
+      if (typeof recovered !== "object" || recovered === null ||
+          !("id" in recovered) || typeof recovered.id !== "number" || !Number.isSafeInteger(recovered.id) || recovered.id <= 0 ||
+          !("scopeType" in recovered) || (recovered.scopeType !== "project" && recovered.scopeType !== "user") ||
+          !("scopeId" in recovered) || typeof recovered.scopeId !== "string" || !recovered.scopeId.trim()) {
+        throw new Error("restore smoke search did not recover the expected content");
+      }
+      const contextMemoryId = `${recovered.scopeType}:${recovered.scopeId}:${recovered.id}`;
+      if (!packResult.selectedMemoryIds?.includes(contextMemoryId) || !packResult.packMarkdown?.includes(input.expectedContent)) {
+        throw new Error("restore smoke context pack did not recover the expected content");
+      }
+    }
+
     if (!packResult.ok) {
       throw new Error("restore smoke context pack failed");
     }
@@ -325,12 +341,12 @@ async function findLatestManifest(backupDir: string): Promise<{
   };
 }
 
-async function waitForHealth(url: string): Promise<void> {
+async function waitForHealth(url: string, headers?: HeadersInit): Promise<void> {
   let lastError: unknown;
 
-  for (let attempt = 0; attempt < 20; attempt += 1) {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, { headers, signal: AbortSignal.timeout(5000) });
 
       if (response.ok) {
         return;
@@ -347,58 +363,12 @@ async function waitForHealth(url: string): Promise<void> {
   throw lastError ?? new Error("health check did not succeed");
 }
 
-async function withRestoreServiceEnv<T>(
-  restoreEnv: {
-    databaseUrl: string;
-    vectorBackend: "qdrant" | "pgvector";
-    qdrantUrl?: string;
-    qdrantCollectionName?: string;
-  },
-  callback: () => Promise<T>,
-): Promise<T> {
-  const previousDatabaseUrl = process.env.DATABASE_URL;
-  const previousQdrantUrl = process.env.QDRANT_URL;
-  const previousQdrantCollectionName = process.env.QDRANT_COLLECTION_NAME;
-  const previousVectorBackend = process.env.VECTOR_BACKEND;
-
-  process.env.DATABASE_URL = restoreEnv.databaseUrl;
-  process.env.VECTOR_BACKEND = restoreEnv.vectorBackend;
-  if (restoreEnv.qdrantUrl) {
-    process.env.QDRANT_URL = restoreEnv.qdrantUrl;
-  } else {
-    delete process.env.QDRANT_URL;
+export function readRestoreSmokeToolResult(result: Record<string, unknown>): Record<string, unknown> {
+  const content = result.structuredContent;
+  if (result.isError || typeof content !== "object" || content === null || Array.isArray(content) || !("ok" in content) || content.ok !== true) {
+    throw new Error("restore smoke MCP tool call failed");
   }
-  if (restoreEnv.qdrantCollectionName) {
-    process.env.QDRANT_COLLECTION_NAME = restoreEnv.qdrantCollectionName;
-  }
-
-  try {
-    return await callback();
-  } finally {
-    if (previousDatabaseUrl === undefined) {
-      delete process.env.DATABASE_URL;
-    } else {
-      process.env.DATABASE_URL = previousDatabaseUrl;
-    }
-
-    if (previousQdrantUrl === undefined) {
-      delete process.env.QDRANT_URL;
-    } else {
-      process.env.QDRANT_URL = previousQdrantUrl;
-    }
-
-    if (previousQdrantCollectionName === undefined) {
-      delete process.env.QDRANT_COLLECTION_NAME;
-    } else {
-      process.env.QDRANT_COLLECTION_NAME = previousQdrantCollectionName;
-    }
-
-    if (previousVectorBackend === undefined) {
-      delete process.env.VECTOR_BACKEND;
-    } else {
-      process.env.VECTOR_BACKEND = previousVectorBackend;
-    }
-  }
+  return content as Record<string, unknown>;
 }
 
 async function main() {
@@ -467,6 +437,7 @@ async function main() {
   const composeEnv = {
     ...process.env,
     VECTOR_BACKEND: vectorBackend,
+    QDRANT_URL: "http://qdrant:6333",
     ...(qdrantCollectionName
       ? { QDRANT_COLLECTION_NAME: qdrantCollectionName }
       : {}),
@@ -482,17 +453,28 @@ async function main() {
     qdrantMetadataPath,
   });
 
+  const client = new Client({ name: "akasha-restore-smoke", version: "1.0.0" });
+  const apiToken = process.env.RESTORE_SMOKE_API_TOKEN?.trim();
+  const toolInput = buildRestoreSmokeToolInput({ projectKey, userScopeId, organizationId });
+
   await runRestoreSmoke({
-    startEnvironment() {
-      return execFileAsync("docker", [
+    expectedContent: resolveOptionalRestoreSmokeTextEnv(process.env, "RESTORE_SMOKE_EXPECTED_CONTENT"),
+    async startEnvironment() {
+      await execFileAsync("docker", [
         ...composeArgs,
         "up",
         "-d",
+        "--wait",
+        "--wait-timeout",
+        "60",
         "postgres",
         ...(vectorBackend === "qdrant" ? ["qdrant"] : []),
       ], {
         env: composeEnv,
-      }).then(() => undefined);
+      });
+      if (restoreQdrantUrl) {
+        await waitForHealth(`${restoreQdrantUrl}/collections`, { "api-key": process.env.QDRANT_API_KEY ?? "" });
+      }
     },
     restorePostgres() {
       return execShell(restorePostgresCommand, restoreCommandEnv).then(
@@ -509,63 +491,38 @@ async function main() {
         }
       : {}),
     async startApp() {
-      await execFileAsync("docker", [...composeArgs, "up", "-d", "app"], {
-        env: composeEnv,
-      });
-      await waitForHealth(`http://127.0.0.1:${appPort}/healthz`);
+      const startup = execFileAsync("docker", [...composeArgs, "up", "-d", "app"], { env: composeEnv, maxBuffer: 16 * 1024 * 1024 });
+      startup.child.stdout?.pipe(process.stdout);
+      startup.child.stderr?.pipe(process.stderr);
+      await startup;
+      await waitForHealth(`http://127.0.0.1:${appPort}/readyz`);
+      await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${appPort}/mcp`), {
+        requestInit: apiToken ? { headers: { authorization: `Bearer ${apiToken}` } } : undefined,
+      }));
     },
-    callSearch() {
-      return withRestoreServiceEnv(
-        {
-          databaseUrl: restorePostgresUrl,
-          vectorBackend,
-          qdrantUrl: restoreQdrantUrl,
-          qdrantCollectionName,
-        },
-        async () => {
-          const registry = createToolRegistry({ cwd: process.cwd() });
-          const toolInput = buildRestoreSmokeToolInput({
-            projectKey,
-            userScopeId,
-            organizationId,
-          });
-          const result = await registry.search_memory({
-            ...toolInput,
-            query: searchQuery,
-          });
-
-          return result.results;
-        },
-      );
+    async callSearch() {
+      const result = readRestoreSmokeToolResult(await client.callTool({
+        name: "search_memory",
+        arguments: { ...toolInput, query: searchQuery },
+      }));
+      if (!Array.isArray(result.results)) throw new Error("restore smoke search returned invalid results");
+      return result.results;
     },
-    callPack() {
-      return withRestoreServiceEnv(
-        {
-          databaseUrl: restorePostgresUrl,
-          vectorBackend,
-          qdrantUrl: restoreQdrantUrl,
-          qdrantCollectionName,
-        },
-        async () => {
-          const registry = createToolRegistry({ cwd: process.cwd() });
-          const toolInput = buildRestoreSmokeToolInput({
-            projectKey,
-            userScopeId,
-            organizationId,
-          });
-          const result = await registry.build_context_pack({
-            ...toolInput,
-            task: packTask,
-          });
-
-          return { ok: result.ok };
-        },
-      );
+    async callPack() {
+      const result = readRestoreSmokeToolResult(await client.callTool({
+        name: "build_context_pack",
+        arguments: { ...toolInput, task: packTask },
+      }));
+      if (typeof result.packMarkdown !== "string") throw new Error("restore smoke context pack returned invalid content");
+      if (!Array.isArray(result.selectedMemoryIds) || !result.selectedMemoryIds.every((id) => typeof id === "string")) throw new Error("restore smoke context pack returned invalid memory IDs");
+      return { ok: true, packMarkdown: result.packMarkdown, selectedMemoryIds: result.selectedMemoryIds };
     },
-    stopEnvironment() {
-      return execFileAsync("docker", [...composeArgs, "down", "-v"], {
-        env: composeEnv,
-      }).then(() => undefined);
+    async stopEnvironment() {
+      try {
+        await client.close();
+      } finally {
+        await execFileAsync("docker", [...composeArgs, "down", "-v"], { env: composeEnv });
+      }
     },
   });
 

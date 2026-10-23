@@ -22,6 +22,8 @@ governed by `CONTRACTS.md`.
 - Run the real default `transformers + Qdrant` factories after a warm-up query.
 - Gate project/user retrieval at `k=5` with recall, reciprocal rank, and warmed
   p50/p95 latency. Report cold start separately.
+- Treat project scope as a stable tie breaker, not an absolute relevance boost;
+  query evidence must be able to outrank unrelated metadata.
 - Treat organization leakage as an immediate failure, regardless of aggregate
   ranking scores.
 

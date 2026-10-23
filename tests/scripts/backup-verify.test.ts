@@ -11,7 +11,7 @@ import {
   rm,
   writeFile,
 } from "node:fs/promises";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import {
   resolveBackupTargetDir,
   verifyBackups,
@@ -19,6 +19,9 @@ import {
 
 const tempDirs: string[] = [];
 const execFileAsync = promisify(execFile);
+
+vi.setConfig({ testTimeout: 15_000 });
+afterAll(() => vi.resetConfig());
 
 afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));

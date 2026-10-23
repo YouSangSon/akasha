@@ -11,6 +11,14 @@ changes; CHANGELOG entries call those out explicitly.
 
 ## [Unreleased]
 
+- Retrieval now uses project scope only to break equal scores, so relevant user
+  memory can outrank unrelated project metadata. A real transformers + Qdrant
+  regression gate checks user recall and organization isolation in CI.
+- Backup recovery now checks the restored app through authenticated HTTP MCP,
+  verifies the selected scoped memory identity and content, and includes an
+  owned local runner that compares restored Qdrant points with their source.
+- A fixed-SHA client A/B harness includes a free local context preflight. Real
+  client execution remains explicitly gated; no token-saving result is claimed.
 - Docs: README comparison now positions code-intelligence MCP servers such as
   `codebase-memory-mcp` as complementary to Akasha's durable agent-memory
   scope.

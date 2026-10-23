@@ -26,7 +26,7 @@ non-trivial changes, also include typecheck, build, audit, and test output.
 
 - [ ] `npm run typecheck` passes
 - [ ] `npm run build` passes
-- [ ] `npm audit --audit-level=moderate` reports 0 vulnerabilities
+- [ ] `npm run audit:dependencies` reports 0 vulnerabilities
 - [ ] `npm test` passes (or expected skips noted)
 - [ ] Manual test of the affected path
 

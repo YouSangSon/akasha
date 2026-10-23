@@ -11,6 +11,13 @@ CHANGELOG에서 명시적으로 표기합니다.
 
 ## [Unreleased]
 
+- 검색 점수가 같을 때만 프로젝트 범위를 우선하도록 수정해, 관련 있는 사용자
+  메모리가 무관한 프로젝트 메타데이터보다 앞설 수 있게 합니다. 실제 transformers
+  + Qdrant CI 검증에 사용자 메모리 회수와 조직 격리를 포함합니다.
+- 백업 복원 후 앱의 인증된 HTTP MCP에서 선택된 범위별 메모리 ID와 본문을
+  확인합니다. 격리된 로컬 runner는 복원한 Qdrant point를 원본과 비교합니다.
+- 고정 SHA의 클라이언트 A/B harness에 무료 로컬 컨텍스트 사전 검증을 추가합니다.
+  실제 클라이언트 실행에는 명시적인 실행 조건이 필요하며 토큰 절감 성과는 주장하지 않습니다.
 - 문서: README 비교 문단이 `codebase-memory-mcp` 같은 code-intelligence MCP
   서버를 Akasha의 영구 에이전트 메모리 범위와 보완 관계로 설명하도록 정리합니다.
 - First-class goal run: MCP와 JSON HTTP가 `/v1/goal-run/*` 아래

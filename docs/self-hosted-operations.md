@@ -148,6 +148,17 @@ manifest checksums match both copies.
 
 Run a disposable restore check against the newest manifest in `BACKUP_DIR`:
 
+For a complete local default-Qdrant proof that owns both source and restore
+containers, ports, volumes, credentials, and its temporary backup directory,
+run the repository runner. It refuses occupied ports and does not attach to an
+existing deployment:
+
+```bash
+./tests/eval/run-backup-restore.sh
+```
+
+For authenticated HTTP MCP, set `RESTORE_SMOKE_API_TOKEN` to a token configured in the restored app's `MEMORY_API_TOKENS`. Set `RESTORE_SMOKE_EXPECTED_CONTENT` to check the recovered search content and the pack's selected memory ID and content. The disposable runner sets these automatically and also compares the restored Qdrant point ID, payload, and vector with the source.
+
 Qdrant manifests require `RESTORE_QDRANT_URL` and
 `RESTORE_SMOKE_QDRANT_RESTORE_CMD`. Pgvector manifests skip the Qdrant restore
 step and validate with `VECTOR_BACKEND=pgvector`.
@@ -162,8 +173,8 @@ export RESTORE_SMOKE_PROJECT_KEY="project-alpha"
 export RESTORE_SMOKE_ORGANIZATION_ID="default"
 export RESTORE_SMOKE_SEARCH_QUERY="continue work"
 export RESTORE_SMOKE_PACK_TASK="continue work"
-export RESTORE_SMOKE_POSTGRES_RESTORE_CMD='cat "$RESTORE_SMOKE_POSTGRES_ARTIFACT_PATH" | gunzip | psql "$RESTORE_POSTGRES_URL"'
-export RESTORE_SMOKE_QDRANT_RESTORE_CMD='curl -fsS -X POST "$RESTORE_QDRANT_URL/collections/$RESTORE_SMOKE_QDRANT_COLLECTION_NAME/snapshots/upload?priority=snapshot" -F "snapshot=@$RESTORE_SMOKE_QDRANT_ARTIFACT_PATH"'
+export RESTORE_SMOKE_POSTGRES_RESTORE_CMD='set -eu; sql="$(mktemp)"; trap "rm -f -- \"$sql\"" EXIT; gunzip -c "$RESTORE_SMOKE_POSTGRES_ARTIFACT_PATH" > "$sql"; psql -X -v ON_ERROR_STOP=1 "$RESTORE_POSTGRES_URL" < "$sql"'
+export RESTORE_SMOKE_QDRANT_RESTORE_CMD='curl -fsS -H "api-key: $QDRANT_API_KEY" -X POST "$RESTORE_QDRANT_URL/collections/$RESTORE_SMOKE_QDRANT_COLLECTION_NAME/snapshots/upload?priority=snapshot" -F "snapshot=@$RESTORE_SMOKE_QDRANT_ARTIFACT_PATH"'
 npm run restore:smoke
 ```
 
@@ -173,8 +184,8 @@ For Qdrant manifests, this helper:
 - resolves the newest manifest and artifact paths from `BACKUP_DIR`
 - restores the newest Postgres dump into the isolated database
 - restores the newest Qdrant snapshot into the isolated vector store
-- starts the `app` service only after both restores succeed and waits for `/healthz`
-- runs one real `search_memory` query and one real `build_context_pack` call against the restored services
+- starts the `app` service only after both restores succeed and waits for `/readyz`
+- runs one `search_memory` query and one `build_context_pack` call through the restored app's authenticated HTTP MCP endpoint
   using `RESTORE_SMOKE_ORGANIZATION_ID` when set (or `LEGACY_ANONYMOUS_SEARCH=true` for intentional legacy org-blind checks)
 - tears the disposable environment down with `docker compose -f compose.yaml -f compose.restore-smoke.yaml -p restore-smoke down -v`
 
