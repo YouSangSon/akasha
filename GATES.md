@@ -7,7 +7,7 @@ Last updated: 2026-10-23 KST. Valid states are `GREEN`, `RED`, `NOT RUN`, and
 
 | Gate | Passing bar | Reproducible check | Current evidence | State |
 | --- | --- | --- | --- | --- |
-| Public contract and organization isolation | 20 service tools, three MCP-only tools, envelopes, auth precedence, and org filters remain characterized | `npm test -- tests/mcp tests/app tests/store tests/vector --reporter=dot` plus full suite | PR #25 (`ec299fa`): Node 22/24, PostgreSQL and pgvector CI passed; merged as `79c7fd6`. Unmerged goal changes need their own final checks | GREEN |
+| Public contract and organization isolation | 20 service tools, three MCP-only tools, envelopes, auth precedence, and org filters remain characterized | `npm test -- tests/mcp tests/app tests/store tests/vector --reporter=dot` plus full suite | PR #26 (`2fd9814`): Node 22/24, PostgreSQL, pgvector, and default retrieval CI passed; merged as `5e7770f`. UI changes remain outside that merge | GREEN |
 | Cross-backend point identity | Every positive safe chunk ID maps injectively to a Qdrant-compatible ID; all write/recovery paths share it | focused vector/store/compact/MCP tests and real Qdrant smoke | Commit `e8f9136`; six focused files, 449 tests passed; Qdrant 1.13.2 accepted the UUID form in an owned local smoke | GREEN |
 | Default stack flow | Pinned Postgres + Qdrant 1.13.2 + transformers completes org-scoped write, search, and context pack from one checked-in command | `./tests/eval/run-default-stack.sh` | 2026-10-22 local run: real write/search/context-pack passed; scoped containers and volumes removed | GREEN |
 | Default retrieval quality | At `k=5`: recall >= 0.90, MRR >= 0.55, user-scope recall = 1.00, cross-org leakage = 0 | pinned default-stack eval after warm-up | 2026-10-22 Qdrant 1.13.2 + transformers 4.3.1, 20 unique queries x 3 repeats (60 samples): recall 1.00, MRR 0.7267, user recall 1.00, leakage 0, misses 0 | GREEN |
@@ -31,19 +31,19 @@ pinned runner; shared CI reports it without failing the build.
 | Focused retrieval batch | Shared ranking, cutoff, eval safety, and real default stack pass | 2026-08-31: 3 focused files, 67 passed and 2 eval tests skipped; real eval 4/4 passed | GREEN |
 | Typecheck | `npm run typecheck` | 2026-10-23 passed on Node 24.14.0 | GREEN |
 | Build | `npm run build` | 2026-10-23 passed in the successful owned restore run | GREEN |
-| Full test suite | No new failure; skips reported | 2026-10-23 `npm test -- --maxWorkers=2`: 87 files, 2628 passed, 35 skipped; skips include unavailable local database/eval integrations | GREEN |
+| Full test suite | No new failure; skips reported | PR #26 final CI: Node 22/24 each 2625 passed, 35 skipped; separate PostgreSQL 246, pgvector 115, default retrieval 5 passed. Earlier local 2628 included the three unmerged UI assertions | GREEN |
 | Diff hygiene | `git diff --check` and staged review | 2026-10-23 staged core diff passed; unverified UI changes excluded | GREEN |
 | Dependency security | No unmitigated reachable critical/high advisory | PR #25: native npm audit reports 0 vulnerabilities, no exception policy. This is not an OS-image vulnerability assessment | GREEN |
-| Admin UI truth and accessibility | no-op/pending results are truthful; archive confirmation and keyboard/status basics pass | Historical UI checks exist; current static tests pass, but current interactive validation stopped with the browser-control session | NOT RUN |
+| Admin UI truth and accessibility | no-op/pending results are truthful; archive confirmation and keyboard/status basics pass | 2026-10-23 local browser + mock registry: auth/error/loading/empty, save/tag success + no-op, archive cancellation, focus and selection retention passed. At 390px no horizontal overflow. Archive approval/pending-cleanup remains unverified after browser-control timeouts; UI is unmerged | RED |
 | Backup/restore | Owned local backup, restore, and data/index smoke pass for the default backend | 2026-10-23 owned run passed: Postgres dump + Qdrant snapshot, identical point ID/payload/vector, authenticated restored-app search + selected scoped ID/content in the context pack | GREEN |
 | Owned-resource cleanup | No test process, temporary container, volume, or fixture remains | 2026-10-23 restore projects `15810` have no remaining containers, volumes, or networks. One earlier anonymous-volume deletion lacked conclusive ownership evidence; its impact remains unknown | RED |
 | Deployment and production | Explicit deploy, effective config/image, rollout, smoke, rollback, and operating evidence | No external deployment authorized or observed | EXTERNAL |
 
 ## Next Gate
 
-Complete CI and integration for the verified core changes. Interactive UI
-validation requires an available browser
-session. Real client token reduction and task-success claims remain external;
+Core changes are merged in PR #26. Finish archive approval/pending-cleanup UI
+validation after browser control recovers, then integrate the UI. Real client
+token reduction and task-success claims remain external;
 paid execution, credential changes, and deployment are not authorized.
 
 Free client preflight: from a clean, committed checkout, run

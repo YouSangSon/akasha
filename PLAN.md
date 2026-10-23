@@ -6,8 +6,11 @@ Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale i
 
 ## Current State
 
-Branch: `codex/goal-value-gates`. PR #25 is merged into `main` at
-`79c7fd6`; its Node 22/24, PostgreSQL, and pgvector CI jobs passed.
+PR #26 is merged into `main` at `5e7770f`, following PR #25 at `79c7fd6`.
+All five PR #26 CI jobs passed, including real default-stack retrieval.
+Current branch: `codex/admin-memory-outcomes`; archive approval/pending-cleanup
+browser validation is pending after control timeouts. Other exercised UI flows
+are recorded in `GATES.md` with their mock-registry boundary.
 
 Canonical goal: `goal.md`; current evidence: `GATES.md`. Remaining work covers
 retrieval ranking, local recovery, the fixed-SHA client evaluation harness, UI
@@ -146,12 +149,11 @@ Known issues:
 
 Execute in this order and close each bounded owner before changing scope:
 
-1. Complete CI/main integration for the core changes. The 2026-10-23 owned
-   backup/restore proof and free client preflight passed. At `fab19fe`, corpus
-   v3 retained all required scoped seeds across three tasks without foreign
-   leakage or model calls. The preflight preserves each seed's memory kind.
-2. Verify the admin UI when browser control is available, then complete final
-   checks, PR/main integration, portfolio evidence, and exact resource cleanup.
+1. Verify the admin UI when browser control is available, then integrate that
+   bounded change through CI and PR/main. Do not merge the UI on static checks alone.
+2. Keep the core receipts: PR #26's five CI jobs, the 2026-10-23 owned
+   backup/restore proof, and corpus-v3 preflight at `fab19fe` (all required
+   scoped seeds across three tasks, no foreign leakage or model calls).
 3. Keep real Codex/Claude A/B token and outcome claims unverified until the
    required execution authority and enforceable spend limits exist.
 

@@ -39,7 +39,10 @@ changes; CHANGELOG entries call those out explicitly.
 - Memory governance UI: the static `/admin/memory` shell now reports
   load/save/tag/archive failures through visible status text, keeps
   API-provided errors, includes HTTP status details for non-JSON failures, and
-  avoids sending non-finite numeric form values as JSON `null`.
+  avoids sending non-finite numeric form values as JSON `null`. It also reports
+  update/tag/archive no-op and pending-cleanup results truthfully, requires
+  native confirmation before archive, restores focus after list rerenders, and
+  uses wrapping live status/count regions on narrow screens.
 - PR #19 added MCP Streamable HTTP at `/mcp`, MCP resources, MCP prompts, and
   structured MCP tool output for clients that consume typed results.
 - Docs: public docs now describe descriptor-shared validation, non-root

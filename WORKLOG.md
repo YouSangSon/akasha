@@ -2,6 +2,12 @@
 
 ## 2026-10-23
 
+- PR #26 merged at `5e7770f` after all five final CI jobs passed: Node 22/24
+  each 2625 tests (35 skips), PostgreSQL 246, pgvector 115, and real default
+  retrieval 5. The initial CI convention failure was fixed before merging;
+  new tracked files must be included when running the Git-file-based checks.
+  Its merged branch was removed only after proving no unique commits and no
+  worktree use. The UI change remains in a separate unmerged branch.
 - PR #25 merged at `79c7fd6` after Node 22/24, PostgreSQL, and pgvector CI
   passed. It fixes Qdrant point identity, refreshes dependencies with zero
   native npm-audit findings, and supplies ONNX's glibc runtime in the non-root
@@ -29,8 +35,16 @@
   tasks over 82 seeded records with required seeds/anchors retained and zero
   foreign leakage. Raw/pack word estimates are not client-token measurements.
   The 19 harness cases and typecheck passed after this correction.
-- The current UI browser check remains stopped pending a usable authorized browser
-  session. No paid model run, external deployment, or token-saving result.
+- After explicit user approval, local Brave testing exercised the real admin
+  shell and HTTP routes with an in-memory fixture registry. Auth failure,
+  update/tag success and no-op, sanitized server errors, loading/empty states,
+  keyboard selection, selection retention, focus restoration, and archive
+  cancellation passed. The cancellation made no archive request. At 390px,
+  document width did not exceed the viewport; desktop capture was retained.
+- Browser control then timed out repeatedly before archive approval and
+  pending-cleanup could be verified. The temporary viewport was reset and the
+  owned fixture server stopped with exit 0; port 58622 is no longer listening.
+  UI changes remain unmerged. No paid model run, deployment, or token-saving result.
 
 ## 2026-08-31
 
