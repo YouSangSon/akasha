@@ -35,7 +35,7 @@ ${EDITOR:-nano} .env       # MEMORY_API_TOKENS 설정 (OPENAI_API_KEY 는 EMBEDD
 | CLI watch 모드 | `npm run dev:cli` |
 | 타입 체크 | `npm run typecheck` |
 | 빌드 | `npm run build` |
-| 의존성 감사 | `npm audit --audit-level=moderate` |
+| 의존성 감사 | `npm run audit:dependencies` |
 | 모든 테스트 실행 | `npm test` |
 | 테스트 watch | `npm run test:watch` |
 | 마이그레이션 적용 | `npm run db:migrate` |
@@ -94,7 +94,7 @@ SQL 파일은 `src/db/migrations/NNN_*.sql` 에 있습니다. 현재 마이그�
    - `test:` 테스트 추가/수정
    - `chore:` 의존성, 빌드, 도구
 3. push 전에 **로컬 검증 통과**: `npm run typecheck`, `npm run build`,
-   `npm audit --audit-level=moderate`, `npm test`.
+   `npm run audit:dependencies`, `npm test`.
 4. **CHANGELOG.md**: `## [Unreleased]` 섹션에 사용자 가시 변경사항 한 줄 추가
    (순수 내부 리팩토링은 생략 가능).
 5. **PR 설명**: 관련 이슈 링크, 무엇을 / 왜 변경했는지 서술, 작은 테스트 플랜

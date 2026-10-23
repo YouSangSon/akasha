@@ -145,7 +145,7 @@ describe("public documentation drift checks", () => {
     for (const command of [
       "npm run typecheck",
       "npm run build",
-      "npm audit --audit-level=moderate",
+      "npm run audit:dependencies",
       "npm test",
     ]) {
       expect(prTemplate).toContain(command);
@@ -158,14 +158,14 @@ describe("public documentation drift checks", () => {
     expect(prTemplate).toContain("`npm run typecheck` passes");
     expect(prTemplate).toContain("`npm run build` passes");
     expect(prTemplate).toContain(
-      "`npm audit --audit-level=moderate` reports 0 vulnerabilities",
+      "`npm run audit:dependencies` reports 0 vulnerabilities",
     );
     expect(prTemplate).toContain("`npm test` passes");
     expect(contributing).toContain(
-      "| Dependency audit | `npm audit --audit-level=moderate` |",
+      "| Dependency audit | `npm run audit:dependencies` |",
     );
     expect(contributingKo).toContain(
-      "| 의존성 감사 | `npm audit --audit-level=moderate` |",
+      "| 의존성 감사 | `npm run audit:dependencies` |",
     );
     expect(contributing).toContain("| Run all tests | `npm test` |");
     expect(contributingKo).toContain("| 모든 테스트 실행 | `npm test` |");

@@ -6,10 +6,6 @@ import type {
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const RANKING_WEIGHTS = {
-  scope: {
-    project: 1000,
-    user: 0,
-  },
   memoryType: {
     decision: 120,
     summary: 70,
@@ -24,10 +20,10 @@ const RANKING_WEIGHTS = {
     maxBonus: 25,
   },
   vector: {
-    maxBonus: 50,
+    maxBonus: 100,
   },
   lexical: {
-    maxBonus: 50,
+    maxBonus: 100,
   },
   penalty: {
     genericNote: 35,
@@ -200,6 +196,13 @@ function rankTimestampedCandidates(
         right.candidate.scores.total - left.candidate.scores.total;
       if (scoreDiff !== 0) {
         return scoreDiff;
+      }
+
+      if (
+        left.candidate.record.scopeType !==
+        right.candidate.record.scopeType
+      ) {
+        return left.candidate.record.scopeType === "project" ? -1 : 1;
       }
 
       const updatedAtDiff = right.updatedAtTime - left.updatedAtTime;
@@ -395,12 +398,8 @@ function scopeScore(
   record: SearchMemoryResult,
   reasons: string[],
 ): number {
-  const score =
-    record.scopeType === "project"
-      ? RANKING_WEIGHTS.scope.project
-      : RANKING_WEIGHTS.scope.user;
   reasons.push(`scope:${record.scopeType}`);
-  return score;
+  return 0;
 }
 
 function metadataScore(

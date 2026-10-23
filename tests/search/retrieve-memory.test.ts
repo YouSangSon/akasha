@@ -243,7 +243,7 @@ describe("retrieveMemory", () => {
     expect(repository.getMemoryRecordsByIds).not.toHaveBeenCalled();
   });
 
-  it("keeps project hits ahead when limit is smaller than the combined candidate set", async () => {
+  it("keeps a stronger user hit when limit is smaller than the combined candidate set", async () => {
     const vectorIndex = {
       query: vi
         .fn()
@@ -316,7 +316,87 @@ describe("retrieveMemory", () => {
       undefined,
       true,
     );
-    expect(results.map((result) => result.id)).toEqual([12]);
+    expect(results.map((result) => result.id)).toEqual([21]);
+  });
+
+  it("keeps a strongly relevant user fact inside a five-result decision set", async () => {
+    const projectDecisions = Array.from({ length: 5 }, (_, index) => ({
+      id: index + 1,
+      sourceId: index + 101,
+      scopeType: "project" as const,
+      scopeId: "project-alpha",
+      memoryType: "decision" as const,
+      content: `Decision ${index + 1}: keep an unrelated service boundary.`,
+      createdAt: "2026-03-29T00:00:00.000Z",
+      updatedAt: "2026-03-29T00:00:00.000Z",
+      source: {
+        id: index + 201,
+        scopeType: "project" as const,
+        scopeId: "project-alpha",
+        sourceType: "decision" as const,
+        externalId: `adr-${index + 1}`,
+        title: `ADR ${index + 1}`,
+        uri: `file:///tmp/adr-${index + 1}.md`,
+        createdAt: "2026-03-29T00:00:00.000Z",
+      },
+    }));
+    const userFact = {
+      id: 21,
+      sourceId: 121,
+      scopeType: "user" as const,
+      scopeId: "alice",
+      memoryType: "fact" as const,
+      content: "Alice formats TypeScript with tabs, not spaces.",
+      createdAt: "2026-03-29T00:00:00.000Z",
+      updatedAt: "2026-03-29T00:00:00.000Z",
+      source: {
+        id: 221,
+        scopeType: "user" as const,
+        scopeId: "alice",
+        sourceType: "document" as const,
+        externalId: "alice-profile",
+        title: "Alice profile",
+        uri: "file:///tmp/alice-profile.md",
+        createdAt: "2026-03-29T00:00:00.000Z",
+      },
+    };
+    const vectorIndex = {
+      query: vi
+        .fn()
+        .mockResolvedValueOnce(
+          projectDecisions.map((record, index) => ({
+            id: `chunk:${record.id}`,
+            score: 0.1 - index * 0.01,
+            payload: { memory_record_id: record.id },
+          })),
+        )
+        .mockResolvedValueOnce([
+          {
+            id: "chunk:21",
+            score: 0.812859,
+            payload: { memory_record_id: 21 },
+          },
+        ]),
+    };
+    const repository = {
+      getMemoryRecordsByIds: vi
+        .fn()
+        .mockResolvedValue([...projectDecisions, userFact]),
+      searchMemory: vi.fn().mockResolvedValue([userFact]),
+    };
+
+    const results = await retrieveMemory({
+      vectorIndex: vectorIndex as never,
+      repository: repository as never,
+      vector: [0.1, 0.2, 0.3],
+      query: "Does Alice use tabs or spaces in TypeScript?",
+      organizationId: "dev-team",
+      projectKey: "project-alpha",
+      userScopeId: "alice",
+      limit: 5,
+    });
+
+    expect(results.map((result) => result.id)).toContain(21);
   });
 
   it("passes organizationId through to the repository hydration call", async () => {

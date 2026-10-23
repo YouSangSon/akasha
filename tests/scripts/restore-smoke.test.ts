@@ -8,6 +8,7 @@ import {
   resolveRestoreAppPort,
   resolveRestoreSmokeTextEnv,
   runRestoreSmoke,
+  readRestoreSmokeToolResult,
 } from "../../scripts/restore-smoke.js";
 
 describe("runRestoreSmoke", () => {
@@ -111,6 +112,67 @@ describe("runRestoreSmoke", () => {
       "start-app",
       "stop",
     ]);
+  });
+});
+
+describe("restore smoke proof", () => {
+  it.each([
+    [{ id: 1, content: "unrelated" }, "proof", "search"],
+    [{ id: 1, scopeType: "project", scopeId: "p", content: "proof" }, "unrelated", "context pack"],
+  ])("rejects unrelated restored content", async (row, packMarkdown, failedStep) => {
+    const stopEnvironment = vi.fn().mockResolvedValue(undefined);
+    await expect(runRestoreSmoke({
+      startEnvironment: async () => {}, restorePostgres: async () => {}, startApp: async () => {},
+      callSearch: async () => [row], callPack: async () => ({ ok: true, packMarkdown, selectedMemoryIds: ["project:p:1"] }),
+      expectedContent: "proof", stopEnvironment,
+    })).rejects.toThrow(`restore smoke ${failedStep} did not recover`);
+    expect(stopEnvironment).toHaveBeenCalledOnce();
+  });
+
+  it("accepts the expected restored content in both calls", async () => {
+    await expect(runRestoreSmoke({
+      startEnvironment: async () => {}, restorePostgres: async () => {}, startApp: async () => {},
+      callSearch: async () => [{ id: 1, scopeType: "project", scopeId: "p", content: "proof" }], callPack: async () => ({ ok: true, packMarkdown: "# decision\nproof", selectedMemoryIds: ["project:p:1"] }),
+      expectedContent: "proof", stopEnvironment: async () => {},
+    })).resolves.toBeUndefined();
+  });
+
+  it("rejects a pack that only echoes the proof in the task", async () => {
+    await expect(runRestoreSmoke({
+      startEnvironment: async () => {}, restorePostgres: async () => {}, startApp: async () => {},
+      callSearch: async () => [{ id: 1, scopeType: "project", scopeId: "p", content: "proof" }],
+      callPack: async () => ({ ok: true, packMarkdown: "# Task\nproof", selectedMemoryIds: [] }),
+      expectedContent: "proof", stopEnvironment: async () => {},
+    })).rejects.toThrow("context pack did not recover");
+  });
+
+  it.each(["1", "project:other:1", "user:p:1"])("rejects a selected ID from a different context: %s", async (selectedMemoryId) => {
+    await expect(runRestoreSmoke({
+      startEnvironment: async () => {}, restorePostgres: async () => {}, startApp: async () => {},
+      callSearch: async () => [{ id: 1, scopeType: "project", scopeId: "p", content: "proof" }],
+      callPack: async () => ({ ok: true, packMarkdown: "proof", selectedMemoryIds: [selectedMemoryId] }),
+      expectedContent: "proof", stopEnvironment: async () => {},
+    })).rejects.toThrow("context pack did not recover");
+  });
+
+  it.each([
+    { id: 1, content: "proof" },
+    { id: 1, scopeType: "organization", scopeId: "p", content: "proof" },
+    { id: 1, scopeType: "project", scopeId: " ", content: "proof" },
+    { id: "1", scopeType: "project", scopeId: "p", content: "proof" },
+  ])("rejects restored proof with invalid identity fields", async (row) => {
+    const stopEnvironment = vi.fn().mockResolvedValue(undefined);
+    await expect(runRestoreSmoke({
+      startEnvironment: async () => {}, restorePostgres: async () => {}, startApp: async () => {},
+      callSearch: async () => [row],
+      callPack: async () => ({ ok: true, packMarkdown: "proof", selectedMemoryIds: ["project:p:1"] }),
+      expectedContent: "proof", stopEnvironment,
+    })).rejects.toThrow("search did not recover");
+    expect(stopEnvironment).toHaveBeenCalledOnce();
+  });
+
+  it.each([{ isError: true, structuredContent: { ok: true } }, { structuredContent: { ok: false } }, {}])("rejects failed or malformed MCP responses", (result) => {
+    expect(() => readRestoreSmokeToolResult(result)).toThrow("MCP tool call failed");
   });
 });
 

@@ -49,7 +49,7 @@ describe("docker/app.Dockerfile hardening", () => {
   });
 
   it("uses the onnxruntime-node CUDA skip environment variable in CI", () => {
-    expect(ciInstallCommands).toHaveLength(3);
+    expect(ciInstallCommands).toHaveLength(4);
     for (const command of ciInstallCommands) {
       expect(command).toContain("ONNXRUNTIME_NODE_INSTALL_CUDA=skip");
     }

@@ -1,5 +1,32 @@
 # WORKLOG
 
+## 2026-10-23
+
+- PR #25 merged at `79c7fd6` after Node 22/24, PostgreSQL, and pgvector CI
+  passed. It fixes Qdrant point identity, refreshes dependencies with zero
+  native npm-audit findings, and supplies ONNX's glibc runtime in the non-root
+  Debian image. These checks do not prove an OS-image vulnerability assessment.
+- Real recovery exposed a harness contract error: `add_memory` returns a bare
+  record ID, while context packs select `scopeType:scopeId:recordId`. Two
+  regression tests reproduced the mismatch; both recovery and A/B preflight
+  now compare the scoped identity without changing the public API. Focused
+  checks passed all 78 cases, and independent read-only review found no blocker.
+- The owned PostgreSQL/Qdrant recovery run passed after the correction. It
+  compared the restored Qdrant point ID, payload, and vector with the source,
+  then exercised authenticated HTTP MCP search and context-pack selection.
+  Neither source nor restore project `15810` retains containers, volumes, or
+  networks. Logs and cleanup receipts are under the local Git evidence folder.
+- An earlier anonymous-volume deletion lacked an exact ownership receipt.
+  The user was informed; its impact remains unknown. Subsequent cleanup uses
+  recorded project/container mounts and exact resource identities.
+- Final local checks passed on Node 24.14.0: typecheck, build (reused from the
+  successful restore run), native dependency audit with zero findings, staged
+  diff hygiene, and the full suite (87 files; 2628 passed, 35 skipped). Local
+  database/eval skips remain distinct from the real-stack evidence and CI.
+- Free fixed-SHA preflight remains pending. The current UI browser check
+  remains stopped pending a usable authorized browser
+  session. No paid model run, external deployment, or token-saving result.
+
 ## 2026-08-31
 
 - Reproduced the default Qdrant write blocker: Qdrant 1.13.2 rejects arbitrary
@@ -13,6 +40,43 @@
 - Added the paired Codex navigation guide and updated documentation indexes.
 - Recorded current RED gates instead of promoting partial results: user-scope
   retrieval, context/token value, dependency audit, and admin UI truth/a11y.
+- Added a destructive-safety-guarded default-stack eval and disposable local
+  runner. The first Qdrant + transformers run produced recall@5 0.90,
+  MRR@5 0.5625, user recall 0, leakage 0, and warmed p50/p95 9.48/10.89 ms;
+  q08/q09 were the only misses and the context-pack flow passed.
+- Confirmed the miss is contract drift: public API docs promise project-first
+  ordering only for score ties, while the ranker adds an absolute +1000 boost.
+- Replaced the absolute scope boost with the documented score-tie ordering. The
+  second run recovered q08 but left q09 at rank 6 because unrelated
+  decision/decision metadata had a 90-point advantage over fact/document.
+- Kept metadata, recency, and generic-note weights intact and raised only
+  vector/lexical maximum bonuses from 50 to 100. Added focused score and
+  five-result cutoff coverage; stronger user-scope metadata can now outrank
+  weaker project-scope metadata because project preference is tie-only.
+- The dependency-aligned final Qdrant + transformers run produced recall@5
+  1.00, MRR@5 0.7267, user recall 1.00, leakage 0, no misses, and warmed
+  p50/p95/max 8.32/11.48/15.78 ms across 60 samples. Context-pack flow passed
+  and the runner removed its containers, network, and volumes.
+- Refreshed supported dependency versions in the lockfile. Raw audit moved from
+  12 vulnerability nodes (including critical `tar`) to the two-node
+  `sharp`/Transformers representation of GHSA-f88m-g3jw-g9cj.
+- Prevented Qdrant client drift by changing `^1.13.0` to `~1.14.1`; the bundled
+  server stays at 1.13.2 to avoid unsafe multi-minor storage migration. The
+  installed client 1.14.1 and Undici 6.28.0 passed typecheck, focused adapter
+  tests, and the real default-stack gate without a compatibility warning.
+- Added a fail-closed dependency audit policy and tests. It permits only the
+  exact unresolved `sharp` advisory on the unexposed image path and rejects new
+  moderate-or-higher findings, advisory drift, or an available upstream fix.
+- Made admin save/tag/archive outcomes reflect `updated`, `archived`, and
+  `qdrantPointsPending` instead of unconditional success. Native confirmation,
+  preserved selection, focus restoration, live count/status regions, response
+  validation, and narrow-screen error wrapping stay in the existing static
+  shell without a new browser dependency.
+- A read-only final review found no blocking retrieval/dependency issue. It did
+  identify local `.env` credential drift in the default-stack runner and an
+  overbroad metadata-ordering claim; the runner now pins its disposable
+  credentials before Compose startup and the decision text states the actual
+  tie-only scope behavior.
 
 Verification so far:
 - Focused UUID batch: 6 files, 449 tests passed.
@@ -20,9 +84,36 @@ Verification so far:
 - `npm run build` passed.
 - Full suite: 83 files passed, one skipped; 2,580 tests passed, 34 skipped.
 - Documentation drift: 1 file, 48 tests passed.
+- Default-stack eval before the ranking fix: 1 expected failed quality gate,
+  1 context-pack test passed; all owned compose resources were removed.
+- Focused retrieval closeout: 3 files passed; 67 tests passed and 2 eval tests
+  skipped outside `RUN_EVAL=1`. Real default-stack eval: 4 tests passed.
+- Dependency focused checks: 9 package/runtime files, 364 tests passed; Qdrant
+  compatibility checks, 155 tests and typecheck passed; audit/docs/CI policy,
+  114 tests and `npm run audit:dependencies` passed.
+- Dependency closeout: 85 files passed; 2,591 tests passed and 35 skipped;
+  typecheck, build, the fail-closed audit policy, diff hygiene, and package
+  dry-run passed. The package dry-run excludes the contributor-only dependency
+  audit implementation from the runtime tarball.
+- Admin UI RED: 3 focused assertions failed on the unconditional status,
+  confirmation/focus, and live/wrapping gaps. GREEN: 2 focused files and 71
+  tests passed with typecheck; direct headless Chrome/CDP checks passed for two
+  records, both no-op paths, confirmation cancel, two pending vector points,
+  post-archive focus, live counts, and a 320 px viewport. A reviewer then found
+  the include-archived edge where the retained Archive button is disabled;
+  after the focused fix, a second real Chrome run kept two records, disabled
+  the archived controls, and restored focus to memory list item `#1`.
+- The first current-branch full-suite closeout hit only 5-second timeouts in
+  `tests/scripts/backup-verify.test.ts`; 85 files/2,588 tests had otherwise
+  passed and 35 were skipped. A 15-second diagnostic run proved all 60 backup
+  tests and assertions pass while unrelated user-owned CPU-heavy jobs were
+  active. The shell-heavy file now sets and resets a file-local 15-second test
+  timeout; its normal focused command subsequently passed all 60 tests. A new
+  full closeout remains required before merge.
 - `git diff --check` passed.
-- `npm audit --audit-level=moderate` remains RED: 12 reported nodes before the
-  planned lockfile refresh.
+- Raw `npm audit` remains nonzero by design: one reviewed `sharp` advisory is
+  represented by the `sharp` and `@huggingface/transformers` nodes; no other
+  moderate-or-higher finding remains.
 
 ## 2026-07-05
 

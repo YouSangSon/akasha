@@ -149,6 +149,16 @@ npm run backup:verify
 
 `BACKUP_DIR`의 최신 매니페스트에 대해 일회성 복원 확인을 실행합니다:
 
+source와 restore container, port, volume, credential, 임시 backup directory를 모두
+소유하는 기본 Qdrant 로컬 전체 검증은 저장소 runner로 실행합니다. 사용 중인 port는
+거부하며 기존 배포에는 연결하지 않습니다:
+
+```bash
+./tests/eval/run-backup-restore.sh
+```
+
+HTTP MCP 인증을 위해 `RESTORE_SMOKE_API_TOKEN`에 복원 앱의 `MEMORY_API_TOKENS`에 등록한 토큰을 지정합니다. `RESTORE_SMOKE_EXPECTED_CONTENT`를 지정하면 검색 본문과 팩의 선택된 memory ID 및 본문까지 확인합니다. 일회성 runner는 이를 자동 설정하고 Qdrant point의 ID·payload·vector가 원본과 같은지도 검사합니다.
+
 Qdrant manifest는 `RESTORE_QDRANT_URL` 과
 `RESTORE_SMOKE_QDRANT_RESTORE_CMD` 를 요구합니다. pgvector manifest는 Qdrant
 restore 단계를 건너뛰고 `VECTOR_BACKEND=pgvector` 로 검증합니다.
@@ -163,8 +173,8 @@ export RESTORE_SMOKE_PROJECT_KEY="project-alpha"
 export RESTORE_SMOKE_ORGANIZATION_ID="default"
 export RESTORE_SMOKE_SEARCH_QUERY="continue work"
 export RESTORE_SMOKE_PACK_TASK="continue work"
-export RESTORE_SMOKE_POSTGRES_RESTORE_CMD='cat "$RESTORE_SMOKE_POSTGRES_ARTIFACT_PATH" | gunzip | psql "$RESTORE_POSTGRES_URL"'
-export RESTORE_SMOKE_QDRANT_RESTORE_CMD='curl -fsS -X POST "$RESTORE_QDRANT_URL/collections/$RESTORE_SMOKE_QDRANT_COLLECTION_NAME/snapshots/upload?priority=snapshot" -F "snapshot=@$RESTORE_SMOKE_QDRANT_ARTIFACT_PATH"'
+export RESTORE_SMOKE_POSTGRES_RESTORE_CMD='set -eu; sql="$(mktemp)"; trap "rm -f -- \"$sql\"" EXIT; gunzip -c "$RESTORE_SMOKE_POSTGRES_ARTIFACT_PATH" > "$sql"; psql -X -v ON_ERROR_STOP=1 "$RESTORE_POSTGRES_URL" < "$sql"'
+export RESTORE_SMOKE_QDRANT_RESTORE_CMD='curl -fsS -H "api-key: $QDRANT_API_KEY" -X POST "$RESTORE_QDRANT_URL/collections/$RESTORE_SMOKE_QDRANT_COLLECTION_NAME/snapshots/upload?priority=snapshot" -F "snapshot=@$RESTORE_SMOKE_QDRANT_ARTIFACT_PATH"'
 npm run restore:smoke
 ```
 
@@ -174,8 +184,8 @@ Qdrant manifest에서 이 도우미는:
 - `BACKUP_DIR`에서 최신 매니페스트 및 아티팩트 경로 해석
 - 최신 Postgres 덤프를 격리된 데이터베이스에 복원
 - 최신 Qdrant 스냅샷을 격리된 벡터 스토어에 복원
-- 두 복원이 성공하고 `/healthz`를 기다린 후에만 `app` 서비스 시작
-- 복원된 서비스에 대해 실제 `search_memory` 쿼리 하나와 `build_context_pack` 호출 하나 실행
+- 두 복원이 성공하고 `/readyz`를 기다린 후에만 `app` 서비스 시작
+- 복원된 앱의 인증된 HTTP MCP로 `search_memory` 쿼리 하나와 `build_context_pack` 호출 하나 실행
   (`RESTORE_SMOKE_ORGANIZATION_ID` 설정 시 이를 사용, 의도적인 legacy org-blind check는 `LEGACY_ANONYMOUS_SEARCH=true`)
 - `docker compose -f compose.yaml -f compose.restore-smoke.yaml -p restore-smoke down -v`로 일회성 환경 해체
 

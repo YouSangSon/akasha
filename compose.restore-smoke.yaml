@@ -9,4 +9,4 @@ services:
 
   app:
     ports:
-      - "127.0.0.1:${RESTORE_APP_PORT:-18787}:8787"
+      - "127.0.0.1:${RESTORE_APP_PORT:-18787}:${PORT:-8787}"

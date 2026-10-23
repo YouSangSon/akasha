@@ -245,7 +245,7 @@ npm run dev:cli       # CLI (watch 모드)
 npm run lifecycle:init -- --project my-project --organization-id default
 npm run typecheck     # tsc --noEmit
 npm run build         # dist/ 정리 후 TypeScript 컴파일
-npm audit --audit-level=moderate
+npm run audit:dependencies
 npm test              # vitest run
 npm run db:migrate    # 미적용 마이그레이션 실행
 npm run backup:create # VECTOR_BACKEND 기준 백업

@@ -59,4 +59,22 @@ describe("compose app service contract", () => {
 
     expect(dockerfile).toContain("apt-get install -y --no-install-recommends curl ca-certificates libgomp1");
   });
+
+  it("keeps the default retrieval runner independent from local compose credentials", () => {
+    const runner = read("tests/eval/run-default-stack.sh");
+    const composeUp = runner.indexOf("compose up -d postgres qdrant");
+
+    expect(composeUp).toBeGreaterThan(0);
+    for (const assignment of [
+      "export POSTGRES_USER=memory",
+      "export POSTGRES_PASSWORD=memory",
+      "export POSTGRES_DB=memory_os",
+      'export POSTGRES_PORT="$postgres_port"',
+      "export QDRANT_API_KEY=local-qdrant-key",
+    ]) {
+      const exportIndex = runner.indexOf(assignment);
+      expect(exportIndex).toBeGreaterThan(0);
+      expect(exportIndex).toBeLessThan(composeUp);
+    }
+  });
 });

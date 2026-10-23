@@ -30,6 +30,55 @@ Tradeoff:
   not enough for a broad product claim. `GATES.md` records the larger evidence
   bar separately.
 
+## 2026-08-31 — Let Retrieval Evidence Outrank Unrelated Metadata
+
+Decision: keep project scope as a score-tie breaker and raise vector and lexical
+maximum bonuses from 50 to 100 in the shared ranker.
+
+Why:
+- The default-stack gate showed the q09 user fact at rank 6 even though it was
+  the strongest vector and lexical match; unrelated decision metadata had a
+  90-point head start.
+- Doubling the two query-evidence signals moves the answer above the `k=5`
+  cutoff without adding a user quota, changing schemas, or weakening gates.
+- Metadata-only callers retain the same metadata, recency, and generic-note
+  weights. Because project preference is now tie-only, stronger user-scope
+  metadata can correctly move ahead of weaker project-scope metadata.
+
+Tradeoff:
+- Strong hybrid relevance can now outrank authoritative-looking but unrelated
+  decisions. The checked-in 20-query gate protects the measured behavior, but
+  broader product claims still require the larger corpus defined in
+  `GATES.md`.
+
+## 2026-08-31 — Keep Qdrant Versions Compatible And Audit Fail-Closed
+
+Superseded on 2026-10-22 by PR #25: Transformers 4.3.1 and the refreshed
+lockfile pass native npm audit without exceptions. The app image now uses
+Debian because ONNX requires a glibc loader that Alpine does not provide. The
+Qdrant client/server compatibility decision remains unchanged.
+
+Decision: keep the bundled Qdrant server at 1.13.2, constrain the JavaScript
+client to compatible 1.14.x patches, and allow only the exact unresolved
+`sharp` advisory through a checked audit policy.
+
+Why:
+- Qdrant's client check supports at most one minor of difference. The old
+  `^1.13.0` range silently resolved to client 1.19.0 and emitted an
+  incompatibility warning against the bundled 1.13.2 server.
+- Jumping the named server volume from 1.13 directly to 1.19 would cross
+  sequential storage migrations and risks irreversible data loss. Client
+  1.14.1 remains compatible and can use fixed Undici 6.28.0.
+- Transformers currently installs `sharp` 0.34.5, but Akasha accepts only text
+  for `feature-extraction`; it exposes no attacker-controlled image path. The
+  audit policy matches that one advisory exactly and rejects every other
+  moderate-or-higher finding or any change in fix status.
+
+Tradeoff:
+- Raw `npm audit` remains nonzero until the supported Transformers line ships
+  `sharp >= 0.35.0`. The policy and paired security docs must be removed when
+  that fix becomes available.
+
 ## 2026-08-31 — Use Chunk-Derived UUID Vector Point IDs
 
 Decision: encode each positive safe `memory_chunks.id` injectively in a

@@ -61,7 +61,7 @@ const callRankCandidates = (candidates: unknown) => () =>
   rankCandidates(candidates as readonly RetrievedMemoryCandidate[]);
 
 describe("rankResults", () => {
-  it("keeps all project-scoped records ahead of user-scoped records", () => {
+  it("allows a stronger user memory to outrank weaker project memories", () => {
     const ranked = rankResults([
       createResult({
         id: 11,
@@ -117,7 +117,21 @@ describe("rankResults", () => {
       }),
     ]);
 
-    expect(ranked.map((record) => record.id)).toEqual([13, 14, 11, 12]);
+    expect(ranked.map((record) => record.id)).toEqual([13, 12, 14, 11]);
+  });
+
+  it("keeps project scope first when relevance scores tie", () => {
+    const ranked = rankResults([
+      createResult({
+        id: 99,
+        scopeType: "user",
+        scopeId: "alice",
+        source: { scopeType: "user", scopeId: "alice" },
+      }),
+      createResult({ id: 1, scopeType: "project" }),
+    ]);
+
+    expect(ranked.map((record) => record.id)).toEqual([1, 99]);
   });
 
   it("keeps a recent project summary ahead of an older project summary", () => {
@@ -191,18 +205,18 @@ describe("rankResults", () => {
     });
 
     expect(candidate.source).toBe("vector");
-    expect(candidate.scores.vector).toBeCloseTo(20);
-    expect(candidate.scores.scope).toBe(1000);
+    expect(candidate.scores.vector).toBeCloseTo(40);
+    expect(candidate.scores.scope).toBe(0);
     expect(candidate.scores.metadata).toBe(150);
     expect(candidate.scores.recency).toBe(25);
-    expect(candidate.scores.total).toBeCloseTo(1195);
+    expect(candidate.scores.total).toBeCloseTo(215);
     expect(candidate.reasons).toEqual(
       expect.arrayContaining([
         "scope:project",
         "memoryType:decision",
         "sourceType:decision",
         "recency:25",
-        "vector:20",
+        "vector:40",
       ]),
     );
   });
@@ -238,6 +252,49 @@ describe("rankResults", () => {
     const ranked = rankCandidates([lowerVector, higherVector]);
 
     expect(ranked.map((candidate) => candidate.record.id)).toEqual([41, 42]);
+  });
+
+  it("lets strong hybrid relevance outrank unrelated decision metadata", () => {
+    const newestUpdatedAt = Date.parse("2026-03-28T10:00:00.000Z");
+    const relevantFact = scoreSearchResult(
+      createResult({
+        id: 61,
+        scopeType: "user",
+        scopeId: "alice",
+        memoryType: "fact",
+        content: "Alice formats TypeScript with tabs, not spaces.",
+        source: {
+          scopeType: "user",
+          scopeId: "alice",
+          sourceType: "document",
+        },
+      }),
+      {
+        newestUpdatedAt,
+        source: "hybrid",
+        vectorScore: 0.8,
+        lexicalScore: 0.65,
+      },
+    );
+    const unrelatedDecision = scoreSearchResult(
+      createResult({
+        id: 62,
+        memoryType: "decision",
+        source: { sourceType: "decision" },
+      }),
+      {
+        newestUpdatedAt,
+        source: "hybrid",
+        vectorScore: 0.05,
+        lexicalScore: 0.3,
+      },
+    );
+
+    expect(
+      rankCandidates([unrelatedDecision, relevantFact]).map(
+        (candidate) => candidate.record.id,
+      ),
+    ).toEqual([61, 62]);
   });
 
   it("rejects invalid candidate updatedAt before tie-break sorting", () => {

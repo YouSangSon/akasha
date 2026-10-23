@@ -36,7 +36,7 @@ Daily commands:
 | CLI watch mode | `npm run dev:cli` |
 | Type-check | `npm run typecheck` |
 | Build | `npm run build` |
-| Dependency audit | `npm audit --audit-level=moderate` |
+| Dependency audit | `npm run audit:dependencies` |
 | Run all tests | `npm test` |
 | Watch tests | `npm run test:watch` |
 | Apply migrations | `npm run db:migrate` |
@@ -98,7 +98,7 @@ populated databases.
    - `test:` test additions or fixes
    - `chore:` deps, build, tooling
 3. **Verification passes locally** before pushing: `npm run typecheck`,
-   `npm run build`, `npm audit --audit-level=moderate`, and `npm test`.
+   `npm run build`, `npm run audit:dependencies`, and `npm test`.
 4. **CHANGELOG.md**: add a line to the `## [Unreleased]` section describing
    the user-visible change (skip for purely internal refactors).
 5. **PR description**: link the issue if any, describe what changed and why,

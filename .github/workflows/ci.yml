@@ -41,7 +41,7 @@ jobs:
         run: ONNXRUNTIME_NODE_INSTALL_CUDA=skip npm ci
 
       - name: Audit dependencies
-        run: npm audit --audit-level=moderate
+        run: npm run audit:dependencies
 
       - name: Typecheck
         run: npm run typecheck
@@ -141,3 +141,62 @@ jobs:
         env:
           PGVECTOR_TEST_URL: postgres://memory:memory@127.0.0.1:5433/memory_pgv
         run: npx vitest run tests/vector/pgvector-index.integration.test.ts
+
+  default-retrieval-eval:
+    name: default transformers + Qdrant retrieval gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: memory
+          POSTGRES_PASSWORD: memory
+          POSTGRES_DB: akasha_eval_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U memory -d akasha_eval_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      qdrant:
+        image: qdrant/qdrant:v1.13.2
+        env:
+          QDRANT__SERVICE__API_KEY: local-qdrant-key
+        ports:
+          - 6333:6333
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install
+        run: ONNXRUNTIME_NODE_INSTALL_CUDA=skip npm ci
+
+      - name: Wait for Qdrant
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl -fsS -H "api-key: local-qdrant-key" http://127.0.0.1:6333/collections >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1
+
+      - name: Run default retrieval gate
+        env:
+          RUN_EVAL: "1"
+          DATABASE_URL: postgres://memory:memory@127.0.0.1:5432/akasha_eval_ci
+          QDRANT_URL: http://127.0.0.1:6333
+          QDRANT_API_KEY: local-qdrant-key
+          QDRANT_COLLECTION_NAME: akasha_eval_ci
+          VECTOR_BACKEND: qdrant
+          EMBEDDING_PROVIDER: transformers
+        run: npx vitest run tests/eval/retrieval.eval.test.ts --reporter=verbose
