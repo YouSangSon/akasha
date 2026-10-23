@@ -135,6 +135,9 @@ describe("client A/B evaluation harness", () => {
 
     expect(off.args.join(" ")).not.toContain("mcp_servers.akasha");
     expect(on.args.join(" ")).toContain("mcp_servers.akasha.command");
+    expect(on.args).toContain('mcp_servers.akasha.enabled_tools=["build_context_pack"]');
+    expect(on.args).toContain('mcp_servers.akasha.tools.build_context_pack.approval_mode="approve"');
+    expect(on.args).toContain("read-only");
   });
 
   it("grades normalized complete claims while rejecting omissions, contradictions, and sentinel leakage", () => {

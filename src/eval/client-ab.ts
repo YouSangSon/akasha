@@ -493,6 +493,7 @@ function clientEnvironment(vendor: ClientVendor, subscription = false): NodeJS.P
 function mcpConfigOverrides(server: LiveMcpServer): string[] {
   const overrides = [
     'mcp_servers.akasha.enabled_tools=["build_context_pack"]',
+    'mcp_servers.akasha.tools.build_context_pack.approval_mode="approve"',
     `mcp_servers.akasha.command=${JSON.stringify(server.command)}`,
     `mcp_servers.akasha.args=${JSON.stringify(server.args)}`,
   ];
