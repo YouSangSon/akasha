@@ -363,7 +363,7 @@ export function parseCodexEvents(value: string): ClientUsage {
     if (event.type !== "item.completed") return [];
     object(event.item, "Codex item.completed item");
     if (event.item.type === "mcp_tool_call") {
-      if (event.item.status !== "completed" || event.item.error != null) throw new Error("Codex MCP tool call did not complete successfully");
+      if (event.item.status !== "completed" || event.item.error != null) throw new Error("Codex MCP tool call did not complete successfully", { cause: event.item });
       const result = event.item.result;
       object(result, "Codex MCP result");
       const selectedMemoryIds = result.structured_content != null ? contextPackMemoryIds(result.structured_content) : textResultMemoryIds(result.content);
