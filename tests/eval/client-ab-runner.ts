@@ -3,12 +3,15 @@ import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { bootstrapCanonicalServices } from "../../src/mcp/canonical-services.js";
 import { createToolRegistry } from "../../src/mcp/tool-registry.js";
+import { createPgPool } from "../../src/db/connection.js";
+import { prefetchCliContextPack } from "../../src/eval/client-cli-prefetch.js";
 import {
   assertPaidClientExecutionAllowed,
   prepareClientAbExperiment,
   runClientAb,
   seedAndPreflightClientAb,
   type ClientVendor,
+  type ClientAbProfile,
   type LiveMcpServer,
 } from "../../src/eval/client-ab.js";
 
@@ -17,6 +20,7 @@ const EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
 
 export type ClientAbRunnerArgs = {
   sha: string; fixturePath: string; client?: ClientVendor; model?: string; effort?: string;
+  profile: ClientAbProfile;
   resultDir: string; maxBudgetUsd?: number; executePaid: boolean; executeSubscription: boolean; preflight: boolean;
 };
 
@@ -40,6 +44,7 @@ export function parseClientAbArgs(args: readonly string[]): ClientAbRunnerArgs {
   let executePaid = false;
   let executeSubscription = false;
   let preflight = false;
+  let profile: ClientAbProfile = "mcp-roundtrip";
   const seen = new Set<string>();
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -51,7 +56,7 @@ export function parseClientAbArgs(args: readonly string[]): ClientAbRunnerArgs {
       else preflight = true;
       continue;
     }
-    if (!["--sha", "--fixture", "--client", "--model", "--effort", "--result-dir", "--max-budget-usd"].includes(arg ?? "")) throw new Error(`unknown client A/B runner argument ${arg}`);
+    if (!["--sha", "--fixture", "--client", "--model", "--effort", "--result-dir", "--max-budget-usd", "--profile"].includes(arg ?? "")) throw new Error(`unknown client A/B runner argument ${arg}`);
     if (seen.has(arg!)) throw new Error(`client A/B runner repeats ${arg}`);
     seen.add(arg!);
     const value = requireValue(args, index, arg!);
@@ -62,7 +67,10 @@ export function parseClientAbArgs(args: readonly string[]): ClientAbRunnerArgs {
       if (value !== "codex" && value !== "claude") throw new Error("client A/B runner --client must be codex or claude");
       client = value;
     } else if (arg === "--model") model = value;
-    else if (arg === "--effort") {
+    else if (arg === "--profile") {
+      if (value !== "mcp-roundtrip" && value !== "cli-prefetch") throw new Error("client A/B --profile must be mcp-roundtrip or cli-prefetch");
+      profile = value;
+    } else if (arg === "--effort") {
       if (!EFFORTS.has(value)) throw new Error("client A/B runner --effort must be low, medium, high, xhigh, or max");
       effort = value;
     } else if (arg === "--result-dir") resultDir = value;
@@ -73,7 +81,8 @@ export function parseClientAbArgs(args: readonly string[]): ClientAbRunnerArgs {
   if (executeSubscription && (executePaid || client !== "codex" || effort === undefined)) throw new Error("subscription mode requires Codex, explicit --effort, and no paid mode");
   if (maxBudgetUsd !== undefined && client !== "claude") throw new Error("client A/B runner --max-budget-usd is valid only with --client claude");
   if (maxBudgetUsd !== undefined && maxBudgetUsd > 0.20) throw new Error("client A/B runner --max-budget-usd must be no greater than USD 0.20");
-  return { sha, fixturePath, client, model, effort, resultDir, maxBudgetUsd, executePaid, executeSubscription, preflight };
+  if (profile === "cli-prefetch" && client !== undefined && client !== "codex") throw new Error("CLI prefetch currently supports Codex only");
+  return { sha, fixturePath, client, model, effort, profile, resultDir, maxBudgetUsd, executePaid, executeSubscription, preflight };
 }
 function mcpEnvironment(env: NodeJS.ProcessEnv): Record<string, string> {
   const names = [
@@ -135,27 +144,35 @@ async function main(): Promise<void> {
       resultPath: path.join(resultDir, "preflight.json"),
     }));
     if (args.executePaid || args.executeSubscription) {
-      const summary = await runClientAb({
-        experiment,
-        vendor: args.client!,
-        model: args.model!,
-        effort: args.effort,
-        maxBudgetUsd: args.maxBudgetUsd,
-        resultDir: path.join(resultDir, args.client!),
-        mcpServer: mcpServer(),
-        executePaid: args.executePaid,
-        executeSubscription: args.executeSubscription,
-        allowedMemoryIds: preflight.allowedMemoryIds,
-      });
-      process.stdout.write(`${JSON.stringify({ mode: args.executeSubscription ? "subscription" : "paid", preflight, summary })}\n`);
-      process.exitCode = summary.aggregate.passed ? 0 : 1;
+      const database = args.profile === "cli-prefetch" ? createPgPool({ connectionString: process.env.DATABASE_URL!, max: 1 }) : undefined;
+      try {
+        const summary = await runClientAb({
+          profile: args.profile,
+          prefetch: database === undefined ? undefined : (task) => prefetchCliContextPack({ experiment, task, preflight, repoDir: process.cwd(), env: process.env, database }),
+          experiment,
+          vendor: args.client!,
+          model: args.model!,
+          effort: args.effort,
+          maxBudgetUsd: args.maxBudgetUsd,
+          resultDir: path.join(resultDir, args.client!),
+          mcpServer: mcpServer(),
+          executePaid: args.executePaid,
+          executeSubscription: args.executeSubscription,
+          allowedMemoryIds: preflight.allowedMemoryIds,
+        });
+        process.stdout.write(`${JSON.stringify({ mode: args.executeSubscription ? "subscription" : "paid", preflight, summary })}\n`);
+        process.exitCode = summary.aggregate.passed ? 0 : 1;
+      } finally {
+        await database?.end();
+      }
       return;
     }
-    process.stdout.write(`${JSON.stringify({ mode: "preflight", preflight, paidExecution: false })}\n`);
+    process.stdout.write(`${JSON.stringify({ mode: "preflight", profile: args.profile, preflight, paidExecution: false })}\n`);
     return;
   }
   process.stdout.write(`${JSON.stringify({
     mode: "dry-run",
+    profile: args.profile,
     sourceSha: experiment.sourceSha,
     corpusVersion: experiment.corpusVersion,
     targetRecordCount: experiment.targetRecords.length,

@@ -40,6 +40,11 @@ const TASK_SEED_REQUIREMENTS: Readonly<Record<string, readonly string[]>> = {
 
 export type ClientVendor = "codex" | "claude";
 export type ClientCondition = "off" | "on";
+export type ClientAbProfile = "mcp-roundtrip" | "cli-prefetch";
+export type ClientPrefetchPack = {
+  packMarkdown: string;
+  receipt: { contextPackRunId: string; selectedMemoryIds: string[]; packSha256: string; cliDurationMs: number };
+};
 type FixtureTask = { id: string; task: string; claimKeys: string[] };
 type Fixture = {
   version: number; corpusVersion: number; organizationId: string; foreignOrganizationId: string;
@@ -81,12 +86,14 @@ export type ClientAbPreflight = {
   tasks: ClientAbPreflightTask[];
 };
 export type ClientConditionResult = {
+  profile: ClientAbProfile;
   vendor: ClientVendor; taskId: string; repeat: number; condition: ClientCondition;
   runIndex: number; success: boolean; inputTokens: number; cachedInputTokens: number;
   toolCalls: ToolCall[]; grade: ReturnType<typeof gradeClientAnswer>;
   model: { requested: string; observed: string | null }; cliVersion: string;
 };
 export type ClientAbRunSummary = {
+  profile: ClientAbProfile;
   vendor: ClientVendor; sourceSha: string; corpusVersion: number; cliVersion: string;
   model: { requested: string; observed: string | null }; pairs: ClientPair[];
   aggregate: ClientPairSummary;
@@ -94,6 +101,7 @@ export type ClientAbRunSummary = {
 };
 export type ClientExecutor = (command: ClientCommand) => Promise<{ stdout: string; stderr: string; finalOutput?: string }>;
 export type ClientAbRunInput = {
+  profile?: ClientAbProfile; prefetch?: (task: PreparedClientTask) => Promise<ClientPrefetchPack>;
   experiment: ClientAbExperiment; vendor: ClientVendor; model: string; resultDir: string;
   mcpServer: LiveMcpServer; executePaid: boolean; allowedMemoryIds: readonly string[]; env?: NodeJS.ProcessEnv;
   effort?: string; maxBudgetUsd?: number; executeSubscription?: boolean;
@@ -283,10 +291,14 @@ export type ClientPromptScope = Pick<ClientAbExperiment, "organizationId" | "pro
 export function buildClientPrompt(
   task: Pick<PreparedClientTask, "task" | "claimKeys">,
   condition: ClientCondition,
-  options: { rawCanonicalContext?: string; scope?: ClientPromptScope } = {},
+  options: { rawCanonicalContext?: string; scope?: ClientPromptScope; packMarkdown?: string } = {},
 ): string {
   const prefix = `Task:\n${task.task}\n\nRequired claims (choose one exact value per key):\n${task.claimKeys.map((key) => `- ${key}: ${ANSWER_CHOICES[key]!.choices.join(" | ")}`).join("\n")}\n\n`;
   if (condition === "on") {
+    if (options.packMarkdown !== undefined) {
+      text(options.packMarkdown, "CLI context pack");
+      return `${prefix}Akasha context pack:\n${options.packMarkdown}\n\n${SHARED_PROMPT_SUFFIX}`;
+    }
     const scope = options.scope;
     if (scope === undefined) throw new Error("client A/B on prompt requires its exact Akasha scope");
     return `${prefix}Use the Akasha MCP server. Call build_context_pack exactly once before answering, with exactly this JSON input and no other tool calls:\n${JSON.stringify({ organizationId: scope.organizationId, projectKey: scope.projectKey, task: task.task, userScopeId: scope.userScopeId, includeUser: true, limit: 10 })}\n\n${SHARED_PROMPT_SUFFIX}`;
@@ -503,11 +515,12 @@ function mcpConfigOverrides(server: LiveMcpServer): string[] {
   }
   return overrides;
 }
-export async function buildClientCommand(input: { vendor: ClientVendor; condition: ClientCondition; workspace: ClientWorkspace; prompt: string; expectedModel: string; effort?: string; maxBudgetUsd?: number; mcpServer?: LiveMcpServer; executeSubscription?: boolean }): Promise<ClientCommand> {
+export async function buildClientCommand(input: { vendor: ClientVendor; condition: ClientCondition; profile?: ClientAbProfile; workspace: ClientWorkspace; prompt: string; expectedModel: string; effort?: string; maxBudgetUsd?: number; mcpServer?: LiveMcpServer; executeSubscription?: boolean }): Promise<ClientCommand> {
   text(input.expectedModel, "expectedModel");
-  if (input.condition === "on" && input.mcpServer === undefined) throw new Error("client A/B on condition requires an Akasha MCP server configuration");
+  const usesMcp = input.condition === "on" && input.profile !== "cli-prefetch";
+  if (usesMcp && input.mcpServer === undefined) throw new Error("client A/B on condition requires an Akasha MCP server configuration");
   const finalOutputPath = path.join(input.workspace.cwd, "final-output.json");
-  const mcpServer = input.condition === "on" ? input.mcpServer : undefined;
+  const mcpServer = usesMcp ? input.mcpServer : undefined;
   if (input.vendor === "codex") {
     const args = ["exec", "--ephemeral", "--skip-git-repo-check", "--ignore-user-config", "--ignore-rules", "--sandbox", "read-only", "--json", "--model", input.expectedModel, "--output-schema", input.workspace.schemaPath, "--output-last-message", finalOutputPath];
     if (input.executeSubscription) args.push(...CODEX_SUBSCRIPTION_CONFIG, "-c", 'forced_login_method="chatgpt"');
@@ -610,6 +623,20 @@ function preflightInput(experiment: ClientAbExperiment, task: PreparedClientTask
     limit: 10,
   };
 }
+export function assertClientContextPack(task: PreparedClientTask, pack: { packMarkdown: string; selectedMemoryIds: readonly string[] }, allowedMemoryIds: readonly string[], requiredMemoryIds: readonly string[]): void {
+  text(pack.packMarkdown, "client A/B context pack");
+  const selected = pack.selectedMemoryIds;
+  if (!Array.isArray(selected) || selected.length === 0 || selected.length >= allowedMemoryIds.length || new Set(selected).size !== selected.length || selected.some((id) => !allowedMemoryIds.includes(id))) {
+    throw new Error(`client A/B preflight for ${task.id} selected records outside its proper target subset`);
+  }
+  const normalized = normalize(pack.packMarkdown);
+  if (FOREIGN_SENTINEL_MARKERS.some((marker) => normalized.includes(marker))) throw new Error(`client A/B preflight for ${task.id} leaked the foreign sentinel`);
+  if (requiredMemoryIds.length === 0 || requiredMemoryIds.some((id) => !selected.includes(id))) throw new Error(`client A/B preflight for ${task.id} missed a required seed memory`);
+  for (const key of task.claimKeys) {
+    const rule = ANSWER_KEYS[key];
+    if (rule === undefined || !rule.alternatives.some((literal) => normalized.includes(normalize(literal))) || !rule.required.every((literal) => normalized.includes(normalize(literal)))) throw new Error(`client A/B preflight for ${task.id} missed required anchor ${key}`);
+  }
+}
 export async function seedAndPreflightClientAb(input: {
   experiment: ClientAbExperiment; registry: ClientAbRegistry; resultPath?: string;
 }): Promise<ClientAbPreflight> {
@@ -638,23 +665,7 @@ export async function seedAndPreflightClientAb(input: {
         return memoryId;
       });
       const selectedMemoryIds = [...pack.selectedMemoryIds];
-      const allowed = new Set(input.experiment.targetRecords.map((record) => memoryIds.get(record.id)));
-      if (selectedMemoryIds.length === 0 || selectedMemoryIds.length >= input.experiment.targetRecords.length || selectedMemoryIds.some((memoryId) => !allowed.has(memoryId))) {
-        throw new Error(`client A/B preflight for ${task.id} selected records outside its proper target subset`);
-      }
-      if (selectedMemoryIds.includes(foreignMemoryId) || normalize(pack.packMarkdown).includes(FOREIGN_SENTINEL_MARKERS[0])) {
-        throw new Error(`client A/B preflight for ${task.id} leaked the foreign sentinel`);
-      }
-      if (requiredMemoryIds.some((memoryId) => !selectedMemoryIds.includes(memoryId))) {
-        throw new Error(`client A/B preflight for ${task.id} missed a required seed memory; required=${requiredMemoryIds.join(",")} selected=${selectedMemoryIds.join(",")}`);
-      }
-      const normalizedPack = normalize(pack.packMarkdown);
-      for (const key of task.claimKeys) {
-        const rule = ANSWER_KEYS[key];
-        if (rule === undefined || !rule.alternatives.some((literal) => normalizedPack.includes(normalize(literal))) || !rule.required.every((literal) => normalizedPack.includes(normalize(literal)))) {
-          throw new Error(`client A/B preflight for ${task.id} missed required anchor ${key}`);
-        }
-      }
+      assertClientContextPack(task, pack, input.experiment.targetRecords.map((record) => memoryIds.get(record.id)!), requiredMemoryIds);
       tasks.push({
         taskId: task.id,
         selectedMemoryIds,
@@ -773,6 +784,8 @@ function assertClientAuthentication(input: ClientAbRunInput): void {
   }
 }
 export async function runClientAb(input: ClientAbRunInput): Promise<ClientAbRunSummary> {
+  const profile = input.profile ?? "mcp-roundtrip";
+  if (profile === "cli-prefetch" && (input.vendor !== "codex" || input.prefetch === undefined)) throw new Error("CLI prefetch requires Codex and an actual CLI pack provider");
   if (input.executeSubscription) {
     if (input.executePaid || input.vendor !== "codex" || !input.effort) throw new Error("subscription evaluation requires Codex, explicit effort, and no paid mode");
   } else {
@@ -788,6 +801,7 @@ export async function runClientAb(input: ClientAbRunInput): Promise<ClientAbRunS
   const getCliVersion = input.getCliVersion ?? cliVersion;
   const version = await getCliVersion(input.vendor);
   const outcomes = new Map<string, ClientConditionResult>();
+  const prefetched = new Map<string, ClientPrefetchPack>();
   const usageChecks: CodexSubscriptionStatus[] = [];
   const checkSubscription = async () => {
     if (!input.executeSubscription) return;
@@ -806,20 +820,29 @@ export async function runClientAb(input: ClientAbRunInput): Promise<ClientAbRunS
       let executionStarted = false;
       let outcomeWritten = false;
       try {
+        const pairKey = `${entry.task.id}:${entry.repeat}`;
+        if (profile === "cli-prefetch" && !prefetched.has(pairKey)) {
+          // Validate a fresh CLI pack before either side of this pair can invoke a model.
+          const pack = await input.prefetch!(entry.task);
+          await writeResultAtomically(path.join(input.resultDir, `cli-${entry.task.id}-r${entry.repeat}.json`), { profile, sourceSha: input.experiment.sourceSha, taskId: entry.task.id, repeat: entry.repeat, ...pack.receipt });
+          prefetched.set(pairKey, pack);
+        }
         const prompt = buildClientPrompt(entry.task, entry.condition, {
           rawCanonicalContext: input.experiment.rawCanonicalContext,
           scope: input.experiment,
+          packMarkdown: profile === "cli-prefetch" ? prefetched.get(pairKey)!.packMarkdown : undefined,
         });
         const command = await buildClientCommand({
           vendor: input.vendor,
           condition: entry.condition,
+          profile,
           workspace,
           prompt,
           expectedModel: input.model,
           effort: input.effort,
           maxBudgetUsd: input.maxBudgetUsd,
           executeSubscription: input.executeSubscription,
-          mcpServer: entry.condition === "on" ? input.mcpServer : undefined,
+          mcpServer: profile === "mcp-roundtrip" && entry.condition === "on" ? input.mcpServer : undefined,
         });
         await checkSubscription();
         executionStarted = true;
@@ -827,7 +850,7 @@ export async function runClientAb(input: ClientAbRunInput): Promise<ClientAbRunS
         const parsed = input.vendor === "codex"
           ? parseCodexEvents(executed.stdout)
           : parseClaudeStream(executed.stdout, input.model);
-        verifyToolTrace(entry.condition, parsed.toolCalls, preflightInput(input.experiment, entry.task), input.allowedMemoryIds);
+        verifyToolTrace(profile === "cli-prefetch" ? "off" : entry.condition, parsed.toolCalls, preflightInput(input.experiment, entry.task), input.allowedMemoryIds);
         const rawOutput = input.vendor === "codex"
           ? executed.finalOutput ?? await readFile(command.finalOutputPath, "utf8")
           : JSON.stringify((parsed as ClaudeStreamResult).structuredOutput);
@@ -836,6 +859,7 @@ export async function runClientAb(input: ClientAbRunInput): Promise<ClientAbRunS
         const observed = input.vendor === "codex" ? observedCodexModel(executed.stdout) : (parsed as ClaudeStreamResult).observedModel;
         if (observed !== null && observed !== input.model) throw new Error("client A/B observed model differs from the requested model");
         const outcome: ClientConditionResult = {
+          profile,
           vendor: input.vendor, taskId: entry.task.id, repeat: entry.repeat, condition: entry.condition,
           runIndex, success: grade.success, inputTokens: parsed.inputTokens, cachedInputTokens: parsed.cachedInputTokens,
           toolCalls: parsed.toolCalls, grade, model: { requested: input.model, observed }, cliVersion: version,
@@ -848,6 +872,7 @@ export async function runClientAb(input: ClientAbRunInput): Promise<ClientAbRunS
         // Keep raw diagnostics local for debugging; summaries never include client logs.
         if (error instanceof Error && error.cause !== undefined) await writeResultAtomically(`${resultPath}.private-diagnostics`, error.cause);
         if (!outcomeWritten) await writeResultAtomically(resultPath, {
+          profile,
           vendor: input.vendor, taskId: entry.task.id, repeat: entry.repeat, condition: entry.condition, runIndex,
           success: false, cliVersion: version,
           error: error instanceof Error ? error.message : "client A/B condition failed",
@@ -868,6 +893,7 @@ export async function runClientAb(input: ClientAbRunInput): Promise<ClientAbRunS
     const all = [...outcomes.values()];
     const model = { requested: input.model, observed: all.every((outcome) => outcome.model.observed === input.model) ? input.model : null };
     const summary: ClientAbRunSummary = {
+      profile,
       vendor: input.vendor, sourceSha: input.experiment.sourceSha, corpusVersion: input.experiment.corpusVersion,
       cliVersion: version, model, pairs, aggregate,
       totals: {
@@ -881,6 +907,7 @@ export async function runClientAb(input: ClientAbRunInput): Promise<ClientAbRunS
     return summary;
   } catch (error: unknown) {
     await writeResultAtomically(path.join(input.resultDir, `${input.vendor}-failure.json`), {
+      profile,
       status: "failed", sourceSha: input.experiment.sourceSha, completedConditions: outcomes.size,
       error: error instanceof Error ? error.message : "client A/B execution failed",
     });

@@ -19,6 +19,17 @@ delivery and the unmet product-value goal are separate. Existing UI, retrieval,
 and recovery evidence remains valid within its recorded scope. The earlier
 anonymous-volume deletion still has unknown impact.
 
+The existing CLI-to-prompt workflow now has a separate `cli-prefetch` profile.
+At `d459e20`, a complete fresh comparison passed 18/18 answers and reduced total
+input tokens by a median 53.40%; nine actual CLI outputs matched fresh scoped DB
+receipts. A prior sleep-interrupted attempt remains recorded separately.
+`GATES.md` owns the protocol and measurement limits. Typecheck/build/audit passed;
+the serial full suite passed 2,648 tests with 35 skips and one existing backup
+test timeout, which passed alone without changing its 15-second limit. Both owned
+evaluation stacks were removed; final CI and merge receipts belong with the PR
+and the existing portfolio evidence bundle.
+The MCP failure, unavailable Claude proof, and historical cleanup uncertainty remain.
+
 Recent completed architecture-goal commits; run `git log -1 --oneline` for the
 newest local commit:
 - `e8f9136 fix(vector): use qdrant-compatible point ids`
