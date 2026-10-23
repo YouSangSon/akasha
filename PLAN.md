@@ -8,9 +8,11 @@ Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale i
 
 PR #26 is merged into `main` at `5e7770f`, following PR #25 at `79c7fd6`.
 All five PR #26 CI jobs passed, including real default-stack retrieval.
-Current branch: `codex/admin-memory-outcomes`; archive approval/pending-cleanup
-browser validation is pending after control timeouts. Other exercised UI flows
-are recorded in `GATES.md` with their mock-registry boundary.
+PR #27 owns the admin UI changes. Local browser validation now covers
+archive approval, pending cleanup, no-op, focus fallback, and desktop/mobile
+layouts. The archived durability label was corrected after visual inspection.
+Its CI checks and merge record own integration status; see `GATES.md` for the
+fixture boundary.
 
 Canonical goal: `goal.md`; current evidence: `GATES.md`. Remaining work covers
 retrieval ranking, local recovery, the fixed-SHA client evaluation harness, UI
@@ -149,8 +151,8 @@ Known issues:
 
 Execute in this order and close each bounded owner before changing scope:
 
-1. Verify the admin UI when browser control is available, then integrate that
-   bounded change through CI and PR/main. Do not merge the UI on static checks alone.
+1. Preserve the browser-verified admin UI receipts with PR #27's CI and merge
+   evidence. Static assertions are not browser behavior or database E2E evidence.
 2. Keep the core receipts: PR #26's five CI jobs, the 2026-10-23 owned
    backup/restore proof, and corpus-v3 preflight at `fab19fe` (all required
    scoped seeds across three tasks, no foreign leakage or model calls).

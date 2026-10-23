@@ -446,6 +446,7 @@ export function renderMemoryAdminPage(): string {
       form.elements.tags.value = (memory.tags || []).join(", ");
       form.elements.importance.value = memory.importance ?? "";
       if (memory.durability === "archived") {
+        form.elements.durability.add(new Option("archived", "archived", true, true));
         form.elements.durability.disabled = true;
         form.querySelector("[data-action='archive']").disabled = true;
       }

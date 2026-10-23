@@ -42,7 +42,8 @@ changes; CHANGELOG entries call those out explicitly.
   avoids sending non-finite numeric form values as JSON `null`. It also reports
   update/tag/archive no-op and pending-cleanup results truthfully, requires
   native confirmation before archive, restores focus after list rerenders, and
-  uses wrapping live status/count regions on narrow screens.
+  uses wrapping live status/count regions on narrow screens. Archived records
+  show their actual durability in the disabled detail control.
 - PR #19 added MCP Streamable HTTP at `/mcp`, MCP resources, MCP prompts, and
   structured MCP tool output for clients that consume typed results.
 - Docs: public docs now describe descriptor-shared validation, non-root

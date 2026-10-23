@@ -32,17 +32,17 @@ pinned runner; shared CI reports it without failing the build.
 | Typecheck | `npm run typecheck` | 2026-10-23 passed on Node 24.14.0 | GREEN |
 | Build | `npm run build` | 2026-10-23 passed in the successful owned restore run | GREEN |
 | Full test suite | No new failure; skips reported | PR #26 final CI: Node 22/24 each 2625 passed, 35 skipped; separate PostgreSQL 246, pgvector 115, default retrieval 5 passed. Earlier local 2628 included the three unmerged UI assertions | GREEN |
-| Diff hygiene | `git diff --check` and staged review | 2026-10-23 staged core diff passed; unverified UI changes excluded | GREEN |
+| Diff hygiene | `git diff --check` and staged review | 2026-10-23 core diff passed; final UI diff checked separately before commit | GREEN |
 | Dependency security | No unmitigated reachable critical/high advisory | PR #25: native npm audit reports 0 vulnerabilities, no exception policy. This is not an OS-image vulnerability assessment | GREEN |
-| Admin UI truth and accessibility | no-op/pending results are truthful; archive confirmation and keyboard/status basics pass | 2026-10-23 local browser + mock registry: auth/error/loading/empty, save/tag success + no-op, archive cancellation, focus and selection retention passed. At 390px no horizontal overflow. Archive approval/pending-cleanup remains unverified after browser-control timeouts; UI is unmerged | RED |
+| Admin UI truth and accessibility | no-op/pending results are truthful; archive confirmation and keyboard/status basics pass | 2026-10-23 real shell/HTTP + in-memory fixture: auth/error/loading/empty, save/tag success + no-op, native archive cancellation/approval, pending cleanup, archive no-op, selection retention and focus fallback passed. Desktop and 390x844 mobile visually inspected; no horizontal overflow. Archived detail shows archived with durability/archive controls disabled. No database E2E or screen-reader test; integration evidence belongs to PR #27 | GREEN |
 | Backup/restore | Owned local backup, restore, and data/index smoke pass for the default backend | 2026-10-23 owned run passed: Postgres dump + Qdrant snapshot, identical point ID/payload/vector, authenticated restored-app search + selected scoped ID/content in the context pack | GREEN |
 | Owned-resource cleanup | No test process, temporary container, volume, or fixture remains | 2026-10-23 restore projects `15810` have no remaining containers, volumes, or networks. One earlier anonymous-volume deletion lacked conclusive ownership evidence; its impact remains unknown | RED |
 | Deployment and production | Explicit deploy, effective config/image, rollout, smoke, rollback, and operating evidence | No external deployment authorized or observed | EXTERNAL |
 
 ## Next Gate
 
-Core changes are merged in PR #26. Finish archive approval/pending-cleanup UI
-validation after browser control recovers, then integrate the UI. Real client
+Core changes are merged in PR #26. Browser validation is complete within the
+local fixture boundary; PR #27 owns UI integration evidence. Real client
 token reduction and task-success claims remain external;
 paid execution, credential changes, and deployment are not authorized.
 

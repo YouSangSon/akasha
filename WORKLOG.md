@@ -2,6 +2,17 @@
 
 ## 2026-10-23
 
+- Resumed browser validation completed archive approval with pending cleanup,
+  successful archive, archive no-op, and focus fallback to the next record or
+  Reload. Isolated HTTP logs contain exactly IDs 1, 2, and 3. Desktop and
+  390x844 mobile captures were visually inspected with no horizontal overflow.
+  Inspection exposed archived details showing ephemeral; one native option now
+  displays archived while the existing disabled controls and payload guard stay
+  intact. The corrected display and pending outcome were verified in-browser.
+  Both fixture servers exited 0, ports 64313/51867 are closed, the owned tab is
+  closed, and the temporary viewport was reset. This is fixture-registry UI
+  evidence, not database E2E or a screen-reader test. Typecheck and three focused
+  files passed (119 tests); final CI and integration evidence belong to PR #27.
 - PR #26 merged at `5e7770f` after all five final CI jobs passed: Node 22/24
   each 2625 tests (35 skips), PostgreSQL 246, pgvector 115, and real default
   retrieval 5. The initial CI convention failure was fixed before merging;
