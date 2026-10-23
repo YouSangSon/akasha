@@ -14,7 +14,8 @@ Last updated: 2026-10-23 KST. Valid states are `GREEN`, `RED`, `NOT RUN`, and
 | Warm retrieval latency | On the pinned local runner after warm-up: p50 <= 100 ms and p95 <= 250 ms; cold start reported separately | same eval, at least 60 measured queries | 2026-10-22 local run, 60 samples: p50 17.89 ms, p95 72.89 ms, max 143.18 ms; latency enforcement disabled on this shared host | GREEN |
 | Free client preflight | Fixed clean SHA, exact required scoped seed identities, no foreign-organization leakage | `AKASHA_EVAL_MODE=client-ab ./tests/eval/run-default-stack.sh` | 2026-10-23 at `fab19fe`, corpus v3: 82 seeded records, all 3 tasks retained required seeds/anchors, leakage 0; no model client called | GREEN |
 | Context value | Required-decision omission = 0 and context-pack tokenizer count is lower than the defined raw/baseline context | context-pack fixture plus tokenizer report | Required seeds retained in corpus-v3 preflight; real Codex on/off succeeds but median total input-token reduction is only 0.35%, below the product bar | RED |
-| Codex A/B | Paired successful runs have median input-token reduction >= 15%, no success-rate loss, omission/leakage = 0 | fixed-SHA off/on harness, three tasks x three repeats | 2026-10-23 at `fe24b4d`, CLI 0.163.0, requested `gpt-6.1-sol` / medium: 18/18 successful, omission/leakage 0; median input-token reduction **0.35%**, below 15%. No new credit decline observed | RED |
+| Codex MCP A/B | Paired successful runs have median input-token reduction >= 15%, no success-rate loss, omission/leakage = 0 | fixed-SHA off/on harness, three tasks x three repeats | 2026-10-23 at `fe24b4d`, CLI 0.163.0, requested `gpt-6.1-sol` / medium: 18/18 successful, omission/leakage 0; median input-token reduction **0.35%**, below 15%. No new credit decline observed | RED |
+| Supplemental Codex CLI-prefetch A/B | Same per-profile 15% bar; exact actual CLI pack and zero model tool calls | fresh nine-pair comparison, protocol below | 2026-10-23 at `d459e20`, same corpus v3, CLI 0.163.0 and requested model/effort: 18/18 correct, no omission/contradiction/leakage; median total input-token reduction **53.40%**. Nine fresh CLI receipts and 36 usage checks passed | GREEN |
 | Claude A/B | Same per-client bar as Codex; never combine vendor token counts | fixed-SHA off/on harness, three tasks x three repeats | No actual run: the user does not yet use Claude Code; local CLI is not logged in. Paid/API execution is not authorized | EXTERNAL |
 
 For an explicitly authorized Codex subscription evaluation on a clean commit:
@@ -86,7 +87,23 @@ connects MCP, and both must report zero tool calls. Record all 18 outcomes,
 profile, nine receipt IDs/pack hashes/CLI durations, and total input tokens
 including cached input. Retain failures without retries or discarded pairs.
 The per-profile threshold remains 15%; no overall cost or latency claim follows
-from input tokens alone. No result has been measured for this profile yet.
+from input tokens alone. The protocol was committed at `d459e20` before execution.
+
+The complete run at that SHA passed all 18 answers with zero omissions,
+contradictions, leakage, or model tool calls. Total input was 576,431 off and
+269,369 on, with cached input of 19,200 and 66,816 respectively still included.
+The independently recomputed median reduction was 53.3954%. All nine actual CLI
+receipts retained required scoped memories; 36 before/after usage checks observed
+no new credit decline. CLI events still omitted the observed model ID. CLI
+process duration was 31.21–34.60 seconds (median 31.41), so this is not evidence
+of lower end-to-end latency or total monetary cost.
+
+An earlier attempt at the same SHA stopped after 11 successful conditions when
+the laptop entered clamshell sleep during condition 12; that command timed out
+and the subsequent usage query failed. The incomplete attempt and its failure
+were retained. After a documented full wake and successful live usage query, a
+new complete comparison used fresh pairs; no partial pair was reused. Neither
+this supplemental pass nor the recovered execution changes the MCP or Claude gates.
 
 Select this profile by adding `AKASHA_CLIENT_AB_PROFILE=cli-prefetch` to the
 authorized subscription command above and use a new result directory.
@@ -115,9 +132,9 @@ pinned runner; shared CI reports it without failing the build.
 
 ## Next Gate
 
-Implementation and evaluation changes are merged through PR #28. Codex's actual task-success
-checks pass, but its measured input-token reduction fails the 15% bar. Preserve
-that baseline and the source audit above. The user does not yet use Claude Code,
+Implementation and evaluation changes are merged through PR #28. The supplemental
+CLI-prefetch run now passes its 15% bar, while the MCP baseline still fails it.
+Preserve both results and the source audit above. The user does not yet use Claude Code,
 so its proof remains external to this completed evaluation unit. The original
 product goal is still unmet; do not mark it complete or lower its passing bar
 without a scope decision. Paid execution, credential
