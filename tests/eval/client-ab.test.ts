@@ -228,7 +228,7 @@ describe("client A/B evaluation harness", () => {
     expect(aggregateClientPairs("codex", pairs.map((pair) => ({ ...pair, on: { success: true, inputTokens: 199 } })))).toMatchObject({ allPairsSuccessful: true, passed: false });
   });
 
-  it("uses a deterministic 18-call plan, stdin-only prompts, isolated MCP env, and atomic paired evidence", async () => {
+  it.each(["mcp-roundtrip", "cli-prefetch"] as const)("uses a deterministic 18-call %s plan, isolated auth, and atomic paired evidence", async (profile) => {
     const { repoDir, sha } = await makeTrackedFixtureRepo();
     const experiment = prepareClientAbExperiment({ repoDir, sha, fixturePath: "fixture.json" });
     const resultRoot = await mkdtemp(path.join(os.tmpdir(), "akasha-client-ab-results-"));
@@ -249,7 +249,9 @@ describe("client A/B evaluation harness", () => {
     vi.stubEnv("OPENAI_API_KEY", "must-not-reach-subscription");
     vi.stubEnv("CODEX_API_KEY", "must-not-reach-subscription");
     const readSubscriptionStatus = vi.fn(async () => ({ checkedAt: new Date().toISOString(), weeklyRemainingPercent: 80, creditBalance: "12.0000000000" }));
+    const prefetch = vi.fn(async () => ({ packMarkdown: "Exact CLI pack\n", receipt: { contextPackRunId: "42", selectedMemoryIds: ["1"], packSha256: "a".repeat(64), cliDurationMs: 10 } }));
     const summary = await runClientAb({
+      profile, prefetch,
       experiment,
       vendor: "codex",
       model: "codex-test",
@@ -260,10 +262,15 @@ describe("client A/B evaluation harness", () => {
       allowedMemoryIds: ["1"],
       getCliVersion: async () => "codex 0.test",
       execute: async (command) => {
-        const on = command.args.some((arg) => arg.includes("mcp_servers.akasha.command"));
+        const mcp = command.args.some((arg) => arg.includes("mcp_servers.akasha.command"));
+        const on = mcp || command.stdin.includes("Akasha context pack:");
+        if (profile === "cli-prefetch") {
+          expect(mcp).toBe(false);
+          if (on) expect(command.stdin).toContain("Akasha context pack:\nExact CLI pack\n\n\n");
+        }
         calls.push({ condition: on ? "on" : "off", stdin: command.stdin, args: command.args, env: command.env });
         return {
-          stdout: `${on ? JSON.stringify({ type: "item.completed", item: { type: "mcp_tool_call", server: "akasha", tool: "build_context_pack", status: "completed", error: null, arguments: JSON.parse(command.stdin.split("\n").find((line) => line.startsWith('{"organizationId"'))!), result: { structured_content: { ok: true, packMarkdown: "retrieved fact", selectedMemoryIds: ["1"] } } } }) + "\n" : ""}{"type":"turn.completed","model":"codex-test","usage":{"input_tokens":${on ? 160 : 200},"cached_input_tokens":0}}\n`,
+          stdout: `${mcp ? JSON.stringify({ type: "item.completed", item: { type: "mcp_tool_call", server: "akasha", tool: "build_context_pack", status: "completed", error: null, arguments: JSON.parse(command.stdin.split("\n").find((line) => line.startsWith('{"organizationId"'))!), result: { structured_content: { ok: true, packMarkdown: "retrieved fact", selectedMemoryIds: ["1"] } } } }) + "\n" : ""}{"type":"turn.completed","model":"codex-test","usage":{"input_tokens":${on ? 160 : 200},"cached_input_tokens":0}}\n`,
           stderr: "",
           finalOutput: JSON.stringify(answer(command.stdin)),
         };
@@ -277,10 +284,13 @@ describe("client A/B evaluation harness", () => {
     expect(calls.every((call) => !call.args.some((arg) => arg.includes("Raw canonical context")) && call.stdin.includes("Return exactly one JSON object"))).toBe(true);
     expect(calls.every((call) => !call.stdin.includes("alpha.canonical-pg") && call.env.DATABASE_URL === undefined)).toBe(true);
     expect(summary.aggregate).toMatchObject({ pairCount: 9, passed: true, medianInputTokenReduction: 0.2 });
-    expect(await (await import("node:fs/promises")).readdir(resultDir)).toHaveLength(20);
+    expect(summary.profile).toBe(profile);
+    expect(prefetch).toHaveBeenCalledTimes(profile === "cli-prefetch" ? 9 : 0);
+    expect(JSON.parse(await readFile(path.join(resultDir, "codex-canonical-state-r1-on.json"), "utf8"))).toMatchObject({ profile });
+    expect(await (await import("node:fs/promises")).readdir(resultDir)).toHaveLength(profile === "cli-prefetch" ? 29 : 20);
   });
 
-  it("persists a failing condition and summary failure without retrying", async () => {
+  it.each(["client", "prefetch"])("persists a failing %s and summary failure without retrying", async (failure) => {
     const { repoDir, sha } = await makeTrackedFixtureRepo();
     const experiment = prepareClientAbExperiment({ repoDir, sha, fixturePath: "fixture.json" });
     const resultRoot = await mkdtemp(path.join(os.tmpdir(), "akasha-client-ab-failure-"));
@@ -289,6 +299,8 @@ describe("client A/B evaluation harness", () => {
     let calls = 0;
 
     await expect(runClientAb({
+      profile: failure === "prefetch" ? "cli-prefetch" : "mcp-roundtrip",
+      prefetch: async () => { throw new Error("fake client failure"); },
       experiment, vendor: "codex", model: "codex-test", resultDir,
       mcpServer: { command: "node", args: ["server.js"] }, executePaid: true,
       env: { AKASHA_ALLOW_PAID_CLIENT_EVAL: "1" }, allowedMemoryIds: ["1"],
@@ -296,10 +308,11 @@ describe("client A/B evaluation harness", () => {
       execute: async () => { calls += 1; throw new Error("fake client failure"); },
     })).rejects.toThrow("fake client failure");
 
-    expect(calls).toBe(1);
+    expect(calls).toBe(failure === "prefetch" ? 0 : 1);
     const files = await (await import("node:fs/promises")).readdir(resultDir);
     expect(files).toContain("codex-canonical-state-r1-off.json");
     expect(files).toContain("codex-failure.json");
+    expect(JSON.parse(await readFile(path.join(resultDir, "codex-failure.json"), "utf8"))).toMatchObject({ profile: failure === "prefetch" ? "cli-prefetch" : "mcp-roundtrip" });
   });
 
   it("seeds and preflights exact target scope through public registry methods before any client call", async () => {
@@ -377,6 +390,10 @@ describe("client A/B evaluation harness", () => {
       expect(() => parseClientAbArgs(["--sha", sha, "--execute-subscription", "--client", client, "--model", "test", ...extra])).toThrow();
     }
     expect(parseClientAbArgs(["--sha", sha])).toMatchObject({ executePaid: false, preflight: false });
+    expect(parseClientAbArgs(["--sha", sha])).toMatchObject({ profile: "mcp-roundtrip" });
+    expect(parseClientAbArgs(["--sha", sha, "--profile", "cli-prefetch"])).toMatchObject({ profile: "cli-prefetch" });
+    expect(() => parseClientAbArgs(["--sha", sha, "--profile", "unknown"])).toThrow("--profile");
+    expect(() => parseClientAbArgs(["--sha", sha, "--profile", "cli-prefetch", "--client", "claude"])).toThrow("Codex only");
     expect(parseClientAbArgs(["--sha", sha, "--preflight"])).toMatchObject({ preflight: true });
     expect(parseClientAbArgs(["--sha", sha, "--execute-paid", "--client", "claude", "--model", "claude-test", "--max-budget-usd", "0.20"])).toMatchObject({ executePaid: true, client: "claude", maxBudgetUsd: 0.2 });
     expect(() => parseClientAbArgs(["--sha", sha, "--execute-paid"])).toThrow("requires --client and --model");

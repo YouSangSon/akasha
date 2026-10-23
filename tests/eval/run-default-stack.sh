@@ -97,7 +97,7 @@ if [ "${AKASHA_CLIENT_AB_EXECUTE_PAID:-0}" = "1" ] || [ "${AKASHA_CLIENT_AB_EXEC
   QDRANT_COLLECTION_NAME="$collection_name" \
   VECTOR_BACKEND=qdrant \
   EMBEDDING_PROVIDER=transformers \
-  ./node_modules/.bin/tsx tests/eval/client-ab-runner.ts --sha "$sha" --preflight "$execution_flag" --effort "$AKASHA_CLIENT_AB_EFFORT" --client "$AKASHA_CLIENT_AB_CLIENT" --model "$AKASHA_CLIENT_AB_MODEL" --result-dir "$result_dir"
+  ./node_modules/.bin/tsx tests/eval/client-ab-runner.ts --sha "$sha" --preflight "$execution_flag" --profile "${AKASHA_CLIENT_AB_PROFILE:-mcp-roundtrip}" --effort "$AKASHA_CLIENT_AB_EFFORT" --client "$AKASHA_CLIENT_AB_CLIENT" --model "$AKASHA_CLIENT_AB_MODEL" --result-dir "$result_dir"
   exit 0
 fi
 

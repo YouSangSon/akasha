@@ -19,6 +19,12 @@ delivery and the unmet product-value goal are separate. Existing UI, retrieval,
 and recovery evidence remains valid within its recorded scope. The earlier
 anonymous-volume deletion still has unknown impact.
 
+The resumed unit evaluates the existing CLI-to-prompt workflow in a separate
+`cli-prefetch` profile. `GATES.md` owns its preregistered protocol. Verify actual
+CLI output against fresh DB receipts, complete the focused/full checks, then
+run one fixed-commit Codex comparison with the existing subscription guards.
+Preserve the MCP failure and unavailable Claude evidence regardless of outcome.
+
 Recent completed architecture-goal commits; run `git log -1 --oneline` for the
 newest local commit:
 - `e8f9136 fix(vector): use qdrant-compatible point ids`

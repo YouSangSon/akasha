@@ -67,6 +67,30 @@ Do not remove user instructions or public response fields to manufacture a pass;
 retain this host-profile baseline and require a concrete hypothesis before another
 model run.
 
+### Supplemental CLI-prefetch protocol
+
+The existing `pack` CLI can supply `packMarkdown` to a new agent prompt, as in
+the README's context-pack workflow. The hypothesis is that retrieving before
+the model turn avoids the model-initiated MCP round trip while retaining the
+same required context. This is a separate `cli-prefetch` profile; it cannot
+replace the failed `mcp-roundtrip` baseline or satisfy the missing Claude gate.
+
+Before measuring, pin a clean commit and keep corpus v3, the three tasks,
+grading, model/effort, global instructions, and subscription guards unchanged.
+For each of nine fresh off/on pairs, run the actual CLI with explicit org,
+project, task, and user scope. Require exactly one matching DB receipt after
+the pre-call cursor and byte-identical stdout (apart from `console.log`'s last
+LF); independently check selected IDs, required seeds, and content anchors.
+Off receives the full raw corpus; on receives that exact CLI pack. Neither side
+connects MCP, and both must report zero tool calls. Record all 18 outcomes,
+profile, nine receipt IDs/pack hashes/CLI durations, and total input tokens
+including cached input. Retain failures without retries or discarded pairs.
+The per-profile threshold remains 15%; no overall cost or latency claim follows
+from input tokens alone. No result has been measured for this profile yet.
+
+Select this profile by adding `AKASHA_CLIENT_AB_PROFILE=cli-prefetch` to the
+authorized subscription command above and use a new result directory.
+
 The retrieval thresholds are regression-smoke minima anchored to the existing
 20-query result, not evidence of broad product quality. A publishable product
 claim requires at least 50 queries, at least 10 user-scope queries, and explicit
