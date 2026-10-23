@@ -7,8 +7,8 @@ Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale i
 ## Current State
 
 Core, admin UI, and guarded Codex evaluation changes are merged through
-[PR #28](https://github.com/YouSangSon/akasha/pull/28), main `61534fc`.
-All five final CI jobs passed at `abd64a4`. The completed Codex baseline has
+[PR #30](https://github.com/YouSangSon/akasha/pull/30), main `dd20bbd`.
+All five final CI jobs passed at `f1c7d56`. The completed MCP Codex baseline has
 18/18 correct answers and no omissions/leakage, but median total input-token
 reduction is 0.35%, below the 15% product gate. `GATES.md` owns the current
 measurement, host-prompt audit, and verification boundaries.
@@ -29,6 +29,14 @@ test timeout, which passed alone without changing its 15-second limit. Both owne
 evaluation stacks were removed; final CI and merge receipts belong with the PR
 and the existing portfolio evidence bundle.
 The MCP failure, unavailable Claude proof, and historical cleanup uncertainty remain.
+
+CLI lifecycle follow-up `3b30134` closes command-owned services after draining
+best-effort audit writes and releases pools when service initialization fails.
+An isolated Postgres + Qdrant + transformers process smoke preserved exact pack
+output and audit rows, covered successful writes/reindex and failure paths, and
+left no CLI database connections. A single comparison removed the baseline's
+30-second post-output idle wait; it is not a new client A/B or general latency
+benchmark. Injected registries and long-lived server ownership remain unchanged.
 
 Recent completed architecture-goal commits; run `git log -1 --oneline` for the
 newest local commit:
