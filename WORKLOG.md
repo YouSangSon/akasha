@@ -1,5 +1,21 @@
 # WORKLOG
 
+## 2026-10-25
+
+- PR #36's Node 22/24 CI stopped at the required audit with three high findings:
+  body-parser 2.3.0, Zod 3.25.76 and the OpenAI peer chain. Kept the failure logs
+  and isolated the security repair from the still-draft shared-VM work.
+- Selected body-parser 2.4.0 within the existing transitive range, Zod 4.6.7 and
+  OpenAI 6.0.0 with a compatible Zod-4 peer. Existing source `zod/v4` imports,
+  public tool schemas and the embedding adapter remain unchanged. Lock-only,
+  script-free updates removed the old dependency chain without an audit exception,
+  forced peer resolution or a new HTTP adapter. Independent read-only review
+  checked the affected boundary and the SDK transport change.
+- Added actual-SDK single/batch base64 and 401 checks using fake fetch and a
+  loopback test base URL. No paid provider request or local integration stack.
+  Local Node checks remain deferred while host swap grows; required CI is pending.
+  Previous Linux full-suite evidence is not reused for the changed dependencies.
+
 ## 2026-10-24
 
 - Aligned English/Korean README presentation and added complete Japanese and

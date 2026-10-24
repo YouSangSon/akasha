@@ -11,6 +11,9 @@ changes; CHANGELOG entries call those out explicitly.
 
 ## [Unreleased]
 
+- Security: update Zod to 4.6.7 and compatible OpenAI SDK 6.0.0, plus transitive
+  body-parser 2.4.0, without changing tool schemas or embedding adapter inputs.
+  Add real-SDK request/decoding/error checks using fake fetch, with no live API calls.
 - Docs: align the English and Korean README layout, add complete Japanese and
   Simplified Chinese editions, and include all four in the npm package. Quick-start
   examples load `.env` explicitly and send one bearer token with an organization ID.
