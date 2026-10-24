@@ -7,9 +7,13 @@ Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale i
 ## Current State
 
 Four-language README delivery is merged through PR #35 at `0f9cb6f`.
+The dependency repair in PR #37 is merged as `eb1575b`; final CI at `356ec10`
+passed all five jobs with zero audit findings. The old local Linux suite is
+historical evidence and is not reused for the changed dependencies.
 The 2026-10-25 request adds temporary private `my-cloud` deployment and smoke
 verification, with sequential lightweight local checks. Runtime verification
-and cleanup remain pending; `GATES.md` owns their status. The historical deletion
+and cleanup remain pending. Draft PR #36's configuration and code CI passed at
+`0073815`; this does not establish VM execution. `GATES.md` owns their status. The historical deletion
 incident remains unresolved and is not evidence about newly created VM resources.
 
 The latest implementation delivery is

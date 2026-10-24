@@ -34,6 +34,11 @@
   Set only that test's outer budget to 30 seconds, covering its existing
   5 + 10 + 10-second subprocess limits. Existing test timeouts are unchanged;
   fresh CI remains required and VM runtime verification remains incomplete.
+- Source `0073815` then passed all five required CI jobs: Node 22/24 each
+  2670 tests with 35 skips, PostgreSQL 246, pgvector 115 and default retrieval
+  5. Both Node jobs passed the five Compose cases, typecheck/build and audit
+  with zero findings. Draft PR #36 stays unmerged until VM execution and cleanup
+  are verified; the earlier failed logs and local-check deferral remain recorded.
 
 - PR #36's Node 22/24 CI stopped at the required audit with three high findings:
   body-parser 2.3.0, Zod 3.25.76 and the OpenAI peer chain. Kept the failure logs
