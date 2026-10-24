@@ -100,6 +100,23 @@ and any other non-strict-boolean value. Only `true` / `false` /
 omitted (defaults to `true`) reach the handler. Prevents accidental
 type-coerced destructive runs.
 
+### Dependency security and SDK verification
+
+The 2026-10-25 CI audit reported high-severity body-parser and Zod advisories.
+The compatible transitive body-parser update is 2.4.0; Zod is pinned in the
+lockfile to 4.6.7 while existing `zod/v4` imports remain unchanged. OpenAI 6.0.0
+supports Zod 4, unlike the previous SDK's Zod-3-only peer range. Keep the existing
+embedding adapter instead of reimplementing SDK retries and errors. No audit
+exception or forced peer override is used.
+
+The real SDK is exercised with fake fetch responses for request/authentication
+fields, single/batch base64 decoding, ordering and 401 propagation. These tests
+use a loopback test base URL, restore global mocks and make no paid API calls.
+They do not establish live-provider behavior. Dependency inventory and actual
+runtime exposure are separate claims. The [Korean security owner](security.ko.md#의존성-보안과-sdk-검증)
+contains the advisory/source links, choice rationale and failure example;
+`GATES.md` owns final verification status.
+
 ### Container runtime hardening
 
 The production app container runs as a non-root user. Keep that default in

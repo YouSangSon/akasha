@@ -93,6 +93,34 @@ defense-in-depth.
 non-strict-boolean 값 거부. `true` / `false` / 생략 (기본 `true`) 만 핸들러로
 도달. 우발적 type-coerced destructive 실행 방지.
 
+### 의존성 보안과 SDK 검증
+
+2026-10-25 CI의 필수 audit가 `body-parser`와 Zod의 high 취약점을 보고했습니다.
+이는 해당 공격이 Akasha에서 재현됐다는 뜻은 아니며, 설치 그래프의 보안 문제와
+실제 도달 가능성은 구분합니다. audit 예외나 강제 peer 무시로 통과시키지 않습니다.
+
+[body-parser 권고](https://github.com/advisories/GHSA-27r3-jxmh-p828)의 수정 버전
+2.4.0은 기존 Express 의존 범위 안에 있어 lock만 갱신합니다.
+[Zod 권고](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5)는 4.6.6 이상을 요구해
+4.6.7을 선택했습니다. 소스의 기존 `zod/v4` import는 유지합니다.
+[상위 수정 a0ebf97](https://github.com/colinhacks/zod/commit/a0ebf970f2d752e5f58527cd2942ff48be4f46bd)은
+컬렉션 상한을 원소 처리 전에 확인합니다. 이 수정이 HTTP body 크기 제한이나
+애플리케이션의 입력 검증을 대체하지는 않습니다.
+
+OpenAI SDK 4.104.0과 직전 5.23.2는 Zod 3 peer만 선언하므로 Zod만 올리는 안은
+선택하지 않았습니다. [6.0.0](https://github.com/openai/openai-node/blob/v6.0.0/CHANGELOG.md)은
+Zod 4 호환을 추가합니다. 별도 HTTP 어댑터를 만들어 재시도·오류 처리를 재구현하는
+대신 이 SDK를 유지하며, `src/embedding/openai-embeddings.ts`의 단건·배치 인터페이스는
+변경하지 않습니다. 라이선스는 기존과 같은 Apache-2.0이며 Zod는 MIT입니다.
+
+SDK 교체에서는 `createClient` 가짜 객체의 통과만으로 충분하지 않습니다. 예를 들어
+가짜 응답이 숫자 배열이면 실제 SDK의 base64 디코딩 실패를 놓칠 수 있습니다.
+`tests/embedding/openai-embeddings.test.ts`는 실제 기본 SDK 생성 경로에 가짜 fetch를
+설치해 요청 본문·인증 헤더, 단건·배치 순서와 숫자 변환, 401 오류 전파를 확인합니다.
+시험용 loopback base URL을 사용하고 전역 mock을 복원하며, 유료 API는 호출하지 않습니다.
+이는 실제 공급자 서비스 검증이 아닙니다. 최종 의존 트리·audit와 Node 22/24의
+스키마·MCP·HTTP 계약 검사 결과는 `GATES.md`가 소유합니다.
+
 ### 컨테이너 런타임 하드닝
 
 production app 컨테이너는 non-root 사용자로 실행됩니다. 이 기본값을 유지하고,
