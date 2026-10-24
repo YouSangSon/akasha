@@ -1,0 +1,44 @@
+# Temporary private verification; requires Docker Compose >= 2.24.4.
+# Total runtime budget: 1 vCPU, 2 GiB RAM, no additional swap.
+# Build the image separately with its own limits; this file limits runtime only.
+services:
+  postgres:
+    restart: "no"
+    cpus: 0.25
+    mem_limit: 512m
+    memswap_limit: 512m
+    pids_limit: 128
+    ports: !reset []
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  qdrant:
+    restart: "no"
+    cpus: 0.25
+    mem_limit: 512m
+    memswap_limit: 512m
+    pids_limit: 128
+    ports: !reset []
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  app:
+    build: !reset null
+    image: ${AKASHA_VM_IMAGE:?Set a verified local image tagged with its source commit}
+    pull_policy: never
+    restart: "no"
+    cpus: 0.5
+    mem_limit: 1g
+    memswap_limit: 1g
+    pids_limit: 256
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

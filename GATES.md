@@ -1,6 +1,6 @@
 # GATES
 
-Last updated: 2026-10-23 KST. Valid states are `GREEN`, `RED`, `NOT RUN`, and
+Last updated: 2026-10-25 KST. Valid states are `GREEN`, `RED`, `NOT RUN`, and
 `EXTERNAL`. A green local gate is not client, deployment, or production proof.
 
 The current delivery scope is defined in `goal.md` from the user's implementation
@@ -140,7 +140,8 @@ pinned runner; shared CI reports it without failing the build.
 | Backup/restore | Owned local backup, restore, and data/index smoke pass for the default backend | 2026-10-23 owned run passed: Postgres dump + Qdrant snapshot, identical point ID/payload/vector, authenticated restored-app search + selected scoped ID/content in the context pack | GREEN |
 | Confirmed owned-resource cleanup | Identified task-owned resources are removed after ownership and use checks | Owned real-DB UI project `akasha-ui-db-20261023-1235` and its listener/UI resources were removed after ownership checks. Three failed-test directories were preserved privately then removed after open-handle checks. The subsequent Linux validator's exact container/bind mount and clean clone were verified, removed, and logs retained; the preexisting image/VM were preserved. This does not establish safety of the earlier deletion | GREEN |
 | Historical deletion incident | Exact ownership or identified data impact and required recovery established | Earlier anonymous volume `d11530edf3ec7e875503f64d81a35dafc634cdee2509804cc83d02608ba51dab` was removed without an exact ownership receipt. Retained metadata and timestamp proximity do not prove ownership or absence of data loss. Current resource cleanup cannot close this incident | RED |
-| Deployment and production | Explicit deploy, effective config/image, rollout, smoke, rollback, and operating evidence | No external deployment authorized or observed | EXTERNAL |
+| Private my-cloud verification | Current traffic/resource preflight, exclusive process lock, bounded builder/runtime, fixed source-to-image mapping, real default-provider success/error smoke, and owned cleanup | 2026-10-25: preflight and builder init cgroup checks passed; SSH disconnected during the first build. Build outcome, RUN child containment, app smoke and remote cleanup remain unverified. Do not replay before retrieving the original receipts | RED |
+| Production operation | Explicit production scope, effective config/image, rollout, smoke, rollback, and operating evidence | Private VM verification does not establish production operation | EXTERNAL |
 
 ## Next Gate
 
@@ -154,7 +155,9 @@ Preserve both results and the source audit above. Claude stays outside the curre
 delivery scope and unverified. The historical deletion incident still needs exact
 ownership or identified impact/recovery evidence before overall closeout. The failed MCP
 benchmark remains a negative result, not a delivery-scope approval request.
-Paid execution, credential changes, and deployment are not authorized.
+The 2026-10-25 request authorizes the separate private `my-cloud` verification
+gate above. Paid execution, credential changes, and other deployment remain
+unauthorized. Follow `docs/deployment.ko.md` for the shared-host boundaries.
 
 Free client preflight: from a clean, committed checkout, run
 `AKASHA_EVAL_MODE=client-ab ./tests/eval/run-default-stack.sh`. It records the

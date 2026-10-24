@@ -1,5 +1,30 @@
 # WORKLOG
 
+## 2026-10-25
+
+- Added a temporary private `my-cloud` Compose overlay that divides a total
+  1 vCPU / 2 GiB runtime budget across the unchanged app/Postgres/Qdrant stack,
+  disables extra swap and automatic restart, rotates logs, removes DB port
+  publication and implicit app builds. The Korean deployment owner explains
+  the separate build boundary, alternatives, provenance and cleanup requirements.
+- Existing-VM preflight confirmed amd64, resource headroom and current-period
+  provider traffic below the hold threshold. A verified process lock serialized
+  the work. The official Ubuntu package plan changed no existing package; only
+  the new Docker/Compose/Buildx prerequisites and their dependencies were installed,
+  with existing service restarts deferred. No account, billing or SSH settings changed.
+- One fixed-commit build attempt reached the separately capped builder. Its
+  init cgroup CPU/memory/swap/pids and logging assertions passed, then SSH timed
+  out. Build completion, RUN-child containment, app smoke and remote cleanup are
+  unverified. Do not attribute the outage to OOM without kernel/daemon evidence,
+  reboot the shared VM, or replay before retrieving the original receipts.
+  Independent review found cleanup lifecycle gaps in the private harness; these
+  must be corrected before another attempt. The historical deletion incident
+  remains a separate unresolved record.
+- Added a daemon-independent Compose configuration regression for the aggregate
+  budget, private ports, log/swap/restart settings and missing-image rejection.
+  Local Node tests are deferred while shared-host swap usage increases; remote
+  CI remains required. No local integration stack or broad VM test suite was run.
+
 ## 2026-10-24
 
 - Aligned English/Korean README presentation and added complete Japanese and
