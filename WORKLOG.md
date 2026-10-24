@@ -13,8 +13,12 @@
   checked the affected boundary and the SDK transport change.
 - Added actual-SDK single/batch base64 and 401 checks using fake fetch and a
   loopback test base URL. No paid provider request or local integration stack.
-  Local Node checks remain deferred while host swap grows; required CI is pending.
-  Previous Linux full-suite evidence is not reused for the changed dependencies.
+  Source `733fb3a` passed all five required CI jobs: Node 22/24 each 2669 tests
+  with 35 skips, PostgreSQL 246, pgvector 115 and default retrieval 5. Each Node
+  job passed all 19 adapter cases and reported zero audit findings. Independent
+  final diff review found no blocking defect. Local Node checks remain deferred
+  while host swap grows; the previous Linux full-suite result is not reused for
+  the changed dependencies.
 
 ## 2026-10-24
 
