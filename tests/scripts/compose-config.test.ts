@@ -80,7 +80,8 @@ describe("compose app service contract", () => {
     expect(() => execFileSync("docker", args, {
       env: { ...env, AKASHA_VM_IMAGE: "" }, stdio: "pipe", timeout: 10_000,
     })).toThrow(/AKASHA_VM_IMAGE/);
-  });
+  // Accommodate the bounded CLI calls (5s + 10s + 10s) on a shared runner.
+  }, 30_000);
 
   it("passes all public runtime env knobs through to the app container", () => {
     const compose = read("compose.yaml");

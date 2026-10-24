@@ -29,6 +29,11 @@
   strings. Normalize those values before arithmetic and comparison; the parsed
   local configuration totals 2 GiB. The failed CI logs are retained. No runtime
   resource setting changed; the corrected test still requires fresh CI.
+- The normalized configuration passed on Node 22. Node 24 exceeded the new
+  test's default 5-second wrapper timeout while running its bounded CLI calls.
+  Set only that test's outer budget to 30 seconds, covering its existing
+  5 + 10 + 10-second subprocess limits. Existing test timeouts are unchanged;
+  fresh CI remains required and VM runtime verification remains incomplete.
 
 - PR #36's Node 22/24 CI stopped at the required audit with three high findings:
   body-parser 2.3.0, Zod 3.25.76 and the OpenAI peer chain. Kept the failure logs
