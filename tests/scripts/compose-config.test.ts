@@ -54,18 +54,18 @@ describe("compose app service contract", () => {
       PORT: "18787", POSTGRES_PORT: "15432", EMBEDDING_PROVIDER: "transformers", VECTOR_BACKEND: "qdrant",
     };
     const model: { services: Record<string, {
-      cpus: number; mem_limit: number; memswap_limit: number; pids_limit: number; restart: string;
+      cpus: number; mem_limit: number | string; memswap_limit: number | string; pids_limit: number; restart: string;
       image: string; pull_policy?: string; build?: unknown;
       ports?: Array<{ host_ip: string }>; logging: { driver: string; options: Record<string, string> };
     }> } = JSON.parse(execFileSync("docker", args, { env, encoding: "utf8", timeout: 10_000 }));
     const services = Object.values(model.services);
     expect(Object.keys(model.services).sort()).toEqual(["app", "postgres", "qdrant"]);
     expect(services.reduce((sum, service) => sum + Number(service.cpus), 0)).toBe(1);
-    expect(services.reduce((sum, service) => sum + service.mem_limit, 0)).toBe(2 * 1024 ** 3);
+    expect(services.reduce((sum, service) => sum + Number(service.mem_limit), 0)).toBe(2 * 1024 ** 3);
     for (const service of services) {
       expect(service.cpus).toBeGreaterThan(0);
-      expect(service.mem_limit).toBeGreaterThan(0);
-      expect(service.memswap_limit).toBe(service.mem_limit);
+      expect(Number(service.mem_limit)).toBeGreaterThan(0);
+      expect(Number(service.memswap_limit)).toBe(Number(service.mem_limit));
       expect(service.pids_limit).toBeGreaterThan(0);
       expect(service.restart).toBe("no");
       expect(service.logging).toEqual({ driver: "json-file", options: { "max-size": "10m", "max-file": "3" } });

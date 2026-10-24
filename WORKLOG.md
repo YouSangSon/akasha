@@ -24,6 +24,11 @@
   budget, private ports, log/swap/restart settings and missing-image rejection.
   Local Node tests are deferred while shared-host swap usage increases; remote
   CI remains required. No local integration stack or broad VM test suite was run.
+- After merging the security repair, PR #36's configuration regression reached
+  the test step and failed because Compose serializes memory byte counts as
+  strings. Normalize those values before arithmetic and comparison; the parsed
+  local configuration totals 2 GiB. The failed CI logs are retained. No runtime
+  resource setting changed; the corrected test still requires fresh CI.
 
 - PR #36's Node 22/24 CI stopped at the required audit with three high findings:
   body-parser 2.3.0, Zod 3.25.76 and the OpenAI peer chain. Kept the failure logs
