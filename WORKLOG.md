@@ -2,6 +2,44 @@
 
 ## 2026-10-25
 
+- Added a temporary private `my-cloud` Compose overlay that divides a total
+  1 vCPU / 2 GiB runtime budget across the unchanged app/Postgres/Qdrant stack,
+  disables extra swap and automatic restart, rotates logs, removes DB port
+  publication and implicit app builds. The Korean deployment owner explains
+  the separate build boundary, alternatives, provenance and cleanup requirements.
+- Existing-VM preflight confirmed amd64, resource headroom and current-period
+  provider traffic below the hold threshold. A verified process lock serialized
+  the work. The official Ubuntu package plan changed no existing package; only
+  the new Docker/Compose/Buildx prerequisites and their dependencies were installed,
+  with existing service restarts deferred. No account, billing or SSH settings changed.
+- One fixed-commit build attempt reached the separately capped builder. Its
+  init cgroup CPU/memory/swap/pids and logging assertions passed, then SSH timed
+  out. Build completion, RUN-child containment, app smoke and remote cleanup are
+  unverified. Do not attribute the outage to OOM without kernel/daemon evidence,
+  reboot the shared VM, or replay before retrieving the original receipts.
+  Independent review found cleanup lifecycle gaps in the private harness; these
+  must be corrected before another attempt. The historical deletion incident
+  remains a separate unresolved record.
+- Added a daemon-independent Compose configuration regression for the aggregate
+  budget, private ports, log/swap/restart settings and missing-image rejection.
+  Local Node tests are deferred while shared-host swap usage increases; remote
+  CI remains required. No local integration stack or broad VM test suite was run.
+- After merging the security repair, PR #36's configuration regression reached
+  the test step and failed because Compose serializes memory byte counts as
+  strings. Normalize those values before arithmetic and comparison; the parsed
+  local configuration totals 2 GiB. The failed CI logs are retained. No runtime
+  resource setting changed; the corrected test still requires fresh CI.
+- The normalized configuration passed on Node 22. Node 24 exceeded the new
+  test's default 5-second wrapper timeout while running its bounded CLI calls.
+  Set only that test's outer budget to 30 seconds, covering its existing
+  5 + 10 + 10-second subprocess limits. Existing test timeouts are unchanged;
+  fresh CI remains required and VM runtime verification remains incomplete.
+- Source `0073815` then passed all five required CI jobs: Node 22/24 each
+  2670 tests with 35 skips, PostgreSQL 246, pgvector 115 and default retrieval
+  5. Both Node jobs passed the five Compose cases, typecheck/build and audit
+  with zero findings. Draft PR #36 stays unmerged until VM execution and cleanup
+  are verified; the earlier failed logs and local-check deferral remain recorded.
+
 - PR #36's Node 22/24 CI stopped at the required audit with three high findings:
   body-parser 2.3.0, Zod 3.25.76 and the OpenAI peer chain. Kept the failure logs
   and isolated the security repair from the still-draft shared-VM work.

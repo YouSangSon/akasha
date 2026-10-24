@@ -14,6 +14,9 @@ changes; CHANGELOG entries call those out explicitly.
 - Security: update Zod to 4.6.7 and compatible OpenAI SDK 6.0.0, plus transitive
   body-parser 2.4.0, without changing tool schemas or embedding adapter inputs.
   Add real-SDK request/decoding/error checks using fake fetch, with no live API calls.
+- Add a temporary private shared-VM Compose overlay with a total 1 vCPU / 2 GiB
+  runtime budget, bounded logs, no extra swap or automatic restart, and no published
+  DB ports. Document separate build limits, source/image evidence and owned cleanup.
 - Docs: align the English and Korean README layout, add complete Japanese and
   Simplified Chinese editions, and include all four in the npm package. Quick-start
   examples load `.env` explicitly and send one bearer token with an organization ID.

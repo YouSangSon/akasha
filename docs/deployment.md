@@ -85,6 +85,42 @@ For Postgres-only deployments, set `VECTOR_BACKEND=pgvector`, enable the
 `vector` extension once as a database admin, and omit Qdrant credentials.
 `/readyz` will not probe Qdrant in this mode.
 
+## Temporary private verification on a shared VM
+
+Use `compose.my-cloud.yaml` with the existing default stack for the explicitly
+authorized `my-cloud` verification. It divides a total 1 vCPU / 2 GiB runtime
+budget across the app, Postgres and Qdrant, disables additional swap and automatic
+restart, removes published DB ports, and limits each container's logs to 10 MB
+times three files. It removes the app's implicit build configuration and retains
+the base loopback binding. Compose 2.24.4 or
+later is required for `!reset`.
+
+Before deployment, verify current provider billing-period traffic, host resources,
+and exclusive ownership of `/home/ubuntu/.cache/personal-project-vm.lock`. Keep at
+least 1 GiB MemAvailable and 10 GiB disk free after budgeting. Unknown traffic or
+usage at/above 2.4 TB blocks new images and large dependency transfers. Usage
+observations are not a billing block.
+
+Build only a fixed commit's `git archive`, using the existing Dockerfile and an
+OCI revision label. Runtime limits do not constrain builds: use one separately
+bounded Buildx container builder and BuildKit parallelism one, inspect its actual
+cgroup limits, and stop it before starting the app. Set `AKASHA_VM_IMAGE` in a
+private environment file to the prepared local commit-tagged image. Start with
+the two Compose files, a unique project name, `--no-build --pull never`, and
+already prepared dependency images. Record source SHA, image revision label and
+image ID, then compare the container's `.Image`.
+
+Verify real default-provider write/search/context-pack content and scoped IDs,
+missing authentication and foreign-organization rejection, and representative
+admin flows. Readiness alone does not prove model loading or business operations.
+Connect exact owned-resource cleanup to the lock-owning wrapper's exit/signals;
+SSH exit alone does not stop containers. Keep synthetic data separate and retain
+unproven historical deletion impact. This is private smoke evidence, not a public
+demo, load test, or production claim.
+
+The [Korean runbook](deployment.ko.md#공유-my-cloud-vm의-임시-비공개-검증) owns the
+detailed rationale, preconditions, failure example and cleanup procedure.
+
 ## Behind a reverse proxy
 
 ### nginx

@@ -20,7 +20,11 @@ The earlier two-client research objective is retained in `DECISIONS.md` as histo
 `GATES.md` owns verification status and unresolved safety incidents. Do not claim
 safe resource cleanup or data preservation for an unverified deletion, or call
 the delivery complete while required checks or material safety work remain.
-Paid model execution, credential changes, external deployment, and unsupported
+The 2026-10-25 user request additionally authorizes temporary private deployment
+and representative smoke verification on the existing shared `my-cloud` VM.
+Use the resource, traffic, locking, and cleanup boundaries in
+`docs/deployment.ko.md`; no new local integration stack or broad VM test suite.
+Other external deployment, paid model execution, credential changes, and unsupported
 production or sales claims remain excluded. The user has authorized in-scope
 commit, push, PR creation, and main merge after required verification.
 Resume in the order `goal.md` → `GATES.md` → `PLAN.md`; distinguish local, CI,
