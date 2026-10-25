@@ -29,7 +29,9 @@ evidence, not a guaranteed positive result for each product hypothesis. Existing
 UI, retrieval, and recovery evidence remains valid within its recorded scope.
 Required local checks passed in the existing Podman Linux environment on a clean
 fixed checkout; earlier macOS failures retain their own scope. The anonymous-volume
-deletion's unknown impact remains a closeout issue; scope correction does not waive it.
+deletion's unknown impact remains an unresolved incident.
+2026-10-25 사용자는 이 사고를 미확인 후속으로 보존하고 비-VM 제품 전달을
+이번 Goal의 종결 범위로 선택했다. 사고 해결이나 무손실을 확인한 것은 아니다.
 
 The existing CLI-to-prompt workflow now has a separate `cli-prefetch` profile.
 At `d459e20`, a complete fresh comparison passed 18/18 answers and reduced total

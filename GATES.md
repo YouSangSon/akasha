@@ -139,7 +139,7 @@ pinned runner; shared CI reports it without failing the build.
 | Archived index maintenance | Observed archived records stay out of vector refresh, reindex, and pending ingest retries | Six new regression cases; four focused files, 310 tests passed. Actual UI Save/Tag, HTTP reindex/reactivation/rearchive/search, and a rearmed real ingest retry passed. Concurrent archive/index races remain outside this sequential fix | GREEN |
 | Backup/restore | Owned local backup, restore, and data/index smoke pass for the default backend | 2026-10-23 owned run passed: Postgres dump + Qdrant snapshot, identical point ID/payload/vector, authenticated restored-app search + selected scoped ID/content in the context pack | GREEN |
 | Previously verified local resource cleanup | Identified task-owned local resources are removed after ownership and use checks | Owned real-DB UI project `akasha-ui-db-20261023-1235` and its listener/UI resources were removed after ownership checks. Three failed-test directories were preserved privately then removed after open-handle checks. The subsequent Linux validator's exact container/bind mount and clean clone were verified, removed, and logs retained; the preexisting image/VM were preserved. This does not establish safety of the earlier deletion or remote VM cleanup | GREEN |
-| Historical deletion incident | Exact ownership or identified data impact and required recovery established | Earlier anonymous volume `d11530edf3ec7e875503f64d81a35dafc634cdee2509804cc83d02608ba51dab` was removed without an exact ownership receipt. Retained metadata and timestamp proximity do not prove ownership or absence of data loss. Current resource cleanup cannot close this incident | RED |
+| Historical deletion incident follow-up | 사고 해결에는 정확한 소유권 또는 데이터 영향·필요한 복구 근거가 필요 | Earlier anonymous volume `d11530edf3ec7e875503f64d81a35dafc634cdee2509804cc83d02608ba51dab` was removed without an exact ownership receipt. Retained metadata and timestamp proximity do not prove ownership or absence of data loss. 2026-10-25 사용자는 이를 미확인 사고로 별도 보존하고 비-VM 제품 전달 후 Goal을 종료하도록 명시했다. 사고가 해결된 것은 아니다 | OPEN |
 | Private VM follow-up | VM 접속 복구 후 원본 영수증·실행 버전·대표 동작·정리 확인 | 2026-10-25 사용자 요청으로 이번 완료 범위에서 보류. PR #36은 Draft로 보존한다. 이전 빌드 도중 접속이 끊겼고, 승인된 제공사 재시작 1회 후에도 SSH 연결이 시간 초과됐다. 빌드·실제 앱·원격 정리는 미확인으로 남긴다 | DEFERRED |
 | Production operation | Explicit production scope, effective config/image, rollout, smoke, rollback, and operating evidence | 실서비스 운영은 검증하지 않았다. 개인 VM 구성의 CI 통과와 제공사 재시작 기록으로 운영 경험을 주장하지 않는다 | EXTERNAL |
 
@@ -152,15 +152,17 @@ matches the merge. A subsequent fixed-checkout local Linux run passed all requir
 commands and 2667 tests; prior macOS timeout/cleanup failures remain recorded separately. The supplemental
 CLI-prefetch run now passes its 15% bar, while the MCP baseline still fails it.
 Preserve both results and the source audit above. Claude stays outside the current
-delivery scope and unverified. The historical deletion incident still needs exact
-ownership or identified impact/recovery evidence before overall closeout. The failed MCP
-benchmark remains a negative result, not a delivery-scope approval request.
+delivery scope and unverified. 과거 삭제 사고의 해결에는 정확한 소유권 또는 영향·복구
+근거가 여전히 필요하다. 사용자는 이 미확인 사고를 별도 후속으로 보존한 채
+비-VM 제품 전달로 이번 Goal을 종료하도록 명시했다. 실패한 MCP 측정은 그대로
+부정적인 결과로 유지한다.
 2026-10-25 사용자는 VM 검증을 우선 건너뛰도록 명시했다. 따라서 현재 전달 범위는
 구현·기존 검증·문서·포트폴리오이며 VM 성공을 완료 조건으로 요구하지 않는다.
 미확인 원격 자원과 과거 삭제 기록은 보존한다. 유료 실행과 credential 변경은
 승인 범위에 포함되지 않는다.
 
-Free client preflight: from a clean, committed checkout, run
+Historical client-preflight reproduction reference; rerun only in an authorized
+environment matching the current shared-host policy. From a clean, committed checkout:
 `AKASHA_EVAL_MODE=client-ab ./tests/eval/run-default-stack.sh`. It records the
 exact HEAD, seeds an owned local database/collection, checks required scoped
 context identities and a foreign-organization decoy, and does not call either
