@@ -129,18 +129,19 @@ pinned runner; shared CI reports it without failing the build.
 | --- | --- | --- | --- |
 | Focused UUID batch | All touched vector/store/compact/MCP behavior passes | 2026-08-31: 6 files, 449 tests passed | GREEN |
 | Focused retrieval batch | Shared ranking, cutoff, eval safety, and real default stack pass | 2026-08-31: 3 focused files, 67 passed and 2 eval tests skipped; real eval 4/4 passed | GREEN |
-| Typecheck | `npm run typecheck` | PR #37 source `733fb3a`: Node 22/24 CI passed with the patched dependency graph; local Node checks deferred for shared-host resource pressure | GREEN |
-| Build | `npm run build` | PR #37 source `733fb3a`: Node 22/24 CI passed with the patched dependency graph | GREEN |
-| CI full test suite | All required CI jobs pass; skips reported | PR #37 source `733fb3a`: [CI](https://github.com/YouSangSon/akasha/actions/runs/40112925194) passed all five jobs; Node 22/24 each 2669 passed, 35 skipped, PostgreSQL 246, pgvector 115, default retrieval 5. Each Node job passed 19 OpenAI adapter cases, including the three new real-SDK fake-fetch checks | GREEN |
+| Typecheck | `npm run typecheck` | PR #37 final head `356ec10`: Node 22/24 CI passed with the patched dependency graph; local Node checks deferred for shared-host resource pressure | GREEN |
+| Build | `npm run build` | PR #37 final head `356ec10`: Node 22/24 CI passed with the patched dependency graph | GREEN |
+| CI full test suite | All required CI jobs pass; skips reported | PR #37 final head `356ec10`: [CI](https://github.com/YouSangSon/akasha/actions/runs/40113140656) passed all five jobs; Node 22/24 each 2669 passed, 35 skipped, PostgreSQL 246, pgvector 115, default retrieval 5. Each Node job passed 19 OpenAI adapter cases, including the three new real-SDK fake-fetch checks | GREEN |
 | Historical local full suite | Retain the previous fixed-source result; do not reuse it for changed dependencies | Existing local Podman, Debian 12 arm64, Node 22.23.4: clean fixed checkout `e937ef7`, lockfile `npm ci`, typecheck/build/audit passed (0 vulnerabilities), then network detached. Previously failing seven cases passed; one full run passed 2667 with 35 expected DB/eval skips. The 2026-10-25 user request permits lightweight local checks only; no new local integration stack or full suite. Old Linux success is not a current dependency or macOS pass | GREEN |
 | Diff hygiene | `git diff --check` and staged review | 2026-10-23 core diff passed; final UI diff checked separately before commit | GREEN |
-| Dependency security | Required audit passes without an exception or forced peer override; actual reachability remains separately assessed | PR #37 source `733fb3a`: both Node 22/24 CI audit reports contain zero vulnerabilities with Zod 4.6.7, OpenAI 6.0.0 and body-parser 2.4.0. PR #36's earlier three-high failure is retained separately. No exception or forced peer override; not an OS-image vulnerability assessment | GREEN |
+| Dependency security | Required audit passes without an exception or forced peer override; actual reachability remains separately assessed | PR #37 final head `356ec10`: both Node 22/24 CI audit reports contain zero vulnerabilities with Zod 4.6.7, OpenAI 6.0.0 and body-parser 2.4.0. PR #36's earlier three-high failure is retained separately. No exception or forced peer override; not an OS-image vulnerability assessment | GREEN |
 | Admin UI truth and accessibility | no-op/pending results are truthful; archive confirmation and keyboard/status basics pass | 2026-10-23 real admin + HTTP + owned PostgreSQL/Qdrant/transformers: auth, empty, invalid save, save/tag persistence, org/user isolation, controlled archive cancel/approve, reload, desktop/mobile passed. Archived Save exposed vector resurrection, now corrected and rechecked against DB/index snapshots; loading/no-op/pending proof comes from the separate fixture-backed checks. No screen-reader test | GREEN |
 | Archived index maintenance | Observed archived records stay out of vector refresh, reindex, and pending ingest retries | Six new regression cases; four focused files, 310 tests passed. Actual UI Save/Tag, HTTP reindex/reactivation/rearchive/search, and a rearmed real ingest retry passed. Concurrent archive/index races remain outside this sequential fix | GREEN |
 | Backup/restore | Owned local backup, restore, and data/index smoke pass for the default backend | 2026-10-23 owned run passed: Postgres dump + Qdrant snapshot, identical point ID/payload/vector, authenticated restored-app search + selected scoped ID/content in the context pack | GREEN |
-| Confirmed owned-resource cleanup | Identified task-owned resources are removed after ownership and use checks | Owned real-DB UI project `akasha-ui-db-20261023-1235` and its listener/UI resources were removed after ownership checks. Three failed-test directories were preserved privately then removed after open-handle checks. The subsequent Linux validator's exact container/bind mount and clean clone were verified, removed, and logs retained; the preexisting image/VM were preserved. This does not establish safety of the earlier deletion | GREEN |
-| Historical deletion incident | Exact ownership or identified data impact and required recovery established | Earlier anonymous volume `d11530edf3ec7e875503f64d81a35dafc634cdee2509804cc83d02608ba51dab` was removed without an exact ownership receipt. Retained metadata and timestamp proximity do not prove ownership or absence of data loss. Current resource cleanup cannot close this incident | RED |
-| Deployment and production | Explicit deploy, effective config/image, rollout, smoke, rollback, and operating evidence | No external deployment authorized or observed | EXTERNAL |
+| Previously verified local resource cleanup | Identified task-owned local resources are removed after ownership and use checks | Owned real-DB UI project `akasha-ui-db-20261023-1235` and its listener/UI resources were removed after ownership checks. Three failed-test directories were preserved privately then removed after open-handle checks. The subsequent Linux validator's exact container/bind mount and clean clone were verified, removed, and logs retained; the preexisting image/VM were preserved. This does not establish safety of the earlier deletion or remote VM cleanup | GREEN |
+| Historical deletion incident follow-up | 사고 해결에는 정확한 소유권 또는 데이터 영향·필요한 복구 근거가 필요 | Earlier anonymous volume `d11530edf3ec7e875503f64d81a35dafc634cdee2509804cc83d02608ba51dab` was removed without an exact ownership receipt. Retained metadata and timestamp proximity do not prove ownership or absence of data loss. 2026-10-25 사용자는 이를 미확인 사고로 별도 보존하고 비-VM 제품 전달 후 Goal을 종료하도록 명시했다. 사고가 해결된 것은 아니다 | OPEN |
+| Private VM follow-up | VM 접속 복구 후 원본 영수증·실행 버전·대표 동작·정리 확인 | 2026-10-25 사용자 요청으로 이번 완료 범위에서 보류. PR #36은 Draft로 보존한다. 이전 빌드 도중 접속이 끊겼고, 승인된 제공사 재시작 1회 후에도 SSH 연결이 시간 초과됐다. 빌드·실제 앱·원격 정리는 미확인으로 남긴다 | DEFERRED |
+| Production operation | Explicit production scope, effective config/image, rollout, smoke, rollback, and operating evidence | 실서비스 운영은 검증하지 않았다. 개인 VM 구성의 CI 통과와 제공사 재시작 기록으로 운영 경험을 주장하지 않는다 | EXTERNAL |
 
 ## Next Gate
 
@@ -151,12 +152,17 @@ matches the merge. A subsequent fixed-checkout local Linux run passed all requir
 commands and 2667 tests; prior macOS timeout/cleanup failures remain recorded separately. The supplemental
 CLI-prefetch run now passes its 15% bar, while the MCP baseline still fails it.
 Preserve both results and the source audit above. Claude stays outside the current
-delivery scope and unverified. The historical deletion incident still needs exact
-ownership or identified impact/recovery evidence before overall closeout. The failed MCP
-benchmark remains a negative result, not a delivery-scope approval request.
-Paid execution, credential changes, and deployment are not authorized.
+delivery scope and unverified. 과거 삭제 사고의 해결에는 정확한 소유권 또는 영향·복구
+근거가 여전히 필요하다. 사용자는 이 미확인 사고를 별도 후속으로 보존한 채
+비-VM 제품 전달로 이번 Goal을 종료하도록 명시했다. 실패한 MCP 측정은 그대로
+부정적인 결과로 유지한다.
+2026-10-25 사용자는 VM 검증을 우선 건너뛰도록 명시했다. 따라서 현재 전달 범위는
+구현·기존 검증·문서·포트폴리오이며 VM 성공을 완료 조건으로 요구하지 않는다.
+미확인 원격 자원과 과거 삭제 기록은 보존한다. 유료 실행과 credential 변경은
+승인 범위에 포함되지 않는다.
 
-Free client preflight: from a clean, committed checkout, run
+Historical client-preflight reproduction reference; rerun only in an authorized
+environment matching the current shared-host policy. From a clean, committed checkout:
 `AKASHA_EVAL_MODE=client-ab ./tests/eval/run-default-stack.sh`. It records the
 exact HEAD, seeds an owned local database/collection, checks required scoped
 context identities and a foreign-organization decoy, and does not call either

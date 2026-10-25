@@ -10,10 +10,7 @@ experience, documentation, features.
 
 ## P1
 
-- Add a checked-in, org-scoped default `transformers + Qdrant` retrieval gate at
-  `k=5` that measures project recall, MRR, user-scope recall, cross-org leakage,
-  and warmed latency. The current OpenAI/legacy-anonymous eval cannot serve as
-  this gate.
+- None currently known.
 
 ## P2
 
@@ -21,6 +18,9 @@ experience, documentation, features.
 
 ## Recently Merged
 
+- 기본 `transformers + Qdrant` 검색 게이트는 PR #26으로 반영됐다.
+  조직 범위의 recall@5·MRR·사용자 회수·조직 유출·warm 지연 근거는
+  `GATES.md`가 소유한다. 이 완료 항목을 신규 구현 작업으로 다시 잡지 않는다.
 - PR #23 was squash-merged into `main` as `db93314`
   (`Hardening production boundaries and package surface`), covering the
   post-v1 hardening branch. Detailed implementation history remains in
