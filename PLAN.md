@@ -6,7 +6,16 @@ Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale i
 
 ## Current State
 
-The latest implementation delivery is
+2026-10-25 사용자 요청으로 VM 배포·검증은 이번 완료 범위에서 보류한다.
+VM 구성 PR #36은 Draft로 보존한다. 이전 빌드 결과와 원격 정리는 미확인이며,
+새 접속·빌드 시도보다 기존 증거 보존을 우선한다. 상태는 `GATES.md`가 소유한다.
+
+README의 영어·한국어·일본어·중국어 통일은 PR #35 (`0f9cb6f`)로 반영됐다.
+보안 의존성 수정 PR #37은 `eb1575b`로 반영됐고, 최종 head `356ec10`의 CI
+5개 작업과 의존성 감사 0건을 확인했다. 이전 로컬 Linux 전체 통과 결과는
+변경된 의존성의 검증으로 재사용하지 않는다.
+
+The latest core behavior delivery is
 [PR #32](https://github.com/YouSangSon/akasha/pull/32), merged as `183433b`.
 All five final CI jobs passed at `b98c397`; its tree matches the merge.
 The completed MCP Codex baseline has

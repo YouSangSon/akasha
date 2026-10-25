@@ -2,6 +2,15 @@
 
 ## 2026-10-25
 
+- 사용자의 "우선 안되면 vm은 건너뛰어" 요청을 반영해 VM 배포·스모크를
+  이번 완료 범위에서 보류했다. PR #36과 원본 빌드·접속 실패 증거를 보존한다.
+  승인된 제공사 재시작 1회는 09:04:56에 기록됐으나 실제 SSH 연결도 계속
+  시간 초과됐다. 원격 빌드 결과·실행 버전·정리를 확인한 것으로 보고하지 않는다.
+  과거 익명 볼륨 삭제의 영향도 별도 미확인 기록으로 유지한다.
+- 이번 후속 변경은 진행 문서만 대상으로 하며 앱·의존성·VM 구성은 바꾸지 않는다.
+  공유 호스트의 swap 압박으로 로컬 Node 검사는 추가하지 않고 필수 원격 CI를
+  유지한다. VM 관련 작업을 재개할 때는 원래 영수증과 실제 소유 자원부터 확인한다.
+
 - PR #36's Node 22/24 CI stopped at the required audit with three high findings:
   body-parser 2.3.0, Zod 3.25.76 and the OpenAI peer chain. Kept the failure logs
   and isolated the security repair from the still-draft shared-VM work.
