@@ -13,6 +13,7 @@ export type EvalQuery = {
   id: string;
   query: string;
   relevantRecordSeedKeys: string[];
+  hardNegativeRecordSeedKeys?: string[];
   scope: EvalScope;
 };
 

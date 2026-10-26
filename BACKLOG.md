@@ -10,7 +10,7 @@ experience, documentation, features.
 
 ## P1
 
-- [#39](https://github.com/YouSangSon/akasha/issues/39): MCP 전체 턴 입력 토큰과 개별 응답 바이트를 구분하는 계측 및 동일 입력의 예산 비교를 구현한다.
+- [#39](https://github.com/YouSangSon/akasha/issues/39): 검색 평가를 52개 질문으로 확장하고 실제 사용자 정답·동일 범위 오답 순위·조직/사용자/프로젝트 격리를 검증한다.
 
 ## P2
 
@@ -18,6 +18,7 @@ experience, documentation, features.
 
 ## Recently Merged
 
+- PR #41 (`74dc5b8`): MCP 전체 턴 입력 토큰과 개별 응답 바이트 계측을 분리하고 명시적 예산 변형을 검증한다. 필수 CI 5개 통과.
 - PR #40 (`2314ba3`): 선택적 전체 구조화 컨텍스트 팩 바이트 예산과 경계·기록·감사 계약을 검증했다.
 
 - 기본 `transformers + Qdrant` 검색 게이트는 PR #26으로 반영됐다.

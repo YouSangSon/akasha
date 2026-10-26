@@ -1,0 +1,368 @@
+[
+  {
+    "id": "q21",
+    "query": "What language does Alice use for Git commit messages?",
+    "relevantRecordSeedKeys": [
+      "alice.commit-language"
+    ],
+    "scope": {
+      "projectKey": "project-alpha",
+      "userScopeId": "alice"
+    }
+  },
+  {
+    "id": "q22",
+    "query": "How does Alice format calendar dates?",
+    "relevantRecordSeedKeys": [
+      "alice.date-format"
+    ],
+    "scope": {
+      "projectKey": "project-alpha",
+      "userScopeId": "alice"
+    }
+  },
+  {
+    "id": "q23",
+    "query": "Which time zone does Alice use for scheduled tasks and work logs?",
+    "relevantRecordSeedKeys": [
+      "alice.time-zone"
+    ],
+    "scope": {
+      "projectKey": "project-alpha",
+      "userScopeId": "alice"
+    }
+  },
+  {
+    "id": "q24",
+    "query": "What line endings does Alice require in source files?",
+    "relevantRecordSeedKeys": [
+      "alice.line-endings"
+    ],
+    "scope": {
+      "projectKey": "project-alpha",
+      "userScopeId": "alice"
+    }
+  },
+  {
+    "id": "q25",
+    "query": "What response language does Bob prefer for technical discussions?",
+    "relevantRecordSeedKeys": [
+      "bob.response-language"
+    ],
+    "scope": {
+      "projectKey": "project-alpha",
+      "userScopeId": "bob"
+    }
+  },
+  {
+    "id": "q26",
+    "query": "How many spaces does Bob use to indent TypeScript?",
+    "relevantRecordSeedKeys": [
+      "bob.typescript-indent"
+    ],
+    "scope": {
+      "projectKey": "project-alpha",
+      "userScopeId": "bob"
+    }
+  },
+  {
+    "id": "q27",
+    "query": "Which tool manages Python dependencies and environments for Bob?",
+    "relevantRecordSeedKeys": [
+      "bob.python-packages"
+    ],
+    "scope": {
+      "projectKey": "project-alpha",
+      "userScopeId": "bob"
+    }
+  },
+  {
+    "id": "q28",
+    "query": "Which framework does Bob use for Python unit tests?",
+    "relevantRecordSeedKeys": [
+      "bob.python-tests"
+    ],
+    "scope": {
+      "projectKey": "project-alpha",
+      "userScopeId": "bob"
+    }
+  },
+  {
+    "id": "q29",
+    "query": "Which interactive shell does Carol use for terminal sessions?",
+    "relevantRecordSeedKeys": [
+      "carol.interactive-shell"
+    ],
+    "scope": {
+      "projectKey": "project-alpha",
+      "userScopeId": "carol"
+    },
+    "hardNegativeRecordSeedKeys": [
+      "carol.portable-scripts"
+    ]
+  },
+  {
+    "id": "q30",
+    "query": "What interpreter does Carol require for portable automation scripts?",
+    "relevantRecordSeedKeys": [
+      "carol.portable-scripts"
+    ],
+    "scope": {
+      "projectKey": "project-alpha",
+      "userScopeId": "carol"
+    },
+    "hardNegativeRecordSeedKeys": [
+      "carol.interactive-shell"
+    ]
+  },
+  {
+    "id": "q31",
+    "query": "Which probe should fail when Postgres is unavailable and traffic must stop?",
+    "relevantRecordSeedKeys": [
+      "alpha.readiness"
+    ],
+    "scope": {
+      "projectKey": "project-alpha"
+    },
+    "hardNegativeRecordSeedKeys": [
+      "alpha.liveness"
+    ]
+  },
+  {
+    "id": "q32",
+    "query": "Which endpoint checks process liveness rather than dependency readiness?",
+    "relevantRecordSeedKeys": [
+      "alpha.liveness"
+    ],
+    "scope": {
+      "projectKey": "project-alpha"
+    },
+    "hardNegativeRecordSeedKeys": [
+      "alpha.readiness"
+    ]
+  },
+  {
+    "id": "q33",
+    "query": "How is canonical database loss recovered?",
+    "relevantRecordSeedKeys": [
+      "alpha.backup-restore"
+    ],
+    "scope": {
+      "projectKey": "project-alpha"
+    },
+    "hardNegativeRecordSeedKeys": [
+      "alpha.reindex-derived"
+    ]
+  },
+  {
+    "id": "q34",
+    "query": "Which maintenance operation regenerates vector entries from retained canonical chunks?",
+    "relevantRecordSeedKeys": [
+      "alpha.reindex-derived"
+    ],
+    "scope": {
+      "projectKey": "project-alpha"
+    },
+    "hardNegativeRecordSeedKeys": [
+      "alpha.backup-restore"
+    ]
+  },
+  {
+    "id": "q35",
+    "query": "What happens to canonical memory content when a record is archived?",
+    "relevantRecordSeedKeys": [
+      "alpha.archive"
+    ],
+    "scope": {
+      "projectKey": "project-alpha"
+    },
+    "hardNegativeRecordSeedKeys": [
+      "alpha.unarchive"
+    ]
+  },
+  {
+    "id": "q36",
+    "query": "How do we restore a previously archived memory to searchable state?",
+    "relevantRecordSeedKeys": [
+      "alpha.unarchive"
+    ],
+    "scope": {
+      "projectKey": "project-alpha"
+    },
+    "hardNegativeRecordSeedKeys": [
+      "alpha.archive"
+    ]
+  },
+  {
+    "id": "q37",
+    "query": "Which logger configuration redacts raw queries and memory content?",
+    "relevantRecordSeedKeys": [
+      "alpha.no-content-logging"
+    ],
+    "scope": {
+      "projectKey": "project-alpha"
+    },
+    "hardNegativeRecordSeedKeys": [
+      "alpha.log-rotation"
+    ]
+  },
+  {
+    "id": "q38",
+    "query": "What caps the size and retained history of container log files?",
+    "relevantRecordSeedKeys": [
+      "alpha.log-rotation"
+    ],
+    "scope": {
+      "projectKey": "project-alpha"
+    },
+    "hardNegativeRecordSeedKeys": [
+      "alpha.no-content-logging"
+    ]
+  },
+  {
+    "id": "q39",
+    "query": "How do operators access the database without exposing its port publicly?",
+    "relevantRecordSeedKeys": [
+      "alpha.private-db-access"
+    ],
+    "scope": {
+      "projectKey": "project-alpha"
+    }
+  },
+  {
+    "id": "q40",
+    "query": "How are interrupted ingest jobs retried after an indexing outage?",
+    "relevantRecordSeedKeys": [
+      "alpha.ingest-retry"
+    ],
+    "scope": {
+      "projectKey": "project-alpha"
+    }
+  },
+  {
+    "id": "q41",
+    "query": "What makes compaction preview safe unless archival is explicitly requested?",
+    "relevantRecordSeedKeys": [
+      "alpha.compaction-preview"
+    ],
+    "scope": {
+      "projectKey": "project-alpha"
+    }
+  },
+  {
+    "id": "q42",
+    "query": "At what stage should an API key inside memory content be rejected?",
+    "relevantRecordSeedKeys": [
+      "alpha.secret-write-boundary"
+    ],
+    "scope": {
+      "projectKey": "project-alpha"
+    }
+  },
+  {
+    "id": "q43",
+    "query": "Can a token bound to one tenant choose another through a request header?",
+    "relevantRecordSeedKeys": [
+      "alpha.token-org-binding"
+    ],
+    "scope": {
+      "projectKey": "project-alpha"
+    }
+  },
+  {
+    "id": "q44",
+    "query": "How are vector point identities kept stable across ingest retries?",
+    "relevantRecordSeedKeys": [
+      "alpha.ingest-point-id"
+    ],
+    "scope": {
+      "projectKey": "project-alpha"
+    }
+  },
+  {
+    "id": "q45",
+    "query": "What work must a CLI command finish before releasing its database pool?",
+    "relevantRecordSeedKeys": [
+      "alpha.cli-audit-drain"
+    ],
+    "scope": {
+      "projectKey": "project-alpha"
+    }
+  },
+  {
+    "id": "q46",
+    "query": "How are successful and failed JSON HTTP tool responses wrapped?",
+    "relevantRecordSeedKeys": [
+      "alpha.http-envelope"
+    ],
+    "scope": {
+      "projectKey": "project-alpha"
+    },
+    "hardNegativeRecordSeedKeys": [
+      "alpha.mcp-native-result"
+    ]
+  },
+  {
+    "id": "q47",
+    "query": "What must a native MCP tool response contain?",
+    "relevantRecordSeedKeys": [
+      "alpha.mcp-native-result"
+    ],
+    "scope": {
+      "projectKey": "project-alpha"
+    },
+    "hardNegativeRecordSeedKeys": [
+      "alpha.http-envelope"
+    ]
+  },
+  {
+    "id": "q48",
+    "query": "What HTTP status is returned when a JSON request body exceeds its limit?",
+    "relevantRecordSeedKeys": [
+      "alpha.body-limit"
+    ],
+    "scope": {
+      "projectKey": "project-alpha"
+    }
+  },
+  {
+    "id": "q49",
+    "query": "What ordering is required when applying database schema migrations?",
+    "relevantRecordSeedKeys": [
+      "alpha.migration-order"
+    ],
+    "scope": {
+      "projectKey": "project-alpha"
+    }
+  },
+  {
+    "id": "q50",
+    "query": "What storage does Beta use in production, as opposed to local development?",
+    "relevantRecordSeedKeys": [
+      "beta.sqlite-local"
+    ],
+    "scope": {
+      "projectKey": "project-beta"
+    }
+  },
+  {
+    "id": "q51",
+    "query": "How are live update notifications delivered in Beta?",
+    "relevantRecordSeedKeys": [
+      "beta.notifications"
+    ],
+    "scope": {
+      "projectKey": "project-beta"
+    }
+  },
+  {
+    "id": "q52",
+    "query": "Which application port does Beta use behind its reverse proxy?",
+    "relevantRecordSeedKeys": [
+      "beta.app-port"
+    ],
+    "scope": {
+      "projectKey": "project-beta"
+    }
+  }
+]

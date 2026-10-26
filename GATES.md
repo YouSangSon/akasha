@@ -211,3 +211,23 @@ MCP 프로필의 별도 예산 변형은 runner `--max-output-bytes 8192` 또는
 `node node_modules/vitest/vitest.mjs run tests/eval/payload-metrics.test.ts --maxWorkers=1 --no-file-parallelism --reporter=verbose`다.
 여기서 같은 합성 기록의 기본 응답과 4096-byte 응답을 비교한다. 이는 in-memory native serialization 실험이며
 실제 DB 검색·클라이언트 A/B·토큰 절감 결과가 아니다. 기존 실제 MCP 0.35% RED와 별도 CLI-prefetch 53.40% 결과는 유지한다.
+
+## 확장 검색 평가 프로토콜 v2
+
+`tests/eval/fixtures/retrieval-corpus.ts`는 기존 14개 seed·20개 질문 파일을 SHA-256으로 보존하고
+검색 전용 33개 seed·32개 질문을 추가한다. 총 47개 target 기록과 동일 내용의 다른 조직 기록 47개,
+고유 질문 52개, 요청한 사용자의 실제 정답을 요구하는 질문 12개, 동일 범위의 유사 오답 대비 질문 12개다.
+클라이언트 A/B의 14개 seed 계약은 바꾸지 않는다. 반복 3회는 156개 관측이며 고유 질문 수에 더하지 않는다.
+
+측정 전 고정한 통과 기준은 전체 52개·기존 20개·추가 32개 각각 recall@5 ≥ 0.90,
+MRR@5 ≥ 0.55, 사용자 recall@5 = 1, 조직/요청 범위 유출 = 0이다. 오답 대비가 있는 cohort는
+`hardNegativeOrderingAt5 = 1`도 요구한다. 이 값은 top-5 안에 정답이 있고 명시한 오답보다 먼저 나와야 1이다.
+정답 뒤의 관련 없는 기록을 모두 금지하는 지표는 아니다. 다른 사용자·프로젝트 기록은 순위 오답으로
+사용하지 않고 별도 scope 유출로 검사한다. 집계 성공으로 기존 질문의 회귀를 가리지 않는다.
+
+새 47개 seed 안의 기존 20개 질문 결과는 과거 14개 seed 평가와 별도다. 합성 영어 질문의
+측정이며 다국어·실사용 분포·새 모델 토큰 절감을 입증하지 않는다. 같은 실제 검색 결과의 8192-byte
+팩 검사도 도구 클라이언트 왕복이나 모델 실행은 아니다. 모든 반복의 누락·오답 순위·유출을 진단 로그에 남긴다.
+
+현재 검증 상태: 구현 후 독립 검토 및 기존 `default-retrieval-eval` 필수 CI 대기.
+로컬 전체 스택/Node 검사는 호스트 자원 압박으로 실행하지 않았다. 결과를 확인하기 전 GREEN으로 바꾸지 않는다.

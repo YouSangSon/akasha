@@ -1,14 +1,13 @@
 import { performance } from "node:perf_hooks";
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { resolveServiceConfig } from "../../src/config.js";
 import { buildContextPack } from "../../src/context-pack/build-context-pack.js";
 import { createPgPool, type PgPool } from "../../src/db/connection.js";
 import { runMigrations } from "../../src/db/migrate.js";
 import { createEmbeddingProvider } from "../../src/embedding/embedding-factory.js";
-import { mrrAtK, recallAtK } from "../../src/eval/metrics.js";
+import { hardNegativeOrderingAtK, mrrAtK, recallAtK } from "../../src/eval/metrics.js";
+import { isAllowedEvalScope } from "../../src/eval/retrieval-corpus.js";
+import { buildContextPackResult } from "../../src/mcp/context-pack-result.js";
 import type { EvalQuery } from "../../src/eval/types.js";
 import { createIngestJobRepository } from "../../src/jobs/ingest-job-repository.js";
 import { createQdrantClient } from "../../src/qdrant/client.js";
@@ -25,7 +24,7 @@ import type {
 } from "../../src/types.js";
 import { createQdrantVectorIndex } from "../../src/vector/qdrant-index.js";
 import { resolveEvalThreshold } from "./env.js";
-import { SEED_ENTRIES } from "./fixtures/seed.js";
+import { loadRetrievalCorpus } from "./fixtures/retrieval-corpus.js";
 
 const RUN_EVAL = process.env.RUN_EVAL === "1";
 const RECALL_THRESHOLD = resolveEvalThreshold(
@@ -48,11 +47,9 @@ const EVAL_RESOURCE_PREFIX = "akasha_eval_";
 const EVAL_ORGANIZATION_ID = `akasha-eval-${process.pid}-${Date.now()}`;
 const DECOY_ORGANIZATION_ID = `${EVAL_ORGANIZATION_ID}-decoy`;
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const QUERIES_PATH = join(__dirname, "fixtures", "queries.json");
-const QUERIES: EvalQuery[] = RUN_EVAL
-  ? (JSON.parse(readFileSync(QUERIES_PATH, "utf8")) as EvalQuery[])
-  : [];
+const CORPUS = RUN_EVAL ? loadRetrievalCorpus() : undefined;
+const QUERIES = CORPUS?.queries ?? [];
+const EVAL_SEEDS = CORPUS?.seeds ?? [];
 
 type EvalServices = {
   pool: PgPool;
@@ -66,6 +63,9 @@ type EvalServices = {
 
 type QueryMeasurement = {
   queryId: string;
+  repeat: number;
+  scopeLeakageCount: number;
+  hardNegativeScore?: number;
   isUserScope: boolean;
   latencyMs: number;
   recall: number;
@@ -184,7 +184,7 @@ describe.skipIf(!RUN_EVAL)("default retrieval eval harness", () => {
         memory,
       });
 
-    for (const entry of SEED_ENTRIES) {
+    for (const entry of EVAL_SEEDS) {
       const written = await writeEvalMemory({
         ...entry.memory,
         organizationId: EVAL_ORGANIZATION_ID,
@@ -192,14 +192,10 @@ describe.skipIf(!RUN_EVAL)("default retrieval eval harness", () => {
       seedKeyToRecordId.set(entry.seedKey, written.id);
     }
 
-    const decoySeed = SEED_ENTRIES[0];
-    if (!decoySeed) {
-      throw new Error("retrieval eval requires at least one seed entry");
+    // Every target record has a same-content competitor in a different tenant.
+    for (const entry of EVAL_SEEDS) {
+      await writeEvalMemory({ ...entry.memory, organizationId: DECOY_ORGANIZATION_ID });
     }
-    await writeEvalMemory({
-      ...decoySeed.memory,
-      organizationId: DECOY_ORGANIZATION_ID,
-    });
   }, 180_000);
 
   afterAll(async () => {
@@ -236,62 +232,26 @@ describe.skipIf(!RUN_EVAL)("default retrieval eval harness", () => {
     for (let repeat = 0; repeat < WARM_REPEATS; repeat += 1) {
       for (const query of QUERIES) {
         measurements.push(
-          await measureQuery(query, services, seedKeyToRecordId),
+          await measureQuery(query, services, seedKeyToRecordId, repeat + 1),
         );
       }
     }
 
-    const userMeasurements = measurements.filter(
-      (measurement) => measurement.isUserScope,
-    );
-    const latencies = measurements
-      .map((measurement) => measurement.latencyMs)
-      .sort((left, right) => left - right);
-    const summary = {
-      provider: "transformers",
-      model: services.embeddingModel,
-      backend: "qdrant",
-      topK: TOP_K,
-      samples: measurements.length,
-      recallAt5: average(measurements.map((value) => value.recall)),
-      mrrAt5: average(
-        measurements.map((value) => value.reciprocalRank),
-      ),
-      userScopeRecallAt5: average(
-        userMeasurements.map((value) => value.recall),
-      ),
-      crossOrgLeakage: measurements.reduce(
-        (total, value) => total + value.leakageCount,
-        0,
-      ),
-      latencyMs: {
-        p50: percentile(latencies, 0.5),
-        p95: percentile(latencies, 0.95),
-        max: latencies.at(-1) ?? 0,
-      },
-      misses: measurements
-        .slice(0, QUERIES.length)
-        .filter((value) => value.recall < 1)
-        .map((value) => ({
-          queryId: value.queryId,
-          returned: value.results.map((record) => ({
-            seedKey: seedKeyForRecordId(seedKeyToRecordId, record.id),
-            scopeType: record.scopeType,
-            memoryType: record.memoryType,
-            sourceType: record.source.sourceType,
-          })),
-        })),
-    };
-
+    const legacyIds = new Set(CORPUS!.legacyQueries.map((query) => query.id));
+    const overall = summarizeMeasurements(measurements, seedKeyToRecordId);
+    const legacy = summarizeMeasurements(measurements.filter((value) => legacyIds.has(value.queryId)), seedKeyToRecordId);
+    const expanded = summarizeMeasurements(measurements.filter((value) => !legacyIds.has(value.queryId)), seedKeyToRecordId);
+    const summary = { provider: "transformers", model: services.embeddingModel, backend: "qdrant", topK: TOP_K,
+      corpusVersion: CORPUS!.version, targetSeeds: EVAL_SEEDS.length, foreignTenantMirrors: EVAL_SEEDS.length,
+      ...overall, legacyQueriesWithinExpandedCorpus: legacy, addedQueriesWithinExpandedCorpus: expanded };
     process.stderr.write(`eval-summary ${JSON.stringify(summary)}\n`);
-
     expect(measurements).toHaveLength(QUERIES.length * WARM_REPEATS);
-    expect(summary.recallAt5).toBeGreaterThanOrEqual(RECALL_THRESHOLD);
-    expect(summary.mrrAt5).toBeGreaterThanOrEqual(MRR_THRESHOLD);
-    expect(summary.userScopeRecallAt5).toBeGreaterThanOrEqual(
-      USER_RECALL_THRESHOLD,
-    );
-    expect(summary.crossOrgLeakage).toBe(0);
+    expect(summary.uniqueQueries).toBe(52);
+    expect(summary.uniqueUserQueries).toBe(12);
+    expect(summary.uniqueHardNegativeQueries).toBe(12);
+    // A good new cohort must not hide a regression on the historical queries.
+    for (const cohort of [overall, legacy, expanded]) assertQuality(cohort);
+
     if (ENFORCE_LATENCY) {
       expect(summary.latencyMs.p50).toBeLessThanOrEqual(P50_THRESHOLD_MS);
       expect(summary.latencyMs.p95).toBeLessThanOrEqual(P95_THRESHOLD_MS);
@@ -314,6 +274,16 @@ describe.skipIf(!RUN_EVAL)("default retrieval eval harness", () => {
     expect(pack.markdown).toContain(
       "Postgres is the canonical store for memory records",
     );
+    expect(measurement.scopeLeakageCount).toBe(0);
+    const input = { projectKey: "project-alpha", task: QUERIES[0]!.query, records: measurement.results };
+    const baseline = buildContextPackResult(input);
+    const budgeted = buildContextPackResult({ ...input, maxOutputBytes: 8192 });
+    expect(Buffer.byteLength(JSON.stringify(budgeted), "utf8")).toBeLessThanOrEqual(8192);
+    expect(budgeted.packMarkdown).toContain("Postgres is the canonical store for memory records");
+    process.stderr.write(`eval-pack-bytes ${JSON.stringify({ profile: "default-stack-retrieved-records", maxOutputBytes: 8192,
+      baselineStructuredJsonUtf8Bytes: Buffer.byteLength(JSON.stringify(baseline), "utf8"),
+      budgetedStructuredJsonUtf8Bytes: Buffer.byteLength(JSON.stringify(budgeted), "utf8"),
+      selectedMemoryIds: budgeted.selectedMemoryIds, modelTokensMeasured: false })}\n`);
   }, 60_000);
 });
 
@@ -321,6 +291,7 @@ async function measureQuery(
   query: EvalQuery,
   services: EvalServices,
   seedKeyToRecordId: ReadonlyMap<string, number>,
+  repeat = 0,
 ): Promise<QueryMeasurement> {
   const projectKey = query.scope.projectKey;
   if (!projectKey) {
@@ -348,9 +319,17 @@ async function measureQuery(
     return id;
   });
   const retrievedIds = results.map((record) => record.id);
+  const negativeIds = query.hardNegativeRecordSeedKeys?.map((key) => {
+    const id = seedKeyToRecordId.get(key);
+    if (id === undefined) throw new Error(`unknown negative seed key: ${key}`);
+    return id;
+  });
 
   return {
     queryId: query.id,
+    repeat,
+    scopeLeakageCount: results.filter((record) => !isAllowedEvalScope(record, query.scope)).length,
+    hardNegativeScore: negativeIds === undefined ? undefined : hardNegativeOrderingAtK(retrievedIds, relevantIds, negativeIds, TOP_K),
     isUserScope: query.scope.userScopeId !== undefined,
     latencyMs,
     recall: recallAtK(retrievedIds, relevantIds, TOP_K),
@@ -360,6 +339,43 @@ async function measureQuery(
     ).length,
     results,
   };
+}
+
+
+function summarizeMeasurements(measurements: QueryMeasurement[], seedIds: ReadonlyMap<string, number>) {
+  const users = measurements.filter((value) => value.isUserScope);
+  const contrasts = measurements.filter((value) => value.hardNegativeScore !== undefined);
+  const latencies = measurements.map((value) => value.latencyMs).sort((a, b) => a - b);
+  const failures = measurements.filter((value) => value.recall < 1 || value.hardNegativeScore === 0 || value.leakageCount > 0 || value.scopeLeakageCount > 0)
+    .map((value) => ({ queryId: value.queryId, repeat: value.repeat, recall: value.recall,
+      reciprocalRank: value.reciprocalRank, hardNegativeScore: value.hardNegativeScore,
+      crossOrgLeakage: value.leakageCount, crossScopeLeakage: value.scopeLeakageCount,
+      returned: value.results.map((record) => ({ seedKey: seedKeyForRecordId(seedIds, record.id), scopeType: record.scopeType,
+        memoryType: record.memoryType, sourceType: record.source.sourceType })) }));
+  return {
+    samples: measurements.length,
+    uniqueQueries: new Set(measurements.map((value) => value.queryId)).size,
+    uniqueUserQueries: new Set(users.map((value) => value.queryId)).size,
+    uniqueHardNegativeQueries: new Set(contrasts.map((value) => value.queryId)).size,
+    recallAt5: average(measurements.map((value) => value.recall)),
+    mrrAt5: average(measurements.map((value) => value.reciprocalRank)),
+    userScopeRecallAt5: average(users.map((value) => value.recall)),
+    hardNegativeOrderingAt5: contrasts.length === 0 ? null : average(contrasts.map((value) => value.hardNegativeScore!)),
+    crossOrgLeakage: measurements.reduce((sum, value) => sum + value.leakageCount, 0),
+    crossScopeLeakage: measurements.reduce((sum, value) => sum + value.scopeLeakageCount, 0),
+    latencyMs: { p50: percentile(latencies, 0.5), p95: percentile(latencies, 0.95), max: latencies.at(-1) ?? 0 },
+    misses: failures.filter((value) => value.repeat === 1 && value.recall < 1),
+    failures,
+  };
+}
+
+function assertQuality(summary: ReturnType<typeof summarizeMeasurements>): void {
+  expect(summary.recallAt5).toBeGreaterThanOrEqual(RECALL_THRESHOLD);
+  expect(summary.mrrAt5).toBeGreaterThanOrEqual(MRR_THRESHOLD);
+  expect(summary.userScopeRecallAt5).toBe(USER_RECALL_THRESHOLD);
+  expect(summary.crossOrgLeakage).toBe(0);
+  expect(summary.crossScopeLeakage).toBe(0);
+  if (summary.hardNegativeOrderingAt5 !== null) expect(summary.hardNegativeOrderingAt5).toBe(1);
 }
 
 function seedKeyForRecordId(
