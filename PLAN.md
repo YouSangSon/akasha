@@ -9,7 +9,8 @@ Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale i
 2026-10-26 사용자가 추가 승인한 작업은 [#39](https://github.com/YouSangSon/akasha/issues/39)가 추적한다.
 세 단위를 각각 검증·PR·필수 CI·main 병합 순서로 진행한다.
 
-- [ ] 전체 구조화 컨텍스트 팩의 선택적 크기 예산; 기존 기본 응답과 결정·제약 보존.
+- [x] 전체 구조화 컨텍스트 팩의 선택적 크기 예산: PR #40, main `2314ba3`, CI 5개 통과.
+  정확한 경계와 측정 범위는 `GATES.md`가 소유한다.
 - [ ] MCP 응답 크기와 실제 전체 턴 입력 토큰을 구분하는 비용 계측 및 같은 입력 비교.
 - [ ] 기존 20개 질문을 보존한 50개 이상 검색 평가와 사용자/조직 격리·유사 오답 검증.
 

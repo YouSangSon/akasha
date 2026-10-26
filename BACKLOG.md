@@ -10,14 +10,15 @@ experience, documentation, features.
 
 ## P1
 
-- [#39](https://github.com/YouSangSon/akasha/issues/39): 전체 컨텍스트 팩에 선택적 크기 예산을 적용한다.
-  기본 응답·신뢰 경계·조직 격리·선택 기록을 보존하고, 필수 결정·제약이 들어가지 않으면 실패한다.
+- [#39](https://github.com/YouSangSon/akasha/issues/39): MCP 전체 턴 입력 토큰과 개별 응답 바이트를 구분하는 계측 및 동일 입력의 예산 비교를 구현한다.
 
 ## P2
 
 - None currently known.
 
 ## Recently Merged
+
+- PR #40 (`2314ba3`): 선택적 전체 구조화 컨텍스트 팩 바이트 예산과 경계·기록·감사 계약을 검증했다.
 
 - 기본 `transformers + Qdrant` 검색 게이트는 PR #26으로 반영됐다.
   조직 범위의 recall@5·MRR·사용자 회수·조직 유출·warm 지연 근거는

@@ -177,3 +177,37 @@ model client. Word estimates are not tokenizer measurements.
 
 This is local unit/in-memory contract evidence. The existing required five-job CI must pass for this change before main merge.
 No live provider, VM runtime, or new real-client token-saving result follows from this row.
+
+
+### MCP 입력 비용 관측과 예산 변형의 범위
+
+PR #40의 head `11fcdb9`는 [CI 40295261552](https://github.com/YouSangSon/akasha/actions/runs/40295261552)의
+필수 5개 작업을 통과했고 main `2314ba3`과 tree가 같다. Node 22/24 각각 2696 통과·35 skip,
+Postgres 246, pgvector 115, 기본 transformers/Qdrant 5개 통과, 의존성 감사 0건이다.
+
+추가 계측은 단위를 분리한다. 아래 바이트 값은 관측 객체를 재직렬화한 UTF-8 크기이며,
+원래 wire bytes나 전체 모델 프롬프트 토큰 기여도가 아니다. 서로 겹치는 값이므로 합산하지 않는다.
+
+| 기록 | 의미 |
+| --- | --- |
+| `inputTokens`, `cachedInputTokens` | 클라이언트가 보고한 전체 턴 입력. Codex cached input은 input에 이미 포함되어 추가 합산하지 않는다. |
+| `payloadBytes.argumentsJsonUtf8Bytes` | 관측된 도구 인자의 compact JSON 크기 |
+| `payloadBytes.resultJsonUtf8Bytes` | 관측된 결과 객체의 compact JSON 크기 |
+| `payloadBytes.structuredContentJsonUtf8Bytes` | structured data가 노출된 경우 그 JSON 크기 |
+| `payloadBytes.textContentUtf8Bytes` | 관측된 text 블록 내용만의 UTF-8 크기 |
+| `clientStdinUtf8Bytes` | 실행을 시도한 클라이언트 명령의 stdin 크기. 전역 지시·도구 스키마·이력 전체가 아니다. |
+| `clientDurationMs` | 해당 클라이언트 명령 실행 시간. 도구 실행만의 지연이나 전체 제품 응답 시간이 아니다. 실패한 실행도 기록한다. |
+
+preflight에는 기존 word estimate와 별도로 raw context, pack Markdown, 전체 structured data의 바이트를 기록한다.
+모델 실행 전 필요한 seed ID·본문 anchor·조직 격리 검증은 유지한다.
+
+MCP 프로필의 별도 예산 변형은 runner `--max-output-bytes 8192` 또는 기존 wrapper의
+`AKASHA_CLIENT_AB_MAX_OUTPUT_BYTES=8192`로 명시한다. preflight·도구 인자·관측 응답·결과 영수증이
+같은 예산을 유지해야 한다. 실제 응답의 compact data 크기와 예산 메타데이터도 검증하므로,
+인자만 맞고 서버가 옵션을 무시한 실행은 통과하지 못한다. CLI-prefetch 프로필과의 혼용은 거부한다.
+기존 유료 실행 금지·구독 허용량·크레딧 변화·실패 보존·원자적 결과 기록 조건은 그대로다.
+
+새 스택이나 모델을 실행하지 않는 재현 명령은
+`node node_modules/vitest/vitest.mjs run tests/eval/payload-metrics.test.ts --maxWorkers=1 --no-file-parallelism --reporter=verbose`다.
+여기서 같은 합성 기록의 기본 응답과 4096-byte 응답을 비교한다. 이는 in-memory native serialization 실험이며
+실제 DB 검색·클라이언트 A/B·토큰 절감 결과가 아니다. 기존 실제 MCP 0.35% RED와 별도 CLI-prefetch 53.40% 결과는 유지한다.

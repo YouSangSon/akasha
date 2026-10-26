@@ -4,8 +4,10 @@ import os from "node:os";
 import { isDeepStrictEqual } from "node:util";
 import path from "node:path";
 import { createInterface } from "node:readline";
+import { performance } from "node:perf_hooks";
 import { chunkText } from "../chunk/chunk-text.js";
 import type { ToolRegistry } from "../mcp/types.js";
+import { assertObservedPackBudget, measureToolPayloadBytes, type ToolPayloadBytes } from "./payload-metrics.js";
 
 const FULL_SHA = /^[0-9a-f]{40}$/;
 const SAFE_SOURCE_PATHS = [
@@ -63,7 +65,7 @@ export type ClientAbExperiment = {
   seedRecords: readonly PreparedClientRecord[]; tasks: readonly PreparedClientTask[];
   rawCanonicalContext: string; sharedPromptSuffix: string;
 };
-export type ToolCall = { server: string; name: string; arguments?: unknown; succeeded?: boolean; selectedMemoryIds?: string[] };
+export type ToolCall = { server: string; name: string; arguments?: unknown; succeeded?: boolean; selectedMemoryIds?: string[]; payloadBytes?: ToolPayloadBytes };
 export type ClientUsage = { inputTokens: number; cachedInputTokens: number; toolCalls: ToolCall[] };
 export type ClaudeStreamResult = ClientUsage & { structuredOutput: unknown; observedModel: string };
 export type ClientWorkspace = { rootDir: string; cwd: string; schemaPath: string };
@@ -79,11 +81,13 @@ export type ClientAbRegistry = Pick<ToolRegistry, "add_memory" | "build_context_
 export type ClientAbPreflightTask = {
   taskId: string; selectedMemoryIds: string[]; requiredMemoryIds: string[];
   rawInputWordEstimate: number; contextPackWordEstimate: number; foreignLeakageCount: number;
+  rawCanonicalUtf8Bytes?: number; contextPackMarkdownUtf8Bytes?: number; contextPackStructuredJsonUtf8Bytes?: number;
 };
 export type ClientAbPreflight = {
   sourceSha: string; corpusVersion: number; seededRecordCount: number;
   rawCanonicalWordEstimate: number; foreignLeakageCount: number; allowedMemoryIds: string[];
   tasks: ClientAbPreflightTask[];
+  maxOutputBytes?: number;
 };
 export type ClientConditionResult = {
   profile: ClientAbProfile;
@@ -91,12 +95,15 @@ export type ClientConditionResult = {
   runIndex: number; success: boolean; inputTokens: number; cachedInputTokens: number;
   toolCalls: ToolCall[]; grade: ReturnType<typeof gradeClientAnswer>;
   model: { requested: string; observed: string | null }; cliVersion: string;
+  clientStdinUtf8Bytes?: number; clientDurationMs?: number;
+  maxOutputBytes?: number;
 };
 export type ClientAbRunSummary = {
   profile: ClientAbProfile;
   vendor: ClientVendor; sourceSha: string; corpusVersion: number; cliVersion: string;
   model: { requested: string; observed: string | null }; pairs: ClientPair[];
   aggregate: ClientPairSummary;
+  maxOutputBytes?: number;
   totals: { offInputTokens: number; onInputTokens: number; offCachedInputTokens: number; onCachedInputTokens: number };
 };
 export type ClientExecutor = (command: ClientCommand) => Promise<{ stdout: string; stderr: string; finalOutput?: string }>;
@@ -105,6 +112,7 @@ export type ClientAbRunInput = {
   experiment: ClientAbExperiment; vendor: ClientVendor; model: string; resultDir: string;
   mcpServer: LiveMcpServer; executePaid: boolean; allowedMemoryIds: readonly string[]; env?: NodeJS.ProcessEnv;
   effort?: string; maxBudgetUsd?: number; executeSubscription?: boolean;
+  maxOutputBytes?: number;
   readSubscriptionStatus?: () => Promise<CodexSubscriptionStatus>;
   execute?: ClientExecutor; getCliVersion?: (binary: string) => Promise<string>;
 };
@@ -291,17 +299,19 @@ export type ClientPromptScope = Pick<ClientAbExperiment, "organizationId" | "pro
 export function buildClientPrompt(
   task: Pick<PreparedClientTask, "task" | "claimKeys">,
   condition: ClientCondition,
-  options: { rawCanonicalContext?: string; scope?: ClientPromptScope; packMarkdown?: string } = {},
+  options: { rawCanonicalContext?: string; scope?: ClientPromptScope; packMarkdown?: string; maxOutputBytes?: number } = {},
 ): string {
+  if (options.maxOutputBytes !== undefined) positive(options.maxOutputBytes, "maxOutputBytes");
   const prefix = `Task:\n${task.task}\n\nRequired claims (choose one exact value per key):\n${task.claimKeys.map((key) => `- ${key}: ${ANSWER_CHOICES[key]!.choices.join(" | ")}`).join("\n")}\n\n`;
   if (condition === "on") {
     if (options.packMarkdown !== undefined) {
+      if (options.maxOutputBytes !== undefined) throw new Error("maxOutputBytes is supported only by the MCP roundtrip profile");
       text(options.packMarkdown, "CLI context pack");
       return `${prefix}Akasha context pack:\n${options.packMarkdown}\n\n${SHARED_PROMPT_SUFFIX}`;
     }
     const scope = options.scope;
     if (scope === undefined) throw new Error("client A/B on prompt requires its exact Akasha scope");
-    return `${prefix}Use the Akasha MCP server. Call build_context_pack exactly once before answering, with exactly this JSON input and no other tool calls:\n${JSON.stringify({ organizationId: scope.organizationId, projectKey: scope.projectKey, task: task.task, userScopeId: scope.userScopeId, includeUser: true, limit: 10 })}\n\n${SHARED_PROMPT_SUFFIX}`;
+    return `${prefix}Use the Akasha MCP server. Call build_context_pack exactly once before answering, with exactly this JSON input and no other tool calls:\n${JSON.stringify(preflightInput(scope, task, options.maxOutputBytes))}\n\n${SHARED_PROMPT_SUFFIX}`;
   }
   text(options.rawCanonicalContext, "rawCanonicalContext");
   return `${prefix}Raw canonical context:\n${options.rawCanonicalContext}\n\n${SHARED_PROMPT_SUFFIX}`;
@@ -337,10 +347,10 @@ function contextPackMemoryIds(value: unknown): string[] | undefined {
       !result.selectedMemoryIds.every((id) => typeof id === "string" && id.trim())) return undefined;
   return result.selectedMemoryIds;
 }
-function textResultMemoryIds(content: unknown): string[] | undefined {
+function textResultData(content: unknown): unknown {
   const textContent = typeof content === "string" ? content : Array.isArray(content)
     ? content.filter((block) => typeof block === "object" && block !== null && block.type === "text").map((block) => block.text).join("\n") : "";
-  try { return contextPackMemoryIds(JSON.parse(textContent)); } catch (_error: unknown) { return undefined; }
+  try { return JSON.parse(textContent); } catch (_error: unknown) { return undefined; }
 }
 function jsonLines(value: string, label: string): Record<string, unknown>[] {
   const lines = value.split("\n").filter((line) => line.trim());
@@ -378,11 +388,14 @@ export function parseCodexEvents(value: string): ClientUsage {
       if (event.item.status !== "completed" || event.item.error != null) throw new Error("Codex MCP tool call did not complete successfully", { cause: event.item });
       const result = event.item.result;
       object(result, "Codex MCP result");
-      const selectedMemoryIds = result.structured_content != null ? contextPackMemoryIds(result.structured_content) : textResultMemoryIds(result.content);
+      const data = result.structured_content != null ? result.structured_content : textResultData(result.content);
+      assertObservedPackBudget(data, typeof event.item.arguments === "object" && event.item.arguments !== null ? (event.item.arguments as Record<string, unknown>).maxOutputBytes : undefined);
+      const selectedMemoryIds = contextPackMemoryIds(data);
       return [{
         arguments: event.item.arguments,
         succeeded: result.isError !== true && selectedMemoryIds !== undefined,
         selectedMemoryIds,
+        payloadBytes: measureToolPayloadBytes(event.item.arguments, result),
         server: typeof event.item.server === "string" ? event.item.server : typeof event.item.server_name === "string" ? event.item.server_name : "builtin",
         name: typeof event.item.tool === "string" ? event.item.tool : typeof event.item.name === "string" ? event.item.name : "unknown",
       }];
@@ -433,13 +446,16 @@ export function parseClaudeStream(value: string, expectedModel: string): ClaudeS
         object(candidate.message, "Claude tool-result message");
         return Array.isArray(candidate.message.content) ? candidate.message.content.filter((item) => typeof item === "object" && item !== null && item.type === "tool_result" && item.tool_use_id === block.id) : [];
       });
-      const selectedMemoryIds = matching.length === 1 && matching[0].is_error !== true ? textResultMemoryIds(matching[0].content) : undefined;
+      const data = matching.length === 1 && matching[0].is_error !== true ? textResultData(matching[0].content) : undefined;
+      assertObservedPackBudget(data, typeof block.input === "object" && block.input !== null ? (block.input as Record<string, unknown>).maxOutputBytes : undefined);
+      const selectedMemoryIds = contextPackMemoryIds(data);
       return [{
         server: block.name.startsWith(prefix) ? "akasha" : "builtin",
         name: block.name.startsWith(prefix) ? block.name.slice(prefix.length) : block.name,
         arguments: block.input,
         succeeded: selectedMemoryIds !== undefined,
         selectedMemoryIds,
+        payloadBytes: measureToolPayloadBytes(block.input, matching.length === 1 ? matching[0] : undefined),
       }];
     });
   });
@@ -613,7 +629,8 @@ export function assertPaidClientExecutionAllowed(env: NodeJS.ProcessEnv, execute
 function wordEstimate(value: string): number {
   return value.match(/\S+/g)?.length ?? 0;
 }
-function preflightInput(experiment: ClientAbExperiment, task: PreparedClientTask) {
+function preflightInput(experiment: ClientPromptScope, task: Pick<PreparedClientTask, "task">, maxOutputBytes?: number) {
+  if (maxOutputBytes !== undefined) positive(maxOutputBytes, "maxOutputBytes");
   return {
     organizationId: experiment.organizationId,
     projectKey: experiment.projectKey,
@@ -621,6 +638,7 @@ function preflightInput(experiment: ClientAbExperiment, task: PreparedClientTask
     userScopeId: experiment.userScopeId,
     includeUser: true,
     limit: 10,
+    ...(maxOutputBytes === undefined ? {} : { maxOutputBytes }),
   };
 }
 export function assertClientContextPack(task: PreparedClientTask, pack: { packMarkdown: string; selectedMemoryIds: readonly string[] }, allowedMemoryIds: readonly string[], requiredMemoryIds: readonly string[]): void {
@@ -639,7 +657,9 @@ export function assertClientContextPack(task: PreparedClientTask, pack: { packMa
 }
 export async function seedAndPreflightClientAb(input: {
   experiment: ClientAbExperiment; registry: ClientAbRegistry; resultPath?: string;
+  maxOutputBytes?: number;
 }): Promise<ClientAbPreflight> {
+  if (input.maxOutputBytes !== undefined) positive(input.maxOutputBytes, "maxOutputBytes");
   const memoryIds = new Map<string, string>();
   try {
     for (const record of input.experiment.seedRecords) {
@@ -658,7 +678,8 @@ export async function seedAndPreflightClientAb(input: {
     if (foreignMemoryId === undefined) throw new Error("client A/B preflight did not seed its foreign decoy");
     const tasks: ClientAbPreflightTask[] = [];
     for (const task of input.experiment.tasks) {
-      const pack = await input.registry.build_context_pack(preflightInput(input.experiment, task));
+      const pack = await input.registry.build_context_pack(preflightInput(input.experiment, task, input.maxOutputBytes));
+      assertObservedPackBudget(pack, input.maxOutputBytes);
       const requiredMemoryIds = task.contextRecords.map((record) => {
         const memoryId = memoryIds.get(record.id);
         if (memoryId === undefined) throw new Error(`client A/B preflight is missing seeded memory ${record.id}`);
@@ -672,10 +693,14 @@ export async function seedAndPreflightClientAb(input: {
         requiredMemoryIds,
         rawInputWordEstimate: wordEstimate(input.experiment.rawCanonicalContext),
         contextPackWordEstimate: wordEstimate(pack.packMarkdown),
+        rawCanonicalUtf8Bytes: Buffer.byteLength(input.experiment.rawCanonicalContext, "utf8"),
+        contextPackMarkdownUtf8Bytes: Buffer.byteLength(pack.packMarkdown, "utf8"),
+        contextPackStructuredJsonUtf8Bytes: Buffer.byteLength(JSON.stringify(pack), "utf8"),
         foreignLeakageCount: 0,
       });
     }
     const result: ClientAbPreflight = {
+      ...(input.maxOutputBytes === undefined ? {} : { maxOutputBytes: input.maxOutputBytes }),
       sourceSha: input.experiment.sourceSha,
       corpusVersion: input.experiment.corpusVersion,
       seededRecordCount: input.experiment.seedRecords.length,
@@ -690,6 +715,7 @@ export async function seedAndPreflightClientAb(input: {
     if (input.resultPath !== undefined) {
       await writeResultAtomically(input.resultPath, {
         status: "failed",
+        ...(input.maxOutputBytes === undefined ? {} : { maxOutputBytes: input.maxOutputBytes }),
         sourceSha: input.experiment.sourceSha,
         error: error instanceof Error ? error.message : "client A/B preflight failed",
       });
@@ -785,6 +811,10 @@ function assertClientAuthentication(input: ClientAbRunInput): void {
 }
 export async function runClientAb(input: ClientAbRunInput): Promise<ClientAbRunSummary> {
   const profile = input.profile ?? "mcp-roundtrip";
+  if (input.maxOutputBytes !== undefined) {
+    positive(input.maxOutputBytes, "maxOutputBytes");
+    if (profile !== "mcp-roundtrip") throw new Error("maxOutputBytes is supported only by the MCP roundtrip profile");
+  }
   if (profile === "cli-prefetch" && (input.vendor !== "codex" || input.prefetch === undefined)) throw new Error("CLI prefetch requires Codex and an actual CLI pack provider");
   if (input.executeSubscription) {
     if (input.executePaid || input.vendor !== "codex" || !input.effort) throw new Error("subscription evaluation requires Codex, explicit effort, and no paid mode");
@@ -819,6 +849,8 @@ export async function runClientAb(input: ClientAbRunInput): Promise<ClientAbRunS
       const resultPath = conditionResultPath(input.resultDir, input.vendor, entry.task.id, entry.repeat, entry.condition);
       let executionStarted = false;
       let outcomeWritten = false;
+      let clientStdinUtf8Bytes: number | undefined;
+      let clientDurationMs: number | undefined;
       try {
         const pairKey = `${entry.task.id}:${entry.repeat}`;
         if (profile === "cli-prefetch" && !prefetched.has(pairKey)) {
@@ -831,6 +863,7 @@ export async function runClientAb(input: ClientAbRunInput): Promise<ClientAbRunS
           rawCanonicalContext: input.experiment.rawCanonicalContext,
           scope: input.experiment,
           packMarkdown: profile === "cli-prefetch" ? prefetched.get(pairKey)!.packMarkdown : undefined,
+          maxOutputBytes: input.maxOutputBytes,
         });
         const command = await buildClientCommand({
           vendor: input.vendor,
@@ -846,11 +879,15 @@ export async function runClientAb(input: ClientAbRunInput): Promise<ClientAbRunS
         });
         await checkSubscription();
         executionStarted = true;
-        const executed = await execute(command);
+        clientStdinUtf8Bytes = Buffer.byteLength(command.stdin, "utf8");
+        const started = performance.now();
+        let executed: Awaited<ReturnType<ClientExecutor>>;
+        try { executed = await execute(command); }
+        finally { clientDurationMs = performance.now() - started; }
         const parsed = input.vendor === "codex"
           ? parseCodexEvents(executed.stdout)
           : parseClaudeStream(executed.stdout, input.model);
-        verifyToolTrace(profile === "cli-prefetch" ? "off" : entry.condition, parsed.toolCalls, preflightInput(input.experiment, entry.task), input.allowedMemoryIds);
+        verifyToolTrace(profile === "cli-prefetch" ? "off" : entry.condition, parsed.toolCalls, preflightInput(input.experiment, entry.task, input.maxOutputBytes), input.allowedMemoryIds);
         const rawOutput = input.vendor === "codex"
           ? executed.finalOutput ?? await readFile(command.finalOutputPath, "utf8")
           : JSON.stringify((parsed as ClaudeStreamResult).structuredOutput);
@@ -863,6 +900,8 @@ export async function runClientAb(input: ClientAbRunInput): Promise<ClientAbRunS
           vendor: input.vendor, taskId: entry.task.id, repeat: entry.repeat, condition: entry.condition,
           runIndex, success: grade.success, inputTokens: parsed.inputTokens, cachedInputTokens: parsed.cachedInputTokens,
           toolCalls: parsed.toolCalls, grade, model: { requested: input.model, observed }, cliVersion: version,
+          clientStdinUtf8Bytes, clientDurationMs,
+          ...(input.maxOutputBytes === undefined ? {} : { maxOutputBytes: input.maxOutputBytes }),
         };
         await writeResultAtomically(resultPath, outcome);
         outcomeWritten = true;
@@ -875,6 +914,8 @@ export async function runClientAb(input: ClientAbRunInput): Promise<ClientAbRunS
           profile,
           vendor: input.vendor, taskId: entry.task.id, repeat: entry.repeat, condition: entry.condition, runIndex,
           success: false, cliVersion: version,
+          clientStdinUtf8Bytes, clientDurationMs,
+          ...(input.maxOutputBytes === undefined ? {} : { maxOutputBytes: input.maxOutputBytes }),
           error: error instanceof Error ? error.message : "client A/B condition failed",
         });
         throw error;
@@ -894,6 +935,7 @@ export async function runClientAb(input: ClientAbRunInput): Promise<ClientAbRunS
     const model = { requested: input.model, observed: all.every((outcome) => outcome.model.observed === input.model) ? input.model : null };
     const summary: ClientAbRunSummary = {
       profile,
+      ...(input.maxOutputBytes === undefined ? {} : { maxOutputBytes: input.maxOutputBytes }),
       vendor: input.vendor, sourceSha: input.experiment.sourceSha, corpusVersion: input.experiment.corpusVersion,
       cliVersion: version, model, pairs, aggregate,
       totals: {
@@ -908,6 +950,7 @@ export async function runClientAb(input: ClientAbRunInput): Promise<ClientAbRunS
   } catch (error: unknown) {
     await writeResultAtomically(path.join(input.resultDir, `${input.vendor}-failure.json`), {
       profile,
+      ...(input.maxOutputBytes === undefined ? {} : { maxOutputBytes: input.maxOutputBytes }),
       status: "failed", sourceSha: input.experiment.sourceSha, completedConditions: outcomes.size,
       error: error instanceof Error ? error.message : "client A/B execution failed",
     });

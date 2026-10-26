@@ -22,6 +22,7 @@ export type ClientAbRunnerArgs = {
   sha: string; fixturePath: string; client?: ClientVendor; model?: string; effort?: string;
   profile: ClientAbProfile;
   resultDir: string; maxBudgetUsd?: number; executePaid: boolean; executeSubscription: boolean; preflight: boolean;
+  maxOutputBytes?: number;
 };
 
 function requireValue(args: readonly string[], index: number, flag: string): string {
@@ -41,6 +42,7 @@ export function parseClientAbArgs(args: readonly string[]): ClientAbRunnerArgs {
   let effort: string | undefined;
   let resultDir = "artifacts/client-ab";
   let maxBudgetUsd: number | undefined;
+  let maxOutputBytes: number | undefined;
   let executePaid = false;
   let executeSubscription = false;
   let preflight = false;
@@ -56,7 +58,7 @@ export function parseClientAbArgs(args: readonly string[]): ClientAbRunnerArgs {
       else preflight = true;
       continue;
     }
-    if (!["--sha", "--fixture", "--client", "--model", "--effort", "--result-dir", "--max-budget-usd", "--profile"].includes(arg ?? "")) throw new Error(`unknown client A/B runner argument ${arg}`);
+    if (!["--sha", "--fixture", "--client", "--model", "--effort", "--result-dir", "--max-budget-usd", "--profile", "--max-output-bytes"].includes(arg ?? "")) throw new Error(`unknown client A/B runner argument ${arg}`);
     if (seen.has(arg!)) throw new Error(`client A/B runner repeats ${arg}`);
     seen.add(arg!);
     const value = requireValue(args, index, arg!);
@@ -73,6 +75,9 @@ export function parseClientAbArgs(args: readonly string[]): ClientAbRunnerArgs {
     } else if (arg === "--effort") {
       if (!EFFORTS.has(value)) throw new Error("client A/B runner --effort must be low, medium, high, xhigh, or max");
       effort = value;
+    } else if (arg === "--max-output-bytes") {
+      maxOutputBytes = /^\d+$/.test(value) ? Number(value) : NaN;
+      if (!Number.isSafeInteger(maxOutputBytes) || maxOutputBytes <= 0) throw new Error("--max-output-bytes must be a positive safe integer");
     } else if (arg === "--result-dir") resultDir = value;
     else maxBudgetUsd = decimal(value, "--max-budget-usd");
   }
@@ -82,7 +87,8 @@ export function parseClientAbArgs(args: readonly string[]): ClientAbRunnerArgs {
   if (maxBudgetUsd !== undefined && client !== "claude") throw new Error("client A/B runner --max-budget-usd is valid only with --client claude");
   if (maxBudgetUsd !== undefined && maxBudgetUsd > 0.20) throw new Error("client A/B runner --max-budget-usd must be no greater than USD 0.20");
   if (profile === "cli-prefetch" && client !== undefined && client !== "codex") throw new Error("CLI prefetch currently supports Codex only");
-  return { sha, fixturePath, client, model, effort, profile, resultDir, maxBudgetUsd, executePaid, executeSubscription, preflight };
+  if (maxOutputBytes !== undefined && profile !== "mcp-roundtrip") throw new Error("--max-output-bytes is supported only by the MCP roundtrip profile");
+  return { sha, fixturePath, client, model, effort, profile, resultDir, maxBudgetUsd, executePaid, executeSubscription, preflight, ...(maxOutputBytes === undefined ? {} : { maxOutputBytes }) };
 }
 function mcpEnvironment(env: NodeJS.ProcessEnv): Record<string, string> {
   const names = [
@@ -142,6 +148,7 @@ async function main(): Promise<void> {
       experiment,
       registry,
       resultPath: path.join(resultDir, "preflight.json"),
+      maxOutputBytes: args.maxOutputBytes,
     }));
     if (args.executePaid || args.executeSubscription) {
       const database = args.profile === "cli-prefetch" ? createPgPool({ connectionString: process.env.DATABASE_URL!, max: 1 }) : undefined;
@@ -158,6 +165,7 @@ async function main(): Promise<void> {
           mcpServer: mcpServer(),
           executePaid: args.executePaid,
           executeSubscription: args.executeSubscription,
+          maxOutputBytes: args.maxOutputBytes,
           allowedMemoryIds: preflight.allowedMemoryIds,
         });
         process.stdout.write(`${JSON.stringify({ mode: args.executeSubscription ? "subscription" : "paid", preflight, summary })}\n`);
@@ -178,6 +186,7 @@ async function main(): Promise<void> {
     targetRecordCount: experiment.targetRecords.length,
     seededRecordCount: experiment.seedRecords.length,
     taskCount: experiment.tasks.length,
+    ...(args.maxOutputBytes === undefined ? {} : { maxOutputBytes: args.maxOutputBytes }),
     paidExecution: false,
   })}\n`);
 }

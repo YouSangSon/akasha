@@ -62,6 +62,26 @@ async function makeTrackedFixtureRepo() {
 }
 
 describe("client A/B evaluation harness", () => {
+  it("propagates a validated MCP budget without changing the off prompt", () => {
+    const task = { task: "continue", claimKeys: ["canonical_store"] };
+    const scope = { organizationId: "org-a", projectKey: "p", userScopeId: "alice" };
+    expect(buildClientPrompt(task, "on", { scope, maxOutputBytes: 4096 })).toContain('"maxOutputBytes":4096');
+    expect(buildClientPrompt(task, "off", { rawCanonicalContext: "facts", maxOutputBytes: 4096 })).toBe(buildClientPrompt(task, "off", { rawCanonicalContext: "facts" }));
+    expect(parseClientAbArgs(["--sha", "a".repeat(40), "--max-output-bytes", "4096"])).toHaveProperty("maxOutputBytes", 4096);
+    expect(() => parseClientAbArgs(["--sha", "a".repeat(40), "--profile", "cli-prefetch", "--max-output-bytes", "4096"])).toThrow(/MCP roundtrip/);
+  });
+
+  it.each(["0", "-1", "1.5", "1x", "9007199254740992"])("rejects malformed evaluation budget %s", (value) => {
+    expect(() => parseClientAbArgs(["--sha", "a".repeat(40), "--max-output-bytes", value])).toThrow(/positive safe integer/);
+  });
+
+  it("rejects invalid budgets before seeding or creating result directories", async () => {
+    const add = vi.fn();
+    await expect(seedAndPreflightClientAb({ experiment: {} as never, registry: { add_memory: add, build_context_pack: vi.fn() }, maxOutputBytes: 0 })).rejects.toThrow(/maxOutputBytes/);
+    expect(add).not.toHaveBeenCalled();
+    await expect(runClientAb({ profile: "cli-prefetch", maxOutputBytes: 4096 } as never)).rejects.toThrow(/MCP roundtrip/);
+  });
+
   it("uses a clean fixed-SHA corpus for both conditions without leaking the foreign sentinel", async () => {
     const { repoDir, sha } = await makeTrackedFixtureRepo();
     const experiment = prepareClientAbExperiment({
@@ -228,7 +248,11 @@ describe("client A/B evaluation harness", () => {
     expect(aggregateClientPairs("codex", pairs.map((pair) => ({ ...pair, on: { success: true, inputTokens: 199 } })))).toMatchObject({ allPairsSuccessful: true, passed: false });
   });
 
-  it.each(["mcp-roundtrip", "cli-prefetch"] as const)("uses a deterministic 18-call %s plan, isolated auth, and atomic paired evidence", async (profile) => {
+  it.each([
+    { profile: "mcp-roundtrip", maxOutputBytes: undefined },
+    { profile: "mcp-roundtrip", maxOutputBytes: 8192 },
+    { profile: "cli-prefetch", maxOutputBytes: undefined },
+  ] as const)("uses the existing paired $profile plan with budget $maxOutputBytes, isolated auth and atomic evidence", async ({ profile, maxOutputBytes }) => {
     const { repoDir, sha } = await makeTrackedFixtureRepo();
     const experiment = prepareClientAbExperiment({ repoDir, sha, fixturePath: "fixture.json" });
     const resultRoot = await mkdtemp(path.join(os.tmpdir(), "akasha-client-ab-results-"));
@@ -252,6 +276,7 @@ describe("client A/B evaluation harness", () => {
     const prefetch = vi.fn(async () => ({ packMarkdown: "Exact CLI pack\n", receipt: { contextPackRunId: "42", selectedMemoryIds: ["1"], packSha256: "a".repeat(64), cliDurationMs: 10 } }));
     const summary = await runClientAb({
       profile, prefetch,
+      maxOutputBytes,
       experiment,
       vendor: "codex",
       model: "codex-test",
@@ -270,7 +295,7 @@ describe("client A/B evaluation harness", () => {
         }
         calls.push({ condition: on ? "on" : "off", stdin: command.stdin, args: command.args, env: command.env });
         return {
-          stdout: `${mcp ? JSON.stringify({ type: "item.completed", item: { type: "mcp_tool_call", server: "akasha", tool: "build_context_pack", status: "completed", error: null, arguments: JSON.parse(command.stdin.split("\n").find((line) => line.startsWith('{"organizationId"'))!), result: { structured_content: { ok: true, packMarkdown: "retrieved fact", selectedMemoryIds: ["1"] } } } }) + "\n" : ""}{"type":"turn.completed","model":"codex-test","usage":{"input_tokens":${on ? 160 : 200},"cached_input_tokens":0}}\n`,
+          stdout: `${mcp ? JSON.stringify({ type: "item.completed", item: { type: "mcp_tool_call", server: "akasha", tool: "build_context_pack", status: "completed", error: null, arguments: JSON.parse(command.stdin.split("\n").find((line) => line.startsWith('{"organizationId"'))!), result: { structured_content: { ok: true, packMarkdown: "retrieved fact", selectedMemoryIds: ["1"], ...(maxOutputBytes === undefined ? {} : { budget: { maxOutputBytes, omittedCount: 0 } }) } } } }) + "\n" : ""}{"type":"turn.completed","model":"codex-test","usage":{"input_tokens":${on ? 160 : 200},"cached_input_tokens":0}}\n`,
           stderr: "",
           finalOutput: JSON.stringify(answer(command.stdin)),
         };
@@ -286,7 +311,15 @@ describe("client A/B evaluation harness", () => {
     expect(summary.aggregate).toMatchObject({ pairCount: 9, passed: true, medianInputTokenReduction: 0.2 });
     expect(summary.profile).toBe(profile);
     expect(prefetch).toHaveBeenCalledTimes(profile === "cli-prefetch" ? 9 : 0);
-    expect(JSON.parse(await readFile(path.join(resultDir, "codex-canonical-state-r1-on.json"), "utf8"))).toMatchObject({ profile });
+    const observed = JSON.parse(await readFile(path.join(resultDir, "codex-canonical-state-r1-on.json"), "utf8"));
+    expect(observed).toMatchObject({ profile, clientStdinUtf8Bytes: Buffer.byteLength(calls.find((call) => call.condition === "on")!.stdin, "utf8"), clientDurationMs: expect.any(Number) });
+    expect(observed.clientDurationMs).toBeGreaterThanOrEqual(0);
+    if (maxOutputBytes !== undefined) {
+      expect(observed.maxOutputBytes).toBe(maxOutputBytes);
+      expect(summary.maxOutputBytes).toBe(maxOutputBytes);
+      expect(observed.toolCalls[0].arguments.maxOutputBytes).toBe(maxOutputBytes);
+      expect(observed.toolCalls[0].payloadBytes.structuredContentJsonUtf8Bytes).toBeGreaterThan(0);
+    } else expect(summary).not.toHaveProperty("maxOutputBytes");
     expect(await (await import("node:fs/promises")).readdir(resultDir)).toHaveLength(profile === "cli-prefetch" ? 29 : 20);
   });
 
@@ -312,16 +345,26 @@ describe("client A/B evaluation harness", () => {
     const files = await (await import("node:fs/promises")).readdir(resultDir);
     expect(files).toContain("codex-canonical-state-r1-off.json");
     expect(files).toContain("codex-failure.json");
+    const failed = JSON.parse(await readFile(path.join(resultDir, "codex-canonical-state-r1-off.json"), "utf8"));
+    if (failure === "client") {
+      expect(failed.clientStdinUtf8Bytes).toBeGreaterThan(0);
+      expect(failed.clientDurationMs).toBeGreaterThanOrEqual(0);
+    } else {
+      expect(failed).not.toHaveProperty("clientStdinUtf8Bytes");
+      expect(failed).not.toHaveProperty("clientDurationMs");
+    }
     expect(JSON.parse(await readFile(path.join(resultDir, "codex-failure.json"), "utf8"))).toMatchObject({ profile: failure === "prefetch" ? "cli-prefetch" : "mcp-roundtrip" });
   });
 
-  it("seeds and preflights exact target scope through public registry methods before any client call", async () => {
+  // A roomy cap isolates byte/metadata propagation from the fake selection policy.
+  it.each([undefined, 1_000_000])("seeds and preflights exact target scope through public registry methods before any client call", async (maxOutputBytes) => {
     const { repoDir, sha } = await makeTrackedFixtureRepo();
     const experiment = prepareClientAbExperiment({ repoDir, sha, fixturePath: "fixture.json" });
     const resultPath = path.join(await mkdtemp(path.join(os.tmpdir(), "akasha-client-ab-preflight-")), "preflight.json");
     tempRoots.push(path.dirname(resultPath));
     const memories = new Map<string, { id: string; content: string }>();
     let sequence = 0;
+    const packs: Array<{ packMarkdown: string }> = [];
     const registry = {
       add_memory: async (input: { content: string; kind: string; scope: "project" | "user"; projectKey: string; userScopeId?: string }) => {
         expect(input.kind).toBe(experiment.seedRecords.find((record) => record.content === input.content)!.kind);
@@ -330,21 +373,30 @@ describe("client A/B evaluation harness", () => {
         memories.set(contextId, { id: contextId, content: input.content });
         return { ok: true as const, memoryId, summary: "seeded" };
       },
-      build_context_pack: async (input: { task: string; organizationId?: string; projectKey: string; userScopeId?: string; includeUser?: boolean; limit?: number }) => {
-        expect(input).toMatchObject({ organizationId: experiment.organizationId, projectKey: experiment.projectKey, userScopeId: experiment.userScopeId, includeUser: true, limit: 10 });
+      build_context_pack: async (input: { task: string; organizationId?: string; projectKey: string; userScopeId?: string; includeUser?: boolean; limit?: number; maxOutputBytes?: number }) => {
+        expect(input).toMatchObject({ organizationId: experiment.organizationId, projectKey: experiment.projectKey, userScopeId: experiment.userScopeId, includeUser: true, limit: 10, ...(maxOutputBytes === undefined ? {} : { maxOutputBytes }) });
         const selected = [...memories.values()].filter((memory) =>
           input.task.includes("authoritative") ? memory.content.includes("Postgres is the canonical")
             : input.task.includes("language") ? memory.content.includes("Korean responses") || memory.content.includes("never log raw")
               : memory.content.includes("source diversity") || memory.content.includes("800 tokens"),
         ).map((memory) => memory.id);
-        return { ok: true as const, projectKey: input.projectKey, selectedMemoryIds: selected, packMarkdown: selected.map((id) => memories.get(id)!.content).join("\n"), sections: { project: "", user: "" }, selectionRationale: [] };
+        const pack = { ok: true as const, projectKey: input.projectKey, selectedMemoryIds: selected, packMarkdown: selected.map((id) => memories.get(id)!.content).join("\n"), sections: { project: "", user: "" }, selectionRationale: [], ...(maxOutputBytes === undefined ? {} : { budget: { maxOutputBytes, omittedCount: 0 } }) };
+        packs.push(pack);
+        return pack;
       },
     };
 
-    const preflight = await seedAndPreflightClientAb({ experiment, registry: registry as never, resultPath });
+    const preflight = await seedAndPreflightClientAb({ experiment, registry: registry as never, resultPath, maxOutputBytes });
 
     expect(preflight).toMatchObject({ seededRecordCount: experiment.seedRecords.length, foreignLeakageCount: 0 });
     expect(preflight.tasks).toHaveLength(3);
+    preflight.tasks.forEach((task, index) => {
+      expect(task.rawCanonicalUtf8Bytes).toBe(Buffer.byteLength(experiment.rawCanonicalContext, "utf8"));
+      expect(task.contextPackMarkdownUtf8Bytes).toBe(Buffer.byteLength(packs[index]!.packMarkdown, "utf8"));
+      expect(task.contextPackStructuredJsonUtf8Bytes).toBe(Buffer.byteLength(JSON.stringify(packs[index]), "utf8"));
+    });
+    if (maxOutputBytes !== undefined) expect(preflight.maxOutputBytes).toBe(maxOutputBytes);
+    else expect(preflight).not.toHaveProperty("maxOutputBytes");
     expect(JSON.parse(await readFile(resultPath, "utf8"))).toMatchObject({ sourceSha: sha, foreignLeakageCount: 0 });
   });
 
