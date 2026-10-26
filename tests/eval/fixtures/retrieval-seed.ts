@@ -43,4 +43,7 @@ export const ADDITIONAL_RETRIEVAL_SEEDS: readonly SeedEntry[] = [
   seed("alpha.migration-order", "project", "project-alpha", "Apply database migrations in numeric filename order so each schema prerequisite exists before the next migration runs."),
   seed("beta.notifications", "project", "project-beta", "Beta delivers live update notifications over WebSockets. Its HTTP endpoints handle configuration."),
   seed("beta.app-port", "project", "project-beta", "The synthetic Beta deployment listens on application port 8081 behind its reverse proxy."),
+  seed("beta.backup-retention", "project", "project-beta", "Beta retains encrypted database backups for seven days and tests restoration in an isolated environment."),
+  seed("beta.migration-window", "project", "project-beta", "Beta applies schema migrations during a scheduled maintenance window before restarting application workers."),
+  seed("beta.log-format", "project", "project-beta", "Beta emits structured JSON application logs with request IDs and excludes raw request bodies."),
 ];

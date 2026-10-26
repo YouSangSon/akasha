@@ -258,6 +258,26 @@ describe.skipIf(!RUN_EVAL)("default retrieval eval harness", () => {
     }
   }, 300_000);
 
+  it("isolates deliberately mismatched user and project questions", async () => {
+    if (!services) throw new Error("retrieval eval services were not initialized");
+    const probes = [
+      { queryId: "q23", scope: { projectKey: "project-alpha", userScopeId: "bob" } },
+      { queryId: "q52", scope: { projectKey: "project-alpha" } },
+    ];
+    for (const probe of probes) {
+      const original = QUERIES.find((query) => query.id === probe.queryId)!;
+      const measurement = await measureQuery({ ...original, scope: probe.scope }, services, seedKeyToRecordId);
+      expect(measurement.results.length).toBeGreaterThan(0);
+      expect(measurement.leakageCount).toBe(0);
+      expect(measurement.scopeLeakageCount).toBe(0);
+      expect(measurement.recall).toBe(0);
+      process.stderr.write(`eval-isolation-probe ${JSON.stringify({ queryId: original.id,
+        requestedScope: probe.scope, results: measurement.results.length,
+        forbiddenAnswerRecall: measurement.recall, crossOrgLeakage: measurement.leakageCount,
+        crossScopeLeakage: measurement.scopeLeakageCount })}\n`);
+    }
+  }, 60_000);
+
   it("builds a context pack from org-scoped default-stack retrieval", async () => {
     if (!services) {
       throw new Error("retrieval eval services were not initialized");

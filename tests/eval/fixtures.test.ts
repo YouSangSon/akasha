@@ -16,7 +16,8 @@ describe("retrieval eval fixtures", () => {
   it("keeps all retrieval-only additions synthetic and the client A/B seed contract unchanged", () => {
     expect(SEED_ENTRIES).toHaveLength(14);
     const corpus = loadRetrievalCorpus();
-    expect(corpus.seeds).toHaveLength(47);
+    expect(corpus.seeds).toHaveLength(50);
+    expect(corpus.seeds.filter((entry) => entry.memory.scopeId === "project-beta").length).toBeGreaterThan(5);
     for (const entry of corpus.seeds) expect(scanForSecrets(entry.memory.content), entry.seedKey).toEqual([]);
   });
   it("keeps query ids and seed keys unique", () => {
