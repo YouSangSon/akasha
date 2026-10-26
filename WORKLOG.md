@@ -14103,3 +14103,11 @@ Verification:
 - 최종 영향 재검사: budget 14개 + MCP server 141개 = 155개 통과. 그대로인 나머지 6파일 161개 통과 결과를 재사용해 관련 8파일 316개를 확인했다. 명령은 `node node_modules/vitest/vitest.mjs run <해당 파일들> --maxWorkers=1 --no-file-parallelism --reporter=dot`; `npm run typecheck`도 최종 검사에서 통과했다.
 - 독립 검토의 audit fixture 지적을 반영했다. 정확한 Unicode/escaping 경계·중복 ID·scope 구분·section cap과 byte omission 구분·MCP native 출력·HTTP/CLI 전달·실행 기록을 검사했다.
 - 전체 로컬 테스트·새 스택·유료 모델·VM 검증은 실행하지 않았다. 기존 무료 필수 CI는 유지한다. 실제 MCP 토큰 절감 RED와 CLI-prefetch의 별도 측정 결과는 변경하지 않는다.
+
+
+## 2026-10-26 — MCP 비용 관측의 단위 분리
+
+- [#39](https://github.com/YouSangSon/akasha/issues/39)의 두 번째 단위: 완료된 도구 이벤트에서 재직렬화 JSON·text 바이트를 기록하고, 기존 실제 전체 턴 입력/캐시 토큰을 유지한다. 실행 stdin 크기·성공/실패 명령 시간을 남기되 원본 prompt/result 내용은 새 계측에 저장하지 않는다. 지표의 의미와 재현 명령은 `GATES.md`가 소유한다.
+- MCP 예산 변형의 옵션을 preflight·prompt·정확한 인자 검사·관측 응답·영수증까지 전달한다. 메타데이터·실제 compact data 상한을 확인하고 CLI-prefetch와의 혼용은 거부한다. 기존 구독/크레딧·유료 실행·scope/seed/grade 조건은 유지한다.
+- 기존 파서에는 바이트 계측이 없어 새 4개 검사가 RED였다. 구현 후 로컬 Node 검사는 호스트 swap이 37.2 GB에서 41.4 GB로 증가하고 여유 비율이 28%로 낮아져 추가 실행하지 않았다. 필요한 테스트·타입·빌드·통합 검증은 기존 필수 CI로 확인한다. `sh -n tests/eval/run-default-stack.sh`와 diff 검사는 통과했다.
+- 같은 합성 기록의 기본/4096-byte native serialization 비교를 검사에 포함한다. 모델 실행이 없는 크기 비교이며, 실제 MCP 토큰 절감 RED나 별도 CLI-prefetch 결과를 대체하지 않는다. 이번 단위는 새로운 실사용 A/B 성과를 주장하지 않는다.
