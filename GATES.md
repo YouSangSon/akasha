@@ -167,3 +167,13 @@ environment matching the current shared-host policy. From a clean, committed che
 exact HEAD, seeds an owned local database/collection, checks required scoped
 context identities and a foreign-organization decoy, and does not call either
 model client. Word estimates are not tokenizer measurements.
+
+
+## 2026-10-26 Additional Contract Verification
+
+| Gate | Scope | Evidence | State |
+| --- | --- | --- | --- |
+| Opt-in context-pack byte budget | Entire compact structured tool data fits `maxOutputBytes`; selected decisions/constraints and trust notice retained; no partial context-run record on failure; existing failure audit retained | 8 focused files, 316 cases across final affected-file recheck and unchanged passing files; typecheck passed. Includes native MCP, HTTP 400, CLI, exact UTF-8/escaping and persisted selection checks | GREEN |
+
+This is local unit/in-memory contract evidence. The existing required five-job CI must pass for this change before main merge.
+No live provider, VM runtime, or new real-client token-saving result follows from this row.

@@ -12,6 +12,24 @@ function expectDirectoryToBeEmpty(dir: string): void {
 }
 
 describe("parseCliArgs", () => {
+  it("parses a pack budget and rejects it for reindex", () => {
+    expect(parseCliArgs(["pack", "--project", "p", "--task", "continue", "--max-output-bytes", "4096"]))
+      .toMatchObject({ command: "pack", maxOutputBytes: 4096 });
+    expect(() => parseCliArgs(["reindex", "--project", "p", "--max-output-bytes", "4096"]))
+      .toThrow("Unsupported argument: --max-output-bytes");
+  });
+
+  it.each(["0", "-1", "1.5", "1e3", "1x", "9007199254740992"])("rejects invalid pack byte budget %s", (value) => {
+    expect(() => parseCliArgs(["pack", "--project", "p", "--task", "continue", "--max-output-bytes", value])).toThrow(/positive safe integer/);
+  });
+
+  it("forwards the budget while preserving Markdown-only CLI output", async () => {
+    const build = vi.fn().mockResolvedValue({ packMarkdown: "# Context Pack" });
+    const registry = { build_context_pack: build } as unknown as ToolRegistry;
+    expect(await runCli(["pack", "--project", "p", "--task", "continue", "--max-output-bytes", "4096"], { registry })).toBe("# Context Pack");
+    expect(build).toHaveBeenCalledWith({ projectKey: "p", task: "continue", userScopeId: undefined, organizationId: undefined, maxOutputBytes: 4096 });
+  });
+
   it("can import public MCP server exports after module split", async () => {
     const module = await import("../src/mcp/server.js");
     expect(typeof module.createMcpServer).toBe("function");

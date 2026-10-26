@@ -11,6 +11,8 @@ CHANGELOG에서 명시적으로 표기합니다.
 
 ## [Unreleased]
 
+- 컨텍스트 팩에 선택적 `maxOutputBytes`(CLI `--max-output-bytes`)를 추가해 전체 compact JSON의 바이트 예산을 제한합니다. 선택된 결정·제약을 보존하고 부족하면 안전한 오류를 반환하며, 기존 기본 출력과 실패 감사를 유지합니다.
+
 - 보안: Zod 4.6.7, Zod 4와 호환되는 OpenAI SDK 6.0.0과 전이 의존성
   body-parser 2.4.0으로 갱신합니다. 기존 도구 스키마·임베딩 어댑터 입력을 유지하고,
   실제 SDK의 요청·디코딩·오류 전파를 유료 호출 없는 가짜 fetch로 검사합니다.

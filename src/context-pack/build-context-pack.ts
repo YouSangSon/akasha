@@ -141,7 +141,7 @@ export function buildContextPack(
   return {
     sections,
     selectionRationale,
-    markdown: renderMarkdown(sections),
+    markdown: renderContextPackSections(sections),
   };
 }
 
@@ -269,7 +269,7 @@ function isProjectSummary(record: SearchMemoryResult): boolean {
   );
 }
 
-function renderMarkdown(sections: ContextPackSections): string {
+export function renderContextPackSections(sections: ContextPackSections): string {
   const blocks = [
     TRUST_BOUNDARY_NOTICE,
     renderSection("Project Summary", sections.project_summary),

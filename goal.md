@@ -32,3 +32,8 @@ production or sales claims remain excluded. The user has authorized in-scope
 commit, push, PR creation, and main merge after required verification.
 Resume in the order `goal.md` → `GATES.md` → `PLAN.md`; distinguish local, CI,
 merged, deployed, and production evidence.
+
+
+2026-10-26 추가 승인: 사용자는 컨텍스트 팩 크기 예산·MCP 비용 계측·검색 평가 확장을 모두 진행하도록 요청했다.
+기존 전달 종료와 별개의 이번 추가 구현 범위이며, 세 단위의 완료 조건과 진행 순서는 `PLAN.md`가 소유한다.
+VM 보류와 미확인 삭제 사고의 별도 보존 결정은 그대로 유지한다.

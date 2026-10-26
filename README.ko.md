@@ -211,6 +211,8 @@ curl -sX POST http://localhost:8787/v1/memory/context-pack \
 # → data.packMarkdown을 프롬프트에 바로 넣으면 됩니다.
 ```
 
+컨텍스트 팩의 선택 입력 `maxOutputBytes`로 구조화 결과 전체의 UTF-8 바이트를 제한할 수 있습니다. 선택된 결정·제약은 보존하며, 예산이 부족하면 실패합니다. 적용 범위와 CLI 사용법은 [API 레퍼런스](docs/api-reference.ko.md#build_context_pack--세션-priming용-팩-생성)를 참고하세요.
+
 <a id="architecture"></a>
 ## 아키텍처
 

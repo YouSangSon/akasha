@@ -110,6 +110,10 @@ structured success results rather than transport failures.
 - Clean-architecture and DDD refactors should move internals behind the existing
   descriptors, handlers, repositories, and CLI entrypoints first.
 
+`build_context_pack`의 선택적 `maxOutputBytes`와 `budget` 메타데이터는 추가 계약이다.
+옵션 생략 시 기존 출력·기본값·side effect를 유지한다. 지정 시 compact structured data만 제한하고,
+기존 선택된 결정·제약이 들어가지 않으면 context-pack 실행 기록 없이 실패하되 기존 감사는 유지한다.
+
 ## Current Contract Guards
 
 - `tests/scripts/public-docs-drift.test.ts` verifies public docs include every

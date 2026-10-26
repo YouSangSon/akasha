@@ -7,6 +7,7 @@ import {
   type ServiceToolName,
 } from "../../src/mcp/tool-schemas.js";
 import type { ToolRegistry } from "../../src/mcp/types.js";
+import { ContextPackBudgetError } from "../../src/mcp/context-pack-result.js";
 import {
   createMemoryRoutes,
   resolveOrganizationId,
@@ -76,6 +77,28 @@ function makeResponse(): ServerResponse & {
 }
 
 describe("createMemoryRoutes boundary validation", () => {
+  it("forwards the optional context budget with the resolved organization", async () => {
+    const build = vi.fn().mockResolvedValue({ ok: true });
+    const route = createMemoryRoutes(makeContext({ registry: makeRegistry({ build_context_pack: build }) }))
+      .find((candidate) => candidate.path === "/v1/memory/context-pack")!;
+    const res = makeResponse();
+    await route.handle(makeJsonRequest({ projectKey: "p", task: "continue", maxOutputBytes: 4096 }, { "x-organization-id": "org-a" }), res);
+    expect(res.status).toBe(200);
+    expect(build).toHaveBeenCalledWith({ projectKey: "p", task: "continue", organizationId: "org-a", maxOutputBytes: 4096 });
+  });
+
+  it("returns the existing safe 400 envelope for an insufficient context budget", async () => {
+    const logger = makeLogger();
+    const build = vi.fn().mockRejectedValue(new ContextPackBudgetError(1, 1024));
+    const route = createMemoryRoutes(makeContext({ logger, registry: makeRegistry({ build_context_pack: build }) }))
+      .find((candidate) => candidate.path === "/v1/memory/context-pack")!;
+    const res = makeResponse();
+    await route.handle(makeJsonRequest({ projectKey: "p", task: "continue", maxOutputBytes: 1 }), res);
+    expect(res.status).toBe(400);
+    expect(JSON.parse(res.body!)).toEqual({ success: false, error: { message: new ContextPackBudgetError(1, 1024).message } });
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
   it("constructs the configured JSON HTTP routes with a valid context", () => {
     const routes = createMemoryRoutes(makeContext());
 

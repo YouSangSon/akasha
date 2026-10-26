@@ -10,7 +10,8 @@ experience, documentation, features.
 
 ## P1
 
-- None currently known.
+- [#39](https://github.com/YouSangSon/akasha/issues/39): 전체 컨텍스트 팩에 선택적 크기 예산을 적용한다.
+  기본 응답·신뢰 경계·조직 격리·선택 기록을 보존하고, 필수 결정·제약이 들어가지 않으면 실패한다.
 
 ## P2
 

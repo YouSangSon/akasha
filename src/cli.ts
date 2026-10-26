@@ -74,6 +74,7 @@ async function dispatchCli(
         userScopeId: parsed.userScopeId,
         organizationId: parsed.organizationId,
         task: parsed.task,
+        ...(parsed.maxOutputBytes === undefined ? {} : { maxOutputBytes: parsed.maxOutputBytes }),
       });
 
       return pack.packMarkdown;

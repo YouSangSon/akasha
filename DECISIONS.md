@@ -668,3 +668,26 @@ Implementation:
 Source:
 - Qdrant uploaded snapshot recovery API:
   https://api.qdrant.tech/api-reference/snapshots/recover-from-uploaded-snapshot
+
+
+## 2026-10-26: 컨텍스트 팩의 선택적 전체 출력 예산
+
+문제: 섹션별 건수 제한만으로는 긴 기억이 포함된 전체 응답 크기를 제어하지 못한다.
+단어 추정치를 모델 토큰 상한으로 부르는 대신 `maxOutputBytes`로 compact structured data의
+정확한 UTF-8 바이트를 제한한다. 모델별 tokenizer 의존성을 추가하지 않고 같은 입력의 경계를
+재현할 수 있다. 모델 입력 토큰 감소·실제 지연 개선은 별도 측정이 필요하다.
+
+선택: 기존 `buildContextPack` 분류·건수 상한을 재사용하고, 입력 위치를 기준으로 선택을 보존한다.
+원래 선택된 결정·제약, 신뢰 경계 안내와 task가 들어가지 않으면 실패한다. 나머지는 원래 순위대로
+전체 기록이 들어가는지 확인한다. `sections`·Markdown·ID·근거·예산 메타데이터 전체를 함께 측정하며,
+성공한 바로 그 ID·Markdown을 context-pack 실행 기록에 저장한다. 실패 실행 기록은 만들지 않지만
+기존 실패 감사는 유지한다. 생략한 기록 수는 기존 건수 상한 이후의 선택을 기준으로 센다.
+
+호환성: 옵션을 생략하면 기존 결과가 그대로 유지된다. HTTP 데이터 객체의 상한이며 HTTP envelope나
+MCP 전체 전송 크기를 보장하지 않는다. [MCP 2025-06-18 도구 명세](https://modelcontextprotocol.io/specification/2025-06-18/server/tools#structured-content)에 따라
+structured output과 JSON text fallback을 함께 유지한다. 예산 초과는 내용이 없는 전용 오류로
+HTTP 400에 매핑하고 실패 envelope를 유지한다. CLI는 같은 예산을 전달하되 Markdown만 출력한다.
+
+구현은 `src/mcp/context-pack-result.ts`, 입력 경계는 공유 도구 스키마·직접 registry·CLI에 있다.
+경계 검사는 한글·일본어·중국어와 JSON escaping, 정확한 바이트 경계, 중복 ID의 서로 다른 입력 항목,
+필수 결정/제약 보존, canonical 실행 기록 및 실패 감사, HTTP 400과 MCP native 출력 일치를 포함한다.
