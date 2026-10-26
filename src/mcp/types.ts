@@ -78,6 +78,7 @@ export type BuildContextPackToolInput = {
   userScopeId?: string;
   includeUser?: boolean;
   limit?: number;
+  maxOutputBytes?: number;
 };
 
 export type BuildContextPackToolResult = {
@@ -87,6 +88,7 @@ export type BuildContextPackToolResult = {
   selectedMemoryIds: string[];
   sections: ContextPackSections;
   selectionRationale: ContextPackSelectionRationale[];
+  budget?: { maxOutputBytes: number; omittedCount: number };
 };
 
 export type ReindexMemoryToolInput = {

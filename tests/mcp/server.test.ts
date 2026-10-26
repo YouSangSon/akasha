@@ -1087,6 +1087,49 @@ describe("createToolRegistry", () => {
     });
   });
 
+  it("does not persist a failed budgeted pack and retains the failure audit", async () => {
+    const services = createCanonicalServices();
+    const registry = createToolRegistry({ withCanonicalServices: async (use) => use(services) });
+    await expect(registry.build_context_pack({ organizationId: "org-a", projectKey: "project-alpha", task: "continue", maxOutputBytes: 1 }))
+      .rejects.toThrow(/maxOutputBytes/);
+    expect(services.chunkRepository.createContextPackRun).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(services.auditLog.record).toHaveBeenCalledWith(expect.objectContaining({ tool: "build_context_pack", outcome: "error" })));
+  });
+
+  it("persists exactly the successfully budgeted pack", async () => {
+    const services = createCanonicalServices();
+    services.vectorIndex.query.mockResolvedValue([
+      { id: "chunk:1", score: 0.99, payload: { memory_record_id: 1 } },
+      { id: "chunk:2", score: 0.98, payload: { memory_record_id: 2 } },
+    ]);
+    services.repository.searchMemory.mockResolvedValue([]);
+    services.repository.getMemoryRecordsByIds.mockResolvedValue([
+      createRecord({ id: 1, memoryType: "fact", content: "optional ".repeat(3000), sourceType: "document", externalId: "long" }),
+      createRecord({ id: 2, memoryType: "decision", content: "Decision: preserve this.", sourceType: "decision", externalId: "required" }),
+    ]);
+    const registry = createToolRegistry({ resolveCanonicalServices: async () => services });
+    const result = await registry.build_context_pack({ organizationId: "org-a", projectKey: "project-alpha", task: "continue", includeUser: false, maxOutputBytes: 4096 });
+    expect(Buffer.byteLength(JSON.stringify(result), "utf8")).toBeLessThanOrEqual(4096);
+    expect(result.selectedMemoryIds).toEqual(["project:project-alpha:2"]);
+    expect(services.chunkRepository.createContextPackRun).toHaveBeenCalledWith({ organizationId: "org-a", projectKey: "project-alpha", task: "continue", selectedMemoryIds: result.selectedMemoryIds, packMarkdown: result.packMarkdown });
+  });
+
+  it("keeps native MCP text and structured output equivalent for budgeted packs", async () => {
+    const registry = createToolRegistry({ retrieveMemory: async () => [] });
+    const server = createMcpServer({ registry });
+    const client = await createInMemoryClient(server);
+    try {
+      const result = await client.callTool({ name: "build_context_pack", arguments: { projectKey: "p", task: "continue", includeUser: false, maxOutputBytes: 4096 } });
+      expect(result.isError).not.toBe(true);
+      expect(Buffer.byteLength(JSON.stringify(result.structuredContent), "utf8")).toBeLessThanOrEqual(4096);
+      expect(result.content).toEqual([{ type: "text", text: JSON.stringify(result.structuredContent, null, 2) }]);
+      expect(result.structuredContent).toHaveProperty("budget", { maxOutputBytes: 4096, omittedCount: 0 });
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
   it("persists selected context pack ids after section caps in service-backed mode", async () => {
     const services = createCanonicalServices();
     services.vectorIndex.query.mockResolvedValue([

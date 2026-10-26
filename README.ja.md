@@ -204,6 +204,8 @@ curl -sX POST http://localhost:8787/v1/memory/context-pack \
 # → data.packMarkdownをそのままプロンプトに挿入できます。
 ```
 
+コンテキストパックの任意入力 `maxOutputBytes` で、構造化結果全体の UTF-8 バイト数を制限できます。選択済みの決定と制約を保持し、予算が足りない場合は失敗します。適用範囲と CLI の使用方法は [API リファレンス](docs/api-reference.md#build_context_pack--generate-a-session-priming-pack)を参照してください。
+
 <a id="architecture"></a>
 ## アーキテクチャ
 

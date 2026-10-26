@@ -213,6 +213,8 @@ curl -sX POST http://localhost:8787/v1/memory/context-pack \
 # → data.packMarkdown is ready to drop into your prompt.
 ```
 
+The optional `maxOutputBytes` context-pack input bounds the compact structured result in UTF-8 bytes. Selected decisions and constraints are retained; insufficient budgets fail. See the [API reference](docs/api-reference.md#build_context_pack--generate-a-session-priming-pack) for scope and CLI usage.
+
 <a id="architecture"></a>
 ## Architecture
 

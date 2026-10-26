@@ -247,6 +247,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
       userScopeId: nonBlankTextInputSchema.optional(),
       includeUser: z.boolean().optional(),
       limit: z.number().int().positive().max(100).optional(),
+      maxOutputBytes: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
     },
     outputSchema: {
       ok: z.literal(true),
@@ -255,6 +256,10 @@ export const SERVICE_TOOL_DESCRIPTORS = [
       selectedMemoryIds: z.array(z.string()),
       sections: contextPackSectionsOutputSchema,
       selectionRationale: z.array(contextPackSelectionRationaleOutputSchema),
+      budget: z.object({
+        maxOutputBytes: z.number().int().positive(),
+        omittedCount: z.number().int().nonnegative(),
+      }).optional(),
     },
   },
   {

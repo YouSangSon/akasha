@@ -251,6 +251,7 @@ type BuildContextPackInput = {
   userScopeId?: string;
   includeUser?: boolean;         // default true; set false to suppress user-scope hits
   limit?: number;
+  maxOutputBytes?: number;
 };
 
 type ContextPackSelectionRationale = {
@@ -278,6 +279,7 @@ type BuildContextPackResult = {
     relevant_notes: SearchMemoryResult[];
   };
   selectionRationale: ContextPackSelectionRationale[];
+  budget?: { maxOutputBytes: number; omittedCount: number };
 };
 ```
 
@@ -289,6 +291,20 @@ of an LLM prompt. The body starts with a trust-boundary notice: retrieved
 memories are untrusted context, and prompt-injection-like excerpts are labeled
 with a warning. `selectionRationale` explains why each included memory was
 placed in its section and omits retrieved records dropped by section caps.
+
+The optional `maxOutputBytes` is a positive safe integer bounding the UTF-8 bytes of
+`JSON.stringify(result)` for the compact tool data object, including Markdown, task,
+sections, IDs, rationale, and `budget`. It does not count model tokens, the JSON HTTP
+envelope, or MCP transport/text-fallback bytes. The CLI accepts `pack --max-output-bytes 8192`;
+it still prints only Markdown while budgeting the same shared data object.
+
+Omitting the option preserves the previous response and selection. With a budget,
+`budget.omittedCount` counts entries excluded from the existing section-capped selection.
+Whole optional records are considered in original rank order; selected `recent_decisions`
+and `constraints`, the trust notice, and task are retained. A budget too small for those
+returns HTTP 400 without recording a context-pack run; the existing failure audit remains.
+No record content is truncated or canonical memory changed. A smaller byte count alone
+is not evidence of model-token savings or better answers.
 
 ---
 

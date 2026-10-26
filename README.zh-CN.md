@@ -196,6 +196,8 @@ curl -sX POST http://localhost:8787/v1/memory/context-pack \
 # → data.packMarkdown 可直接放入提示词。
 ```
 
+上下文包的可选输入 `maxOutputBytes` 可限制整个结构化结果的 UTF-8 字节数。已选中的决策和约束会保留；预算不足时请求失败。适用范围及 CLI 用法见 [API 参考](docs/api-reference.md#build_context_pack--generate-a-session-priming-pack)。
+
 <a id="architecture"></a>
 ## 架构
 

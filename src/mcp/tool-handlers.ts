@@ -1,6 +1,6 @@
 import { createAuditToolHandlers } from "../audit/tool-handlers.js";
 import { createCompactionToolHandlers } from "../compact/tool-handlers.js";
-import { buildContextPack } from "../context-pack/build-context-pack.js";
+import { buildContextPackResult } from "./context-pack-result.js";
 import { createGoalRunToolHandlers } from "../goal-run/tool-handlers.js";
 import { rootLogger } from "../logger.js";
 import { rankResults } from "../search/rank-results.js";
@@ -266,6 +266,7 @@ export function createToolHandlers(input: {
     async build_context_pack(toolInput) {
       assertNonBlankText(toolInput.task, "context-pack task");
       assertProvidedScopeIdentifiers(toolInput);
+      assertOptionalPositiveInteger(toolInput.maxOutputBytes, "maxOutputBytes");
       const projectKey = requireProjectKey(toolInput.projectKey, "project");
       const organizationId = toolInput.organizationId?.trim();
       const task = toolInput.task.trim();
@@ -290,28 +291,17 @@ export function createToolHandlers(input: {
                     ),
               limit: normalizeLimit(toolInput.limit),
             });
-            const pack = buildContextPack({ records });
-            const packMarkdown = renderContextPackMarkdown(
-              task,
-              pack.markdown,
-            );
-            const selectedMemoryIds = pack.selectionRationale.map(
-              (entry) => entry.memoryId,
-            );
+            const result = buildContextPackResult({ projectKey, task, records, maxOutputBytes: toolInput.maxOutputBytes });
 
             await services.chunkRepository.createContextPackRun({
               organizationId: organizationId ?? "default",
               projectKey,
               task,
-              selectedMemoryIds,
-              packMarkdown,
+              selectedMemoryIds: result.selectedMemoryIds,
+              packMarkdown: result.packMarkdown,
             });
 
-            return {
-              pack,
-              packMarkdown,
-              selectedMemoryIds,
-            };
+            return result;
           })
         : await (async () => {
             const records = await resolveRecords({
@@ -322,28 +312,10 @@ export function createToolHandlers(input: {
               includeUser: toolInput.includeUser,
               limit: toolInput.limit,
             });
-            const pack = buildContextPack({ records });
-
-            return {
-              pack,
-              packMarkdown: renderContextPackMarkdown(
-                task,
-                pack.markdown,
-              ),
-              selectedMemoryIds: pack.selectionRationale.map(
-                (entry) => entry.memoryId,
-              ),
-            };
+            return buildContextPackResult({ projectKey, task, records, maxOutputBytes: toolInput.maxOutputBytes });
           })();
 
-      return {
-        ok: true,
-        projectKey,
-        packMarkdown: builtPack.packMarkdown,
-        selectedMemoryIds: builtPack.selectedMemoryIds,
-        sections: builtPack.pack.sections,
-        selectionRationale: builtPack.pack.selectionRationale,
-      };
+      return builtPack;
     },
 
     ...createStoreToolHandlers({
@@ -652,14 +624,6 @@ function toRepositoryAddMemoryInput(input: AddMemoryToolInput): AddMemoryInput {
       title: `${input.kind} manual entry`,
     },
   };
-}
-
-function renderContextPackMarkdown(task: string, body: string): string {
-  // Task is placed at the end (after the body and a delimiter) so the stable
-  // body content lives at the cache-eligible prefix. Claude prompt caching is
-  // a prefix cache; putting volatile content first invalidates everything that
-  // follows. Keep this ordering — see plan-perf review for context.
-  return ["# Context Pack", "", body, "", "---", `Task: ${task}`].join("\n");
 }
 
 function collectRecords(input: {

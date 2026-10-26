@@ -11,6 +11,8 @@ changes; CHANGELOG entries call those out explicitly.
 
 ## [Unreleased]
 
+- Context packs accept opt-in `maxOutputBytes` (CLI `--max-output-bytes`) for an exact compact JSON byte budget. Selected decisions and constraints remain whole; insufficient budgets return a safe error. Existing default output and failure audits are preserved.
+
 - Security: update Zod to 4.6.7 and compatible OpenAI SDK 6.0.0, plus transitive
   body-parser 2.4.0, without changing tool schemas or embedding adapter inputs.
   Add real-SDK request/decoding/error checks using fake fetch, with no live API calls.

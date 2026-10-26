@@ -5,6 +5,7 @@ export type ParsedCliArgs =
       userScopeId?: string;
       organizationId?: string;
       task: string;
+      maxOutputBytes?: number;
     }
   | {
       command: "reindex";
@@ -65,6 +66,7 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
   let userScopeId: string | undefined;
   let task: string | undefined;
   let organizationId: string | undefined;
+  let maxOutputBytes: number | undefined;
 
   for (let index = 0; index < rest.length; index += 1) {
     const token = rest[index];
@@ -72,6 +74,16 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
 
     if (token === "--project") {
       projectKey = requireNonBlankFlagValue(token, value);
+      index += 1;
+      continue;
+    }
+
+    if (token === "--max-output-bytes" && command === "pack") {
+      const raw = requireNonBlankFlagValue(token, value);
+      maxOutputBytes = /^\d+$/.test(raw) ? Number(raw) : NaN;
+      if (!Number.isSafeInteger(maxOutputBytes) || maxOutputBytes <= 0) {
+        throw new Error("--max-output-bytes must be a positive safe integer");
+      }
       index += 1;
       continue;
     }
@@ -120,6 +132,7 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
     userScopeId,
     organizationId,
     task: task!,
+    ...(maxOutputBytes === undefined ? {} : { maxOutputBytes }),
   };
 }
 

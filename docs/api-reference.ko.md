@@ -249,6 +249,7 @@ type BuildContextPackInput = {
   userScopeId?: string;
   includeUser?: boolean;         // 기본 true; false로 설정 시 user-scope 결과 제외
   limit?: number;
+  maxOutputBytes?: number;
 };
 
 type ContextPackSelectionRationale = {
@@ -276,6 +277,7 @@ type BuildContextPackResult = {
     relevant_notes: SearchMemoryResult[];
   };
   selectionRationale: ContextPackSelectionRationale[];
+  budget?: { maxOutputBytes: number; omittedCount: number };
 };
 ```
 
@@ -287,6 +289,20 @@ trust-boundary notice로 시작합니다. 검색된 memory는 untrusted context�
 prompt-injection 유사 excerpt에는 warning label이 붙습니다. `selectionRationale` 은
 포함된 각 memory가 어떤 이유로 해당 section에 들어갔는지 설명하며, section cap으로
 제외된 검색 결과는 포함하지 않습니다.
+
+선택 입력 `maxOutputBytes`는 양의 안전 정수이며, `JSON.stringify(result)`의 UTF-8
+바이트 상한이다. Markdown·task·sections·선택 ID·선택 근거·`budget`을 포함한
+공유 도구 데이터 객체 전체에 적용한다. 모델 토큰 수, JSON HTTP envelope,
+MCP 전송·텍스트 fallback 크기는 포함하지 않는다. CLI는 `pack --max-output-bytes 8192`로
+같은 데이터 객체를 제한하며 출력은 기존처럼 Markdown만 반환한다.
+
+옵션을 생략하면 기존 응답과 선택이 유지된다. 지정하면 `budget.omittedCount`는
+기존 섹션별 개수 제한을 통과한 항목 중 바이트 예산 때문에 제외된 수를 나타낸다.
+선택된 `recent_decisions`·`constraints`와 신뢰 경계 안내·task를 보존한 뒤,
+원래 순위대로 선택적인 기록 전체가 들어가는지 확인한다. 필수 부분조차 들어가지 않으면
+HTTP 400으로 실패하고 context-pack 실행 기록을 만들지 않는다. 기존 실패 감사는 유지한다.
+본문을 잘라내거나 원본 기억을 변경하지 않는다. 바이트 감소를 모델 토큰 절감이나 답변 품질
+개선으로 해석하지 않는다.
 
 ---
 
