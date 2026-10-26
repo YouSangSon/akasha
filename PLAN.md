@@ -12,7 +12,7 @@ Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale i
 - [x] 전체 구조화 컨텍스트 팩의 선택적 크기 예산: PR #40, main `2314ba3`, CI 5개 통과.
   정확한 경계와 측정 범위는 `GATES.md`가 소유한다.
 - [x] MCP 비용 계측 및 같은 입력 비교: PR #41, main `74dc5b8`, 필수 CI 5개 통과.
-- [ ] 기존 20개 질문을 보존한 52개 검색 평가와 사용자/조직/프로젝트 격리·유사 오답 검증: 구현 검토 및 필수 CI 대기.
+- [x] 기존 20개 질문을 보존한 52개 검색 평가와 사용자/조직/프로젝트 격리·유사 오답 검증: PR #42, 소스 `a6dc2e3` 독립 검토 및 필수 CI 5개 통과. 병합 여부는 PR 상태로 확인한다.
 
 로컬 전체 스택·유료 실행·VM 재시도는 하지 않는다. 기존 부정적 측정 결과를 새 성과로 바꾸지 않는다.
 
@@ -308,5 +308,5 @@ Before each resume:
   destructive migrations without explicit approval.
 
 
-2026-10-26 명시적 재개: `test/expanded-retrieval-quality`의 기존 변경을 유지하고 독립 구현 검토와 필수 CI부터 진행한다.
-새 기준 사용량을 확인했다. 호스트 swap 약 42.4 GB로 로컬 Node 검사는 보류하며 기존 무료 필수 CI로 검증한다.
+2026-10-26 추가 세 단위의 구현·검증을 마쳤다. 최종 문서 head의 필수 CI와 PR #42 병합,
+별도 포트폴리오 근거의 로컬 커밋을 확인한 뒤 이번 추가 범위를 종료한다. 기존 RED·OPEN·DEFERRED 항목은 유지한다.

@@ -175,7 +175,7 @@ model client. Word estimates are not tokenizer measurements.
 | --- | --- | --- | --- |
 | Opt-in context-pack byte budget | Entire compact structured tool data fits `maxOutputBytes`; selected decisions/constraints and trust notice retained; no partial context-run record on failure; existing failure audit retained | 8 focused files, 316 cases across final affected-file recheck and unchanged passing files; typecheck passed. Includes native MCP, HTTP 400, CLI, exact UTF-8/escaping and persisted selection checks | GREEN |
 
-This is local unit/in-memory contract evidence. The existing required five-job CI must pass for this change before main merge.
+This row describes local unit/in-memory contract evidence; PR #40's required five-job CI and main merge are recorded below.
 No live provider, VM runtime, or new real-client token-saving result follows from this row.
 
 
@@ -212,6 +212,12 @@ MCP 프로필의 별도 예산 변형은 runner `--max-output-bytes 8192` 또는
 여기서 같은 합성 기록의 기본 응답과 4096-byte 응답을 비교한다. 이는 in-memory native serialization 실험이며
 실제 DB 검색·클라이언트 A/B·토큰 절감 결과가 아니다. 기존 실제 MCP 0.35% RED와 별도 CLI-prefetch 53.40% 결과는 유지한다.
 
+계측 단위 PR #41은 head `89eacc0`의 [CI 40299154275](https://github.com/YouSangSon/akasha/actions/runs/40299154275)
+필수 5개 작업을 통과했고 main `74dc5b8`과 tree가 같다. Node 22/24 각각 2711 통과·35 skip,
+Postgres 246, pgvector 115, 기본 검색 5개 통과, 감사 0건이다. 같은 합성 입력의 비교는 두 Node 버전에서
+structured JSON 70976→2477 bytes, 관측 native 결과 JSON 143769→6396 bytes로 재현됐다.
+이 겹치는 크기를 합산하지 않으며 모델 토큰·실제 DB 검색·전체 프롬프트 절감 수치로 사용하지 않는다.
+
 ## 확장 검색 평가 프로토콜 v2
 
 `tests/eval/fixtures/retrieval-corpus.ts`는 기존 14개 seed·20개 질문 파일을 SHA-256으로 보존하고
@@ -233,5 +239,21 @@ Beta 포트 질문을 Alpha 범위로 요청해 의미가 일치하는 금지 �
 측정이며 다국어·실사용 분포·새 모델 토큰 절감을 입증하지 않는다. 같은 실제 검색 결과의 8192-byte
 팩 검사도 도구 클라이언트 왕복이나 모델 실행은 아니다. 모든 반복의 누락·오답 순위·유출을 진단 로그에 남긴다.
 
-현재 검증 상태: 구현 후 독립 검토 및 기존 `default-retrieval-eval` 필수 CI 대기.
-로컬 전체 스택/Node 검사는 호스트 자원 압박으로 실행하지 않았다. 결과를 확인하기 전 GREEN으로 바꾸지 않는다.
+검증 상태: 소스 `a6dc2e3`의 [CI 40336598356](https://github.com/YouSangSon/akasha/actions/runs/40336598356)
+필수 5개 작업 통과. Node 22/24 각각 2728 통과·36 skip, typecheck/build/audit 0건,
+Postgres 246, pgvector 115, 실제 기본 검색 6개 통과. 기본 Node 작업의 추가 skip은 별도 기본 검색 작업에서
+실행한 격리 탐침이다. 로컬 전체 스택/Node 검사는 공유 호스트 자원 압박으로 실행하지 않았다.
+독립 검토는 두 source head에서 차단 결함 없이 완료했다.
+
+| cohort (50개 target seed) | 고유 질문/관측 | recall@5 | MRR@5 | 사용자 recall@5 | 오답 순위 | 조직/scope 유출 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 전체 | 52/156 | 1.00 | 0.800962 | 1.00 | 1.00 | 0/0 |
+| 기존 질문 | 20/60 | 1.00 | 0.797500 | 1.00 | 해당 없음 | 0/0 |
+| 추가 질문 | 32/96 | 1.00 | 0.803125 | 1.00 | 1.00 | 0/0 |
+
+두 불일치 격리 탐침도 각각 허용 결과 5개·금지 정답 회수 0·조직/scope 유출 0으로 통과했다.
+warm p50 21.00 ms, p95 28.74 ms는 이 CI의 관측값이며 성능 개선 비교가 아니다.
+실제 검색 결과 팩은 기본 6966 bytes, 8192-byte 예산 결과 7016 bytes였다. 원래 결과가 충분히 작아
+선택을 줄이지 않았고 예산 메타데이터 50 bytes가 추가됐다. 예산 준수 GREEN이며 절감의 증거는 아니다.
+질문/정답/통과 기준을 바꾸지 않고 Beta 방해 기록·격리 탐침만 보강했다. 이전 47-seed head의 결과도
+기존 CI 40336221187에 보존하며 최종 50-seed 결과와 섞지 않는다.
