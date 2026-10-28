@@ -1,7 +1,8 @@
 import { assertNoSecrets } from "../store/secret-scrub.js";
 import { assertNonBlankText } from "../store/memory-content.js";
 import type { ScopeType } from "../types.js";
-import type { ToolRegistry, WithCanonicalServices } from "../mcp/types.js";
+import type { CanonicalServices, ToolRegistry, WithCanonicalServices } from "../mcp/types.js";
+import { withMemoryRecordWrite } from "../mcp/memory-write-services.js";
 import {
   assertAllowedValue,
   assertOptionalAllowedValue,
@@ -101,9 +102,10 @@ export function createGoalRunToolHandlers(input: {
       if (error) {
         assertNoSecrets(error);
       }
-      return await withCanonicalServices(async (services) => {
+      const organizationId = toolInput.organizationId?.trim() ?? "default";
+      const recordIteration = async (services: CanonicalServices) => {
         const iteration = await services.goalRuns.recordIteration({
-          organizationId: toolInput.organizationId?.trim() ?? "default",
+          organizationId,
           goalRunId: toolInput.goalRunId,
           attempt,
           outcome: toolInput.outcome,
@@ -111,8 +113,11 @@ export function createGoalRunToolHandlers(input: {
           error,
           memoryIds: toolInput.memoryIds,
         });
-        return { ok: true, iteration };
-      });
+        return { ok: true as const, iteration };
+      };
+      return toolInput.memoryIds && toolInput.memoryIds.length > 0
+        ? await withMemoryRecordWrite(withCanonicalServices, organizationId, toolInput.memoryIds, recordIteration)
+        : await withCanonicalServices(recordIteration);
     },
 
     async get_goal_run(toolInput) {

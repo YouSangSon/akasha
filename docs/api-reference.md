@@ -463,17 +463,16 @@ type UpdateMemoryResult = {
 HTTP: `POST /v1/memory/update`
 MCP stdio: `update_memory`
 
-Updates the canonical Postgres row, replaces tags when supplied, refreshes
-entity mentions, and refreshes vector state. Active records use atomic chunk
-replacement with a pending ingest marker before vector writes. Embedding failures
-before that replacement propagate without creating a new marker.
+Updates the canonical Postgres row, replaces supplied tags, and refreshes entity
+mentions. Production writers serialize each record on a reserved DB connection.
+Searchable edits commit a pending ingest job with the canonical change before
+chunking or vector writes. Indexing failures return an error while retaining the
+committed change and retry intent.
 
-For archived records, searchable-field updates and `tag_memory` remove scoped
-vectors without embedding, replacing chunks, or creating a new ingest job.
-If this cleanup fails, the canonical edit remains committed and the error is
-returned; retry the operation or reindex to recover. Changing durability back
-to `durable` or `ephemeral` indexes the latest stored body. These sequential
-operations do not add a cross-database fence against concurrent archive/index work.
+Archived records remove vectors by organization and record ID without embedding.
+Changing durability back to `durable` or `ephemeral` indexes the latest body.
+The ingest sweeper rereads current state under the same record lock. See the
+[recovery limits](operations.md#ingest-sweeper) for DB connection-loss incidents.
 
 ---
 
@@ -490,15 +489,19 @@ type DeleteMemoryResult = {
   archived: boolean;
   qdrantPointsDeleted: number;
   qdrantPointsPending: number;
+  indexCleanupPending?: boolean;
 };
 ```
 
 HTTP: `POST /v1/memory/delete`
 MCP stdio: `delete_memory`
 
-Archives one canonical record through the same recovery path used by
-compaction, then removes active vector points. If vector deletion fails, the
-archive row remains pending for the cleanup sweeper.
+Sets the canonical record's durability to `archived`, committing a cleanup job
+in the same transaction. It then removes all organization-scoped vectors for
+that record. The ingest sweeper retries failures. `indexCleanupPending: true`
+reports an unfinished cleanup even when no point mappings were recorded and
+`qdrantPointsPending` is zero. These point counters count known mappings, not a
+measured Qdrant deletion total. Compaction uses its separate archive outbox.
 
 ---
 
@@ -590,7 +593,7 @@ type UnarchiveMemoryInput = {
 type UnarchiveMemoryResult = {
   ok: true;
   outcomes: Array<
-    | { archiveId: number; status: "restored"; restoredRecordId: number; sourceRecordId: number; chunkCount: number }
+    | { archiveId: number; status: "restored"; restoredRecordId: number; sourceRecordId: number; chunkCount: number; indexPending?: boolean }
     | { archiveId: number; status: "skipped"; reason: string }
     | { archiveId: number; status: "failed"; error: string }
   >;
@@ -610,7 +613,12 @@ Skip reasons:
   capture; manual recovery only
 
 The restored record gets a fresh BIGSERIAL id; the response maps it to
-the original via `sourceRecordId` so callers can update references.
+the original via `sourceRecordId` so callers can update references. Restoration,
+its retry job, and the archive's unarchived marker commit together. Concurrent
+requests reread the archive under a lock, so only one restores it. If indexing
+fails afterward, the canonical record remains restored: `indexPending: true`
+means no completed index count is confirmed (`chunkCount: 0`), and the ingest
+sweeper retries. Retrying unarchive skips that already-restored archive.
 
 ---
 

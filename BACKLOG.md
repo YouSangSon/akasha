@@ -10,7 +10,9 @@ experience, documentation, features.
 
 ## P1
 
-- None currently known.
+- [#43](https://github.com/YouSangSon/akasha/issues/43): 기본 임베딩의 긴 본문 잘림을 수정한다.
+  공백 기준 800개 단위와 모델의 512-token 한도가 맞지 않아 뒷부분이 입력에서 빠진다.
+  실제 토큰 분할과 기존 데이터의 재색인·재시도를 함께 검증한다. 나머지 승인 항목과 순서는 `PLAN.md`가 소유한다.
 
 ## P2
 

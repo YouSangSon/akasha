@@ -171,7 +171,7 @@ export function createMemoryRepository(
   pool: PgPool,
 ): CanonicalMemoryRepository {
   return {
-    async addMemory(input) {
+    async addMemory(input, beforeCommit) {
       assertNonBlankMemoryContent(input.content);
 
       const memoryType = normalizeMemoryType(input.memoryType);
@@ -286,13 +286,15 @@ export function createMemoryRepository(
           sourceRow,
         });
 
-        await client.query("COMMIT");
-
-        return mapPostgresSearchResult({
+        const record = mapPostgresSearchResult({
           ...memoryRow,
           ...sourceRow,
           tags: [],
         });
+        await beforeCommit?.(record);
+        await client.query("COMMIT");
+
+        return record;
       } catch (error: unknown) {
         await client.query("ROLLBACK").catch(() => undefined);
         throw error;
@@ -479,6 +481,63 @@ export function createMemoryRepository(
       return orderRecordsByIds(result.rows.map(mapPostgresSearchResult), ids);
     },
 
+    async listMemoryRecordIdsForIndexing(organizationId, scopes, options) {
+      assertNonBlankText(organizationId, "organizationId");
+      if (!Array.isArray(scopes)) {
+        throw new Error("scopes must be an array");
+      }
+      const scopedRefs = Array.from(scopes, (scope, index) => ({
+        scopeType: mapScopeType(scope?.scopeType, `scopes[${index}].scopeType`),
+        scopeId: mapRequiredText(scope?.scopeId, `scopes[${index}].scopeId`),
+      }));
+      const afterId = options?.afterId === undefined ? 0 : options.afterId;
+      const throughId = options?.throughId;
+      assertNonNegativeSafeInteger(afterId, "afterId");
+      if (throughId !== undefined) {
+        assertNonNegativeSafeInteger(throughId, "throughId");
+      }
+      const limit = normalizeLimit(options?.limit, 500, MAX_LIST_LIMIT, "limit");
+
+      if (scopedRefs.length === 0) {
+        return { ids: [], throughId: throughId ?? 0 };
+      }
+
+      const params: unknown[] = [organizationId.trim()];
+      const scopeClauses = scopedRefs.map((scope) => {
+        const scopeTypeIndex = params.push(scope.scopeType);
+        const scopeIdIndex = params.push(scope.scopeId);
+        return `(mr.scope_type = $${scopeTypeIndex} AND mr.scope_id = $${scopeIdIndex})`;
+      });
+      const afterIdIndex = params.push(afterId);
+      const throughIdClause = throughId === undefined
+        ? ""
+        : `AND mr.id <= $${params.push(throughId)}`;
+      const limitIndex = params.push(limit);
+      const result = await pool.query<{
+        id: number | string;
+        through_id: number | string;
+      }>(
+        `
+          SELECT mr.id, MAX(mr.id) OVER () AS through_id
+          FROM memory_records mr
+          WHERE mr.organization_id = $1
+            AND (${scopeClauses.join(" OR ")})
+            AND mr.id > $${afterIdIndex}
+            ${throughIdClause}
+          ORDER BY mr.id ASC
+          LIMIT $${limitIndex}
+        `,
+        params,
+      );
+
+      return {
+        ids: result.rows.map((row) => mapPositiveSafeInteger(row.id, "memory id")),
+        throughId: throughId ?? (result.rows[0]
+          ? mapPositiveSafeInteger(result.rows[0].through_id, "throughId")
+          : 0),
+      };
+    },
+
     async listMemoryForGovernance(scope, options) {
       assertNonBlankText(options.organizationId, "organizationId");
       const organizationId = options.organizationId.trim();
@@ -536,7 +595,7 @@ export function createMemoryRepository(
       return inspectPostgresMemoryGraph(pool, scope, options);
     },
 
-    async updateMemoryRecord(input) {
+    async updateMemoryRecord(input, beforeCommit) {
       assertNonBlankText(input.organizationId, "organizationId");
       const organizationId = input.organizationId.trim();
       const nextTags =
@@ -677,8 +736,12 @@ export function createMemoryRepository(
           organizationId,
         );
 
+        const record = hydrated ? mapPostgresSearchResult(hydrated) : null;
+        if (record) {
+          await beforeCommit?.(record);
+        }
         await client.query("COMMIT");
-        return hydrated ? mapPostgresSearchResult(hydrated) : null;
+        return record;
       } catch (error: unknown) {
         await client.query("ROLLBACK").catch(() => undefined);
         throw error;
@@ -687,56 +750,73 @@ export function createMemoryRepository(
       }
     },
 
-    async archiveMemoryRecord(input) {
+    async archiveMemoryRecord(input, beforeCommit) {
       assertPositiveSafeInteger(input.id, "id");
       assertNonBlankText(input.organizationId, "organizationId");
       const organizationId = input.organizationId.trim();
 
-      const result = await pool.query<{
-        archived: boolean;
-        found: boolean;
-        qdrant_point_ids: string[] | null;
-      }>(
-        `
-          WITH target AS (
-            SELECT id
-            FROM memory_records
-            WHERE id = $1
-              AND organization_id = $2
-          ),
-          archived AS (
-            UPDATE memory_records
-            SET durability = 'archived',
-                updated_at = NOW()
-            WHERE id = $1
-              AND organization_id = $2
-              AND durability <> 'archived'
-            RETURNING id
-          )
-          SELECT
-            EXISTS (SELECT 1 FROM archived) AS archived,
-            EXISTS (SELECT 1 FROM target) AS found,
-            COALESCE(
-              array_agg(mc.qdrant_point_id) FILTER (WHERE mc.qdrant_point_id IS NOT NULL),
-              '{}'
-            ) AS qdrant_point_ids
-          FROM target
-          LEFT JOIN memory_chunks mc
-            ON mc.memory_record_id = target.id
-           AND mc.organization_id = $2
-        `,
-        [input.id, organizationId],
-      );
+      const client = beforeCommit ? await pool.connect() : undefined;
+      const queryable = client ?? pool;
 
-      const archiveResult = mapArchiveMemoryRecordRow(result.rows[0]);
-      if (!archiveResult.found) {
-        return { archived: false, qdrantPointIds: [] };
+      try {
+        if (client) {
+          await client.query("BEGIN");
+        }
+        const result = await queryable.query<{
+          archived: boolean;
+          found: boolean;
+          qdrant_point_ids: string[] | null;
+        }>(
+          `
+            WITH target AS (
+              SELECT id
+              FROM memory_records
+              WHERE id = $1
+                AND organization_id = $2
+            ),
+            archived AS (
+              UPDATE memory_records
+              SET durability = 'archived',
+                  updated_at = NOW()
+              WHERE id = $1
+                AND organization_id = $2
+                AND durability <> 'archived'
+              RETURNING id
+            )
+            SELECT
+              EXISTS (SELECT 1 FROM archived) AS archived,
+              EXISTS (SELECT 1 FROM target) AS found,
+              COALESCE(
+                array_agg(mc.qdrant_point_id) FILTER (WHERE mc.qdrant_point_id IS NOT NULL),
+                '{}'
+              ) AS qdrant_point_ids
+            FROM target
+            LEFT JOIN memory_chunks mc
+              ON mc.memory_record_id = target.id
+             AND mc.organization_id = $2
+          `,
+          [input.id, organizationId],
+        );
+
+        const archiveResult = mapArchiveMemoryRecordRow(result.rows[0]);
+        if (archiveResult.found) {
+          await beforeCommit?.(input.id);
+        }
+        if (client) {
+          await client.query("COMMIT");
+        }
+        return {
+          archived: archiveResult.archived,
+          qdrantPointIds: archiveResult.qdrantPointIds,
+        };
+      } catch (error: unknown) {
+        if (client) {
+          await client.query("ROLLBACK").catch(() => undefined);
+        }
+        throw error;
+      } finally {
+        client?.release();
       }
-
-      return {
-        archived: archiveResult.archived,
-        qdrantPointIds: archiveResult.qdrantPointIds,
-      };
     },
 
     async getMemoryRecordById(id, organizationId) {
@@ -1244,6 +1324,16 @@ function mapEntityKind(
   throw new Error(
     `${fieldName} must be one of: code_symbol, path, url, date, proper_noun`,
   );
+}
+
+function assertNonNegativeSafeInteger(value: unknown, fieldName: string): void {
+  if (
+    typeof value !== "number" ||
+    !Number.isSafeInteger(value) ||
+    value < 0
+  ) {
+    throw new Error(`${fieldName} must be a non-negative safe integer`);
+  }
 }
 
 function assertPositiveSafeInteger(value: unknown, fieldName: string): void {

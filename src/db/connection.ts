@@ -16,7 +16,10 @@ export type PgQueryable = {
 };
 
 export type PgPoolClient = PgQueryable & {
-  release(): void;
+  release(error?: Error | boolean): void;
+  on?(event: "error", listener: (error: Error) => void): unknown;
+  removeListener?(event: "error", listener: (error: Error) => void): unknown;
+  assertUsable?(): void;
 };
 
 export type PgPool = PgQueryable & {

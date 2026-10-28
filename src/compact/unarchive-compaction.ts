@@ -1,16 +1,9 @@
 // unarchiveCompaction — restores archived records back to canonical state.
 //
-// Flow per archive id:
-//   1. findArchiveByIds (org-scoped) → ArchiveRow
-//   2. Skip if already unarchived (unarchivedAt !== null) — idempotent
-//   3. restoreToCanonical → INSERT into memory_records preserving original
-//      timestamps + source_id. New row gets a fresh BIGSERIAL id.
-//   4. Re-chunk content via existing chunkText
-//   5. insertChunks (writes memory_chunks rows with the new record id)
-//   6. Embed restored chunks via one EmbeddingClient.embedBatch call
-//   7. vectorIndex.upsert points with the new chunk ids
-//   8. updatePointIds back to memory_chunks
-//   9. markUnarchived(archiveId) — set unarchived_at = NOW()
+// Production holds the archive lock while rereading its state, then commits
+// the restored record, pending index job, and unarchived marker together.
+// The new record lock is acquired before commit and held through indexing.
+// Index failures retain the canonical record and its retry job.
 //
 // Each archive is processed independently inside a try/catch so one
 // failed restore doesn't block the rest of the batch. The restored record
@@ -24,17 +17,19 @@ import type {
   ScopeType,
   SearchMemoryResult,
 } from "../types.js";
-import { chunkText } from "../chunk/chunk-text.js";
+import { chunkForEmbedding } from "../chunk/chunk-for-embedding.js";
 import type {
   ArchiveRow,
   MemoryArchiveRepository,
 } from "../store/memory-archive-repository.js";
 import { assertNonBlankText } from "../store/memory-content.js";
-import type {
-  ChunkEmbeddingConfig,
-  EmbeddingClient,
-  MemoryChunkRepository,
+import {
+  refreshCanonicalMemoryIndex,
+  type ChunkEmbeddingConfig,
+  type EmbeddingClient,
+  type MemoryChunkRepository,
 } from "../store/canonical-indexing.js";
+import type { MemoryWriteCoordinator } from "../store/memory-write-coordinator.js";
 import type { VectorIndex, VectorPoint } from "../vector/vector-index.js";
 import { buildVectorPoint } from "../vector/point-builder.js";
 
@@ -51,6 +46,7 @@ export type UnarchiveOutcome =
       restoredRecordId: number;
       sourceRecordId: number;
       chunkCount: number;
+      indexPending?: boolean;
     }
   | {
       archiveId: number;
@@ -77,6 +73,7 @@ export type UnarchiveCompactionDeps = {
   embeddings: EmbeddingClient;
   vectorIndex: VectorIndex;
   embedding: ChunkEmbeddingConfig;
+  writes?: MemoryWriteCoordinator;
   logger: Logger;
   now?: () => Date;
 };
@@ -100,7 +97,7 @@ export async function unarchiveCompaction(
     };
   }
 
-  const archives = await deps.archiveRepository.findArchiveByIds(
+  const archives = deps.writes ? [] : await deps.archiveRepository.findArchiveByIds(
     input.archiveIds,
     scopedOrganizationId,
   );
@@ -111,34 +108,13 @@ export async function unarchiveCompaction(
   const outcomes: UnarchiveOutcome[] = [];
 
   for (const archiveId of input.archiveIds) {
-    const archive = found.get(archiveId);
-    if (!archive) {
-      outcomes.push({
-        archiveId,
-        status: "skipped",
-        reason: "archive_not_found_or_org_mismatch",
-      });
-      continue;
-    }
-    if (archive.unarchivedAt !== null) {
-      outcomes.push({
-        archiveId,
-        status: "skipped",
-        reason: "already_unarchived",
-      });
-      continue;
-    }
-    if (archive.sourceId === null) {
-      outcomes.push({
-        archiveId,
-        status: "skipped",
-        reason: "pre_p19.1_archive_missing_source_id",
-      });
-      continue;
-    }
-
     try {
-      const outcome = await restoreOne(archive, scopedOrganizationId, deps);
+      const outcome = deps.writes
+        ? await deps.writes.archive(scopedOrganizationId, archiveId, async (scope) => {
+          const [archive] = await scope.archiveRepository.findArchiveByIds([archiveId], scopedOrganizationId);
+          return restoreArchive(archiveId, archive, scopedOrganizationId, { ...deps, ...scope });
+        })
+        : await restoreArchive(archiveId, found.get(archiveId), scopedOrganizationId, deps);
       outcomes.push(outcome);
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -164,6 +140,58 @@ export async function unarchiveCompaction(
   };
 }
 
+async function restoreArchive(
+  archiveId: number,
+  archive: ArchiveRow | undefined,
+  organizationId: string,
+  deps: UnarchiveCompactionDeps,
+): Promise<UnarchiveOutcome> {
+  if (!archive || archive.organizationId !== organizationId) {
+    return { archiveId, status: "skipped", reason: "archive_not_found_or_org_mismatch" };
+  }
+  if (archive.unarchivedAt !== null) {
+    return { archiveId, status: "skipped", reason: "already_unarchived" };
+  }
+  if (archive.sourceId === null) {
+    return { archiveId, status: "skipped", reason: "pre_p19.1_archive_missing_source_id" };
+  }
+  if (!deps.writes) return restoreOne(archive, organizationId, deps);
+
+  return deps.writes.restore(normalizeArchive(archive), organizationId, async (scope, record, job) => {
+    const restored = {
+      archiveId,
+      status: "restored" as const,
+      restoredRecordId: record.id,
+      sourceRecordId: archive.sourceRecordId,
+    };
+    try {
+      const indexed = await refreshCanonicalMemoryIndex({ ...scope, record, job });
+      return { ...restored, ...indexed };
+    } catch (error: unknown) {
+      deps.logger.error({
+        event: "compact.unarchive_index_pending",
+        archiveId,
+        restoredRecordId: record.id,
+        err: error,
+      }, "canonical memory restored; search indexing is pending retry");
+      return { ...restored, chunkCount: 0, indexPending: true };
+    }
+  });
+}
+
+function normalizeArchive(archive: ArchiveRow): ArchiveRow & {
+  scopeType: ScopeType;
+  kind: MemoryType;
+  durability: Durability;
+} {
+  return {
+    ...archive,
+    scopeType: toUnarchiveArchiveScopeType(archive.scopeType),
+    kind: toUnarchiveArchiveKind(archive.kind),
+    durability: toUnarchiveArchiveDurability(archive.durability),
+  };
+}
+
 async function restoreOne(
   archive: ArchiveRow,
   organizationId: string,
@@ -173,15 +201,8 @@ async function restoreOne(
   let upsertedPointIds: string[] = [];
 
   try {
-    const archiveScopeType = toUnarchiveArchiveScopeType(archive.scopeType);
-    const archiveKind = toUnarchiveArchiveKind(archive.kind);
-    const archiveDurability = toUnarchiveArchiveDurability(archive.durability);
-    const restorableArchive: ArchiveRow = {
-      ...archive,
-      scopeType: archiveScopeType,
-      kind: archiveKind,
-      durability: archiveDurability,
-    };
+    const restorableArchive = normalizeArchive(archive);
+    const { scopeType: archiveScopeType, kind: archiveKind, durability: archiveDurability } = restorableArchive;
     const restored = await deps.archiveRepository.restoreToCanonical(
       restorableArchive,
       organizationId,
@@ -219,11 +240,11 @@ async function restoreOne(
       },
     };
 
-    const chunks = chunkText({
+    const chunks = await chunkForEmbedding({
       text: archive.content,
       targetTokens: deps.embedding.targetTokens,
       overlapTokens: deps.embedding.overlapTokens,
-    });
+    }, deps.embeddings);
     const storedChunks = await deps.chunkRepository.insertChunks({
       record: restoredRecord,
       chunks,

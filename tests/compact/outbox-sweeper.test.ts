@@ -443,3 +443,28 @@ describe("runOutboxSweep", () => {
     });
   });
 });
+
+
+describe("unmapped archive vectors", () => {
+  it("cleans by original record ID even when no point mapping was committed", async () => {
+    const { repo, markQdrantStatus } = makeRepoWithPending([
+      { archiveId: 7, sourceRecordId: 42, organizationId: "org-a", qdrantPointIds: [], attemptCount: 0 },
+    ]);
+    const vectorIndex = makeVectorIndex();
+    const result = await runOutboxSweep({ archiveRepository: repo, vectorIndex, logger: SILENT_LOGGER });
+    expect(vectorIndex.deleteByRecordIds).toHaveBeenCalledExactlyOnceWith([42], { organizationId: "org-a" });
+    expect(vectorIndex.delete).not.toHaveBeenCalled();
+    expect(markQdrantStatus).toHaveBeenCalledWith(7, "deleted");
+    expect(result).toEqual({ scanned: 1, cleaned: 1, retried: 0, failed: 0 });
+  });
+
+  it("leaves record cleanup pending when deleteByRecordIds fails", async () => {
+    const { repo, markQdrantStatus } = makeRepoWithPending([
+      { archiveId: 7, sourceRecordId: 42, organizationId: "org-a", qdrantPointIds: [], attemptCount: 0 },
+    ]);
+    const vectorIndex = makeVectorIndex({ deleteByRecordIds: vi.fn().mockRejectedValue(new Error("offline")) });
+    const result = await runOutboxSweep({ archiveRepository: repo, vectorIndex, logger: SILENT_LOGGER });
+    expect(result.retried).toBe(1);
+    expect(markQdrantStatus).toHaveBeenCalledWith(7, "pending", "offline");
+  });
+});

@@ -5,6 +5,7 @@ import {
   type ApplyCompactionDeps,
   type ApplyCompactionInput,
 } from "../../src/compact/apply-compaction.js";
+import type { MemoryWriteCoordinator, MemoryWriteScope } from "../../src/store/memory-write-coordinator.js";
 import type { SearchMemoryResult } from "../../src/types.js";
 import type {
   CompactionRunRow,
@@ -735,5 +736,47 @@ describe("applyCompaction (semantic dedup — embedBatch length mismatch)", () =
       expect.objectContaining({ event: "compact.semantic_embed_failed" }),
       expect.any(String),
     );
+  });
+});
+
+
+describe("compaction planning under record locks", () => {
+  it.each([1, 2])("skips a stale candidate or kept record %i after acquiring both locks", async (changedId) => {
+    const records = [1, 2].map((id) => makeRecord({ id, importance: 10 }));
+    const { repo, applyCompactionRecord } = makeRepoMocks();
+    const vectorIndex = makeVectorIndex();
+    const read = vi.fn(async (id: number) => ({ ...records[id - 1]!, ...(id === changedId ? { content: "changed after planning" } : {}) }));
+    const writes = {
+      record: vi.fn(async (_org: string, ids: number[], work: (scope: MemoryWriteScope) => Promise<unknown>) => {
+        expect([...ids].sort()).toEqual([1, 2]);
+        return work({ repository: { getMemoryRecordById: read } } as unknown as MemoryWriteScope);
+      }),
+    } as unknown as MemoryWriteCoordinator;
+    const result = await applyCompaction(makeInput({ records, dryRun: false, decayThreshold: 0 }),
+      makeDeps(repo, vectorIndex, { writes }));
+    expect(writes.record).toHaveBeenCalledTimes(1);
+    expect(applyCompactionRecord).not.toHaveBeenCalled();
+    expect(result.applyStats.skipped).toBe(1);
+  });
+
+  it("cleans record vectors while the lock is held even without mapped point IDs", async () => {
+    const record = makeRecord();
+    const { repo, applyCompactionRecord, markQdrantStatus } = makeRepoMocks();
+    applyCompactionRecord.mockResolvedValue({ archived: true, archiveId: 7, qdrantPointIds: [] });
+    let locked = false;
+    const vectorIndex = makeVectorIndex();
+    vectorIndex.deleteByRecordIds.mockImplementation(async () => { expect(locked).toBe(true); });
+    const writes = {
+      record: vi.fn(async (_org: string, _ids: number[], work: (scope: MemoryWriteScope) => Promise<unknown>) => {
+        locked = true;
+        try { return await work({ repository: { getMemoryRecordById: async () => record }, archiveRepository: repo, vectorIndex, writes } as unknown as MemoryWriteScope); }
+        finally { locked = false; }
+      }),
+    } as unknown as MemoryWriteCoordinator;
+    const result = await applyCompaction(makeInput({ records: [record], dryRun: false }),
+      makeDeps(repo, vectorIndex, { writes }));
+    expect(vectorIndex.deleteByRecordIds).toHaveBeenCalledWith([record.id], { organizationId: "org-a" });
+    expect(markQdrantStatus).toHaveBeenCalledWith(7, "deleted");
+    expect(result.applyStats.archived).toBe(1);
   });
 });

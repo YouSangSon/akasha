@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createTransformersEmbeddingClient,
+  EmbeddingInputTooLongError,
   type FeatureExtractor,
 } from "../../src/embedding/transformers-embedding.js";
 
@@ -99,6 +100,79 @@ describe("createTransformersEmbeddingClient", () => {
     await client.embed("third");
 
     expect(factory).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the extractor tokenizer for chunking and rejects oversized direct inputs before inference", async () => {
+    const encode = vi.fn((text: string, options: { add_special_tokens: boolean }) =>
+      Array.from({ length: Array.from(text).length + (options.add_special_tokens ? 2 : 0) }, () => 1),
+    );
+    const infer = vi.fn(async () => ({ data: [1] }));
+    const extractor: FeatureExtractor = Object.assign(infer, {
+      tokenizer: { model_max_length: 5, encode },
+    });
+    const factory = vi.fn(async () => extractor);
+    const client = createTransformersEmbeddingClient({ model: "test", createExtractor: factory });
+
+    const tokenizer = await client.getChunkingTokenizer!();
+    expect(tokenizer.maxInputTokens).toBe(5);
+    expect(tokenizer.countTokens("abc", false)).toBe(3);
+    expect(encode).toHaveBeenCalledWith("abc", { add_special_tokens: false });
+    await expect(client.embed("abc")).resolves.toEqual([1]);
+    expect(infer).toHaveBeenCalledTimes(1);
+
+    const sensitiveInput = "secret";
+    const error = await client.embed(sensitiveInput).catch((reason: unknown) => reason);
+    expect(error).toBeInstanceOf(EmbeddingInputTooLongError);
+    expect(error).toMatchObject({ actualTokens: 8, maxInputTokens: 5 });
+    expect((error as Error).message).not.toContain(sensitiveInput);
+    expect(infer).toHaveBeenCalledTimes(1);
+    expect(encode).toHaveBeenLastCalledWith(sensitiveInput, { add_special_tokens: true });
+    expect(factory).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps embed-only extractor fakes working but rejects tokenizer requests", async () => {
+    const client = createTransformersEmbeddingClient({
+      model: "test",
+      createExtractor: async () => async () => ({ data: [1] }),
+    });
+    await expect(client.embed("hello")).resolves.toEqual([1]);
+    await expect(client.getChunkingTokenizer!()).rejects.toThrow(
+      "transformers feature extractor tokenizer is required for chunking",
+    );
+  });
+
+  it.each([0, -1, 1.5, Infinity, NaN, Number.MAX_SAFE_INTEGER + 1])(
+    "rejects an invalid extractor tokenizer limit %s", async (model_max_length) => {
+      const extractor: FeatureExtractor = Object.assign(async () => ({ data: [1] }), {
+        tokenizer: { model_max_length, encode: () => [1] },
+      });
+      const client = createTransformersEmbeddingClient({ model: "test", createExtractor: async () => extractor });
+      await expect(client.embed("hello")).rejects.toThrow(
+        "transformers tokenizer model_max_length must be a positive safe integer",
+      );
+    },
+  );
+
+  it("rejects invalid tokenizer output before inference", async () => {
+    const infer = vi.fn(async () => ({ data: [1] }));
+    const extractor: FeatureExtractor = Object.assign(infer, {
+      tokenizer: { model_max_length: 5, encode: () => null as never },
+    });
+    const client = createTransformersEmbeddingClient({ model: "test", createExtractor: async () => extractor });
+    await expect(client.embed("hello")).rejects.toThrow("transformers tokenizer encode must return token IDs");
+    expect(infer).not.toHaveBeenCalled();
+  });
+
+  it("requires a tokenizer for the default feature-extraction pipeline", async () => {
+    vi.doMock("@huggingface/transformers", () => ({
+      pipeline: async () => async () => ({ data: [1] }),
+    }));
+    try {
+      const client = createTransformersEmbeddingClient({ model: "test" });
+      await expect(client.embed("hello")).rejects.toThrow("transformers feature extractor tokenizer is required");
+    } finally {
+      vi.doUnmock("@huggingface/transformers");
+    }
   });
 
   it("throws when the extractor returns an empty embedding", async () => {

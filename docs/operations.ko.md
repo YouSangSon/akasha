@@ -187,9 +187,24 @@ ORDER BY archived_at DESC;
 
 ## Ingest sweeper
 
-`add_memory` 는 vector upsert 전에 write-ahead ingest job을 기록합니다. Postgres
-commit 이후 vector indexing 완료 전에 프로세스가 crash되면 ingest sweeper가 이미
-commit된 chunk를 다시 임베딩해 활성 벡터 백엔드에 기록합니다.
+원본 생성, 검색 필드 수정, governance 보관, 복원은 레코드 변경과 pending ingest
+작업을 함께 커밋합니다. Sweeper는 메모리를 잠근 뒤 현재 작업과 원본을 다시 읽고,
+없거나 오래된 청크를 복구해 색인합니다. 보관된 레코드는 포인트 ID가 기록되지
+않았더라도 조직과 레코드 ID로 정리합니다. Provider·model·dimensions·version이
+다르면 명시적으로 `reindex_memory`를 실행해야 하며 재시도가 기존 벡터를 임의로
+다른 설정으로 해석하지 않습니다.
+
+업그레이드 후 기존 데이터가 있는 각 조직·프로젝트/사용자 scope에서
+`reindex_memory`를 실행하세요. 최초 레코드 ID 범위 안에서 처리하며 이후 생성된
+레코드는 자신의 쓰기 작업이 색인합니다. 정상 청크의 ID는 유지합니다.
+수정·재색인·compaction·goal-run pin 변경이 같은 레코드 잠금을 사용하며,
+복원은 아카이브 ID도 잠급니다.
+
+잠금과 짧은 SQL 트랜잭션, pgvector 작업은 같은 연결을 사용합니다. Qdrant 호출은
+pending 작업 커밋 후 실행합니다. 연결 오류가 확인되면 해당 작업 범위를
+무효화하고 새 DB·벡터 작업을 거부합니다. 분산 트랜잭션은 아니므로 DB 연결을 잃은 뒤
+이미 전송된 Qdrant 요청까지 차단하지는 못합니다. 연결 상실 사고가 있었다면
+정리 상태를 확인하고 영향받은 scope를 재색인하세요.
 
 지속 실행 replica 정확히 1개에서 활성화:
 
@@ -259,9 +274,9 @@ curl -X POST http://localhost:8787/v1/memory/delete \
 
 OAuth 기준 `list_memory`, `inspect_memory_graph` 는 read scope,
 `update_memory`, `delete_memory`, `tag_memory` 는 admin scope가 필요합니다.
-`delete_memory` 응답의
-`qdrantPointsPending > 0` 이면 compaction sweeper를 활성화하고 compaction
-cleanup과 같은 "Stuck rows" 점검을 사용하세요.
+`delete_memory` 응답이 `indexCleanupPending: true`이거나
+`qdrantPointsPending > 0`이면 ingest sweeper를 활성화하고 `ingest_jobs`를
+점검하세요. Compaction 정리는 `memory_archive`와 compaction sweeper를 사용합니다.
 
 ## Unarchive
 

@@ -461,17 +461,16 @@ type UpdateMemoryResult = {
 HTTP: `POST /v1/memory/update`
 MCP stdio: `update_memory`
 
-canonical Postgres row를 수정하고, 전달된 경우 tag를 교체하며, entity mention과
-vector 상태를 갱신합니다. 활성 레코드는 vector 쓰기 전에 chunk 교체와 pending
-ingest marker를 원자적으로 저장합니다. 교체 전 임베딩 실패는 새 marker 없이
-오류로 반환됩니다.
+원본 Postgres 레코드를 수정하고, 전달된 태그를 교체하며 entity mention을
+갱신합니다. 운영 경로는 예약된 DB 연결에서 같은 레코드의 쓰기를 직렬화합니다.
+검색 필드 수정은 원본 변경과 pending ingest 작업을 함께 커밋한 뒤 청크와
+벡터를 갱신합니다. 색인 실패는 오류를 반환하지만 원본 변경과 재시도 기록은
+유지합니다.
 
-보관 레코드의 검색 필드 수정과 `tag_memory`는 조직 범위의 vector만 삭제합니다.
-임베딩, chunk 교체, 새 ingest job 생성은 수행하지 않습니다. 이 정리가 실패하면
-canonical 수정은 이미 반영된 상태로 오류를 반환하므로 같은 작업을 재시도하거나
-재색인해야 합니다. durability를 `durable` 또는 `ephemeral`로 되돌리면 최신 저장
-본문을 색인합니다. 이 순차 처리 보완은 동시에 실행되는 보관·색인 작업을 두
-저장소에 걸쳐 동기화하는 기능을 추가하지 않습니다.
+보관된 레코드는 임베딩 없이 조직과 레코드 ID로 벡터를 정리합니다.
+Durability를 `durable` 또는 `ephemeral`로 되돌리면 최신 본문을 색인합니다.
+Ingest sweeper도 같은 잠금 안에서 현재 상태를 다시 읽습니다. DB 연결 상실
+시의 한계는 [인덱스 복구](operations.ko.md#ingest-sweeper)를 참고하세요.
 
 ---
 
@@ -488,15 +487,19 @@ type DeleteMemoryResult = {
   archived: boolean;
   qdrantPointsDeleted: number;
   qdrantPointsPending: number;
+  indexCleanupPending?: boolean;
 };
 ```
 
 HTTP: `POST /v1/memory/delete`
 MCP stdio: `delete_memory`
 
-Compaction과 같은 복구 가능한 archive 경로로 canonical 레코드 1개를 보관한 뒤
-활성 vector point를 제거합니다. Vector 삭제 실패 시 archive row가 cleanup
-sweeper 대상 pending 상태로 남습니다.
+원본 레코드의 durability를 `archived`로 바꾸고 정리 작업을 같은 트랜잭션에
+저장합니다. 이어서 조직과 레코드 ID로 모든 벡터를 정리하며, 실패하면 ingest
+sweeper가 재시도합니다. `indexCleanupPending: true`이면 아직 정리가 끝나지
+않았습니다. 포인트 매핑이 기록되지 않았다면 이때도 `qdrantPointsPending`은
+0일 수 있습니다. 두 포인트 카운터는 알려진 매핑 수이며 실제 Qdrant 삭제 건수
+측정값이 아닙니다. Compaction은 별도의 archive outbox를 사용합니다.
 
 ---
 
@@ -586,7 +589,7 @@ type UnarchiveMemoryInput = {
 type UnarchiveMemoryResult = {
   ok: true;
   outcomes: Array<
-    | { archiveId: number; status: "restored"; restoredRecordId: number; sourceRecordId: number; chunkCount: number }
+    | { archiveId: number; status: "restored"; restoredRecordId: number; sourceRecordId: number; chunkCount: number; indexPending?: boolean }
     | { archiveId: number; status: "skipped"; reason: string }
     | { archiveId: number; status: "failed"; error: string }
   >;
@@ -606,7 +609,11 @@ Skip 사유:
   manual recovery 필요
 
 복원된 레코드는 새 BIGSERIAL id를 받으며, 응답의 `sourceRecordId` 가 원래
-id와 매핑 — 호출자는 이걸로 레퍼런스 업데이트.
+id와 매핑됩니다. 복원 레코드·재시도 작업·아카이브의 복원 표시를 함께 커밋하며,
+동시 요청은 잠금 안에서 아카이브를 다시 읽어 한 번만 복원합니다. 이후 색인이
+실패하면 원본을 유지하고 `indexPending: true`를 반환합니다. 이때 완료된 색인
+수를 확정하지 못했으므로 `chunkCount: 0`이며, ingest sweeper가 재시도합니다.
+같은 아카이브에 대한 복원 재요청은 이미 복원된 항목으로 건너뜁니다.
 
 ---
 

@@ -1,4 +1,7 @@
-import { chunkText, type TextChunk } from "../chunk/chunk-text.js";
+import type { TextChunk } from "../chunk/chunk-text.js";
+import { chunkForEmbedding } from "../chunk/chunk-for-embedding.js";
+import type { EmbeddingProvider } from "../embedding/embedding-provider.js";
+import type { MemoryWriteCoordinator } from "./memory-write-coordinator.js";
 import type { PgPool, PgQueryable } from "../db/connection.js";
 import { requireSingleRow, toIsoString, toNumber } from "./db-utils.js";
 import {
@@ -13,6 +16,7 @@ import type {
   AddMemoryInput,
   CanonicalMemoryRepository,
   IngestJobRepository,
+  IngestJob,
   ScopeRef,
   SearchMemoryResult,
 } from "../types.js";
@@ -34,6 +38,9 @@ export type StoredMemoryChunk = {
   startOffset: number;
   endOffset: number;
   embeddingVersion: string;
+  embeddingProvider?: string;
+  embeddingModel?: string;
+  embeddingDimensions?: number;
 };
 
 type PendingIngestJobRef = {
@@ -49,6 +56,9 @@ type StoredMemoryChunkRow = {
   start_offset: number | string;
   end_offset: number | string;
   embedding_version: string;
+  embedding_provider?: string;
+  embedding_model?: string;
+  embedding_dimensions?: number | string;
 };
 
 type ReindexableMemoryChunkRow = StoredMemoryChunkRow & {
@@ -102,6 +112,7 @@ export type MemoryChunkRepository = {
     chunks: TextChunk[];
     embedding: ChunkEmbeddingConfig;
     nextRetryAt: Date;
+    jobId?: number;
   }): Promise<{ chunks: StoredMemoryChunk[]; job: PendingIngestJobRef }>;
   listChunks(
     organizationId: string,
@@ -121,10 +132,7 @@ export type MemoryChunkRepository = {
   }): Promise<void>;
 };
 
-export type EmbeddingClient = {
-  embed(inputText: string): Promise<number[]>;
-  embedBatch(inputs: string[]): Promise<number[][]>;
-};
+export type EmbeddingClient = EmbeddingProvider;
 
 export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository {
   assertMemoryChunkPool(pool);
@@ -224,7 +232,16 @@ export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository
           [input.record.id, organizationId],
         );
         const chunks = await insertPostgresChunks(client, input);
-        const jobResult = await client.query<{
+        const jobResult = input.jobId !== undefined
+          ? await client.query<{ id: number | string; qdrant_attempts: number | string }>(
+            `UPDATE ingest_jobs SET status = 'pending', qdrant_status = 'pending',
+              qdrant_next_retry_at = $4, updated_at = NOW()
+             WHERE id = $1 AND memory_record_id = $2 AND organization_id = $3
+               AND qdrant_status = 'pending'
+             RETURNING id, qdrant_attempts`,
+            [input.jobId, input.record.id, organizationId, input.nextRetryAt],
+          )
+          : await client.query<{
           id: number | string;
           qdrant_attempts: number | string;
         }>(
@@ -295,6 +312,7 @@ export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository
             mc.start_offset,
             mc.end_offset,
             mc.embedding_version,
+            mc.embedding_provider, mc.embedding_model, mc.embedding_dimensions,
             mr.organization_id,
             mr.scope_type,
             mr.scope_id,
@@ -337,6 +355,7 @@ export function createMemoryChunkRepository(pool: PgPool): MemoryChunkRepository
             mc.start_offset,
             mc.end_offset,
             mc.embedding_version,
+            mc.embedding_provider, mc.embedding_model, mc.embedding_dimensions,
             mr.organization_id,
             mr.scope_type,
             mr.scope_id,
@@ -397,22 +416,39 @@ export async function refreshCanonicalMemoryIndex(input: {
   vectorIndex: VectorIndex;
   embedding: ChunkEmbeddingConfig;
   record: SearchMemoryResult;
+  job?: PendingIngestJobRef;
+  reuseUnchangedChunks?: boolean;
+  manageFailure?: boolean;
 }): Promise<{ chunkCount: number }> {
-  const organizationId = input.record.organizationId ?? "default";
-  assertNonBlankText(organizationId, "organizationId");
+  const recordOrganizationId = input.record.organizationId ?? "default";
+  assertNonBlankText(recordOrganizationId, "organizationId");
+  const organizationId = recordOrganizationId.trim();
+  let job: PendingIngestJobRef | null = input.job ?? null;
 
   if (input.record.durability === "archived") {
+    if (input.ingestJobs && !job) {
+      job = await input.ingestJobs.create({ memoryRecordId: input.record.id, organizationId });
+      await input.ingestJobs.markQdrantPending({
+        jobId: job.id,
+        attempts: job.qdrantAttempts,
+        nextRetryAt: new Date(Date.now() + nextRetryDelayMs(job.qdrantAttempts)),
+      });
+    }
     await input.vectorIndex.deleteByRecordIds([input.record.id], {
       organizationId,
     });
+    if (job && input.ingestJobs) {
+      await input.ingestJobs.markCompleted(job.id);
+      await input.ingestJobs.markQdrantCompleted(job.id);
+    }
     return { chunkCount: 0 };
   }
 
-  const chunks = chunkText({
+  const chunks = await chunkForEmbedding({
     text: input.record.content,
     targetTokens: input.embedding.targetTokens,
     overlapTokens: input.embedding.overlapTokens,
-  });
+  }, input.embeddings);
   const embeddings = chunks.length === 0
     ? []
     : await input.embeddings.embedBatch(chunks.map((chunk) => chunk.content));
@@ -422,12 +458,23 @@ export async function refreshCanonicalMemoryIndex(input: {
     );
   }
 
-  let job: PendingIngestJobRef | null = null;
-
   try {
     const retryAt = new Date(Date.now() + nextRetryDelayMs(0));
     let storedChunks: StoredMemoryChunk[];
-    if (input.ingestJobs) {
+    const existing = input.reuseUnchangedChunks
+      ? await input.chunkRepository.getChunksByRecordId(input.record.id)
+      : [];
+    if (input.reuseUnchangedChunks && sameChunkLayout(existing, chunks, input.embedding)) {
+      storedChunks = existing;
+      if (input.ingestJobs && !job) {
+        job = await input.ingestJobs.create({ memoryRecordId: input.record.id, organizationId });
+        await input.ingestJobs.markQdrantPending({
+          jobId: job.id,
+          attempts: job.qdrantAttempts,
+          nextRetryAt: retryAt,
+        });
+      }
+    } else if (input.ingestJobs) {
       if (!input.chunkRepository.replaceChunksForRecordWithPendingIngest) {
         throw new Error(
           "refreshCanonicalMemoryIndex requires atomic chunk replacement with pending ingest",
@@ -439,6 +486,7 @@ export async function refreshCanonicalMemoryIndex(input: {
           chunks,
           embedding: input.embedding,
           nextRetryAt: retryAt,
+          ...(job ? { jobId: job.id } : {}),
         });
       job = replaced.job;
       storedChunks = replaced.chunks;
@@ -456,10 +504,6 @@ export async function refreshCanonicalMemoryIndex(input: {
           embedding: input.embedding,
         });
     }
-
-    await input.vectorIndex.deleteByRecordIds([input.record.id], {
-      organizationId,
-    });
 
     const points: VectorPoint[] = storedChunks.map((chunk, index) =>
       buildVectorPoint({
@@ -480,6 +524,10 @@ export async function refreshCanonicalMemoryIndex(input: {
       }),
     );
 
+    await input.vectorIndex.deleteByRecordIds([input.record.id], {
+      organizationId,
+    });
+
     if (points.length > 0) {
       let upsertedPointIds: string[] = [];
       await input.vectorIndex.upsert(points);
@@ -496,18 +544,16 @@ export async function refreshCanonicalMemoryIndex(input: {
           .catch(() => undefined);
         throw error;
       }
-      if (job) {
-        await input.ingestJobs!.markQdrantCompleted(job.id);
-      }
     }
 
     if (job) {
       await input.ingestJobs!.markCompleted(job.id);
+      await input.ingestJobs!.markQdrantCompleted(job.id);
     }
 
     return { chunkCount: storedChunks.length };
   } catch (error: unknown) {
-    if (job && chunks.length > 0) {
+    if (job && input.manageFailure !== false) {
       try {
         await input.ingestJobs!.markQdrantPending({
           jobId: job.id,
@@ -524,7 +570,7 @@ export async function refreshCanonicalMemoryIndex(input: {
   }
 }
 
-export async function writeCanonicalMemory(input: {
+export type WriteCanonicalMemoryInput = {
   repository: CanonicalMemoryRepository;
   chunkRepository: MemoryChunkRepository;
   ingestJobs: IngestJobRepository;
@@ -532,7 +578,10 @@ export async function writeCanonicalMemory(input: {
   vectorIndex: VectorIndex;
   embedding: ChunkEmbeddingConfig;
   memory: AddMemoryInput;
-}): Promise<SearchMemoryResult> {
+  writes?: MemoryWriteCoordinator;
+};
+
+export async function writeCanonicalMemory(input: WriteCanonicalMemoryInput): Promise<SearchMemoryResult> {
   assertNonBlankMemoryContent(input.memory.content);
 
   // Guard: refuse to persist user-supplied text that looks like a credential.
@@ -550,6 +599,11 @@ export async function writeCanonicalMemory(input: {
     throw new SecretDetectedError(detections.map((d) => d.category));
   }
 
+  if (input.writes) {
+    return input.writes.create(input.memory, (scope, record, job) =>
+      indexCreatedMemory({ ...input, ...scope }, record, job));
+  }
+
   const record = await input.repository.addMemory(input.memory);
   const organizationId = record.organizationId ?? "default";
   assertNonBlankText(organizationId, "organizationId");
@@ -558,14 +612,24 @@ export async function writeCanonicalMemory(input: {
     memoryRecordId: record.id,
     organizationId,
   });
+  return indexCreatedMemory(input, record, job);
+}
+
+async function indexCreatedMemory(
+  input: WriteCanonicalMemoryInput,
+  record: SearchMemoryResult,
+  job: IngestJob,
+): Promise<SearchMemoryResult> {
+  const organizationId = record.organizationId ?? "default";
   let upsertedPointIds: string[] = [];
+  let vectorWriteAttempted = false;
 
   try {
-    const chunks = chunkText({
+    const chunks = await chunkForEmbedding({
       text: record.content,
       targetTokens: input.embedding.targetTokens,
       overlapTokens: input.embedding.overlapTokens,
-    });
+    }, input.embeddings);
     const storedChunks = await input.chunkRepository.insertChunks({
       record,
       chunks,
@@ -614,6 +678,7 @@ export async function writeCanonicalMemory(input: {
     );
 
     if (points.length > 0) {
+      vectorWriteAttempted = true;
       await input.vectorIndex.upsert(points);
       upsertedPointIds = points.map((point) => point.id);
       await input.chunkRepository.updatePointIds(
@@ -622,20 +687,30 @@ export async function writeCanonicalMemory(input: {
           qdrantPointId: point.id,
         })),
       );
-      // Success: clear the retry schedule and mark Qdrant indexing complete.
-      await input.ingestJobs.markQdrantCompleted(job.id);
     }
 
     await input.ingestJobs.markCompleted(job.id);
+    if (points.length > 0) {
+      // Clear the retry intent last so compensation can still be recovered.
+      await input.ingestJobs.markQdrantCompleted(job.id);
+    }
 
     return record;
   } catch (error: unknown) {
+    if (input.writes && vectorWriteAttempted) {
+      try {
+        await input.vectorIndex.deleteByRecordIds([record.id], { organizationId });
+      } catch {
+        // Keep the committed pending intent if partial vector writes cannot be removed.
+        throw error;
+      }
+    }
     // Rollback the partial PG state. Schema-level ON DELETE CASCADE removes
     // memory_chunks, ingest_jobs (including this job row), and relationships
     // in the same statement. If vector points became visible before a later
     // SQL/job step failed, delete those points too. Cleanup is best-effort:
     // if it itself fails, the original error still surfaces to the caller.
-    if (upsertedPointIds.length > 0) {
+    if (!input.writes && upsertedPointIds.length > 0) {
       await input.vectorIndex.delete(upsertedPointIds).catch(() => undefined);
     }
     await input.repository.deleteMemoryRecord(record.id, organizationId).catch(() => undefined);
@@ -644,6 +719,8 @@ export async function writeCanonicalMemory(input: {
 }
 
 export async function reindexCanonicalMemory(input: {
+  repository?: CanonicalMemoryRepository;
+  writes?: MemoryWriteCoordinator;
   chunkRepository: MemoryChunkRepository;
   embeddings: EmbeddingClient;
   vectorIndex: VectorIndex;
@@ -656,6 +733,39 @@ export async function reindexCanonicalMemory(input: {
   const reindexInput = { ...input, organizationId };
 
   const batchSize = normalizeReindexBatchSize(input.batchSize);
+  if (input.writes) {
+    if (!input.repository?.listMemoryRecordIdsForIndexing) {
+      throw new Error("canonical reindex requires record-ID pagination");
+    }
+    const scopes = normalizeScopeRefs(input.scopes, "scopes");
+    let afterId: number | undefined;
+    let throughId: number | undefined;
+    let chunkCount = 0;
+    while (true) {
+      const page = await input.repository.listMemoryRecordIdsForIndexing(
+        organizationId, scopes, { afterId, throughId, limit: batchSize },
+      );
+      throughId ??= page.throughId;
+      if (page.ids.length === 0) break;
+      for (const id of page.ids) {
+        chunkCount += await input.writes.record(organizationId, [id], async (scope) => {
+          const record = await scope.repository.getMemoryRecordById(id, organizationId);
+          if (!record || record.id !== id || record.organizationId !== organizationId
+            || !scopes.some((ref) => ref.scopeType === record.scopeType && ref.scopeId === record.scopeId)) {
+            return 0;
+          }
+          const result = await refreshCanonicalMemoryIndex({
+            ...scope, record, reuseUnchangedChunks: true,
+          });
+          return result.chunkCount;
+        });
+      }
+      afterId = page.ids[page.ids.length - 1]!;
+      if (afterId >= throughId) break;
+    }
+    return { chunkCount };
+  }
+
   let foundChunks = false;
 
   await forEachReindexChunkPage(reindexInput, batchSize, async (chunks) => {
@@ -825,7 +935,10 @@ async function insertPostgresChunks(
         content,
         start_offset,
         end_offset,
-        embedding_version
+        embedding_version,
+        embedding_provider,
+        embedding_model,
+        embedding_dimensions
     `,
     params,
   );
@@ -882,7 +995,20 @@ function mapStoredMemoryChunkRow(row: StoredMemoryChunkRow): StoredMemoryChunk {
       row.embedding_version,
       "memory chunk embedding_version",
     ).trim(),
+    ...(row.embedding_provider === undefined ? {} : { embeddingProvider: mapRequiredText(row.embedding_provider, "memory chunk embedding_provider") }),
+    ...(row.embedding_model === undefined ? {} : { embeddingModel: mapRequiredText(row.embedding_model, "memory chunk embedding_model") }),
+    ...(row.embedding_dimensions === undefined ? {} : { embeddingDimensions: toPositiveSafeInteger(row.embedding_dimensions, "memory chunk embedding_dimensions") }),
   };
+}
+
+function sameChunkLayout(stored: StoredMemoryChunk[], desired: TextChunk[], embedding: ChunkEmbeddingConfig): boolean {
+  return stored.length === desired.length && stored.every((chunk, index) => {
+    const next = desired[index]!;
+    return chunk.chunkIndex === next.chunkIndex && chunk.content === next.content
+      && chunk.startOffset === next.startOffset && chunk.endOffset === next.endOffset
+      && chunk.embeddingProvider === embedding.provider && chunk.embeddingModel === embedding.model
+      && chunk.embeddingDimensions === embedding.dimensions && chunk.embeddingVersion === embedding.version;
+  });
 }
 
 function mapReindexableMemoryChunkRow(
@@ -1011,9 +1137,13 @@ function assertReplaceChunksWithPendingIngestInput(
   chunks: TextChunk[];
   embedding: ChunkEmbeddingConfig;
   nextRetryAt: Date;
+  jobId?: number;
 } {
   const candidate = assertObject(value, "chunk replacement input");
   assertValidDate(candidate.nextRetryAt, "nextRetryAt");
+  if (candidate.jobId !== undefined) {
+    assertPositiveSafeInteger(candidate.jobId, "jobId");
+  }
   assertChunkWriteInput(candidate);
 }
 

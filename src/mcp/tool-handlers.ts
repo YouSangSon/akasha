@@ -6,11 +6,13 @@ import { rootLogger } from "../logger.js";
 import { rankResults } from "../search/rank-results.js";
 import { retrieveMemory as retrieveMemoryFromQdrant } from "../search/retrieve-memory.js";
 import { createServiceBackedAuditLog } from "./canonical-services.js";
+import { withMemoryRecordWrite, updateWithIndexIntent } from "./memory-write-services.js";
 import {
   refreshCanonicalMemoryIndex,
   writeCanonicalMemory,
 } from "../store/canonical-indexing.js";
 import { createStoreToolHandlers } from "../store/tool-handlers.js";
+import { createPendingIndexJob } from "../store/memory-write-coordinator.js";
 import {
   assertNonBlankMemoryContent,
   assertNonBlankText,
@@ -18,6 +20,7 @@ import {
 import { ENTITY_KIND_VALUES } from "../entities/entity-extraction.js";
 import type {
   AddMemoryInput,
+  IngestJob,
   MemoryRepository,
   SearchMemoryResult,
 } from "../types.js";
@@ -211,6 +214,7 @@ export function createToolHandlers(input: {
           )
         : await withCanonicalServices((services) =>
             writeCanonicalMemory({
+              writes: services.writes,
               repository: services.repository,
               chunkRepository: services.chunkRepository,
               ingestJobs: services.ingestJobs,
@@ -446,9 +450,10 @@ export function createToolHandlers(input: {
           ? undefined
           : optionalNonBlankText(toolInput.summary);
 
-      return await withCanonicalServices(async (services) => {
-        const organizationId = toolInput.organizationId?.trim() ?? "default";
-        const memory = await services.repository.updateMemoryRecord({
+      const organizationId = toolInput.organizationId?.trim() ?? "default";
+      return await withMemoryRecordWrite(withCanonicalServices, organizationId, [toolInput.memoryId], async (services) => {
+        const refresh = shouldRefreshMemoryIndex(toolInput);
+        const { memory, job } = await updateWithIndexIntent(services, {
           id: toolInput.memoryId,
           organizationId,
           kind: toolInput.kind,
@@ -458,7 +463,7 @@ export function createToolHandlers(input: {
           importance: toolInput.importance,
           durability: toolInput.durability,
           tags: toolInput.tags,
-        });
+        }, refresh);
 
         if (!memory) {
           return {
@@ -467,8 +472,10 @@ export function createToolHandlers(input: {
           };
         }
 
-        if (shouldRefreshMemoryIndex(toolInput)) {
+        if (refresh) {
           await refreshCanonicalMemoryIndex({
+            job,
+            reuseUnchangedChunks: Boolean(services.writes),
             chunkRepository: services.chunkRepository,
             ingestJobs: services.ingestJobs,
             embeddings: services.embeddings,
@@ -489,14 +496,20 @@ export function createToolHandlers(input: {
     async delete_memory(toolInput) {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
       assertPositiveInteger(toolInput.memoryId, "memoryId");
-      return await withCanonicalServices(async (services) => {
-        const organizationId = toolInput.organizationId?.trim() ?? "default";
-        const archived = await services.repository.archiveMemoryRecord({
+      const organizationId = toolInput.organizationId?.trim() ?? "default";
+      return await withMemoryRecordWrite(withCanonicalServices, organizationId, [toolInput.memoryId], async (services) => {
+        let job: IngestJob | undefined;
+        const archiveInput = {
           id: toolInput.memoryId,
           organizationId,
-        });
+        };
+        const archived = services.writes
+          ? await services.repository.archiveMemoryRecord(archiveInput, async (recordId) => {
+            job = await createPendingIndexJob(services.ingestJobs, recordId, organizationId);
+          })
+          : await services.repository.archiveMemoryRecord(archiveInput);
 
-        if (archived.qdrantPointIds.length === 0) {
+        if (!job && archived.qdrantPointIds.length === 0) {
           return {
             ok: true,
             archived: archived.archived,
@@ -506,9 +519,13 @@ export function createToolHandlers(input: {
         }
 
         try {
-          await services.vectorIndex.delete(archived.qdrantPointIds, {
-            organizationId,
-          });
+          if (job) {
+            await services.vectorIndex.deleteByRecordIds([toolInput.memoryId], { organizationId });
+            await services.ingestJobs.markCompleted(job.id);
+            await services.ingestJobs.markQdrantCompleted(job.id);
+          } else {
+            await services.vectorIndex.delete(archived.qdrantPointIds, { organizationId });
+          }
           return {
             ok: true,
             archived: archived.archived,
@@ -531,6 +548,7 @@ export function createToolHandlers(input: {
             archived: archived.archived,
             qdrantPointsDeleted: 0,
             qdrantPointsPending: archived.qdrantPointIds.length,
+            ...(job ? { indexCleanupPending: true } : {}),
           };
         }
       });
@@ -540,13 +558,13 @@ export function createToolHandlers(input: {
       ensureGovernanceCanonicalMode(hasGovernanceOverrides);
       assertPositiveInteger(toolInput.memoryId, "memoryId");
       assertNonBlankTags(toolInput.tags);
-      return await withCanonicalServices(async (services) => {
-        const organizationId = toolInput.organizationId?.trim() ?? "default";
-        const memory = await services.repository.updateMemoryRecord({
+      const organizationId = toolInput.organizationId?.trim() ?? "default";
+      return await withMemoryRecordWrite(withCanonicalServices, organizationId, [toolInput.memoryId], async (services) => {
+        const { memory, job } = await updateWithIndexIntent(services, {
           id: toolInput.memoryId,
           organizationId,
           tags: toolInput.tags,
-        });
+        }, true);
 
         if (!memory) {
           return {
@@ -556,6 +574,8 @@ export function createToolHandlers(input: {
         }
 
         await refreshCanonicalMemoryIndex({
+          job,
+          reuseUnchangedChunks: Boolean(services.writes),
           chunkRepository: services.chunkRepository,
           ingestJobs: services.ingestJobs,
           embeddings: services.embeddings,

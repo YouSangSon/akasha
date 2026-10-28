@@ -14,15 +14,14 @@
 // Concurrency: relies on memory_archive UNIQUE (compaction_run_id,
 // source_record_id) for record-level idempotency and on
 // compaction_runs.idempotency_key UNIQUE for run-level replay defense.
-// Advisory-lock-based scope mutex is intentionally not wired into this apply
-// path yet. MemoryArchiveRepository.acquireScopeLock exposes the available
-// primitive, but session-level lock semantics need a dedicated connection to
-// hold across statements; that remains out of scope until multi-replica deploy.
+// Production writers lock candidate and kept record IDs on one reserved
+// connection, then recheck the planning snapshot before archiving.
 
 import { randomUUID } from "node:crypto";
 import type { Logger } from "../logger.js";
 import type { CompactMemoryToolResult, DuplicateGroupView } from "../mcp/types.js";
 import type { SearchMemoryResult } from "../types.js";
+import type { MemoryWriteCoordinator } from "../store/memory-write-coordinator.js";
 import type { EmbeddingClient } from "../store/canonical-indexing.js";
 import { assertNonBlankText } from "../store/memory-content.js";
 import type { VectorIndex } from "../vector/vector-index.js";
@@ -61,6 +60,7 @@ export class CompactionRateLimitError extends Error {
 }
 
 export type ApplyCompactionDeps = {
+  writes?: MemoryWriteCoordinator;
   archiveRepository: MemoryArchiveRepository;
   vectorIndex: VectorIndex;
   logger: Logger;
@@ -199,84 +199,107 @@ export async function applyCompaction(
   const archivedIds: string[] = [];
 
   for (const candidate of candidates) {
-    let archiveResult;
-    try {
-      archiveResult = await deps.archiveRepository.applyCompactionRecord({
-        runId: run.id,
-        organizationId,
-        recordId: candidate.recordId,
-        reason: candidate.reason,
-        decayScore: candidate.decayScore,
-        keptRecordId: candidate.keptRecordId,
-        planGeneratedAt: startedAt,
-      });
-    } catch (err: unknown) {
-      // PG failure aborts the run — leaves prior records archived (durable),
-      // and the run row stays status='pending'. Operator must investigate.
-      await markRunFailed(deps, run.id, err);
-      throw err;
-    }
+    const applyCandidate = async (candidateDeps: ApplyCompactionDeps) => {
+      let archiveResult;
+      try {
+        archiveResult = await candidateDeps.archiveRepository.applyCompactionRecord({
+          runId: run.id,
+          organizationId,
+          recordId: candidate.recordId,
+          reason: candidate.reason,
+          decayScore: candidate.decayScore,
+          keptRecordId: candidate.keptRecordId,
+          planGeneratedAt: startedAt,
+        });
+      } catch (err: unknown) {
+        // PG failure aborts the run — leaves prior records archived (durable),
+        // and the run row stays status='pending'. Operator must investigate.
+        await markRunFailed(candidateDeps, run.id, err);
+        throw err;
+      }
 
-    if (!archiveResult.archived) {
-      // TOCTOU skip / org mismatch / concurrent run won.
-      skippedCount += 1;
-      continue;
-    }
+      if (!archiveResult.archived) {
+        // TOCTOU skip / org mismatch / concurrent run won.
+        skippedCount += 1;
+        return;
+      }
 
-    archivedCount += 1;
-    archivedIds.push(String(candidate.recordId));
+      archivedCount += 1;
+      archivedIds.push(String(candidate.recordId));
 
-    if (
-      archiveResult.qdrantPointIds.length === 0 ||
-      archiveResult.archiveId === undefined
-    ) {
-      // No vectors to clean — mark deleted immediately (vacuous true).
-      if (archiveResult.archiveId !== undefined) {
-        await deps.archiveRepository.markQdrantStatus(
+      if (
+        (!candidateDeps.writes && archiveResult.qdrantPointIds.length === 0) ||
+        archiveResult.archiveId === undefined
+      ) {
+        // No vectors to clean — mark deleted immediately (vacuous true).
+        if (archiveResult.archiveId !== undefined) {
+          await candidateDeps.archiveRepository.markQdrantStatus(
+            archiveResult.archiveId,
+            "deleted",
+          );
+        }
+        return;
+      }
+
+      // Sequential Qdrant deletes — see design §4.4.
+      try {
+        if (candidateDeps.writes) {
+          await candidateDeps.vectorIndex.deleteByRecordIds([candidate.recordId], { organizationId });
+        } else {
+          await candidateDeps.vectorIndex.delete(archiveResult.qdrantPointIds, { organizationId });
+        }
+        qdrantPointsDeleted += archiveResult.qdrantPointIds.length;
+        await candidateDeps.archiveRepository.markQdrantStatus(
           archiveResult.archiveId,
           "deleted",
         );
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        candidateDeps.logger.warn(
+          {
+            event: "compact.qdrant_delete_failed",
+            archiveId: archiveResult.archiveId,
+            recordId: candidate.recordId,
+            err: errorMessage,
+          },
+          "qdrant delete failed; sweeper will retry",
+        );
+        qdrantFailedRecords += 1;
+        qdrantPointsPending += archiveResult.qdrantPointIds.length;
+        // Leave qdrant_status='pending' — the sweeper picks it up. Bumping
+        // attempt_count + last_error here is best-effort.
+        try {
+          await candidateDeps.archiveRepository.markQdrantStatus(
+            archiveResult.archiveId,
+            "pending",
+            errorMessage,
+          );
+        } catch (markErr: unknown) {
+          candidateDeps.logger.error(
+            { event: "compact.mark_pending_failed", archiveId: archiveResult.archiveId, err: markErr },
+            "failed to mark archive row as pending; row remains pending",
+          );
+        }
       }
-      continue;
-    }
+    };
 
-    // Sequential Qdrant deletes — see design §4.4.
-    try {
-      await deps.vectorIndex.delete(archiveResult.qdrantPointIds, {
-        organizationId,
+    if (deps.writes) {
+      const ids = candidate.keptRecordId === undefined
+        ? [candidate.recordId]
+        : [candidate.recordId, candidate.keptRecordId];
+      await deps.writes.record(organizationId, ids, async (scope) => {
+        for (const id of ids) {
+          const planned = input.records.find((record) => record.id === id);
+          const current = await scope.repository.getMemoryRecordById(id, organizationId);
+          if (!planned || !current || !samePlanningSnapshot(planned, current)) {
+            skippedCount += 1;
+            return;
+          }
+        }
+        await applyCandidate({ ...deps, ...scope });
       });
-      qdrantPointsDeleted += archiveResult.qdrantPointIds.length;
-      await deps.archiveRepository.markQdrantStatus(
-        archiveResult.archiveId,
-        "deleted",
-      );
-    } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      deps.logger.warn(
-        {
-          event: "compact.qdrant_delete_failed",
-          archiveId: archiveResult.archiveId,
-          recordId: candidate.recordId,
-          err: errorMessage,
-        },
-        "qdrant delete failed; sweeper will retry",
-      );
-      qdrantFailedRecords += 1;
-      qdrantPointsPending += archiveResult.qdrantPointIds.length;
-      // Leave qdrant_status='pending' — the sweeper picks it up. Bumping
-      // attempt_count + last_error here is best-effort.
-      try {
-        await deps.archiveRepository.markQdrantStatus(
-          archiveResult.archiveId,
-          "pending",
-          errorMessage,
-        );
-      } catch (markErr: unknown) {
-        deps.logger.error(
-          { event: "compact.mark_pending_failed", archiveId: archiveResult.archiveId, err: markErr },
-          "failed to mark archive row as pending; row remains pending",
-        );
-      }
+    } else {
+      await applyCandidate(deps);
     }
   }
 
@@ -307,6 +330,15 @@ export async function applyCompaction(
       durationMs: endedAt.getTime() - startedAt.getTime(),
     },
   };
+}
+
+function samePlanningSnapshot(planned: SearchMemoryResult, current: SearchMemoryResult): boolean {
+  return current.durability !== "archived" &&
+    current.organizationId === planned.organizationId &&
+    current.scopeType === planned.scopeType && current.scopeId === planned.scopeId &&
+    current.content === planned.content && current.memoryType === planned.memoryType &&
+    current.durability === planned.durability && current.importance === planned.importance &&
+    current.createdAt === planned.createdAt && current.updatedAt === planned.updatedAt;
 }
 
 type ArchiveCandidate = {

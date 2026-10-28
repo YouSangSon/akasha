@@ -1,3 +1,4 @@
+import { EmbeddingInputTooLongError } from "../../src/embedding/transformers-embedding.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createConnection, type AddressInfo } from "node:net";
 import {
@@ -888,6 +889,17 @@ describe("createOperatorServer", () => {
       query: "anything",
       organizationId: "org-a",
     });
+  });
+
+  it("returns an actionable 400 for an overlong embedding query", async () => {
+    vi.mocked(registry.search_memory).mockRejectedValueOnce(new EmbeddingInputTooLongError(800, 512));
+    const res = await fetch(`${handle.baseUrl}/v1/memory/search`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${tokens[0]}` },
+      body: JSON.stringify({ projectKey: "p", query: "long query" }),
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json() as { error: { message: string } }).error.message).toContain("maximum is 512");
   });
 
   it("returns 400 on invalid JSON body", async () => {

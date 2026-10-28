@@ -14120,3 +14120,21 @@ Verification:
 - 중지 후 명시적 재개 시 최신 Git·사용량을 다시 확인했다. 로컬 swap 약 42.4 GB로 새 Node 검사 대신 기존 무료 필수 CI를 사용한다. 아직 새 검사/실제 검색 게이트 통과를 주장하지 않는다.
 - 첫 head `09daa93`의 CI 40336221187은 5개 작업이 통과했다. 독립 검토에서 차단 결함은 없었지만 Beta 후보가 top-5보다 적다는 한계를 발견했다. 측정값을 개선하려고 정답/기준을 바꾸는 대신 Beta 방해 기록 3개와 의미·요청 scope를 일부러 불일치시킨 격리 탐침 2개를 추가한다. 최종 head의 필수 CI를 다시 확인한다.
 - 보강한 `a6dc2e3`의 CI 40336598356은 필수 5개 작업을 통과했다. 두 Node 버전에서 2728 통과·36 skip, PG 246·pgvector 115·실제 기본 검색 6개 통과 및 감사 0건. 독립 재검토도 차단 결함 없이 끝났다. 상세 품질 수치와 팩 크기 증가는 `GATES.md`에 남겼다. 같은 소스의 로컬 전체 검사를 추가하지 않는다.
+
+
+## 2026-10-28 — Long input and coordinated index recovery (#43, parts 1–2)
+
+- Reproduced actual default-tokenizer truncation: 800 words became 802 tokens,
+  and the word at position 601 was absent from the old model input. Token-aware
+  splitting now yields 512/412 tokens with full original-offset coverage.
+- Added one-connection record locks, canonical+pending intent transactions,
+  current-state reindex/retry, archive cleanup by record ID, and atomic restore.
+  Independent review caught reserved-client connection loss; scoped DB/vector
+  operations now reject after known loss and discard the client after work settles.
+- Local: final typecheck passed; focused suites passed (788 initial tests, 242
+  related follow-up tests, 73 connection-loss/document tests; counts overlap).
+  Cached-tokenizer proof used no model inference/network. README EN/KO/JA/ZH-CN
+  and paired API/config/operations docs describe recovery and explicit limits.
+- Actual PG/pgvector races, owned-backend termination, and real long-body ONNX +
+  Qdrant indexing are wired into the existing required CI jobs. Their results are
+  pending PR execution. No local DB/Compose/Testcontainers, paid calls, or VM work.

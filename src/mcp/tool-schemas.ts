@@ -143,6 +143,7 @@ const archiveOutcomeOutputSchema = z.union([
     restoredRecordId: z.number(),
     sourceRecordId: z.number(),
     chunkCount: z.number(),
+    indexPending: z.boolean().optional(),
   }),
   z.object({
     archiveId: z.number(),
@@ -382,6 +383,7 @@ export const SERVICE_TOOL_DESCRIPTORS = [
       archived: z.boolean(),
       qdrantPointsDeleted: z.number().int().nonnegative(),
       qdrantPointsPending: z.number().int().nonnegative(),
+      indexCleanupPending: z.boolean().optional(),
     },
   },
   {

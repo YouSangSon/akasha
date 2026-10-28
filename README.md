@@ -29,11 +29,15 @@ search index. The default `transformers` provider embeds text locally with ONNX,
 without an embedding API key. Model files are downloaded on first use; client
 subscriptions, optional paid APIs, and hosting costs are separate.
 
+Long documents use the embedding tokenizer’s actual input limit, including special tokens.
+After upgrading, run `reindex_memory` to repair legacy chunks from the original records.
+See [index recovery](docs/operations.md#ingest-sweeper) for retry and concurrency behavior.
+
 | Need | What Akasha provides |
 |------|----------------------|
 | Resume work in a fresh session | Searchable decisions and task-specific context packs |
 | Keep control of stored memory | Self-hosted Postgres, org-scoped reads/writes, and an audit trail |
-| Repair the search index | Rebuild vectors from canonical Postgres chunks |
+| Repair the search index | Rebuild chunks and vectors from canonical Postgres records |
 | Run fewer services | `VECTOR_BACKEND=pgvector` stores vectors in Postgres instead of Qdrant |
 | Review what an agent remembers | A memory UI to inspect, edit, tag, and archive records |
 

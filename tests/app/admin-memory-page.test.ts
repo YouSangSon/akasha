@@ -18,6 +18,8 @@ describe("memory admin page", () => {
       "Not archived: memory was not found or is already archived.",
     );
     expect(html).toContain("result.qdrantPointsPending");
+    expect(html).toContain("result.indexCleanupPending === true");
+    expect(html).toContain("Archived; search index cleanup pending retry");
     expect(html).toContain("pending cleanup");
   });
 

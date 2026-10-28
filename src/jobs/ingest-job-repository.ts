@@ -72,6 +72,17 @@ export function createIngestJobRepository(pool: PgPool): IngestJobRepository {
       return mapJob(requireSingleRow(result.rows[0], "ingest job"));
     },
 
+    async getById(jobId, organizationId) {
+      assertPositiveSafeInteger(jobId, "jobId");
+      assertNonBlankText(organizationId, "organizationId");
+      const result = await pool.query<IngestJobRow>(
+        `SELECT ${RETURNING_COLUMNS} FROM ingest_jobs
+         WHERE id = $1 AND organization_id = $2`,
+        [jobId, organizationId.trim()],
+      );
+      return result.rows[0] ? mapJob(result.rows[0]) : null;
+    },
+
     async markCompleted(jobId) {
       assertPositiveSafeInteger(jobId, "jobId");
 

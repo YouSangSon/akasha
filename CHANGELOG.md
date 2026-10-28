@@ -11,6 +11,9 @@ changes; CHANGELOG entries call those out explicitly.
 
 ## [Unreleased]
 
+- Preserve long transformer inputs with tokenizer-aware chunks, original offsets, and bounded overlap. Reindex repairs legacy chunks and preserves unchanged chunk IDs. Direct overlong embedding queries return HTTP 400 instead of silently truncating.
+- Serialize memory writers on a reserved Postgres connection; commit index retry intent with canonical writes. Archive cleanup covers unmapped vectors, and restore commits its record, retry job, and completion marker together. Pending cleanup and restored-but-pending indexing are explicit in tool results.
+
 - Context packs accept opt-in `maxOutputBytes` (CLI `--max-output-bytes`) for an exact compact JSON byte budget. Selected decisions and constraints remain whole; insufficient budgets return a safe error. Existing default output and failure audits are preserved.
 
 - Security: update Zod to 4.6.7 and compatible OpenAI SDK 6.0.0, plus transitive

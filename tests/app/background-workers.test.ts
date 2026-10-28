@@ -118,6 +118,7 @@ describe("startBackgroundWorkers", () => {
   it("shares one canonical services bootstrap across both enabled loops", async () => {
     const logger = buildLogger();
     const services = buildServices();
+    services.writes = { record: vi.fn() } as unknown as NonNullable<BackgroundWorkerServices["writes"]>;
     const bootstrapServices = vi.fn().mockResolvedValue(services);
     const stopCompaction = vi.fn().mockResolvedValue(undefined);
     const stopIngest = vi.fn().mockResolvedValue(undefined);
@@ -169,6 +170,7 @@ describe("startBackgroundWorkers", () => {
     expect(startIngestSweeper.mock.calls[0]?.[0].vectorIndex).toBe(
       services.vectorIndex,
     );
+    expect(startIngestSweeper.mock.calls[0]?.[0].writes).toBe(services.writes);
     expect(handle.startedWorkers).toEqual(["compaction", "ingest"]);
 
     await handle.stop();
