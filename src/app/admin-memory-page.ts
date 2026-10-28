@@ -554,12 +554,17 @@ export function renderMemoryAdminPage(): string {
         !result ||
         typeof result.archived !== "boolean" ||
         !Number.isSafeInteger(result.qdrantPointsPending) ||
-        result.qdrantPointsPending < 0
+        result.qdrantPointsPending < 0 ||
+        (result.indexCleanupPending !== undefined && typeof result.indexCleanupPending !== "boolean")
       ) {
         throw new Error("archive response has invalid status");
       }
       await loadMemories();
       focusAfterRefresh(memoryId, "archive");
+      if (result.indexCleanupPending === true) {
+        setStatus("Archived; search index cleanup pending retry");
+        return;
+      }
       if (result.archived !== true) {
         setStatus("Not archived: memory was not found or is already archived.");
         return;

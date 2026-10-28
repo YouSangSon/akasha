@@ -191,10 +191,24 @@ retry forever.
 
 ## Ingest sweeper
 
-`add_memory` records a write-ahead ingest job before vector upsert. If the
-process crashes after Postgres commit but before vector indexing completes,
-the ingest sweeper re-embeds those committed chunks and writes them to the
-active vector backend.
+Canonical creates, searchable edits, governance archives, and restores commit a
+pending ingest job with the record change. The sweeper locks the record, rereads
+the current job and canonical state, and repairs missing or legacy chunks before
+indexing. Archived records are cleaned by organization and record ID, even if no
+point IDs were recorded. Provider/model/dimensions/version mismatches require
+an explicit `reindex_memory`; retries do not silently reinterpret old vectors.
+
+After upgrading, run `reindex_memory` for each organization and project/user
+scope that contains older records. Reindex uses a bounded snapshot of record IDs;
+newer inserts are indexed by their own write jobs. Unchanged chunk layouts retain
+their IDs. Active writers, reindex, compaction, and goal-run pin updates share
+record locks; archive restoration also locks its archive ID.
+
+Locks and short SQL transactions use one connection, including pgvector calls.
+Qdrant calls happen after pending intent commits. A known connection failure
+invalidates the reserved scope and rejects new DB/vector operations. This is not a distributed
+transaction: a lost DB session cannot fence an already-sent Qdrant request.
+After a connection-loss incident, verify cleanup and reindex affected scopes.
 
 Enable it on exactly one continuously-running replica:
 
@@ -264,9 +278,9 @@ curl -X POST http://localhost:8787/v1/memory/delete \
 
 `list_memory` and `inspect_memory_graph` are read-scoped for OAuth.
 `update_memory`, `delete_memory`, and `tag_memory` require admin scope. If
-`delete_memory` reports
-`qdrantPointsPending > 0`, enable the compaction sweeper and use the same
-"Stuck rows" checks as compaction cleanup.
+`delete_memory` reports `indexCleanupPending: true` or
+`qdrantPointsPending > 0`, enable the ingest sweeper and inspect `ingest_jobs`.
+Compaction cleanup remains in `memory_archive` and uses the compaction sweeper.
 
 ## Unarchive
 

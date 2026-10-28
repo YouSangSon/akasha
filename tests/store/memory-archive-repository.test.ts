@@ -344,6 +344,11 @@ describe("MemoryArchiveRepository.applyCompactionRecord", () => {
     expect(sql).toContain("WITH deleted AS");
     expect(sql).toContain("updated_at <= $7"); // TOCTOU guard
     expect(sql).toContain("organization_id = $2"); // org isolation
+    expect(sql).toMatch(/NOT EXISTS\s*\(\s*SELECT 1 FROM goal_runs gr/);
+    expect(sql).toContain("gr.id = memory_records.goal_run_id");
+    expect(sql).toContain("gr.organization_id = $2");
+    expect(sql).toContain("gr.status = 'active'");
+    expect(sql).toContain("dwp.qdrant_point_ids, NOW()");
     expect(sql).toContain("ON CONFLICT (compaction_run_id, source_record_id) DO NOTHING");
     const params = query.mock.calls[0]![1] as unknown[];
     expect(params[1]).toBe("org-a");
@@ -728,12 +733,14 @@ describe("MemoryArchiveRepository.findPendingQdrantCleanup", () => {
         {
           id: "1",
           organization_id: "org-a",
+          source_record_id: "100",
           qdrant_point_ids: ["pa1", "pa2"],
           qdrant_attempt_count: "0",
         },
         {
           id: "2",
           organization_id: "org-b",
+          source_record_id: "200",
           qdrant_point_ids: ["pb1"],
           qdrant_attempt_count: "3",
         },
@@ -747,12 +754,14 @@ describe("MemoryArchiveRepository.findPendingQdrantCleanup", () => {
       {
         archiveId: 1,
         organizationId: "org-a",
+        sourceRecordId: 100,
         qdrantPointIds: ["pa1", "pa2"],
         attemptCount: 0,
       },
       {
         archiveId: 2,
         organizationId: "org-b",
+        sourceRecordId: 200,
         qdrantPointIds: ["pb1"],
         attemptCount: 3,
       },
@@ -765,6 +774,7 @@ describe("MemoryArchiveRepository.findPendingQdrantCleanup", () => {
         {
           id,
           organization_id: "org-a",
+          source_record_id: "100",
           qdrant_point_ids: ["pa1"],
           qdrant_attempt_count: "0",
         },
@@ -800,6 +810,7 @@ describe("MemoryArchiveRepository.findPendingQdrantCleanup", () => {
           {
             id: "1",
             organization_id: "org-a",
+            source_record_id: "100",
             qdrant_point_ids: ["pa1"],
             qdrant_attempt_count: attemptCount,
           },
@@ -843,6 +854,7 @@ describe("MemoryArchiveRepository.findPendingQdrantCleanup", () => {
         {
           id: "1",
           organization_id: "org-a",
+          source_record_id: "100",
           qdrant_point_ids: ["pa1"],
           qdrant_attempt_count: "0",
           ...rowPatch,
@@ -863,6 +875,8 @@ describe("MemoryArchiveRepository.findPendingQdrantCleanup", () => {
     const sql = query.mock.calls[0]![0] as string;
     expect(sql).toContain("qdrant_status = 'pending'");
     expect(sql).toContain("qdrant_next_retry_at <= NOW()");
+    expect(sql).toContain("source_record_id");
+    expect(sql).not.toContain("array_length(qdrant_point_ids");
     expect(sql).not.toContain("FOR UPDATE SKIP LOCKED");
   });
 });
@@ -899,6 +913,7 @@ describe("MemoryArchiveRepository.claimPendingQdrantCleanup", () => {
         {
           id: "1",
           organization_id: "org-a",
+          source_record_id: "100",
           qdrant_point_ids: ["pa1"],
           qdrant_attempt_count: "2",
         },
@@ -912,6 +927,7 @@ describe("MemoryArchiveRepository.claimPendingQdrantCleanup", () => {
       {
         archiveId: 1,
         organizationId: "org-a",
+        sourceRecordId: 100,
         qdrantPointIds: ["pa1"],
         attemptCount: 2,
       },
@@ -922,6 +938,8 @@ describe("MemoryArchiveRepository.claimPendingQdrantCleanup", () => {
     expect(sql).toContain("FOR UPDATE SKIP LOCKED");
     expect(sql).toContain("qdrant_next_retry_at = $3");
     expect(sql).toContain("archived_at < $1::timestamptz - INTERVAL '60 seconds'");
+    expect(sql).toContain("source_record_id");
+    expect(sql).not.toContain("array_length(qdrant_point_ids");
     expect(params[0]).toBe(now.toISOString());
     expect(params[1]).toBe(10);
     expect(params[2]).toBe("2026-06-25T00:01:00.000Z");
@@ -933,6 +951,7 @@ describe("MemoryArchiveRepository.claimPendingQdrantCleanup", () => {
         {
           id: "1.5",
           organization_id: "org-a",
+          source_record_id: "100",
           qdrant_point_ids: ["pa1"],
           qdrant_attempt_count: "2",
         },
@@ -948,12 +967,36 @@ describe("MemoryArchiveRepository.claimPendingQdrantCleanup", () => {
     ).rejects.toThrow("memory archive id must be a positive safe integer");
   });
 
+  it.each(["find", "claim"] as const)("%s includes record cleanup when no point ids were mapped", async (operation) => {
+    const { pool } = makeMockPool(async () => ({ rows: [{
+      id: "1",
+      organization_id: "org-a",
+      source_record_id: "100",
+      qdrant_point_ids: [],
+      qdrant_attempt_count: "0",
+    }] }));
+    const repo = createMemoryArchiveRepository(pool);
+
+    const rows = operation === "find"
+      ? await repo.findPendingQdrantCleanup(1)
+      : await repo.claimPendingQdrantCleanup({ limit: 1, now: new Date("2026-06-25T00:00:00.000Z") });
+
+    expect(rows).toEqual([{
+      archiveId: 1,
+      organizationId: "org-a",
+      sourceRecordId: 100,
+      qdrantPointIds: [],
+      attemptCount: 0,
+    }]);
+  });
+
   it("rejects malformed claimed cleanup attempt rows", async () => {
     const { pool } = makeMockPool(async () => ({
       rows: [
         {
           id: "1",
           organization_id: "org-a",
+          source_record_id: "100",
           qdrant_point_ids: ["pa1"],
           qdrant_attempt_count: "1.5",
         },
@@ -977,6 +1020,10 @@ describe("MemoryArchiveRepository.claimPendingQdrantCleanup", () => {
       message: "memory archive organization_id must be a string",
     },
     {
+      rowPatch: { source_record_id: "0" },
+      message: "memory archive source_record_id must be a positive safe integer",
+    },
+    {
       rowPatch: { qdrant_point_ids: null },
       message: "memory archive qdrant_point_ids must be an array",
     },
@@ -989,6 +1036,7 @@ describe("MemoryArchiveRepository.claimPendingQdrantCleanup", () => {
         {
           id: "1",
           organization_id: "org-a",
+          source_record_id: "100",
           qdrant_point_ids: ["pa1"],
           qdrant_attempt_count: "2",
           ...rowPatch,
@@ -1362,6 +1410,36 @@ describe("MemoryArchiveRepository.restoreToCanonical", () => {
     expect(sql).toContain("created_at, updated_at");
     expect(params).toContain("2026-04-25T00:00:00.000Z");
     expect(params).toContain(200); // source_id
+  });
+
+  it.each([false, true])("runs the precommit hook on the transaction client and rolls back on failure=%s", async (fail) => {
+    const failure = new Error("restore hook failed");
+    const client = {
+      query: vi.fn(async (sql: string) => ({
+        rows: sql.includes("INSERT INTO memory_records") ? [{ id: "999" }] : [],
+      })),
+      release: vi.fn(),
+    };
+    const { pool, query } = makeMockPool(async () => ({ rows: [] }));
+    vi.mocked(pool.connect).mockResolvedValue(client as never);
+    const repo = createMemoryArchiveRepository(pool);
+    const hook = vi.fn(async (id: number) => {
+      expect(id).toBe(999);
+      expect(client.query.mock.calls.map(([sql]) => sql)).not.toContain("COMMIT");
+      await client.query("restore intent");
+      if (fail) throw failure;
+    });
+
+    const result = repo.restoreToCanonical(makeArchive(), "org-a", hook);
+    if (fail) await expect(result).rejects.toBe(failure);
+    else await expect(result).resolves.toEqual({ restoredRecordId: 999 });
+
+    expect(hook).toHaveBeenCalledOnce();
+    expect(client.query.mock.calls[0]![0]).toBe("BEGIN");
+    expect(client.query.mock.calls.at(-2)![0]).toBe("restore intent");
+    expect(client.query.mock.calls.at(-1)![0]).toBe(fail ? "ROLLBACK" : "COMMIT");
+    expect(client.release).toHaveBeenCalledOnce();
+    expect(query).not.toHaveBeenCalled();
   });
 
   it("trims organizationId before checking org ownership and restoring", async () => {

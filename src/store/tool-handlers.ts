@@ -50,6 +50,8 @@ export function createStoreToolHandlers(input: {
 
       const result = await withCanonicalServices((services) =>
         reindexCanonicalMemory({
+          repository: services.repository,
+          writes: services.writes,
           chunkRepository: services.chunkRepository,
           embeddings: services.embeddings,
           vectorIndex: services.vectorIndex,

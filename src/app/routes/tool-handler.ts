@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { CompactionRateLimitError } from "../../compact/apply-compaction.js";
 import { ContextPackBudgetError } from "../../mcp/context-pack-result.js";
+import { EmbeddingInputTooLongError } from "../../embedding/transformers-embedding.js";
 import {
   type ServiceToolName,
   validateToolInput,
@@ -87,7 +88,7 @@ export function buildToolRouteHandler<K extends ServiceToolName>(
       const result = await handler(validation.data);
       sendOk(res, 200, result);
     } catch (error: unknown) {
-      if (error instanceof SecretDetectedError || error instanceof ContextPackBudgetError) {
+      if (error instanceof SecretDetectedError || error instanceof ContextPackBudgetError || error instanceof EmbeddingInputTooLongError) {
         sendError(res, 400, error.message);
         return;
       }

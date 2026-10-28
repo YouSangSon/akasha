@@ -144,7 +144,10 @@ export type MemoryRepository = {
 };
 
 export type CanonicalMemoryRepository = {
-  addMemory(input: AddMemoryInput): Promise<SearchMemoryResult>;
+  addMemory(
+    input: AddMemoryInput,
+    beforeCommit?: (record: SearchMemoryResult) => Promise<void>,
+  ): Promise<SearchMemoryResult>;
   searchMemory(input: SearchMemoryInput): Promise<SearchMemoryResult[]>;
   listMemory(
     scope: ScopeRef,
@@ -160,6 +163,11 @@ export type CanonicalMemoryRepository = {
     organizationId?: string,
     allowLegacyAnonymous?: boolean,
   ): Promise<SearchMemoryResult[]>;
+  listMemoryRecordIdsForIndexing?(
+    organizationId: string,
+    scopes: ScopeRef[],
+    options?: { afterId?: number; throughId?: number; limit?: number },
+  ): Promise<{ ids: number[]; throughId: number }>;
   listMemoryForGovernance(
     scope: ScopeRef,
     options: {
@@ -180,21 +188,27 @@ export type CanonicalMemoryRepository = {
       relationshipLimit?: number;
     },
   ): Promise<MemoryGraphView>;
-  updateMemoryRecord(input: {
-    id: number;
-    organizationId: string;
-    kind?: MemoryType;
-    title?: string | null;
-    content?: string;
-    summary?: string | null;
-    importance?: number;
-    durability?: Durability;
-    tags?: string[];
-  }): Promise<SearchMemoryResult | null>;
-  archiveMemoryRecord(input: {
-    id: number;
-    organizationId: string;
-  }): Promise<{ archived: boolean; qdrantPointIds: string[] }>;
+  updateMemoryRecord(
+    input: {
+      id: number;
+      organizationId: string;
+      kind?: MemoryType;
+      title?: string | null;
+      content?: string;
+      summary?: string | null;
+      importance?: number;
+      durability?: Durability;
+      tags?: string[];
+    },
+    beforeCommit?: (record: SearchMemoryResult) => Promise<void>,
+  ): Promise<SearchMemoryResult | null>;
+  archiveMemoryRecord(
+    input: {
+      id: number;
+      organizationId: string;
+    },
+    beforeCommit?: (recordId: number) => Promise<void>,
+  ): Promise<{ archived: boolean; qdrantPointIds: string[] }>;
   getMemoryRecordById(
     id: number,
     organizationId: string,
@@ -230,6 +244,7 @@ export type IngestJob = {
 
 export type IngestJobRepository = {
   create(input: { memoryRecordId: number; organizationId: string }): Promise<IngestJob>;
+  getById?(jobId: number, organizationId: string): Promise<IngestJob | null>;
   markCompleted(jobId: number): Promise<IngestJob>;
   markFailed(jobId: number, error: unknown): Promise<IngestJob>;
   markQdrantCompleted(jobId: number): Promise<IngestJob>;

@@ -98,9 +98,14 @@ async function sweepBatch(
   }
 
   try {
-    await input.vectorIndex.delete(flattenPointIds(rows), {
-      organizationId: firstRow.organizationId,
-    });
+    const recordIds = rows.flatMap((row) => row.sourceRecordId === undefined ? [] : [row.sourceRecordId]);
+    if (recordIds.length > 0) {
+      await input.vectorIndex.deleteByRecordIds(recordIds, { organizationId: firstRow.organizationId });
+    }
+    const legacyRows = rows.filter((row) => row.sourceRecordId === undefined);
+    if (legacyRows.length > 0) {
+      await input.vectorIndex.delete(flattenPointIds(legacyRows), { organizationId: firstRow.organizationId });
+    }
   } catch (err: unknown) {
     return markBatchFailure(input, rows, maxAttempts, err);
   }
@@ -233,6 +238,7 @@ function assertPendingQdrantCleanupRow(row: unknown, index: number): void {
   const prefix = `claimPendingQdrantCleanup result[${index}]`;
   const candidate = assertObject(row, prefix);
   assertPositiveSafeInteger(candidate.archiveId, `${prefix}.archiveId`);
+  assertOptionalPositiveSafeInteger(candidate.sourceRecordId, `${prefix}.sourceRecordId`);
   assertNonBlankString(candidate.organizationId, `${prefix}.organizationId`);
   assertStringArray(candidate.qdrantPointIds, `${prefix}.qdrantPointIds`);
   assertNonNegativeSafeInteger(candidate.attemptCount, `${prefix}.attemptCount`);

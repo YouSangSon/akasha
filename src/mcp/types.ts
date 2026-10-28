@@ -37,6 +37,7 @@ import type {
 import type { VectorIndex } from "../vector/vector-index.js";
 import type { MemoryArchiveRepository } from "../store/memory-archive-repository.js";
 import type { ToolName } from "./tool-schemas.js";
+import type { MemoryWriteCoordinator } from "../store/memory-write-coordinator.js";
 
 export type MaybePromise<T> = T | Promise<T>;
 
@@ -220,6 +221,7 @@ export type DeleteMemoryToolResult = {
   archived: boolean;
   qdrantPointsDeleted: number;
   qdrantPointsPending: number;
+  indexCleanupPending?: boolean;
 };
 
 export type TagMemoryToolInput = {
@@ -271,6 +273,7 @@ export type UnarchiveOutcomeView =
       restoredRecordId: number;
       sourceRecordId: number;
       chunkCount: number;
+      indexPending?: boolean;
     }
   | { archiveId: number; status: "skipped"; reason: string }
   | { archiveId: number; status: "failed"; error: string };
@@ -557,6 +560,8 @@ export type CanonicalServices = {
   goalRuns: GoalRunRepository;
   embeddings: EmbeddingClient;
   vectorIndex: VectorIndex;
+  // Production bootstrap always supplies the coordinator; injected test services may omit it.
+  writes?: MemoryWriteCoordinator;
   close?: () => MaybePromise<void>;
 };
 

@@ -119,6 +119,8 @@ compose 기본 자격증명은 로컬 개발 전용입니다. production 운영�
 | `EMBEDDING_DIMENSIONS` | `384` | `transformers` / `local` provider의 일반 십진수 양의 정수 벡터 크기. |
 | `EMBEDDING_MODEL` | `local-deterministic-v1` | `EMBEDDING_PROVIDER=local` 일 때만 의미. |
 
+Transformer 청커는 특수 토큰을 포함한 실제 모델 토큰 수를 세고, 설정된 청크 목표와 토크나이저 한도 중 작은 값을 사용합니다. 기본 모델의 현재 입력 한도는 512토큰입니다. 원문 UTF-16 위치와 제한된 겹침을 보존하며, 다른 provider의 기존 분할 방식은 유지합니다. 검색 질의와 직접 임베딩 입력은 모델 한도 안에 들어가야 하며, 초과하면 명시적인 오류를 반환합니다.
+
 ### Provider 선택 — 비용 vs. 품질 vs. 셋업
 
 | Provider | 비용 | 의미 검색 품질 | 셋업 |

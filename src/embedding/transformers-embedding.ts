@@ -1,4 +1,7 @@
-import type { EmbeddingProvider } from "./embedding-provider.js";
+import type {
+  EmbeddingChunkingTokenizer,
+  EmbeddingProvider,
+} from "./embedding-provider.js";
 
 // Free, local-first embedding provider backed by ONNX models from Hugging Face
 // (via @huggingface/transformers). Default model is Xenova/all-MiniLM-L6-v2 —
@@ -15,10 +18,25 @@ export type FeatureExtractorOptions = {
   normalize: boolean;
 };
 
-export type FeatureExtractor = (
+export type FeatureExtractor = ((
   text: string,
   options: FeatureExtractorOptions,
-) => Promise<{ data: Float32Array | number[] }>;
+) => Promise<{ data: Float32Array | number[] }>) & {
+  tokenizer?: {
+    model_max_length: number;
+    encode(text: string, options: { add_special_tokens: boolean }): number[];
+  };
+};
+
+export class EmbeddingInputTooLongError extends Error {
+  constructor(
+    readonly actualTokens: number,
+    readonly maxInputTokens: number,
+  ) {
+    super(`Embedding input has ${actualTokens} tokens; maximum is ${maxInputTokens}. Shorten the input or split the stored document into chunks.`);
+    this.name = "EmbeddingInputTooLongError";
+  }
+}
 
 export type TransformersEmbeddingClientInput = {
   model: string;
@@ -32,15 +50,25 @@ export function createTransformersEmbeddingClient(
 ): EmbeddingProvider {
   assertTransformersEmbeddingClientInput(input);
 
-  let extractorPromise: Promise<FeatureExtractor> | null = null;
+  let extractorPromise: Promise<LoadedExtractor> | null = null;
 
   const factory = input.createExtractor ?? defaultFactory(input.model);
+
+  function getExtractor(): Promise<LoadedExtractor> {
+    extractorPromise ??= loadExtractor(factory, input.createExtractor === undefined);
+    return extractorPromise;
+  }
 
   async function embedOne(inputText: string): Promise<number[]> {
     assertNonBlankText(inputText, "inputText");
 
-    extractorPromise ??= loadExtractor(factory);
-    const extractor = await extractorPromise;
+    const { extractor, tokenizer } = await getExtractor();
+    if (tokenizer) {
+      const actualTokens = tokenizer.countTokens(inputText, true);
+      if (actualTokens > tokenizer.maxInputTokens) {
+        throw new EmbeddingInputTooLongError(actualTokens, tokenizer.maxInputTokens);
+      }
+    }
     const out = await extractor(inputText, {
       pooling: "mean",
       normalize: true,
@@ -56,6 +84,13 @@ export function createTransformersEmbeddingClient(
 
   return {
     embed: embedOne,
+    async getChunkingTokenizer(): Promise<EmbeddingChunkingTokenizer> {
+      const { tokenizer } = await getExtractor();
+      if (!tokenizer) {
+        throw new Error("transformers feature extractor tokenizer is required for chunking");
+      }
+      return tokenizer;
+    },
     async embedBatch(inputs: string[]): Promise<number[][]> {
       assertEmbeddingInputBatch(inputs);
 
@@ -74,12 +109,41 @@ export function createTransformersEmbeddingClient(
   };
 }
 
+type LoadedExtractor = {
+  extractor: FeatureExtractor;
+  tokenizer?: EmbeddingChunkingTokenizer;
+};
+
 async function loadExtractor(
   factory: () => Promise<FeatureExtractor>,
-): Promise<FeatureExtractor> {
+  requireTokenizer: boolean,
+): Promise<LoadedExtractor> {
   const extractor = await factory();
   assertFunction(extractor, "transformers feature extractor");
-  return extractor;
+  const tokenizer = extractor.tokenizer;
+  if (tokenizer === undefined || tokenizer === null) {
+    if (requireTokenizer) {
+      throw new Error("transformers feature extractor tokenizer is required");
+    }
+    return { extractor };
+  }
+  if (!Number.isSafeInteger(tokenizer.model_max_length) || tokenizer.model_max_length < 1) {
+    throw new Error("transformers tokenizer model_max_length must be a positive safe integer");
+  }
+  assertFunction(tokenizer.encode, "transformers tokenizer encode");
+  return {
+    extractor,
+    tokenizer: {
+      maxInputTokens: tokenizer.model_max_length,
+      countTokens(text, addSpecialTokens) {
+        const tokens = tokenizer.encode(text, { add_special_tokens: addSpecialTokens });
+        if (!Array.isArray(tokens)) {
+          throw new Error("transformers tokenizer encode must return token IDs");
+        }
+        return tokens.length;
+      },
+    },
+  };
 }
 
 function defaultFactory(model: string): () => Promise<FeatureExtractor> {

@@ -3,8 +3,14 @@
 // the canonical-services bootstrap can swap them via env config without any
 // callers needing to know which one is wired.
 
+export type EmbeddingChunkingTokenizer = {
+  maxInputTokens: number;
+  countTokens(text: string, addSpecialTokens: boolean): number;
+};
+
 export type EmbeddingProvider = {
   embed(inputText: string): Promise<number[]>;
+  getChunkingTokenizer?(): Promise<EmbeddingChunkingTokenizer>;
   // Batch counterpart to `embed`. OpenAI sends one HTTP call for the whole
   // array (cost: same per token, latency: 1 RTT instead of N), so callers
   // that have multiple texts (e.g. chunked records, reindex sweeps) should

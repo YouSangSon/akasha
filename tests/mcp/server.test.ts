@@ -1,3 +1,4 @@
+import type { MemoryWriteCoordinator, MemoryWriteScope } from "../../src/store/memory-write-coordinator.js";
 import { Client, type ClientOptions } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -4528,3 +4529,40 @@ function createCanonicalServices() {
     close: vi.fn().mockResolvedValue(undefined),
   };
 }
+
+
+describe("coordinated governance cleanup", () => {
+  it.each([true, false])("persists cleanup intent before deleting unmapped vectors (failure=%s)", async (fails) => {
+    const services = createCanonicalServices();
+    const events: string[] = [];
+    const job = await services.ingestJobs.create();
+    services.ingestJobs.create.mockClear();
+    services.ingestJobs.markQdrantPending.mockImplementation(async () => { events.push("intent"); return job; });
+    services.repository.archiveMemoryRecord.mockImplementation(async (_input, beforeCommit) => {
+      events.push("archive");
+      await beforeCommit(501);
+      events.push("commit");
+      return { archived: true, qdrantPointIds: [] };
+    });
+    services.vectorIndex.deleteByRecordIds.mockImplementation(async () => {
+      events.push("cleanup");
+      if (fails) throw new Error("vector store unavailable");
+    });
+    const writes = {
+      record: vi.fn(async (_org: string, _ids: number[], work: (scope: MemoryWriteScope) => Promise<unknown>) => {
+        events.push("lock");
+        try { return await work({ ...services, writes } as unknown as MemoryWriteScope); }
+        finally { events.push("unlock"); }
+      }),
+    } as unknown as MemoryWriteCoordinator;
+    const registry = createToolRegistry({ resolveCanonicalServices: async () => ({ ...services, writes }) });
+    const result = await registry.delete_memory({ organizationId: "org-a", memoryId: 501 });
+    expect(events).toEqual(["lock", "archive", "intent", "commit", "cleanup", "unlock"]);
+    expect(services.vectorIndex.deleteByRecordIds).toHaveBeenCalledWith([501], { organizationId: "org-a" });
+    expect(services.repository.deleteMemoryRecord).not.toHaveBeenCalled();
+    expect(result.archived).toBe(true);
+    expect(result.qdrantPointsPending).toBe(0);
+    expect(result.indexCleanupPending).toBe(fails ? true : undefined);
+    expect(services.ingestJobs.markQdrantCompleted).toHaveBeenCalledTimes(fails ? 0 : 1);
+  });
+});

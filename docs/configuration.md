@@ -123,6 +123,8 @@ should replace `POSTGRES_PASSWORD`, `QDRANT_API_KEY`, and every
 | `EMBEDDING_DIMENSIONS` | `384` | Plain decimal positive integer vector size for `transformers` and `local` providers. |
 | `EMBEDDING_MODEL` | `local-deterministic-v1` | Only meaningful when `EMBEDDING_PROVIDER=local`. |
 
+The transformer chunker counts model tokens, including special tokens, and uses the smaller of the configured chunk target and tokenizer limit. The default model currently allows 512 input tokens. Original UTF-16 offsets and bounded overlap are preserved. Other providers keep their existing chunking behavior. Search queries and direct embedding inputs must fit the model limit; overlong inputs return an explicit error.
+
 ### Choosing a provider — cost vs. quality vs. setup
 
 | Provider | Cost | Semantic quality | Setup |

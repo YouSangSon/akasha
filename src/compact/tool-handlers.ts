@@ -155,6 +155,7 @@ export function createCompactionToolHandlers(input: {
             archiveRepository: services.archiveRepository,
             vectorIndex: services.vectorIndex,
             embeddings: services.embeddings,
+            writes: services.writes,
             logger,
           },
         ),
@@ -195,6 +196,7 @@ export function createCompactionToolHandlers(input: {
           {
             archiveRepository: services.archiveRepository,
             chunkRepository: services.chunkRepository,
+            writes: services.writes,
             embeddings: services.embeddings,
             vectorIndex: services.vectorIndex,
             embedding: {

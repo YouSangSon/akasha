@@ -97,9 +97,11 @@ jobs:
           POSTGRES_HOST: 127.0.0.1
           POSTGRES_PORT: "5432"
           DATABASE_URL: postgres://memory:memory@127.0.0.1:5432/memory_os
+          AKASHA_WRITE_CONCURRENCY_TEST: "1"
         run: >
           npx vitest run
           tests/store/memory-repository.test.ts
+          tests/store/memory-write-concurrency.integration.test.ts
           tests/jobs/ingest-job-repository.test.ts
           tests/db/migrate.test.ts
 
@@ -140,7 +142,8 @@ jobs:
       - name: Run pgvector integration suite
         env:
           PGVECTOR_TEST_URL: postgres://memory:memory@127.0.0.1:5433/memory_pgv
-        run: npx vitest run tests/vector/pgvector-index.integration.test.ts
+          AKASHA_WRITE_CONCURRENCY_TEST: "1"
+        run: npx vitest run tests/vector/pgvector-index.integration.test.ts tests/store/memory-write-concurrency.integration.test.ts
 
   default-retrieval-eval:
     name: default transformers + Qdrant retrieval gate

@@ -21,10 +21,13 @@ import type {
   MemoryChunkRepository,
   ReindexableMemoryChunk,
 } from "../store/canonical-indexing.js";
+import { refreshCanonicalMemoryIndex } from "../store/canonical-indexing.js";
+import type { MemoryWriteCoordinator, MemoryWriteScope } from "../store/memory-write-coordinator.js";
 import type { IngestJob } from "../types.js";
 import { nextRetryDelayMs } from "../jobs/retry-backoff.js";
 
 export type RunIngestSweepInput = {
+  writes?: MemoryWriteCoordinator;
   ingestJobs: IngestJobRepository;
   chunkRepository: MemoryChunkRepository;
   embeddings: EmbeddingClient;
@@ -47,6 +50,7 @@ export type IngestSweepResult = {
 
 const DEFAULT_BATCH_SIZE = 100;
 const DEFAULT_MAX_ATTEMPTS = 5;
+type SweepOutcome = "completed" | "retry" | "failed" | "skipped";
 
 export async function runIngestSweep(
   input: Readonly<RunIngestSweepInput>,
@@ -69,10 +73,22 @@ export async function runIngestSweep(
   let failed = 0;
 
   for (const job of claimed) {
-    const outcome = await sweepOne(input, job, maxAttempts, getNow);
+    const outcome = input.writes
+      ? await input.writes.record(job.organizationId.trim(), [job.memoryRecordId], async (scope) => {
+        if (!scope.ingestJobs.getById) {
+          throw new Error("coordinated ingest sweep requires ingestJobs.getById");
+        }
+        const current = await scope.ingestJobs.getById(job.id, job.organizationId.trim());
+        if (!current || current.id !== job.id || current.memoryRecordId !== job.memoryRecordId
+          || current.organizationId !== job.organizationId.trim() || current.qdrantStatus !== "pending") {
+          return "skipped";
+        }
+        return sweepOne({ ...input, ...scope }, current, maxAttempts, getNow, scope);
+      })
+      : await sweepOne(input, job, maxAttempts, getNow);
     if (outcome === "completed") completed += 1;
     else if (outcome === "retry") retried += 1;
-    else failed += 1;
+    else if (outcome === "failed") failed += 1;
   }
 
   return { scanned: claimed.length, completed, retried, failed };
@@ -83,8 +99,10 @@ async function sweepOne(
   job: IngestJob,
   maxAttempts: number,
   getNow: () => Date,
-): Promise<"completed" | "retry" | "failed"> {
+  scope?: MemoryWriteScope,
+): Promise<SweepOutcome> {
   try {
+    if (scope) return await sweepCurrentRecord(scope, job);
     const organizationId = job.organizationId.trim();
     const chunks = await input.chunkRepository.getChunksByRecordId(
       job.memoryRecordId,
@@ -209,6 +227,32 @@ async function sweepOne(
   }
 }
 
+async function sweepCurrentRecord(scope: MemoryWriteScope, job: IngestJob): Promise<SweepOutcome> {
+  const organizationId = job.organizationId.trim();
+  const record = await scope.repository.getMemoryRecordById(job.memoryRecordId, organizationId);
+  if (!record) return "skipped";
+  if (record.id !== job.memoryRecordId || record.organizationId !== organizationId) {
+    throw new Error("ingest sweep canonical record does not match the claimed organization and record");
+  }
+  if (record.durability !== "archived") {
+    const chunks = await scope.chunkRepository.getChunksByRecordId(record.id);
+    assertReindexableMemoryChunks(chunks);
+    for (const chunk of chunks) {
+      if (chunk.memoryRecordId !== record.id || chunk.organizationId !== organizationId) {
+        throw new Error("ingest sweep chunk does not match the claimed organization and record");
+      }
+      if (chunk.embeddingProvider !== scope.embedding.provider || chunk.embeddingModel !== scope.embedding.model
+        || chunk.embeddingDimensions !== scope.embedding.dimensions || chunk.embeddingVersion !== scope.embedding.version) {
+        throw new Error("ingest sweep embedding configuration mismatch; run reindex_memory explicitly");
+      }
+    }
+  }
+  await refreshCanonicalMemoryIndex({
+    ...scope, record, job, reuseUnchangedChunks: true, manageFailure: false,
+  });
+  return "completed";
+}
+
 function assertRunIngestSweepInput(
   input: unknown,
 ): asserts input is RunIngestSweepInput {
@@ -252,6 +296,10 @@ function assertRunIngestSweepInput(
   assertOptionalPositiveSafeInteger(candidate.batchSize, "batchSize");
   assertOptionalPositiveSafeInteger(candidate.maxAttempts, "maxAttempts");
   assertOptionalFunction(candidate.now, "now");
+  if (candidate.writes !== undefined) {
+    const writes = assertObject(candidate.writes, "writes");
+    assertFunction(writes.record, "writes.record");
+  }
 }
 
 function assertClaimedIngestJobs(jobs: unknown): asserts jobs is IngestJob[] {

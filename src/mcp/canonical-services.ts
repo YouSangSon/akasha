@@ -21,6 +21,7 @@ import { createMemoryRepository } from "../store/memory-repository.js";
 import { createMemoryChunkRepository } from "../store/canonical-indexing.js";
 import { createMemoryArchiveRepository } from "../store/memory-archive-repository.js";
 import { createGoalRunRepository } from "../goal-run/goal-run-repository.js";
+import { createMemoryWriteCoordinator } from "../store/memory-write-coordinator.js";
 import type {
   CanonicalServices,
   CreateToolRegistryOptions,
@@ -56,6 +57,26 @@ export async function bootstrapCanonicalServices(): Promise<CanonicalServices> {
       vectorIndex = qdrantVectorIndex;
     }
 
+    const embeddings = createEmbeddingProvider({
+      config: config.embedding,
+      openaiApiKey: config.openai.apiKey,
+    });
+    const writes = createMemoryWriteCoordinator({
+      pool,
+      embeddings,
+      embedding: {
+        provider: config.embedding.provider,
+        model: config.embedding.model,
+        dimensions: config.embedding.dimensions,
+        version: config.embedding.version,
+        targetTokens: config.embedding.chunkTargetTokens,
+        overlapTokens: config.embedding.chunkOverlapTokens,
+      },
+      vectorIndexForPool: config.vectorBackend === "pgvector"
+        ? (scopedPool) => createPgVectorIndex(scopedPool)
+        : () => vectorIndex,
+    });
+
     return {
       config: {
         qdrant: {
@@ -69,14 +90,8 @@ export async function bootstrapCanonicalServices(): Promise<CanonicalServices> {
       auditLog: createAuditLogRepository(pool),
       archiveRepository: createMemoryArchiveRepository(pool),
       goalRuns: createGoalRunRepository(pool),
-      embeddings: createEmbeddingProvider({
-        config: {
-          provider: config.embedding.provider,
-          model: config.embedding.model,
-          dimensions: config.embedding.dimensions,
-        },
-        openaiApiKey: config.openai.apiKey,
-      }),
+      embeddings,
+      writes,
       vectorIndex,
       close: async () => {
         await pool.end();

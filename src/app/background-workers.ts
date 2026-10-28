@@ -26,6 +26,7 @@ export type BackgroundWorkerServices = Pick<
   | "embeddings"
   | "ingestJobs"
   | "vectorIndex"
+  | "writes"
   | "close"
 >;
 
@@ -113,6 +114,7 @@ export async function startBackgroundWorkers(
   if (enabledWorkers.includes("ingest")) {
     try {
       const handle = startIngest({
+        writes: services.writes,
         ingestJobs: services.ingestJobs,
         chunkRepository: services.chunkRepository,
         embeddings: services.embeddings,

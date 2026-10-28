@@ -62,6 +62,7 @@ export type ApplyCompactionRecordResult = {
 export type PendingQdrantCleanup = {
   archiveId: number;
   organizationId: string;
+  sourceRecordId?: number;
   qdrantPointIds: string[];
   attemptCount: number;
 };
@@ -115,6 +116,7 @@ export type MemoryArchiveRepository = {
   restoreToCanonical(
     archive: ArchiveRow,
     organizationId: string,
+    beforeCommit?: (recordId: number) => Promise<void>,
   ): Promise<{ restoredRecordId: number }>;
   deleteRestoredCanonicalRecord(
     recordId: number,
@@ -250,6 +252,12 @@ export function createMemoryArchiveRepository(
             WHERE id = $1
               AND organization_id = $2
               AND updated_at <= $7
+              AND NOT EXISTS (
+                SELECT 1 FROM goal_runs gr
+                WHERE gr.id = memory_records.goal_run_id
+                  AND gr.organization_id = $2
+                  AND gr.status = 'active'
+              )
             RETURNING id, organization_id, scope_type, scope_id, project_key,
                       kind, title, content, summary, durability, importance,
                       source_id, created_at, updated_at
@@ -277,12 +285,7 @@ export function createMemoryArchiveRepository(
               $3, dwp.organization_id, dwp.id, $4,
               dwp.scope_type, dwp.scope_id, dwp.project_key, dwp.kind, dwp.title,
               dwp.content, dwp.summary, dwp.durability, dwp.importance, $5, $6,
-              dwp.qdrant_point_ids,
-              CASE
-                WHEN array_length(dwp.qdrant_point_ids, 1) > 0
-                THEN NOW()
-                ELSE NULL
-              END,
+              dwp.qdrant_point_ids, NOW(),
               dwp.source_id, dwp.created_at, dwp.updated_at
             FROM deleted_with_points dwp
             ON CONFLICT (compaction_run_id, source_record_id) DO NOTHING
@@ -398,17 +401,17 @@ export function createMemoryArchiveRepository(
       const result = await pool.query<{
         id: number | string;
         organization_id: unknown;
+        source_record_id: unknown;
         qdrant_point_ids: unknown;
         qdrant_attempt_count: number | string;
       }>(
         `
-          SELECT id, organization_id, qdrant_point_ids, qdrant_attempt_count
+          SELECT id, organization_id, source_record_id, qdrant_point_ids, qdrant_attempt_count
           FROM memory_archive
           WHERE qdrant_status = 'pending'
             AND qdrant_next_retry_at IS NOT NULL
             AND qdrant_next_retry_at <= NOW()
             AND archived_at < NOW() - INTERVAL '60 seconds'
-            AND array_length(qdrant_point_ids, 1) > 0
           ORDER BY qdrant_next_retry_at ASC, archived_at ASC
           LIMIT $1
         `,
@@ -427,6 +430,7 @@ export function createMemoryArchiveRepository(
       const result = await pool.query<{
         id: number | string;
         organization_id: unknown;
+        source_record_id: unknown;
         qdrant_point_ids: unknown;
         qdrant_attempt_count: number | string;
       }>(
@@ -441,12 +445,11 @@ export function createMemoryArchiveRepository(
               AND qdrant_next_retry_at IS NOT NULL
               AND qdrant_next_retry_at <= $1
               AND archived_at < $1::timestamptz - INTERVAL '60 seconds'
-              AND array_length(qdrant_point_ids, 1) > 0
             ORDER BY qdrant_next_retry_at ASC, archived_at ASC
             LIMIT $2
             FOR UPDATE SKIP LOCKED
           )
-          RETURNING id, organization_id, qdrant_point_ids, qdrant_attempt_count
+          RETURNING id, organization_id, source_record_id, qdrant_point_ids, qdrant_attempt_count
         `,
         [now.toISOString(), limit, claimUntil.toISOString()],
       );
@@ -516,7 +519,7 @@ export function createMemoryArchiveRepository(
       return result.rows.map(mapArchiveLookupRow);
     },
 
-    async restoreToCanonical(archive, organizationId) {
+    async restoreToCanonical(archive, organizationId, beforeCommit) {
       assertNonBlankText(organizationId, "organizationId");
       const scopedOrganizationId = organizationId.trim();
       const restorableArchive = mapRestorableArchive(archive);
@@ -536,41 +539,52 @@ export function createMemoryArchiveRepository(
           `restoreToCanonical: archive ${restorableArchive.id} has no source_id; cannot restore until the original source is rebuilt`,
         );
       }
-      const result = await pool.query<{ id: number | string }>(
-        `
-          INSERT INTO memory_records (
-            organization_id, scope_type, scope_id, project_key, kind, title,
-            content, summary, durability, importance, source_id,
-            created_at, updated_at
-          )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-          RETURNING id
-        `,
-        [
-          scopedOrganizationId,
-          restorableArchive.scopeType,
-          restorableArchive.scopeId,
-          restorableArchive.projectKey,
-          restorableArchive.kind,
-          restorableArchive.title,
-          restorableArchive.content,
-          restorableArchive.summary,
-          restorableArchive.durability,
-          restorableArchive.importance,
-          restorableArchive.sourceId,
-          restorableArchive.originalCreatedAt,
-          restorableArchive.originalUpdatedAt,
-        ],
-      );
-      const newId = result.rows[0]?.id;
-      if (newId === undefined) {
-        throw new Error(
-          `restoreToCanonical: INSERT returned no id for archive ${restorableArchive.id}`,
+      const client = beforeCommit ? await pool.connect() : undefined;
+      const queryable = client ?? pool;
+      try {
+        if (client) await client.query("BEGIN");
+        const result = await queryable.query<{ id: number | string }>(
+          `
+            INSERT INTO memory_records (
+              organization_id, scope_type, scope_id, project_key, kind, title,
+              content, summary, durability, importance, source_id,
+              created_at, updated_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            RETURNING id
+          `,
+          [
+            scopedOrganizationId,
+            restorableArchive.scopeType,
+            restorableArchive.scopeId,
+            restorableArchive.projectKey,
+            restorableArchive.kind,
+            restorableArchive.title,
+            restorableArchive.content,
+            restorableArchive.summary,
+            restorableArchive.durability,
+            restorableArchive.importance,
+            restorableArchive.sourceId,
+            restorableArchive.originalCreatedAt,
+            restorableArchive.originalUpdatedAt,
+          ],
         );
+        const newId = result.rows[0]?.id;
+        if (newId === undefined) {
+          throw new Error(
+            `restoreToCanonical: INSERT returned no id for archive ${restorableArchive.id}`,
+          );
+        }
+        const restoredRecordId = toPositiveSafeInteger(newId, "restored memory id");
+        await beforeCommit?.(restoredRecordId);
+        if (client) await client.query("COMMIT");
+        return { restoredRecordId };
+      } catch (error: unknown) {
+        if (client) await client.query("ROLLBACK").catch(() => undefined);
+        throw error;
+      } finally {
+        client?.release();
       }
-      return {
-        restoredRecordId: toPositiveSafeInteger(newId, "restored memory id"),
-      };
     },
 
     async deleteRestoredCanonicalRecord(recordId, organizationId) {
@@ -803,6 +817,10 @@ function mapPendingQdrantCleanupRow(value: unknown): PendingQdrantCleanup {
   return {
     archiveId: toPositiveSafeInteger(candidate.id, "memory archive id"),
     organizationId,
+    sourceRecordId: toPositiveSafeInteger(
+      candidate.source_record_id,
+      "memory archive source_record_id",
+    ),
     qdrantPointIds: toNonBlankStringArray(
       candidate.qdrant_point_ids,
       "memory archive qdrant_point_ids",

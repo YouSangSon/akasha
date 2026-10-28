@@ -1,3 +1,4 @@
+import { createMemoryWriteCoordinator } from "../../src/store/memory-write-coordinator.js";
 import { performance } from "node:perf_hooks";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { resolveServiceConfig } from "../../src/config.js";
@@ -220,6 +221,51 @@ describe.skipIf(!RUN_EVAL)("default retrieval eval harness", () => {
       await services.pool.end();
     }
   });
+
+  it("indexes text beyond the old 512-token truncation boundary with original offsets", async () => {
+    if (!services) throw new Error("retrieval eval services were not initialized");
+    const config = resolveServiceConfig();
+    const embedding = {
+      provider: config.embedding.provider, model: config.embedding.model,
+      dimensions: config.embedding.dimensions, version: config.embedding.version,
+      targetTokens: config.embedding.chunkTargetTokens, overlapTokens: config.embedding.chunkOverlapTokens,
+    };
+    const chunkRepository = createMemoryChunkRepository(services.pool);
+    const ingestJobs = createIngestJobRepository(services.pool);
+    const writes = createMemoryWriteCoordinator({ pool: services.pool, embeddings: services.embeddings,
+      embedding, vectorIndexForPool: () => services!.vectorIndex });
+    const content = "hello ".repeat(600) + "banana ".repeat(100);
+    const written = await writeCanonicalMemory({ repository: services.repository, chunkRepository, ingestJobs,
+      embeddings: services.embeddings, vectorIndex: services.vectorIndex, embedding, writes,
+      memory: { organizationId: EVAL_ORGANIZATION_ID, scopeType: "project", scopeId: "long-input-boundary",
+        projectKey: "long-input-boundary", memoryType: "fact", content,
+        source: { scopeType: "project", scopeId: "long-input-boundary", sourceType: "document", externalId: "long-input-boundary" } },
+    });
+    const chunks = await chunkRepository.getChunksByRecordId(written.id);
+    expect(chunks.length).toBeGreaterThan(1);
+    const tokenizer = await services.embeddings.getChunkingTokenizer!();
+    for (const chunk of chunks) {
+      expect(chunk.content).toBe(content.slice(chunk.startOffset, chunk.endOffset));
+      expect(tokenizer.countTokens(chunk.content, true)).toBeLessThanOrEqual(tokenizer.maxInputTokens);
+    }
+    expect(chunks.at(-1)!.endOffset).toBe(content.length);
+    const tail = chunks.find((chunk) => chunk.content.includes("banana"))!;
+    expect(tail).toBeDefined();
+    const vector = await services.embeddings.embed(tail.content);
+    const hits = await services.vectorIndex.query(vector, { organizationId: EVAL_ORGANIZATION_ID,
+      scopes: [{ scopeType: "project", scopeId: "long-input-boundary" }] }, 1);
+    const persisted = await services.pool.query<{ qdrant_point_id: string | null }>(
+      `SELECT mc.qdrant_point_id FROM memory_chunks mc
+       JOIN memory_records mr ON mr.id = mc.memory_record_id
+       WHERE mc.id = $1 AND mr.id = $2 AND mr.organization_id = $3`,
+      [tail.id, written.id, EVAL_ORGANIZATION_ID],
+    );
+    expect(persisted.rows).toHaveLength(1);
+    expect(persisted.rows[0]!.qdrant_point_id).toBeTruthy();
+    expect(hits[0]?.id).toBe(persisted.rows[0]!.qdrant_point_id);
+    expect(hits[0]?.payload.memory_record_id).toBe(written.id);
+    expect(hits[0]?.score).toBeGreaterThan(0.99);
+  }, 60_000);
 
   it(`gates recall@${TOP_K}, MRR@${TOP_K}, user recall, leakage, and warm latency`, async () => {
     if (!services) {

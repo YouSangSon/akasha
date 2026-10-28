@@ -1,3 +1,4 @@
+import type { MemoryWriteCoordinator, MemoryWriteScope } from "../../src/store/memory-write-coordinator.js";
 import { describe, expect, it, vi } from "vitest";
 import { createToolRegistry } from "../../src/mcp/tool-registry.js";
 import type { CanonicalServices } from "../../src/mcp/types.js";
@@ -679,4 +680,22 @@ describe("goal-run handlers", () => {
     });
     expect(embedBatch).not.toHaveBeenCalled();
   });
+});
+
+
+it("pins memories through the record coordinator and bound goal repository", async () => {
+  const rootGoals = goalRunServicesStub();
+  const scopedGoals = goalRunServicesStub();
+  const writes = {
+    record: vi.fn(async (_org: string, _ids: number[], work: (scope: MemoryWriteScope) => Promise<unknown>) =>
+      work({ goalRuns: scopedGoals } as unknown as MemoryWriteScope)),
+  } as unknown as MemoryWriteCoordinator;
+  const registry = createToolRegistry({
+    withCanonicalServices: (async (cb: (s: CanonicalServices) => Promise<unknown>) =>
+      cb({ goalRuns: rootGoals, writes } as unknown as CanonicalServices)) as never,
+  });
+  await registry.record_iteration({ organizationId: "org-a", goalRunId: 1, attempt: "pin current context", outcome: "success", memoryIds: [3, 1] });
+  expect(writes.record).toHaveBeenCalledWith("org-a", [3, 1], expect.any(Function));
+  expect(rootGoals.recordIteration).not.toHaveBeenCalled();
+  expect(scopedGoals.recordIteration).toHaveBeenCalledWith(expect.objectContaining({ memoryIds: [3, 1] }));
 });
