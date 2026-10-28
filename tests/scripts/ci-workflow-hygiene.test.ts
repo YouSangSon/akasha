@@ -166,12 +166,14 @@ describe("CI workflow hygiene", () => {
     expect(pgJob).toContain("      - name: Run Postgres-backed suites\n");
     expect(pgJob).toContain("        run: >\n          npx vitest run\n");
     expect(pgJob).toContain("          tests/store/memory-repository.test.ts\n");
+    expect(pgJob).toContain("          tests/store/memory-write-concurrency.integration.test.ts\n");
+    expect(pgJob).toContain('          AKASHA_WRITE_CONCURRENCY_TEST: "1"\n');
     expect(pgJob).toContain("          tests/jobs/ingest-job-repository.test.ts\n");
     expect(pgJob).toContain("          tests/db/migrate.test.ts\n");
     expect(pgJob).not.toContain("        run: npm test\n");
   });
 
-  it("keeps the pgvector integration job focused on the pgvector suite", () => {
+  it("keeps the pgvector integration job focused on vector and coordinated-write suites", () => {
     const pgvectorJobStart = ciWorkflow.indexOf("  pgvector-integration:\n");
     const retrievalJobStart = ciWorkflow.indexOf(
       "  default-retrieval-eval:\n",
@@ -187,8 +189,9 @@ describe("CI workflow hygiene", () => {
       "          PGVECTOR_TEST_URL: postgres://memory:memory@127.0.0.1:5433/memory_pgv\n",
     );
     expect(pgvectorJob).toContain(
-      "        run: npx vitest run tests/vector/pgvector-index.integration.test.ts\n",
+      "        run: npx vitest run tests/vector/pgvector-index.integration.test.ts tests/store/memory-write-concurrency.integration.test.ts\n",
     );
+    expect(pgvectorJob).toContain('          AKASHA_WRITE_CONCURRENCY_TEST: "1"\n');
     expect(pgvectorJob).not.toContain("        run: npm test\n");
   });
 

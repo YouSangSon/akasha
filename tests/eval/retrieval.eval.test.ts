@@ -254,7 +254,9 @@ describe.skipIf(!RUN_EVAL)("default retrieval eval harness", () => {
     const vector = await services.embeddings.embed(tail.content);
     const hits = await services.vectorIndex.query(vector, { organizationId: EVAL_ORGANIZATION_ID,
       scopes: [{ scopeType: "project", scopeId: "long-input-boundary" }] }, 1);
-    expect(hits[0]?.payload.chunk_id).toBe(tail.id);
+    expect(tail.qdrantPointId).toBeTruthy();
+    expect(hits[0]?.id).toBe(tail.qdrantPointId);
+    expect(hits[0]?.payload.memory_record_id).toBe(written.id);
     expect(hits[0]?.score).toBeGreaterThan(0.99);
   }, 60_000);
 

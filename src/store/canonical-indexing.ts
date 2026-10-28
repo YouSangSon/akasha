@@ -700,7 +700,7 @@ async function indexCreatedMemory(
     if (input.writes && vectorWriteAttempted) {
       try {
         await input.vectorIndex.deleteByRecordIds([record.id], { organizationId });
-      } catch {
+      } catch (_cleanupError: unknown) {
         // Keep the committed pending intent if partial vector writes cannot be removed.
         throw error;
       }
