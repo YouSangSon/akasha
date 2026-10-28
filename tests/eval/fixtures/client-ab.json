@@ -1,6 +1,6 @@
 {
-  "version": 3,
-  "corpusVersion": 3,
+  "version": 4,
+  "corpusVersion": 4,
   "organizationId": "akasha-client-ab-target",
   "foreignOrganizationId": "akasha-client-ab-foreign",
   "projectKey": "akasha-client-ab-project",
@@ -42,7 +42,7 @@
     },
     {
       "id": "context-quality",
-      "task": "State the context-pack diversity rule and the configured memory chunk size with overlap.",
+      "task": "State the context-pack source diversity rule and the nominal chunk-size policy recorded in the seeded decision alpha.chunk-size, including overlap. Report that decision's policy, not the current runtime tokenizer limit or evaluation splitter settings.",
       "claimKeys": ["source_diversity", "chunk_policy"]
     }
   ]

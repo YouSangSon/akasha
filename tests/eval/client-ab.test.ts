@@ -320,7 +320,7 @@ describe("client A/B evaluation harness", () => {
       expect(observed.toolCalls[0].arguments.maxOutputBytes).toBe(maxOutputBytes);
       expect(observed.toolCalls[0].payloadBytes.structuredContentJsonUtf8Bytes).toBeGreaterThan(0);
     } else expect(summary).not.toHaveProperty("maxOutputBytes");
-    expect(await (await import("node:fs/promises")).readdir(resultDir)).toHaveLength(profile === "cli-prefetch" ? 29 : 20);
+    expect(await (await import("node:fs/promises")).readdir(resultDir)).toHaveLength(profile === "cli-prefetch" ? 47 : 38);
   });
 
   it.each(["client", "prefetch"])("persists a failing %s and summary failure without retrying", async (failure) => {
