@@ -44,6 +44,8 @@ const USER_RECALL_THRESHOLD = 1;
 const P50_THRESHOLD_MS = 100;
 const P95_THRESHOLD_MS = 250;
 const ENFORCE_LATENCY = process.env.EVAL_ENFORCE_LATENCY === "1";
+const REQUIRE_MULTILINGUAL = process.env.EVAL_REQUIRE_MULTILINGUAL === "1";
+const MULTILINGUAL_REQUIREMENTS = { recallAt5: 1, mrrAt5: 0.75, hardNegativeOrderingAt5: 1, crossOrgLeakage: 0, crossScopeLeakage: 0 };
 const EVAL_RESOURCE_PREFIX = "akasha_eval_";
 const EVAL_ORGANIZATION_ID = `akasha-eval-${process.pid}-${Date.now()}`;
 const DECOY_ORGANIZATION_ID = `${EVAL_ORGANIZATION_ID}-decoy`;
@@ -73,6 +75,7 @@ type QueryMeasurement = {
   reciprocalRank: number;
   leakageCount: number;
   results: SearchMemoryResult[];
+  rawVectorHits?: Array<{ seedKey: string; score: number }>;
 };
 
 describe("retrieval eval safety", () => {
@@ -284,19 +287,37 @@ describe.skipIf(!RUN_EVAL)("default retrieval eval harness", () => {
     }
 
     const legacyIds = new Set(CORPUS!.legacyQueries.map((query) => query.id));
+    const expandedIds = new Set(CORPUS!.expandedQueries.map((query) => query.id));
     const overall = summarizeMeasurements(measurements, seedKeyToRecordId);
     const legacy = summarizeMeasurements(measurements.filter((value) => legacyIds.has(value.queryId)), seedKeyToRecordId);
-    const expanded = summarizeMeasurements(measurements.filter((value) => !legacyIds.has(value.queryId)), seedKeyToRecordId);
+    const expanded = summarizeMeasurements(measurements.filter((value) => expandedIds.has(value.queryId)), seedKeyToRecordId);
+    const languagePairs = Object.fromEntries([...new Set(CORPUS!.multilingualQueries.map((query) => `${query.queryLanguage}->${query.memoryLanguage}`))]
+      .map((pair) => {
+        const ids = new Set(CORPUS!.multilingualQueries.filter((query) => `${query.queryLanguage}->${query.memoryLanguage}` === pair).map((query) => query.id));
+        return [pair, summarizeMeasurements(measurements.filter((value) => ids.has(value.queryId)), seedKeyToRecordId)];
+      }));
+    const failedLanguagePairs = Object.entries(languagePairs).filter(([, cohort]) =>
+      cohort.recallAt5 < MULTILINGUAL_REQUIREMENTS.recallAt5 || cohort.mrrAt5 < MULTILINGUAL_REQUIREMENTS.mrrAt5 ||
+      (cohort.hardNegativeOrderingAt5 ?? 0) < MULTILINGUAL_REQUIREMENTS.hardNegativeOrderingAt5).map(([pair]) => pair);
     const summary = { provider: "transformers", model: services.embeddingModel, backend: "qdrant", topK: TOP_K,
       corpusVersion: CORPUS!.version, targetSeeds: EVAL_SEEDS.length, foreignTenantMirrors: EVAL_SEEDS.length,
-      ...overall, legacyQueriesWithinExpandedCorpus: legacy, addedQueriesWithinExpandedCorpus: expanded };
+      ...overall, legacyQueriesWithinExpandedCorpus: legacy, addedQueriesWithinExpandedCorpus: expanded,
+      multilingualQualification: { status: failedLanguagePairs.length === 0 && overall.crossOrgLeakage === 0 && overall.crossScopeLeakage === 0 ? "GREEN" : "RED",
+        requirements: MULTILINGUAL_REQUIREMENTS, failedLanguagePairs, enforced: REQUIRE_MULTILINGUAL }, languagePairs };
     process.stderr.write(`eval-summary ${JSON.stringify(summary)}\n`);
     expect(measurements).toHaveLength(QUERIES.length * WARM_REPEATS);
-    expect(summary.uniqueQueries).toBe(52);
+    expect(summary.uniqueQueries).toBe(70);
     expect(summary.uniqueUserQueries).toBe(12);
-    expect(summary.uniqueHardNegativeQueries).toBe(12);
+    expect(summary.uniqueHardNegativeQueries).toBe(30);
     // A good new cohort must not hide a regression on the historical queries.
-    for (const cohort of [overall, legacy, expanded]) assertQuality(cohort);
+    for (const cohort of [legacy, expanded]) assertQuality(cohort);
+    expect(overall.crossOrgLeakage).toBe(0);
+    expect(overall.crossScopeLeakage).toBe(0);
+    expect(Object.keys(languagePairs)).toHaveLength(9);
+    for (const cohort of Object.values(languagePairs)) {
+      expect(cohort.uniqueQueries).toBe(2);
+    }
+    if (REQUIRE_MULTILINGUAL) expect(failedLanguagePairs).toEqual([]);
 
     if (ENFORCE_LATENCY) {
       expect(summary.latencyMs.p50).toBeLessThanOrEqual(P50_THRESHOLD_MS);
@@ -390,12 +411,19 @@ async function measureQuery(
     if (id === undefined) throw new Error(`unknown negative seed key: ${key}`);
     return id;
   });
+  const contrast = negativeIds === undefined ? undefined : hardNegativeOrderingAtK(retrievedIds, relevantIds, negativeIds, TOP_K);
+  const rawVectorHits = repeat === 1 && query.queryLanguage !== undefined && contrast === 0
+    ? (await services.vectorIndex.query(vector, { organizationId: EVAL_ORGANIZATION_ID,
+      scopes: [{ scopeType: "project", scopeId: projectKey }] }, 20))
+      .map((hit) => ({ seedKey: seedKeyForRecordId(seedKeyToRecordId, Number(hit.payload.memory_record_id)), score: hit.score }))
+    : undefined;
 
   return {
     queryId: query.id,
     repeat,
     scopeLeakageCount: results.filter((record) => !isAllowedEvalScope(record, query.scope)).length,
-    hardNegativeScore: negativeIds === undefined ? undefined : hardNegativeOrderingAtK(retrievedIds, relevantIds, negativeIds, TOP_K),
+    hardNegativeScore: contrast,
+    rawVectorHits,
     isUserScope: query.scope.userScopeId !== undefined,
     latencyMs,
     recall: recallAtK(retrievedIds, relevantIds, TOP_K),
@@ -416,6 +444,7 @@ function summarizeMeasurements(measurements: QueryMeasurement[], seedIds: Readon
     .map((value) => ({ queryId: value.queryId, repeat: value.repeat, recall: value.recall,
       reciprocalRank: value.reciprocalRank, hardNegativeScore: value.hardNegativeScore,
       crossOrgLeakage: value.leakageCount, crossScopeLeakage: value.scopeLeakageCount,
+      rawVectorHits: value.rawVectorHits,
       returned: value.results.map((record) => ({ seedKey: seedKeyForRecordId(seedIds, record.id), scopeType: record.scopeType,
         memoryType: record.memoryType, sourceType: record.source.sourceType })) }));
   return {

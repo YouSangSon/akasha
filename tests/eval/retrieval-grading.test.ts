@@ -35,10 +35,27 @@ describe("expanded retrieval corpus contract", () => {
   it("keeps the historical 20 plus 32 distinct-topic questions with real user and contrast coverage", () => {
     expect(corpus.legacyQueries).toHaveLength(20);
     expect(corpus.expandedQueries).toHaveLength(32);
-    expect(corpus.queries).toHaveLength(52);
+    expect(corpus.queries).toHaveLength(70);
     expect(corpus.queries.filter((q) => q.scope.userScopeId !== undefined)).toHaveLength(12);
-    expect(corpus.queries.filter((q) => q.hardNegativeRecordSeedKeys !== undefined)).toHaveLength(12);
+    expect(corpus.queries.filter((q) => q.hardNegativeRecordSeedKeys !== undefined)).toHaveLength(30);
     expect(new Set(corpus.queries.flatMap((q) => q.scope.userScopeId ?? []))).toEqual(new Set(["alice", "bob", "carol"]));
+  });
+
+  it("adds nine independently reported language directions with in-scope contrast labels", () => {
+    expect(corpus.multilingualQueries).toHaveLength(18);
+    const pairs = new Map<string, number>();
+    for (const query of corpus.multilingualQueries) {
+      expect(query.hardNegativeRecordSeedKeys).toHaveLength(1);
+      const pair = `${query.queryLanguage}->${query.memoryLanguage}`;
+      pairs.set(pair, (pairs.get(pair) ?? 0) + 1);
+    }
+    expect(Object.fromEntries(pairs)).toEqual({ "ko->ko": 2, "ja->ja": 2, "zh->zh": 2,
+      "en->ko": 2, "en->ja": 2, "en->zh": 2, "ko->en": 2, "ja->en": 2, "zh->en": 2 });
+    expect(corpus.seeds.filter((entry) => entry.memory.scopeId === "project-polyglot")).toHaveLength(16);
+    for (const queryLanguage of [undefined, "unknown"]) {
+      const bad = corpus.queries.map((q) => q.id === "m01" ? { ...q, queryLanguage } : q);
+      expect(() => assertRetrievalCorpus(corpus.seeds, bad)).toThrow(/languages must both/);
+    }
   });
 
   it("rejects user labels that only tag a project answer or another user's record", () => {

@@ -115,7 +115,7 @@ compose 기본 자격증명은 로컬 개발 전용입니다. production 운영�
 |---|---|---|
 | `EMBEDDING_PROVIDER` | `transformers` | `transformers` (무료 로컬 ONNX, 기본값), `openai` (유료 API), 또는 `local` (CI용 결정론적 스텁). |
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | 1536-dim. 변경 시 reindex 필요. |
-| `TRANSFORMERS_EMBEDDING_MODEL` | `Xenova/all-MiniLM-L6-v2` | Hugging Face ONNX 모델 id. 384-dim. `EMBEDDING_PROVIDER=transformers` 일 때만 의미. |
+| `TRANSFORMERS_EMBEDDING_MODEL` | `Xenova/all-MiniLM-L6-v2` | Hugging Face ONNX 모델 id. 기본 모델은 384차원이며 다른 모델은 `EMBEDDING_DIMENSIONS`도 맞춰야 합니다. |
 | `EMBEDDING_DIMENSIONS` | `384` | `transformers` / `local` provider의 일반 십진수 양의 정수 벡터 크기. |
 | `EMBEDDING_MODEL` | `local-deterministic-v1` | `EMBEDDING_PROVIDER=local` 일 때만 의미. |
 
@@ -125,15 +125,14 @@ Transformer 청커는 특수 토큰을 포함한 실제 모델 토큰 수를 세
 
 | Provider | 비용 | 의미 검색 품질 | 셋업 |
 |---|---|---|---|
-| `openai` | 유료 (개인 사용 시 월 몇 센트 수준; [openai.com/api/pricing](https://openai.com/api/pricing)에서 확인) | 최고 | `OPENAI_API_KEY` 만 설정 |
-| `transformers` | **무료** | 좋음 (대부분 워크로드에서 OpenAI에 근접) | 프로젝트가 설치 (`@huggingface/transformers`, ~50MB onnxruntime + 첫 호출 시 ~22MB 모델 다운) |
+| `openai` | 유료 API; [가격표](https://openai.com/api/pricing) 참고 | 사용할 데이터로 평가 필요 | `OPENAI_API_KEY` 설정 |
+| `transformers` | 임베딩 API 요금 없음; 로컬 CPU/RAM 사용 | 모델·언어·데이터에 따라 다름; 아래 실측 한계 참고 | 프로젝트가 설치 (`@huggingface/transformers`); 모델 파일은 처음 사용할 때 다운로드 |
 | `local` | 무료 | **없음 — 의미 없음**, 정확 일치만 | 셋업 불필요, 단 실제 검색에는 부적합 |
 
-`transformers` provider는 `Xenova/all-MiniLM-L6-v2` 를 ONNX로 로컬 실행 —
-Chroma와 txtai가 default로 채택한 동일 모델. CPU 추론으로 충분
-(노트북에서 초당 수백 임베딩). 모델과 토크나이저는 첫 호출 시
-`~/.cache/huggingface/hub/` 에 다운로드되고 캐시됩니다. 에어갭 배포 시
-해당 캐시 디렉토리를 미리 채워둘 것.
+기본 모델은 `Xenova/all-MiniLM-L6-v2`이며 ONNX로 로컬 실행합니다.
+모델 캐시는 설치된 Transformers.js 런타임의 `env.cacheDir`가 소유합니다.
+Node에서는 보통 라이브러리 설치 위치의 `.cache`입니다. 오프라인 배포를
+준비할 때는 대상 런타임에서 실제 경로를 먼저 확인하세요.
 
 **provider 변경은 reindex 필수** — 다른 vector dimension / 컨텐츠 의미는
 호환되지 않는 Qdrant point를 만듭니다. 변경 후 `reindex_memory` MCP 도구
@@ -141,6 +140,36 @@ Chroma와 txtai가 default로 채택한 동일 모델. CPU 추론으로 충분
 업그레이드는 [docs/migrations/openai-to-transformers.ko.md](migrations/openai-to-transformers.ko.md)
 의 단계별 절차 참고 (Qdrant collection 을 새 차원으로 재생성하는 `curl`
 명령 포함).
+
+<a id="multilingual-retrieval"></a>
+### 실험용 다국어 검색
+
+기본 모델은 한국어·일본어·중국어 및 교차 언어 질문 18개 중 9개를 놓쳤습니다.
+Multilingual MPNet은 모두 top5에 찾았지만 중국어 청구 파일 질문 한 건에서
+감사 파일을 먼저 반환했습니다. 엄격한 언어 방향별 품질 판정은 **RED**입니다.
+고정한 정답·기준과 채택하지 않은 후보의 결과는 [GATES.md](https://github.com/YouSangSon/akasha/blob/main/GATES.md#multilingual-retrieval-v3)에 남깁니다.
+
+기존 provider 설정으로 별도의 Qdrant 인덱스에서 시험할 수 있습니다.
+
+```dotenv
+VECTOR_BACKEND=qdrant
+EMBEDDING_PROVIDER=transformers
+TRANSFORMERS_EMBEDDING_MODEL=Xenova/paraphrase-multilingual-mpnet-base-v2
+EMBEDDING_DIMENSIONS=768
+QDRANT_COLLECTION_NAME=memory_multilingual_experiment_v1
+```
+
+새 collection 이름을 사용하세요. 일반 조회·쓰기를 멈춘 상태에서 필요한 모든
+조직과 project/user 범위를 원본 레코드로 재색인하고, 완료를 확인한 뒤 조회를
+엽니다. 기존 384차원 collection에는 이 벡터를 저장할 수 없습니다. 이전 인덱스는
+복귀용으로 보존하세요. 모델 이름 변경만으로 벡터가 이관되지는 않습니다.
+검색 결과는 Qdrant에서 측정했습니다. pgvector와 기존 인덱스 전환·복귀 절차는
+이 실험에서 검증하지 않았습니다.
+
+기본 모델을 바꾸지 않는 선택적 실험입니다. 방향별 두 질문은 소규모 smoke 평가이며
+광범위한 언어 품질 보장이 아닙니다. [모델 설명](https://huggingface.co/sentence-transformers/paraphrase-multilingual-mpnet-base-v2)도 참고하세요.
+검색 결과만으로 이 모델의 반복 판정이나 의미 중복 정리 임계값이 검증되지는 않습니다.
+의미 중복 정리는 비활성 상태로 두고, 반복 판정은 자동화에 쓰기 전에 따로 확인하세요.
 
 ## Auth
 

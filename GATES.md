@@ -257,3 +257,41 @@ warm p50 21.00 ms, p95 28.74 ms는 이 CI의 관측값이며 성능 개선 비�
 선택을 줄이지 않았고 예산 메타데이터 50 bytes가 추가됐다. 예산 준수 GREEN이며 절감의 증거는 아니다.
 질문/정답/통과 기준을 바꾸지 않고 Beta 방해 기록·격리 탐침만 보강했다. 이전 47-seed head의 결과도
 기존 CI 40336221187에 보존하며 최종 50-seed 결과와 섞지 않는다.
+
+<a id="multilingual-retrieval-v3"></a>
+## 2026-10-28 — Multilingual retrieval v3 (#43 part 3)
+
+기존 52개 질문은 보존하고, 16개 기록과 18개 질문을 추가했다. 총 66개 target seed와
+동일 내용의 타 조직 mirror 66개, 질문 70개×3회=210회 관측이다. 새 질문은 KO/JA/ZH
+같은 언어 검색과 EN↔KO/JA/ZH의 9방향이다. 방향마다 질문 2개이며 정답 사실 8개를
+번역·재사용하므로 54회 관측을 독립된 54개 사례로 해석하지 않는다.
+
+측정 전 고정한 qualification은 **각 방향 recall@5=1, MRR@5≥0.75,
+유사 오답보다 정답을 먼저 배치=1**, 전체 조직/scope 유출=0이다. 이 기준과
+정답은 바꾸지 않았다. 아래 값은 새 18개 질문만의 결과다.
+
+| ONNX 모델 | 차원 | recall@5 | MRR@5 | 유사 오답 순위 | 엄격 qualification |
+| --- | --- | --- | --- | --- | --- |
+| all-MiniLM-L6-v2 (기본) | 384 | 0.500000 | 0.381481 | 0.500000 | RED |
+| paraphrase-multilingual-MiniLM-L12-v2 | 384 | 1.000000 | 0.944444 | 0.888889 | RED |
+| paraphrase-multilingual-mpnet-base-v2 | 768 | 1.000000 | 0.972222 | 0.944444 | RED |
+| multilingual-e5-small (query/passage 형식 실험) | 384 | 0.944444 | 0.668519 | 0.944444 | RED |
+
+기본 모델은 같은 언어 6개는 모두 1위였지만 교차 언어 12개 중 3개만 top5에 찾았다.
+MPNet은 18개 모두 top5에 찾았고 17개는 1위였다. 중국어 `m17`은 감사 파일을 청구
+파일보다 먼저 반환했다. raw vector 점수도 0.534528/0.532394여서 최종 정렬만의
+오류가 아니다. 모든 후보에서 기존 20개·추가 32개 gate와 조직/scope 유출 0은 유지했다.
+
+근거: 기본·multilingual MiniLM은 source `4a4cf55`, [CI115](https://github.com/YouSangSon/akasha/actions/runs/40665985632);
+MPNet과 raw vector 진단은 `3066bf5`, [CI116](https://github.com/YouSangSon/akasha/actions/runs/40666756063);
+E5는 `2ccda80`, [CI117](https://github.com/YouSangSon/akasha/actions/runs/40668983093).
+이 세 CI의 실패 결과를 보존한다. E5의 query 형식 대칭 비교에서는 다른 사실 8쌍
+모두가 기존 반복 판정 0.85를 넘었다(0.8854–0.9383). 0.95를 넘은 쌍은 없지만
+이 표본만으로 의미 중복 정리를 검증했다고 주장하지 않는다. E5 구현은 채택하지 않았다.
+
+현재 제공 범위는 기본 모델 유지, 한계가 명시된 MPNet 실험 설정, 방향별 평가다.
+필수 CI는 기존 52개 제품 회귀 기준과 전체 유출 검사를 유지하고, 새 방향의 qualification을
+명시적인 RED/GREEN 데이터로 출력한다. **CI 통과는 다국어 qualification 통과가 아니다.**
+수동으로 `EVAL_REQUIRE_MULTILINGUAL=1`을 주면 같은 엄격 기준을 실패 gate로 실행할 수 있다.
+추가 모델 교체나 정답/임계값 조정으로 이번 실패를 숨기지 않는다. 의미 중복 정리·반복
+자동화의 모델별 임계값 조정은 별도 검증이 필요하다.

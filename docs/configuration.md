@@ -119,7 +119,7 @@ should replace `POSTGRES_PASSWORD`, `QDRANT_API_KEY`, and every
 |---|---|---|
 | `EMBEDDING_PROVIDER` | `transformers` | `transformers` (free local ONNX, default), `openai` (paid API), or `local` (deterministic stub for CI). |
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | 1536-dim. Bumping requires reindex. |
-| `TRANSFORMERS_EMBEDDING_MODEL` | `Xenova/all-MiniLM-L6-v2` | Hugging Face ONNX model id. 384-dim. Only when `EMBEDDING_PROVIDER=transformers`. |
+| `TRANSFORMERS_EMBEDDING_MODEL` | `Xenova/all-MiniLM-L6-v2` | Hugging Face ONNX model id; the default has 384 dimensions. Set matching `EMBEDDING_DIMENSIONS` for another model. |
 | `EMBEDDING_DIMENSIONS` | `384` | Plain decimal positive integer vector size for `transformers` and `local` providers. |
 | `EMBEDDING_MODEL` | `local-deterministic-v1` | Only meaningful when `EMBEDDING_PROVIDER=local`. |
 
@@ -129,15 +129,14 @@ The transformer chunker counts model tokens, including special tokens, and uses 
 
 | Provider | Cost | Semantic quality | Setup |
 |---|---|---|---|
-| `openai` | Paid (~cents/month for personal use; verify on [openai.com/api/pricing](https://openai.com/api/pricing)) | Best | Just set `OPENAI_API_KEY` |
-| `transformers` | **Free** | Good (close to OpenAI for most workloads) | Installed by the project (`@huggingface/transformers`, ~50MB onnxruntime + ~22MB model on first call) |
+| `openai` | Paid API; see [pricing](https://openai.com/api/pricing) | Evaluate on your own corpus | Set `OPENAI_API_KEY` |
+| `transformers` | No embedding API fee; uses local CPU/RAM | Depends on model, language and corpus; see the measured multilingual limits below | Installed by the project (`@huggingface/transformers`); model files download on first use |
 | `local` | Free | **None — semantically meaningless**, exact-match only | Zero setup, but unsuitable for real retrieval |
 
-The `transformers` provider runs `Xenova/all-MiniLM-L6-v2` locally via ONNX —
-the same model Chroma and txtai default to. CPU inference is sufficient
-(~hundreds of embeddings/second on a laptop). The model and tokenizer are
-downloaded once on first call to `~/.cache/huggingface/hub/` and cached.
-For air-gapped deployments, pre-populate that cache directory.
+The default runs `Xenova/all-MiniLM-L6-v2` locally via ONNX. The installed
+Transformers.js runtime owns its model cache (`env.cacheDir`; normally `.cache`
+relative to the library installation in Node). Confirm that path in the target
+runtime before preparing an offline deployment.
 
 **Switching providers requires a reindex** — different vector dimensions or
 content semantics produce incompatible Qdrant points. Run
@@ -147,6 +146,39 @@ step-by-step playbook in
 [docs/migrations/openai-to-transformers.md](migrations/openai-to-transformers.md)
 (includes `curl` commands for recreating the Qdrant collection at the new
 dimension).
+
+<a id="multilingual-retrieval"></a>
+### Experimental multilingual retrieval
+
+The default model missed 9 of 18 Korean/Japanese/Chinese and cross-language
+smoke questions. Multilingual MPNet found all 18 in the top 5, but ranked an audit
+export ahead of the billing export for one Chinese question. Its stricter
+language-direction qualification remains **RED**. The fixed labels, thresholds
+and failed alternatives are recorded in [GATES.md](https://github.com/YouSangSon/akasha/blob/main/GATES.md#multilingual-retrieval-v3).
+
+To evaluate the existing configurable provider in a separate Qdrant index:
+
+```dotenv
+VECTOR_BACKEND=qdrant
+EMBEDDING_PROVIDER=transformers
+TRANSFORMERS_EMBEDDING_MODEL=Xenova/paraphrase-multilingual-mpnet-base-v2
+EMBEDDING_DIMENSIONS=768
+QDRANT_COLLECTION_NAME=memory_multilingual_experiment_v1
+```
+
+Use a new collection name. Pause ordinary queries/writes, reindex every required
+organization and project/user scope from canonical records, and verify completion
+before serving the new model. A 384-dimensional collection cannot accept these
+vectors. Preserve the old index for rollback; switching the model name alone
+does not migrate vectors. Retrieval was measured with Qdrant, not pgvector;
+the experiment did not exercise an existing-index migration or rollback.
+
+This is an opt-in experiment, not a default-model change or broad language
+certification. The [model card](https://huggingface.co/sentence-transformers/paraphrase-multilingual-mpnet-base-v2)
+describes the model; our two questions per direction are a small smoke corpus.
+The retrieval result does not calibrate automatic repeat detection or semantic
+compaction thresholds for this model. Leave semantic deduplication disabled and
+independently validate repeat judgments before using them for automation.
 
 ## Auth
 
