@@ -14138,3 +14138,20 @@ Verification:
 - Actual PG/pgvector races, owned-backend termination, and real long-body ONNX +
   Qdrant indexing are wired into the existing required CI jobs. Their results are
   pending PR execution. No local DB/Compose/Testcontainers, paid calls, or VM work.
+- PR #44 merged as `8741c6f`. Required CI [113](https://github.com/YouSangSon/akasha/actions/runs/40664593438)
+  passed all five jobs at `c081219`. Earlier CI caught an outdated workflow assertion,
+  an untyped catch, and an incorrect test assumption about returned chunk IDs;
+  the final test compares Qdrant IDs with persisted Postgres mappings.
+
+## 2026-10-28 — Multilingual retrieval characterization (#43, part 3)
+
+- Preserve the historical 52 queries; add 16 records and 18 labeled questions in
+  nine directions: KO/JA/ZH within-language, English to each, and each to English.
+  Every new question includes an in-scope similar wrong answer; foreign-tenant
+  copies and scope checks remain active. Each direction has only two questions.
+- Before measurement, require recall@5=1, MRR@5>=0.75 and contrast ordering=1 in
+  each multilingual-model direction; retain the original legacy and expanded
+  gates. The English default's multilingual results are characterization only.
+- Compare the unchanged default and `Xenova/paraphrase-multilingual-MiniLM-L12-v2`
+  in free GitHub CI. No local model inference or default-model migration.
+  Local fixture/workflow checks: 39 tests passed. Model results pending CI.

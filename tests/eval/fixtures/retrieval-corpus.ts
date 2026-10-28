@@ -19,9 +19,12 @@ export function loadRetrievalCorpus() {
   }
   const legacy: unknown = JSON.parse(readFileSync(join(directory, "queries.json"), "utf8"));
   const expanded: unknown = JSON.parse(readFileSync(join(directory, "queries-expanded.json"), "utf8"));
-  if (!Array.isArray(legacy) || !Array.isArray(expanded)) throw new Error("retrieval query fixtures must be arrays");
+  const multilingual: unknown = JSON.parse(readFileSync(join(directory, "queries-multilingual.json"), "utf8"));
+  if (!Array.isArray(legacy) || !Array.isArray(expanded) || !Array.isArray(multilingual)) throw new Error("retrieval query fixtures must be arrays");
   const seeds = [...SEED_ENTRIES, ...ADDITIONAL_RETRIEVAL_SEEDS];
-  const queries: unknown[] = [...legacy, ...expanded];
+  const queries: unknown[] = [...legacy, ...expanded, ...multilingual];
   assertRetrievalCorpus(seeds, queries);
-  return { version: 2, seeds, queries, legacyQueries: queries.slice(0, legacy.length), expandedQueries: queries.slice(legacy.length) };
+  return { version: 3, seeds, queries, legacyQueries: queries.slice(0, legacy.length),
+    expandedQueries: queries.slice(legacy.length, legacy.length + expanded.length),
+    multilingualQueries: queries.slice(legacy.length + expanded.length) };
 }

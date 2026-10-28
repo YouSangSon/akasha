@@ -146,9 +146,19 @@ jobs:
         run: npx vitest run tests/vector/pgvector-index.integration.test.ts tests/store/memory-write-concurrency.integration.test.ts
 
   default-retrieval-eval:
-    name: default transformers + Qdrant retrieval gate
+    name: transformers + Qdrant retrieval (${{ matrix.profile }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - profile: default
+            model: Xenova/all-MiniLM-L6-v2
+            multilingual: "0"
+          - profile: multilingual
+            model: Xenova/paraphrase-multilingual-MiniLM-L12-v2
+            multilingual: "1"
     services:
       postgres:
         image: postgres:16-alpine
@@ -202,4 +212,6 @@ jobs:
           QDRANT_COLLECTION_NAME: akasha_eval_ci
           VECTOR_BACKEND: qdrant
           EMBEDDING_PROVIDER: transformers
+          TRANSFORMERS_EMBEDDING_MODEL: ${{ matrix.model }}
+          EVAL_REQUIRE_MULTILINGUAL: ${{ matrix.multilingual }}
         run: npx vitest run tests/eval/retrieval.eval.test.ts --reporter=verbose

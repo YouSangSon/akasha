@@ -205,6 +205,10 @@ describe("CI workflow hygiene", () => {
     expect(retrievalJob).toContain("        image: qdrant/qdrant:v1.13.2\n");
     expect(retrievalJob).toContain("          RUN_EVAL: \"1\"\n");
     expect(retrievalJob).toContain("          EMBEDDING_PROVIDER: transformers\n");
+    expect(retrievalJob).toContain("            model: Xenova/all-MiniLM-L6-v2\n");
+    expect(retrievalJob).toContain("            model: Xenova/paraphrase-multilingual-MiniLM-L12-v2\n");
+    expect(retrievalJob).toContain("          TRANSFORMERS_EMBEDDING_MODEL: ${{ matrix.model }}\n");
+    expect(retrievalJob).toContain("          EVAL_REQUIRE_MULTILINGUAL: ${{ matrix.multilingual }}\n");
     expect(retrievalJob).toContain(
       "        run: npx vitest run tests/eval/retrieval.eval.test.ts --reporter=verbose\n",
     );

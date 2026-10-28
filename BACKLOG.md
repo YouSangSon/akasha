@@ -10,9 +10,7 @@ experience, documentation, features.
 
 ## P1
 
-- [#43](https://github.com/YouSangSon/akasha/issues/43): 기본 임베딩의 긴 본문 잘림을 수정한다.
-  공백 기준 800개 단위와 모델의 512-token 한도가 맞지 않아 뒷부분이 입력에서 빠진다.
-  실제 토큰 분할과 기존 데이터의 재색인·재시도를 함께 검증한다. 나머지 승인 항목과 순서는 `PLAN.md`가 소유한다.
+- None currently known. #43의 승인된 후속 작업은 `PLAN.md`가 소유한다.
 
 ## P2
 
@@ -20,6 +18,7 @@ experience, documentation, features.
 
 ## Recently Merged
 
+- PR #44 (`8741c6f`): 긴 본문 토큰 경계 보존, 동시 쓰기 직렬화, 아카이브·복원·인덱스 복구. 필수 CI 5개 통과.
 - PR #42: 검색 평가 52개 질문·실제 사용자 정답 12개·유사 오답 대비 12개와 의도적 scope 불일치 탐침을 검증했다. 상세 수치·한계는 `GATES.md`가 소유한다.
 - PR #41 (`74dc5b8`): MCP 전체 턴 입력 토큰과 개별 응답 바이트 계측을 분리하고 명시적 예산 변형을 검증한다. 필수 CI 5개 통과.
 - PR #40 (`2314ba3`): 선택적 전체 구조화 컨텍스트 팩 바이트 예산과 경계·기록·감사 계약을 검증했다.

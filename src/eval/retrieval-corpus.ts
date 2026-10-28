@@ -38,6 +38,11 @@ function validateQuery(value: unknown, seeds: ReadonlyMap<string, SeedScope["mem
   if (typeof value !== "object" || value === null) throw new Error("retrieval query must be an object");
   const query = value as Record<string, unknown>;
   requireText(query.id, "query id"); requireText(query.query, "query text");
+  if (query.queryLanguage !== undefined || query.memoryLanguage !== undefined) {
+    for (const language of [query.queryLanguage, query.memoryLanguage]) {
+      if (!["en", "ko", "ja", "zh"].includes(language as string)) throw new Error("query and memory languages must both be en, ko, ja, or zh");
+    }
+  }
   if (typeof query.scope !== "object" || query.scope === null) throw new Error("query scope is required");
   const scope = query.scope as EvalScope;
   requireText(scope.projectKey, "query projectKey");

@@ -44,6 +44,7 @@ const USER_RECALL_THRESHOLD = 1;
 const P50_THRESHOLD_MS = 100;
 const P95_THRESHOLD_MS = 250;
 const ENFORCE_LATENCY = process.env.EVAL_ENFORCE_LATENCY === "1";
+const REQUIRE_MULTILINGUAL = process.env.EVAL_REQUIRE_MULTILINGUAL === "1";
 const EVAL_RESOURCE_PREFIX = "akasha_eval_";
 const EVAL_ORGANIZATION_ID = `akasha-eval-${process.pid}-${Date.now()}`;
 const DECOY_ORGANIZATION_ID = `${EVAL_ORGANIZATION_ID}-decoy`;
@@ -284,19 +285,38 @@ describe.skipIf(!RUN_EVAL)("default retrieval eval harness", () => {
     }
 
     const legacyIds = new Set(CORPUS!.legacyQueries.map((query) => query.id));
+    const expandedIds = new Set(CORPUS!.expandedQueries.map((query) => query.id));
     const overall = summarizeMeasurements(measurements, seedKeyToRecordId);
     const legacy = summarizeMeasurements(measurements.filter((value) => legacyIds.has(value.queryId)), seedKeyToRecordId);
-    const expanded = summarizeMeasurements(measurements.filter((value) => !legacyIds.has(value.queryId)), seedKeyToRecordId);
+    const expanded = summarizeMeasurements(measurements.filter((value) => expandedIds.has(value.queryId)), seedKeyToRecordId);
+    const languagePairs = Object.fromEntries([...new Set(CORPUS!.multilingualQueries.map((query) => `${query.queryLanguage}->${query.memoryLanguage}`))]
+      .map((pair) => {
+        const ids = new Set(CORPUS!.multilingualQueries.filter((query) => `${query.queryLanguage}->${query.memoryLanguage}` === pair).map((query) => query.id));
+        return [pair, summarizeMeasurements(measurements.filter((value) => ids.has(value.queryId)), seedKeyToRecordId)];
+      }));
     const summary = { provider: "transformers", model: services.embeddingModel, backend: "qdrant", topK: TOP_K,
       corpusVersion: CORPUS!.version, targetSeeds: EVAL_SEEDS.length, foreignTenantMirrors: EVAL_SEEDS.length,
-      ...overall, legacyQueriesWithinExpandedCorpus: legacy, addedQueriesWithinExpandedCorpus: expanded };
+      ...overall, legacyQueriesWithinExpandedCorpus: legacy, addedQueriesWithinExpandedCorpus: expanded,
+      multilingualGateEnforced: REQUIRE_MULTILINGUAL, languagePairs };
     process.stderr.write(`eval-summary ${JSON.stringify(summary)}\n`);
     expect(measurements).toHaveLength(QUERIES.length * WARM_REPEATS);
-    expect(summary.uniqueQueries).toBe(52);
+    expect(summary.uniqueQueries).toBe(70);
     expect(summary.uniqueUserQueries).toBe(12);
-    expect(summary.uniqueHardNegativeQueries).toBe(12);
+    expect(summary.uniqueHardNegativeQueries).toBe(30);
     // A good new cohort must not hide a regression on the historical queries.
-    for (const cohort of [overall, legacy, expanded]) assertQuality(cohort);
+    for (const cohort of [legacy, expanded]) assertQuality(cohort);
+    expect(overall.crossOrgLeakage).toBe(0);
+    expect(overall.crossScopeLeakage).toBe(0);
+    expect(Object.keys(languagePairs)).toHaveLength(9);
+    for (const cohort of Object.values(languagePairs)) {
+      expect(cohort.uniqueQueries).toBe(2);
+      // Characterize the English baseline; qualify the opt-in multilingual model separately.
+      if (REQUIRE_MULTILINGUAL) {
+        expect(cohort.recallAt5).toBe(1);
+        expect(cohort.mrrAt5).toBeGreaterThanOrEqual(0.75);
+        expect(cohort.hardNegativeOrderingAt5).toBe(1);
+      }
+    }
 
     if (ENFORCE_LATENCY) {
       expect(summary.latencyMs.p50).toBeLessThanOrEqual(P50_THRESHOLD_MS);
