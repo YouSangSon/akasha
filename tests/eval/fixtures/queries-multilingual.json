@@ -1,0 +1,272 @@
+[
+  {
+    "id": "m01",
+    "query": "감사 기록은 며칠 동안 보관하나요?",
+    "queryLanguage": "ko",
+    "memoryLanguage": "ko",
+    "relevantRecordSeedKeys": [
+      "polyglot.ko.audit-retention"
+    ],
+    "hardNegativeRecordSeedKeys": [
+      "polyglot.ko.support-retention"
+    ],
+    "scope": {
+      "projectKey": "project-polyglot"
+    }
+  },
+  {
+    "id": "m02",
+    "query": "운영에 새 버전을 배포할 때 누가 몇 명 승인해야 하나요?",
+    "queryLanguage": "ko",
+    "memoryLanguage": "ko",
+    "relevantRecordSeedKeys": [
+      "polyglot.ko.release-approval"
+    ],
+    "hardNegativeRecordSeedKeys": [
+      "polyglot.ko.rollback-approval"
+    ],
+    "scope": {
+      "projectKey": "project-polyglot"
+    }
+  },
+  {
+    "id": "m03",
+    "query": "データの書き出しでは、日時にどの時間帯を使いますか？",
+    "queryLanguage": "ja",
+    "memoryLanguage": "ja",
+    "relevantRecordSeedKeys": [
+      "polyglot.ja.export-timezone"
+    ],
+    "hardNegativeRecordSeedKeys": [
+      "polyglot.ja.worklog-timezone"
+    ],
+    "scope": {
+      "projectKey": "project-polyglot"
+    }
+  },
+  {
+    "id": "m04",
+    "query": "夜間の一括処理が失敗したときの再試行回数と待ち方は？",
+    "queryLanguage": "ja",
+    "memoryLanguage": "ja",
+    "relevantRecordSeedKeys": [
+      "polyglot.ja.batch-retry"
+    ],
+    "hardNegativeRecordSeedKeys": [
+      "polyglot.ja.webhook-retry"
+    ],
+    "scope": {
+      "projectKey": "project-polyglot"
+    }
+  },
+  {
+    "id": "m05",
+    "query": "数据库的备份需要怎样保存，保留多久？",
+    "queryLanguage": "zh",
+    "memoryLanguage": "zh",
+    "relevantRecordSeedKeys": [
+      "polyglot.zh.backup-retention"
+    ],
+    "hardNegativeRecordSeedKeys": [
+      "polyglot.zh.report-retention"
+    ],
+    "scope": {
+      "projectKey": "project-polyglot"
+    }
+  },
+  {
+    "id": "m06",
+    "query": "永久删除业务数据需要谁批准？",
+    "queryLanguage": "zh",
+    "memoryLanguage": "zh",
+    "relevantRecordSeedKeys": [
+      "polyglot.zh.delete-approval"
+    ],
+    "hardNegativeRecordSeedKeys": [
+      "polyglot.zh.account-approval"
+    ],
+    "scope": {
+      "projectKey": "project-polyglot"
+    }
+  },
+  {
+    "id": "m07",
+    "query": "How long are audit records retained before deletion?",
+    "queryLanguage": "en",
+    "memoryLanguage": "ko",
+    "relevantRecordSeedKeys": [
+      "polyglot.ko.audit-retention"
+    ],
+    "hardNegativeRecordSeedKeys": [
+      "polyglot.ko.support-retention"
+    ],
+    "scope": {
+      "projectKey": "project-polyglot"
+    }
+  },
+  {
+    "id": "m08",
+    "query": "Who must approve a new production release, and how many approvers are needed?",
+    "queryLanguage": "en",
+    "memoryLanguage": "ko",
+    "relevantRecordSeedKeys": [
+      "polyglot.ko.release-approval"
+    ],
+    "hardNegativeRecordSeedKeys": [
+      "polyglot.ko.rollback-approval"
+    ],
+    "scope": {
+      "projectKey": "project-polyglot"
+    }
+  },
+  {
+    "id": "m09",
+    "query": "Which time zone is used for timestamps in data exports?",
+    "queryLanguage": "en",
+    "memoryLanguage": "ja",
+    "relevantRecordSeedKeys": [
+      "polyglot.ja.export-timezone"
+    ],
+    "hardNegativeRecordSeedKeys": [
+      "polyglot.ja.worklog-timezone"
+    ],
+    "scope": {
+      "projectKey": "project-polyglot"
+    }
+  },
+  {
+    "id": "m10",
+    "query": "How many retries are allowed for a failed nightly batch, and how does the wait change?",
+    "queryLanguage": "en",
+    "memoryLanguage": "ja",
+    "relevantRecordSeedKeys": [
+      "polyglot.ja.batch-retry"
+    ],
+    "hardNegativeRecordSeedKeys": [
+      "polyglot.ja.webhook-retry"
+    ],
+    "scope": {
+      "projectKey": "project-polyglot"
+    }
+  },
+  {
+    "id": "m11",
+    "query": "How must database backups be stored, and for how long?",
+    "queryLanguage": "en",
+    "memoryLanguage": "zh",
+    "relevantRecordSeedKeys": [
+      "polyglot.zh.backup-retention"
+    ],
+    "hardNegativeRecordSeedKeys": [
+      "polyglot.zh.report-retention"
+    ],
+    "scope": {
+      "projectKey": "project-polyglot"
+    }
+  },
+  {
+    "id": "m12",
+    "query": "Whose approval is required to permanently delete business data?",
+    "queryLanguage": "en",
+    "memoryLanguage": "zh",
+    "relevantRecordSeedKeys": [
+      "polyglot.zh.delete-approval"
+    ],
+    "hardNegativeRecordSeedKeys": [
+      "polyglot.zh.account-approval"
+    ],
+    "scope": {
+      "projectKey": "project-polyglot"
+    }
+  },
+  {
+    "id": "m13",
+    "query": "청구 내보내기 파일은 어떤 구분자와 문자 인코딩을 사용하나요?",
+    "queryLanguage": "ko",
+    "memoryLanguage": "en",
+    "relevantRecordSeedKeys": [
+      "polyglot.en.billing-format"
+    ],
+    "hardNegativeRecordSeedKeys": [
+      "polyglot.en.audit-format"
+    ],
+    "scope": {
+      "projectKey": "project-polyglot"
+    }
+  },
+  {
+    "id": "m14",
+    "query": "업로드하는 첨부파일 하나의 최대 크기는 얼마인가요?",
+    "queryLanguage": "ko",
+    "memoryLanguage": "en",
+    "relevantRecordSeedKeys": [
+      "polyglot.en.upload-size"
+    ],
+    "hardNegativeRecordSeedKeys": [
+      "polyglot.en.import-size"
+    ],
+    "scope": {
+      "projectKey": "project-polyglot"
+    }
+  },
+  {
+    "id": "m15",
+    "query": "請求データを書き出す際の区切り文字と文字コードは何ですか？",
+    "queryLanguage": "ja",
+    "memoryLanguage": "en",
+    "relevantRecordSeedKeys": [
+      "polyglot.en.billing-format"
+    ],
+    "hardNegativeRecordSeedKeys": [
+      "polyglot.en.audit-format"
+    ],
+    "scope": {
+      "projectKey": "project-polyglot"
+    }
+  },
+  {
+    "id": "m16",
+    "query": "アップロードする添付ファイル一つの上限サイズは？",
+    "queryLanguage": "ja",
+    "memoryLanguage": "en",
+    "relevantRecordSeedKeys": [
+      "polyglot.en.upload-size"
+    ],
+    "hardNegativeRecordSeedKeys": [
+      "polyglot.en.import-size"
+    ],
+    "scope": {
+      "projectKey": "project-polyglot"
+    }
+  },
+  {
+    "id": "m17",
+    "query": "账单导出文件使用什么字段分隔符和字符编码？",
+    "queryLanguage": "zh",
+    "memoryLanguage": "en",
+    "relevantRecordSeedKeys": [
+      "polyglot.en.billing-format"
+    ],
+    "hardNegativeRecordSeedKeys": [
+      "polyglot.en.audit-format"
+    ],
+    "scope": {
+      "projectKey": "project-polyglot"
+    }
+  },
+  {
+    "id": "m18",
+    "query": "单个上传附件允许的最大大小是多少？",
+    "queryLanguage": "zh",
+    "memoryLanguage": "en",
+    "relevantRecordSeedKeys": [
+      "polyglot.en.upload-size"
+    ],
+    "hardNegativeRecordSeedKeys": [
+      "polyglot.en.import-size"
+    ],
+    "scope": {
+      "projectKey": "project-polyglot"
+    }
+  }
+]

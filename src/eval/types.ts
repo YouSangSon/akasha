@@ -14,6 +14,8 @@ export type EvalQuery = {
   query: string;
   relevantRecordSeedKeys: string[];
   hardNegativeRecordSeedKeys?: string[];
+  queryLanguage?: "en" | "ko" | "ja" | "zh";
+  memoryLanguage?: "en" | "ko" | "ja" | "zh";
   scope: EvalScope;
 };
 

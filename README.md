@@ -33,6 +33,10 @@ Long documents use the embedding tokenizer’s actual input limit, including spe
 After upgrading, run `reindex_memory` to repair legacy chunks from the original records.
 See [index recovery](docs/operations.md#ingest-sweeper) for retry and concurrency behavior.
 
+For Korean, Japanese, Chinese, or cross-language retrieval, see the
+[experimental multilingual configuration](docs/configuration.md#multilingual-retrieval).
+Its small evaluation improves recall; similar wrong answers can still rank first.
+
 | Need | What Akasha provides |
 |------|----------------------|
 | Resume work in a fresh session | Searchable decisions and task-specific context packs |

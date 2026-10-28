@@ -11,6 +11,8 @@ changes; CHANGELOG entries call those out explicitly.
 
 ## [Unreleased]
 
+- Add Korean, Japanese, Chinese and cross-language retrieval measurements and an opt-in multilingual MPNet configuration. All 18 new questions retrieve their answer in the top 5 with MPNet, but one Chinese question ranks a similar wrong answer first; strict multilingual qualification remains RED.
+
 - Preserve long transformer inputs with tokenizer-aware chunks, original offsets, and bounded overlap. Reindex repairs legacy chunks and preserves unchanged chunk IDs. Direct overlong embedding queries return HTTP 400 instead of silently truncating.
 - Serialize memory writers on a reserved Postgres connection; commit index retry intent with canonical writes. Archive cleanup covers unmapped vectors, and restore commits its record, retry job, and completion marker together. Pending cleanup and restored-but-pending indexing are explicit in tool results.
 

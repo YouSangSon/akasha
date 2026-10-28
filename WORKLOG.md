@@ -14138,3 +14138,42 @@ Verification:
 - Actual PG/pgvector races, owned-backend termination, and real long-body ONNX +
   Qdrant indexing are wired into the existing required CI jobs. Their results are
   pending PR execution. No local DB/Compose/Testcontainers, paid calls, or VM work.
+- PR #44 merged as `8741c6f`. Required CI [113](https://github.com/YouSangSon/akasha/actions/runs/40664593438)
+  passed all five jobs at `c081219`. Earlier CI caught an outdated workflow assertion,
+  an untyped catch, and an incorrect test assumption about returned chunk IDs;
+  the final test compares Qdrant IDs with persisted Postgres mappings.
+
+## 2026-10-28 — Multilingual retrieval characterization (#43, part 3)
+
+- Preserve the historical 52 queries; add 16 records and 18 labeled questions in
+  nine directions: KO/JA/ZH within-language, English to each, and each to English.
+  Every new question includes an in-scope similar wrong answer; foreign-tenant
+  copies and scope checks remain active. Each direction has only two questions.
+- Before measurement, require recall@5=1, MRR@5>=0.75 and contrast ordering=1 in
+  each multilingual-model direction; retain the original legacy and expanded
+  gates. The English default's multilingual results are characterization only.
+- Compare the unchanged default and `Xenova/paraphrase-multilingual-MiniLM-L12-v2`
+  in free GitHub CI. No local model inference or default-model migration.
+  Local fixture/workflow checks: 39 tests passed. Model results pending CI.
+- First CI (115) preserved old-cohort quality and zero leaks. The English model
+  missed 9/18 new questions; multilingual MiniLM recalled all18 but ranked the
+  audit export above billing for Korean/Japanese queries. Keep that failed
+  candidate as characterization while checking the documented 768-dimensional
+  multilingual MPNet option against the same unchanged gate and labels. Log raw
+  vector ranks for failed language probes to separate embedding/ranking errors.
+  Also correct the separate fixture-count assertion (50 ->66); no labels change.
+- MPNet's CI116 still fails the fixed Chinese contrast; E5 with correct task
+  prefixes (source `2ccda80`, CI117) misses that answer and falsely marks all8
+  distinct-fact pairs as repeats at0.85. Independent review advised a bounded
+  experiment, not unlimited model changes. Revert the owned E5 implementation;
+  preserve its commit/logs and report all failures in `GATES.md`.
+- Deliver the unchanged default plus an explicitly experimental MPNet recipe.
+  Keep strict multilingual qualification RED and machine-readable, separate
+  from required legacy/scope regression CI. Do not lower its criteria or labels.
+  README EN/KO/JA/ZH-CN and paired configuration docs describe the same limit.
+- Final focused fixture, grading, workflow and public-document checks: 90 passed;
+  typecheck passed. A documentation check caught a removed runtime-dependency
+  label; restore it in both configuration editions and keep packaged links valid.
+- Final read-only review caught two reporting gaps: qualification now includes
+  zero org/scope leakage, and the configuration explicitly distinguishes measured
+  Qdrant retrieval from an untested existing-index migration/rollback procedure.
