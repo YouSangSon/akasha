@@ -295,3 +295,60 @@ E5는 `2ccda80`, [CI117](https://github.com/YouSangSon/akasha/actions/runs/40668
 수동으로 `EVAL_REQUIRE_MULTILINGUAL=1`을 주면 같은 엄격 기준을 실패 gate로 실행할 수 있다.
 추가 모델 교체나 정답/임계값 조정으로 이번 실패를 숨기지 않는다. 의미 중복 정리·반복
 자동화의 모델별 임계값 조정은 별도 검증이 필요하다.
+
+최종 source `160f0f5`의 [CI119](https://github.com/YouSangSon/akasha/actions/runs/40671762858)는
+필수 6개 작업을 통과했다. 두 모델 모두 qualification RED와 조직/scope 유출 0을
+명시적으로 출력했다. PR #45는 main `e06cf22`로 병합했다.
+
+<a id="codex-budget-replay-v4"></a>
+## Codex context-budget replay protocol (corpus v4)
+
+Hypothesis: the existing `maxOutputBytes=8192` option reduces actual whole-turn
+Codex input tokens compared with the same unbudgeted MCP result while preserving
+required decisions. JSON byte savings alone do not establish this result.
+
+The default-model retrieval CI job checks out the exact PR head, creates its own
+disposable Postgres database and Qdrant collection, and seeds the client corpus
+once. It captures three real `build_context_pack` responses with no budget and
+the same three with 8192 bytes. The artifact retains complete structured results,
+source/corpus/model/scope metadata, required scoped IDs, and content digests.
+The v4 question explicitly asks about the seeded nominal `alpha.chunk-size`
+policy (800/120); it does not confuse that policy with actual tokenizer limits.
+
+Before any model call, verify the artifact through GitHub's run, successful job,
+exact head and artifact receipt; preserve the archive digest and independently
+compute the snapshot SHA-256. Its own JSON provenance is not proof of origin.
+The replay server requires a clean, matching source commit and the pinned digest,
+checks production schemas, scope, seeded content, required anchors and budget,
+and accepts only the six exact captured requests. Its advertised tool and full
+MCP response match production. The model's raw tool trace must contain exactly
+the expected call; SDK argument stripping cannot hide an extra argument.
+
+Run two fresh 18-call comparisons (three tasks × three repeats × off/on), first
+unbudgeted, then budgeted, using the same snapshot, source, CLI, requested
+`gpt-6.1-sol` and `max` effort. Off receives the full raw corpus; on makes one
+native MCP round trip. The second run starts even if the first finishes with a
+failed 15% savings gate. Preserve every result and any partial failure without
+retries or cherry-picked pairs. Guard included ChatGPT usage before and after
+each call; API keys are not forwarded and paid execution is prohibited.
+
+Record `turn.completed` total input tokens including cached input, strict answer
+grades, omissions/contradictions/leaks, exact tool arguments, requested/observed
+model and raw private CLI evidence. Report each off/on gate separately, then
+compare matched budgeted-on/unbudgeted-on pairs. The fixed profile order and
+small task corpus limit generalization. This is a real Codex measurement with
+CI-captured MCP responses, not a local DB runtime or retrieval-latency benchmark.
+It does not replace historical corpus-v3 medium-effort results or validate Claude.
+
+Replay command, only after the trusted artifact and source checks above:
+
+```sh
+npx tsx tests/eval/client-ab-runner.ts --sha "$source_sha" \
+  --snapshot "$snapshot_path" --snapshot-sha256 "$snapshot_sha256" \
+  --client codex --model gpt-6.1-sol --effort max --execute-subscription \
+  --result-dir "$fresh_result_dir"
+```
+
+Add `--max-output-bytes 8192` for the second run and use a new result directory.
+Omit `--execute-subscription` for a DB-free, model-free snapshot validation.
+Execution results are pending; no new savings claim is made by this protocol.

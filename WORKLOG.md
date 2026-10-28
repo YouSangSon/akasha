@@ -14177,3 +14177,18 @@ Verification:
 - Final read-only review caught two reporting gaps: qualification now includes
   zero org/scope leakage, and the configuration explicitly distinguishes measured
   Qdrant retrieval from an untested existing-index migration/rollback procedure.
+- PR #45 merged as `e06cf22`; all six CI119 jobs passed at `160f0f5`.
+  Both real retrieval reports retain qualification RED and zero org/scope leaks.
+
+## 2026-10-28 — Actual Codex budget comparison (#43, part 4)
+
+- Capture six production context packs in the existing free default ONNX/Qdrant
+  CI job, then replay those exact results locally without starting a DB or model
+  inference stack. Pin artifact provenance independently before paid-free Codex
+  subscription execution; see the committed corpus-v4 protocol in `GATES.md`.
+- Keep complete MCP schemas/text/structured results, exact input/scope checks,
+  mandatory decisions, whole-turn token events and private failure evidence.
+  An independent review caught a schema strictness difference; production schema
+  and raw-trace validation now match, with full tool-list/response parity tests.
+- Local replay checks: 78 focused tests passed, followed by 40 schema-parity tests
+  after the review fix; typecheck passed. Counts overlap. Actual runs pending CI.

@@ -185,6 +185,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -218,3 +220,34 @@ jobs:
           EMBEDDING_DIMENSIONS: ${{ matrix.dimensions }}
           EVAL_REQUIRE_MULTILINGUAL: ${{ matrix.multilingual }}
         run: npx vitest run tests/eval/retrieval.eval.test.ts --reporter=verbose
+
+      - name: Capture client context packs at the pinned source
+        if: matrix.profile == 'default'
+        env:
+          PGPASSWORD: memory
+          QDRANT_URL: http://127.0.0.1:6333
+          QDRANT_API_KEY: local-qdrant-key
+          VECTOR_BACKEND: qdrant
+          EMBEDDING_PROVIDER: transformers
+          TRANSFORMERS_EMBEDDING_MODEL: ${{ matrix.model }}
+          EMBEDDING_DIMENSIONS: ${{ matrix.dimensions }}
+        run: |
+          eval_database="akasha_eval_${GITHUB_RUN_ID}"
+          createdb --host=127.0.0.1 --port=5432 --username=memory "$eval_database"
+          export DATABASE_URL="postgres://memory:memory@127.0.0.1:5432/${eval_database}"
+          export QDRANT_COLLECTION_NAME="$eval_database"
+          source_sha="$(git rev-parse HEAD)"
+          npx tsx tests/eval/client-ab-runner.ts --sha "$source_sha" --preflight \
+            --capture-snapshot artifacts/client-context-snapshot.json --result-dir artifacts/client-capture
+          sha256sum artifacts/client-context-snapshot.json > artifacts/client-context-snapshot.sha256
+
+      - name: Preserve client context snapshot
+        if: matrix.profile == 'default'
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-context-snapshot-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            artifacts/client-context-snapshot.json
+            artifacts/client-context-snapshot.sha256
+          if-no-files-found: error
+          retention-days: 7
