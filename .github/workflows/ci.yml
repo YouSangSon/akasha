@@ -155,9 +155,15 @@ jobs:
         include:
           - profile: default
             model: Xenova/all-MiniLM-L6-v2
+            dimensions: "384"
+            multilingual: "0"
+          - profile: multilingual-minilm-characterization
+            model: Xenova/paraphrase-multilingual-MiniLM-L12-v2
+            dimensions: "384"
             multilingual: "0"
           - profile: multilingual
-            model: Xenova/paraphrase-multilingual-MiniLM-L12-v2
+            model: Xenova/paraphrase-multilingual-mpnet-base-v2
+            dimensions: "768"
             multilingual: "1"
     services:
       postgres:
@@ -213,5 +219,6 @@ jobs:
           VECTOR_BACKEND: qdrant
           EMBEDDING_PROVIDER: transformers
           TRANSFORMERS_EMBEDDING_MODEL: ${{ matrix.model }}
+          EMBEDDING_DIMENSIONS: ${{ matrix.dimensions }}
           EVAL_REQUIRE_MULTILINGUAL: ${{ matrix.multilingual }}
         run: npx vitest run tests/eval/retrieval.eval.test.ts --reporter=verbose

@@ -14155,3 +14155,10 @@ Verification:
 - Compare the unchanged default and `Xenova/paraphrase-multilingual-MiniLM-L12-v2`
   in free GitHub CI. No local model inference or default-model migration.
   Local fixture/workflow checks: 39 tests passed. Model results pending CI.
+- First CI (115) preserved old-cohort quality and zero leaks. The English model
+  missed 9/18 new questions; multilingual MiniLM recalled all18 but ranked the
+  audit export above billing for Korean/Japanese queries. Keep that failed
+  candidate as characterization while checking the documented 768-dimensional
+  multilingual MPNet option against the same unchanged gate and labels. Log raw
+  vector ranks for failed language probes to separate embedding/ranking errors.
+  Also correct the separate fixture-count assertion (50 ->66); no labels change.

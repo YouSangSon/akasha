@@ -74,6 +74,7 @@ type QueryMeasurement = {
   reciprocalRank: number;
   leakageCount: number;
   results: SearchMemoryResult[];
+  rawVectorHits?: Array<{ seedKey: string; score: number }>;
 };
 
 describe("retrieval eval safety", () => {
@@ -410,12 +411,19 @@ async function measureQuery(
     if (id === undefined) throw new Error(`unknown negative seed key: ${key}`);
     return id;
   });
+  const contrast = negativeIds === undefined ? undefined : hardNegativeOrderingAtK(retrievedIds, relevantIds, negativeIds, TOP_K);
+  const rawVectorHits = repeat === 1 && query.queryLanguage !== undefined && contrast === 0
+    ? (await services.vectorIndex.query(vector, { organizationId: EVAL_ORGANIZATION_ID,
+      scopes: [{ scopeType: "project", scopeId: projectKey }] }, 20))
+      .map((hit) => ({ seedKey: seedKeyForRecordId(seedKeyToRecordId, Number(hit.payload.memory_record_id)), score: hit.score }))
+    : undefined;
 
   return {
     queryId: query.id,
     repeat,
     scopeLeakageCount: results.filter((record) => !isAllowedEvalScope(record, query.scope)).length,
-    hardNegativeScore: negativeIds === undefined ? undefined : hardNegativeOrderingAtK(retrievedIds, relevantIds, negativeIds, TOP_K),
+    hardNegativeScore: contrast,
+    rawVectorHits,
     isUserScope: query.scope.userScopeId !== undefined,
     latencyMs,
     recall: recallAtK(retrievedIds, relevantIds, TOP_K),
@@ -436,6 +444,7 @@ function summarizeMeasurements(measurements: QueryMeasurement[], seedIds: Readon
     .map((value) => ({ queryId: value.queryId, repeat: value.repeat, recall: value.recall,
       reciprocalRank: value.reciprocalRank, hardNegativeScore: value.hardNegativeScore,
       crossOrgLeakage: value.leakageCount, crossScopeLeakage: value.scopeLeakageCount,
+      rawVectorHits: value.rawVectorHits,
       returned: value.results.map((record) => ({ seedKey: seedKeyForRecordId(seedIds, record.id), scopeType: record.scopeType,
         memoryType: record.memoryType, sourceType: record.source.sourceType })) }));
   return {
