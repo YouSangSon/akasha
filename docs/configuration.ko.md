@@ -163,7 +163,8 @@ QDRANT_COLLECTION_NAME=memory_multilingual_experiment_v1
 조직과 project/user 범위를 원본 레코드로 재색인하고, 완료를 확인한 뒤 조회를
 엽니다. 기존 384차원 collection에는 이 벡터를 저장할 수 없습니다. 이전 인덱스는
 복귀용으로 보존하세요. 모델 이름 변경만으로 벡터가 이관되지는 않습니다.
-이 설정은 Qdrant에서 측정했으며 pgvector 전환을 검증한 것은 아닙니다.
+검색 결과는 Qdrant에서 측정했습니다. pgvector와 기존 인덱스 전환·복귀 절차는
+이 실험에서 검증하지 않았습니다.
 
 기본 모델을 바꾸지 않는 선택적 실험입니다. 방향별 두 질문은 소규모 smoke 평가이며
 광범위한 언어 품질 보장이 아닙니다. [모델 설명](https://huggingface.co/sentence-transformers/paraphrase-multilingual-mpnet-base-v2)도 참고하세요.

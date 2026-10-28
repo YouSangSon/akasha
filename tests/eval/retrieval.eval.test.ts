@@ -45,7 +45,7 @@ const P50_THRESHOLD_MS = 100;
 const P95_THRESHOLD_MS = 250;
 const ENFORCE_LATENCY = process.env.EVAL_ENFORCE_LATENCY === "1";
 const REQUIRE_MULTILINGUAL = process.env.EVAL_REQUIRE_MULTILINGUAL === "1";
-const MULTILINGUAL_REQUIREMENTS = { recallAt5: 1, mrrAt5: 0.75, hardNegativeOrderingAt5: 1 };
+const MULTILINGUAL_REQUIREMENTS = { recallAt5: 1, mrrAt5: 0.75, hardNegativeOrderingAt5: 1, crossOrgLeakage: 0, crossScopeLeakage: 0 };
 const EVAL_RESOURCE_PREFIX = "akasha_eval_";
 const EVAL_ORGANIZATION_ID = `akasha-eval-${process.pid}-${Date.now()}`;
 const DECOY_ORGANIZATION_ID = `${EVAL_ORGANIZATION_ID}-decoy`;
@@ -302,7 +302,7 @@ describe.skipIf(!RUN_EVAL)("default retrieval eval harness", () => {
     const summary = { provider: "transformers", model: services.embeddingModel, backend: "qdrant", topK: TOP_K,
       corpusVersion: CORPUS!.version, targetSeeds: EVAL_SEEDS.length, foreignTenantMirrors: EVAL_SEEDS.length,
       ...overall, legacyQueriesWithinExpandedCorpus: legacy, addedQueriesWithinExpandedCorpus: expanded,
-      multilingualQualification: { status: failedLanguagePairs.length === 0 ? "GREEN" : "RED",
+      multilingualQualification: { status: failedLanguagePairs.length === 0 && overall.crossOrgLeakage === 0 && overall.crossScopeLeakage === 0 ? "GREEN" : "RED",
         requirements: MULTILINGUAL_REQUIREMENTS, failedLanguagePairs, enforced: REQUIRE_MULTILINGUAL }, languagePairs };
     process.stderr.write(`eval-summary ${JSON.stringify(summary)}\n`);
     expect(measurements).toHaveLength(QUERIES.length * WARM_REPEATS);

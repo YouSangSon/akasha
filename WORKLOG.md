@@ -14174,3 +14174,6 @@ Verification:
 - Final focused fixture, grading, workflow and public-document checks: 90 passed;
   typecheck passed. A documentation check caught a removed runtime-dependency
   label; restore it in both configuration editions and keep packaged links valid.
+- Final read-only review caught two reporting gaps: qualification now includes
+  zero org/scope leakage, and the configuration explicitly distinguishes measured
+  Qdrant retrieval from an untested existing-index migration/rollback procedure.

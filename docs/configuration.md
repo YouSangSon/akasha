@@ -170,7 +170,8 @@ Use a new collection name. Pause ordinary queries/writes, reindex every required
 organization and project/user scope from canonical records, and verify completion
 before serving the new model. A 384-dimensional collection cannot accept these
 vectors. Preserve the old index for rollback; switching the model name alone
-does not migrate vectors. This recipe was measured with Qdrant, not pgvector.
+does not migrate vectors. Retrieval was measured with Qdrant, not pgvector;
+the experiment did not exercise an existing-index migration or rollback.
 
 This is an opt-in experiment, not a default-model change or broad language
 certification. The [model card](https://huggingface.co/sentence-transformers/paraphrase-multilingual-mpnet-base-v2)
