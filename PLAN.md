@@ -308,5 +308,6 @@ Before each resume:
   destructive migrations without explicit approval.
 
 
-2026-10-26 추가 세 단위의 구현·검증을 마쳤다. 최종 문서 head의 필수 CI와 PR #42 병합,
-별도 포트폴리오 근거의 로컬 커밋을 확인한 뒤 이번 추가 범위를 종료한다. 기존 RED·OPEN·DEFERRED 항목은 유지한다.
+2026-10-28 추가 세 단위의 구현·검증을 마쳤다. PR #42의 문서 head `9ce429e`도 필수 CI 5개를 통과했다.
+병합의 최종 상태는 PR #42, 별도 포트폴리오의 근거는 `/Users/yousang/Desktop/resume/자료수집/2026-10-23/akasha-portfolio`가 소유한다.
+목표 밖 신규 구현은 추가하지 않는다. 기존 RED·OPEN·DEFERRED 항목은 유지한다.
