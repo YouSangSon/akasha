@@ -2,7 +2,6 @@ import type {
   EmbeddingChunkingTokenizer,
   EmbeddingProvider,
 } from "./embedding-provider.js";
-import { MULTILINGUAL_E5_MODEL } from "./embedding-provider.js";
 
 // Free, local-first embedding provider backed by ONNX models from Hugging Face
 // (via @huggingface/transformers). Default model is Xenova/all-MiniLM-L6-v2 —
@@ -54,26 +53,23 @@ export function createTransformersEmbeddingClient(
   let extractorPromise: Promise<LoadedExtractor> | null = null;
 
   const factory = input.createExtractor ?? defaultFactory(input.model);
-  const documentPrefix = input.model === MULTILINGUAL_E5_MODEL ? "passage: " : "";
-  const queryPrefix = input.model === MULTILINGUAL_E5_MODEL ? "query: " : "";
 
   function getExtractor(): Promise<LoadedExtractor> {
     extractorPromise ??= loadExtractor(factory, input.createExtractor === undefined);
     return extractorPromise;
   }
 
-  async function embedOne(inputText: string, prefix: string): Promise<number[]> {
+  async function embedOne(inputText: string): Promise<number[]> {
     assertNonBlankText(inputText, "inputText");
-    const formatted = prefix + inputText;
 
     const { extractor, tokenizer } = await getExtractor();
     if (tokenizer) {
-      const actualTokens = tokenizer.countTokens(formatted, true);
+      const actualTokens = tokenizer.countTokens(inputText, true);
       if (actualTokens > tokenizer.maxInputTokens) {
         throw new EmbeddingInputTooLongError(actualTokens, tokenizer.maxInputTokens);
       }
     }
-    const out = await extractor(formatted, {
+    const out = await extractor(inputText, {
       pooling: "mean",
       normalize: true,
     });
@@ -87,31 +83,30 @@ export function createTransformersEmbeddingClient(
   }
 
   return {
-    embed: (text) => embedOne(text, documentPrefix),
-    embedQuery: (text) => embedOne(text, queryPrefix),
-    embedSimilarityBatch: (texts) => embedBatch(texts, queryPrefix),
+    embed: embedOne,
     async getChunkingTokenizer(): Promise<EmbeddingChunkingTokenizer> {
       const { tokenizer } = await getExtractor();
       if (!tokenizer) {
         throw new Error("transformers feature extractor tokenizer is required for chunking");
       }
-      return documentPrefix ? {
-        maxInputTokens: tokenizer.maxInputTokens,
-        countTokens: (text, addSpecialTokens) => tokenizer.countTokens(addSpecialTokens ? documentPrefix + text : text, addSpecialTokens),
-      } : tokenizer;
+      return tokenizer;
     },
-    embedBatch: (texts) => embedBatch(texts, documentPrefix),
-  };
+    async embedBatch(inputs: string[]): Promise<number[][]> {
+      assertEmbeddingInputBatch(inputs);
 
-  async function embedBatch(inputs: string[], prefix: string): Promise<number[][]> {
-    assertEmbeddingInputBatch(inputs);
-    // Keep sequential CPU inference; batch tensor reshaping needs measured benefit first.
-    const results: number[][] = [];
-    for (const text of inputs) {
-      results.push(await embedOne(text, prefix));
-    }
-    return results;
-  }
+      // Sequential single-text calls. ONNX-side batch input is supported by
+      // @huggingface/transformers but the result tensor reshaping is enough
+      // additional surface that we keep batching at the orchestrator level
+      // for now — local CPU inference has no per-call HTTP RTT to amortize,
+      // so the cost/latency benefit is minimal. Revisit if ONNX batch shows
+      // a measurable win in benchmarks.
+      const results: number[][] = [];
+      for (const text of inputs) {
+        results.push(await embedOne(text));
+      }
+      return results;
+    },
+  };
 }
 
 type LoadedExtractor = {

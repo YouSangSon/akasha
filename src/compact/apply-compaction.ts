@@ -35,7 +35,6 @@ import {
   type BuildCompactionPlanInput,
 } from "./compact-memory.js";
 import { findSemanticDuplicates } from "./semantic-duplicates.js";
-import { embedSimilarityBatch } from "../embedding/embedding-provider.js";
 
 export type ApplyRateLimitConfig = {
   // Window during which `maxRuns` applies cap the org. Set to 0 to disable
@@ -552,7 +551,7 @@ async function computeSemanticGroups(
   // trade-off for the reduction in round-trips.
   try {
     const texts = records.map((r) => r.content);
-    const vecs = await embedSimilarityBatch(embeddings, texts);
+    const vecs = await embeddings.embedBatch(texts);
     if (vecs.length !== texts.length) {
       throw new Error(
         `embedBatch returned ${vecs.length} vectors for ${texts.length} records`,

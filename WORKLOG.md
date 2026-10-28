@@ -14162,11 +14162,15 @@ Verification:
   multilingual MPNet option against the same unchanged gate and labels. Log raw
   vector ranks for failed language probes to separate embedding/ranking errors.
   Also correct the separate fixture-count assertion (50 ->66); no labels change.
-- CI116 confirmed both errors originate in raw MiniLM vectors; MPNet fixes them
-  but still puts audit above billing for the Chinese question (0.534528 vs0.532394).
-  No production ranking weights or labels are changed. Independent design review
-  recommends one bounded E5-small experiment with its trained query/passage
-  formats, prefix-aware chunk limits, and separate `e5-prefix-v1` metadata.
-  Symmetric repeat/compaction consumers use query-format batches and get a
-  contrast check before their existing thresholds can be called compatible.
-  Failed MiniLM/MPNet measurements remain evidence; neither is marked qualified.
+- MPNet's CI116 still fails the fixed Chinese contrast; E5 with correct task
+  prefixes (source `2ccda80`, CI117) misses that answer and falsely marks all8
+  distinct-fact pairs as repeats at0.85. Independent review advised a bounded
+  experiment, not unlimited model changes. Revert the owned E5 implementation;
+  preserve its commit/logs and report all failures in `GATES.md`.
+- Deliver the unchanged default plus an explicitly experimental MPNet recipe.
+  Keep strict multilingual qualification RED and machine-readable, separate
+  from required legacy/scope regression CI. Do not lower its criteria or labels.
+  README EN/KO/JA/ZH-CN and paired configuration docs describe the same limit.
+- Final focused fixture, grading, workflow and public-document checks: 90 passed;
+  typecheck passed. A documentation check caught a removed runtime-dependency
+  label; restore it in both configuration editions and keep packaged links valid.

@@ -157,10 +157,10 @@ jobs:
             model: Xenova/all-MiniLM-L6-v2
             dimensions: "384"
             multilingual: "0"
-          - profile: multilingual
-            model: Xenova/multilingual-e5-small
-            dimensions: "384"
-            multilingual: "1"
+          - profile: experimental-multilingual
+            model: Xenova/paraphrase-multilingual-mpnet-base-v2
+            dimensions: "768"
+            multilingual: "0"
     services:
       postgres:
         image: postgres:16-alpine

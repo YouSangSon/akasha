@@ -6,8 +6,6 @@ import { buildContextPack } from "../../src/context-pack/build-context-pack.js";
 import { createPgPool, type PgPool } from "../../src/db/connection.js";
 import { runMigrations } from "../../src/db/migrate.js";
 import { createEmbeddingProvider } from "../../src/embedding/embedding-factory.js";
-import { embedQuery, embedSimilarityBatch, MULTILINGUAL_E5_MODEL } from "../../src/embedding/embedding-provider.js";
-import { cosineSimilarity } from "../../src/compact/semantic-duplicates.js";
 import { hardNegativeOrderingAtK, mrrAtK, recallAtK } from "../../src/eval/metrics.js";
 import { isAllowedEvalScope } from "../../src/eval/retrieval-corpus.js";
 import { buildContextPackResult } from "../../src/mcp/context-pack-result.js";
@@ -47,6 +45,7 @@ const P50_THRESHOLD_MS = 100;
 const P95_THRESHOLD_MS = 250;
 const ENFORCE_LATENCY = process.env.EVAL_ENFORCE_LATENCY === "1";
 const REQUIRE_MULTILINGUAL = process.env.EVAL_REQUIRE_MULTILINGUAL === "1";
+const MULTILINGUAL_REQUIREMENTS = { recallAt5: 1, mrrAt5: 0.75, hardNegativeOrderingAt5: 1 };
 const EVAL_RESOURCE_PREFIX = "akasha_eval_";
 const EVAL_ORGANIZATION_ID = `akasha-eval-${process.pid}-${Date.now()}`;
 const DECOY_ORGANIZATION_ID = `${EVAL_ORGANIZATION_ID}-decoy`;
@@ -297,10 +296,14 @@ describe.skipIf(!RUN_EVAL)("default retrieval eval harness", () => {
         const ids = new Set(CORPUS!.multilingualQueries.filter((query) => `${query.queryLanguage}->${query.memoryLanguage}` === pair).map((query) => query.id));
         return [pair, summarizeMeasurements(measurements.filter((value) => ids.has(value.queryId)), seedKeyToRecordId)];
       }));
+    const failedLanguagePairs = Object.entries(languagePairs).filter(([, cohort]) =>
+      cohort.recallAt5 < MULTILINGUAL_REQUIREMENTS.recallAt5 || cohort.mrrAt5 < MULTILINGUAL_REQUIREMENTS.mrrAt5 ||
+      (cohort.hardNegativeOrderingAt5 ?? 0) < MULTILINGUAL_REQUIREMENTS.hardNegativeOrderingAt5).map(([pair]) => pair);
     const summary = { provider: "transformers", model: services.embeddingModel, backend: "qdrant", topK: TOP_K,
       corpusVersion: CORPUS!.version, targetSeeds: EVAL_SEEDS.length, foreignTenantMirrors: EVAL_SEEDS.length,
       ...overall, legacyQueriesWithinExpandedCorpus: legacy, addedQueriesWithinExpandedCorpus: expanded,
-      multilingualGateEnforced: REQUIRE_MULTILINGUAL, languagePairs };
+      multilingualQualification: { status: failedLanguagePairs.length === 0 ? "GREEN" : "RED",
+        requirements: MULTILINGUAL_REQUIREMENTS, failedLanguagePairs, enforced: REQUIRE_MULTILINGUAL }, languagePairs };
     process.stderr.write(`eval-summary ${JSON.stringify(summary)}\n`);
     expect(measurements).toHaveLength(QUERIES.length * WARM_REPEATS);
     expect(summary.uniqueQueries).toBe(70);
@@ -313,13 +316,8 @@ describe.skipIf(!RUN_EVAL)("default retrieval eval harness", () => {
     expect(Object.keys(languagePairs)).toHaveLength(9);
     for (const cohort of Object.values(languagePairs)) {
       expect(cohort.uniqueQueries).toBe(2);
-      // Characterize the English baseline; qualify the opt-in multilingual model separately.
-      if (REQUIRE_MULTILINGUAL) {
-        expect(cohort.recallAt5).toBe(1);
-        expect(cohort.mrrAt5).toBeGreaterThanOrEqual(0.75);
-        expect(cohort.hardNegativeOrderingAt5).toBe(1);
-      }
     }
+    if (REQUIRE_MULTILINGUAL) expect(failedLanguagePairs).toEqual([]);
 
     if (ENFORCE_LATENCY) {
       expect(summary.latencyMs.p50).toBeLessThanOrEqual(P50_THRESHOLD_MS);
@@ -345,26 +343,6 @@ describe.skipIf(!RUN_EVAL)("default retrieval eval harness", () => {
         forbiddenAnswerRecall: measurement.recall, crossOrgLeakage: measurement.leakageCount,
         crossScopeLeakage: measurement.scopeLeakageCount })}\n`);
     }
-  }, 60_000);
-
-  it("checks E5 contrast scores before reusing automatic similarity thresholds", async () => {
-    if (!services || services.embeddingModel !== MULTILINGUAL_E5_MODEL) return;
-    const pairs = [...new Map(CORPUS!.multilingualQueries.map((query) => {
-      const positive = query.relevantRecordSeedKeys[0]!;
-      const negative = query.hardNegativeRecordSeedKeys![0]!;
-      return [`${positive}:${negative}`, [positive, negative] as const];
-    })).values()];
-    const keys = [...new Set(pairs.flat())];
-    const vectors = await embedSimilarityBatch(services.embeddings, keys.map((key) => EVAL_SEEDS.find((seed) => seed.seedKey === key)!.memory.content));
-    const byKey = new Map(keys.map((key, index) => [key, vectors[index]!]));
-    const contrasts = pairs.map(([positive, negative]) => ({ positive, negative,
-      score: cosineSimilarity(byKey.get(positive)!, byKey.get(negative)!) }));
-    const repeatFalsePositives = contrasts.filter((pair) => pair.score >= 0.85);
-    const compactionFalsePositives = contrasts.filter((pair) => pair.score >= 0.95);
-    process.stderr.write(`eval-similarity-thresholds ${JSON.stringify({ model: services.embeddingModel,
-      repeatThreshold: 0.85, compactionThreshold: 0.95, contrasts, repeatFalsePositives, compactionFalsePositives })}\n`);
-    expect(repeatFalsePositives).toEqual([]);
-    expect(compactionFalsePositives).toEqual([]);
   }, 60_000);
 
   it("builds a context pack from org-scoped default-stack retrieval", async () => {
@@ -408,7 +386,7 @@ async function measureQuery(
   }
 
   const started = performance.now();
-  const vector = await embedQuery(services.embeddings, query.query);
+  const vector = await services.embeddings.embed(query.query);
   const results = await retrieveMemory({
     vectorIndex: services.vectorIndex,
     repository: services.repository,

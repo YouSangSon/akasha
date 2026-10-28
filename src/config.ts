@@ -1,5 +1,4 @@
 import path from "node:path";
-import { MULTILINGUAL_E5_MODEL } from "./embedding/embedding-provider.js";
 import {
   DEFAULT_PG_POOL_OPTIONS,
   type PgPoolOptions,
@@ -29,7 +28,7 @@ export type ServiceConfig = {
     provider: "openai" | "local" | "transformers";
     model: string;
     dimensions: number;
-    version: "v1" | "e5-prefix-v1";
+    version: "v1";
     chunkTargetTokens: 800;
     chunkOverlapTokens: 120;
   };
@@ -157,7 +156,7 @@ export function resolveServiceConfig(
       provider,
       model,
       dimensions,
-      version: provider === "transformers" && model === MULTILINGUAL_E5_MODEL ? "e5-prefix-v1" : "v1",
+      version: "v1",
       chunkTargetTokens: 800,
       chunkOverlapTokens: 120,
     },

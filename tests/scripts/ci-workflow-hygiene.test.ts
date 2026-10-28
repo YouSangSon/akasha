@@ -206,7 +206,7 @@ describe("CI workflow hygiene", () => {
     expect(retrievalJob).toContain("          RUN_EVAL: \"1\"\n");
     expect(retrievalJob).toContain("          EMBEDDING_PROVIDER: transformers\n");
     expect(retrievalJob).toContain("            model: Xenova/all-MiniLM-L6-v2\n");
-    expect(retrievalJob).toContain("            model: Xenova/multilingual-e5-small\n");
+    expect(retrievalJob).toContain("            model: Xenova/paraphrase-multilingual-mpnet-base-v2\n");
     expect(retrievalJob).toContain("          TRANSFORMERS_EMBEDDING_MODEL: ${{ matrix.model }}\n");
     expect(retrievalJob).toContain("          EVAL_REQUIRE_MULTILINGUAL: ${{ matrix.multilingual }}\n");
     expect(retrievalJob).toContain(

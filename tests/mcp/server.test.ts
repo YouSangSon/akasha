@@ -979,18 +979,6 @@ describe("createToolRegistry", () => {
     );
   });
 
-  it("uses the query-specific embedding for canonical search and context packs", async () => {
-    const services = createCanonicalServices();
-    const embedQuery = vi.fn().mockResolvedValue([1, 0, 0]);
-    const registry = createToolRegistry({ resolveCanonicalServices: async () => ({
-      ...services, embeddings: { ...services.embeddings, embedQuery },
-    }) });
-    await registry.search_memory({ organizationId: "default", projectKey: "project-alpha", query: "query wording" });
-    await registry.build_context_pack({ organizationId: "default", projectKey: "project-alpha", task: "pack wording" });
-    expect(embedQuery.mock.calls).toEqual([["query wording"], ["pack wording"]]);
-    expect(services.embeddings.embed).not.toHaveBeenCalled();
-  });
-
   it("preserves a non-default organization on service-backed ingest jobs", async () => {
     const services = createCanonicalServices();
     services.repository.addMemory.mockResolvedValueOnce(

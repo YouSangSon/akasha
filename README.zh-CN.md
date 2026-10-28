@@ -32,6 +32,10 @@ Postgres 存储权威记录；Qdrant 或 pgvector 提供可重建的搜索索引
 升级后运行 `reindex_memory`，即可从原始记录修复旧文本块。
 重试与并发处理方式参见[索引恢复](docs/operations.md#ingest-sweeper)（英文）。
 
+韩语、日语、中文及跨语言检索可参考
+[实验性多语言配置](docs/configuration.md#multilingual-retrieval)（英文）。
+小规模评测中的正确结果召回率有所提高，但相似的错误答案仍可能排在前面。
+
 | 需求 | Akasha 提供的能力 |
 |------|----------------------|
 | 在新会话中继续工作 | 可搜索的决策和面向具体任务的上下文包 |

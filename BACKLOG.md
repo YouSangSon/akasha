@@ -14,7 +14,9 @@ experience, documentation, features.
 
 ## P2
 
-- None currently known.
+- 교차 언어 순위: 실험용 multilingual MPNet은 18개 질문의 정답을 모두 top5에 찾지만,
+  중국어 청구 파일 질의에서 감사 파일을 먼저 반환한다. 엄격한 다국어 qualification은 RED.
+  기본 모델 교체나 추가 모델 탐색은 이번 범위에 포함하지 않는다. 근거는 `GATES.md`.
 
 ## Recently Merged
 
