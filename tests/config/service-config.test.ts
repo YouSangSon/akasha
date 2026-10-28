@@ -17,6 +17,11 @@ function envWith(overrides: Record<string, unknown>): NodeJS.ProcessEnv {
 }
 
 describe("resolveServiceConfig", () => {
+  it("versions E5 input formatting separately from legacy unprefixed vectors", () => {
+    expect(resolveServiceConfig({ env: envWith({ TRANSFORMERS_EMBEDDING_MODEL: "Xenova/multilingual-e5-small" }) }).embedding)
+      .toMatchObject({ provider: "transformers", dimensions: 384, version: "e5-prefix-v1" });
+    expect(resolveServiceConfig({ env: envWith({}) }).embedding.version).toBe("v1");
+  });
   it("parses Postgres, Qdrant, OpenAI, and optional backup settings when EMBEDDING_PROVIDER=openai is set explicitly", () => {
     const config = resolveServiceConfig({
       env: {

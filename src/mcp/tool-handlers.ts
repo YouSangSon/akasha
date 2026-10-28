@@ -3,6 +3,7 @@ import { createCompactionToolHandlers } from "../compact/tool-handlers.js";
 import { buildContextPackResult } from "./context-pack-result.js";
 import { createGoalRunToolHandlers } from "../goal-run/tool-handlers.js";
 import { rootLogger } from "../logger.js";
+import { embedQuery } from "../embedding/embedding-provider.js";
 import { rankResults } from "../search/rank-results.js";
 import { retrieveMemory as retrieveMemoryFromQdrant } from "../search/retrieve-memory.js";
 import { createServiceBackedAuditLog } from "./canonical-services.js";
@@ -85,7 +86,7 @@ export function createToolHandlers(input: {
     services: CanonicalServices,
     serviceInput: RetrieveMemoryServiceInput,
   ): Promise<SearchMemoryResult[]> {
-    const vector = await services.embeddings.embed(serviceInput.query);
+    const vector = await embedQuery(services.embeddings, serviceInput.query);
 
     return retrieveMemoryFromQdrant({
       vectorIndex: services.vectorIndex,

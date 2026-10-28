@@ -14162,3 +14162,11 @@ Verification:
   multilingual MPNet option against the same unchanged gate and labels. Log raw
   vector ranks for failed language probes to separate embedding/ranking errors.
   Also correct the separate fixture-count assertion (50 ->66); no labels change.
+- CI116 confirmed both errors originate in raw MiniLM vectors; MPNet fixes them
+  but still puts audit above billing for the Chinese question (0.534528 vs0.532394).
+  No production ranking weights or labels are changed. Independent design review
+  recommends one bounded E5-small experiment with its trained query/passage
+  formats, prefix-aware chunk limits, and separate `e5-prefix-v1` metadata.
+  Symmetric repeat/compaction consumers use query-format batches and get a
+  contrast check before their existing thresholds can be called compatible.
+  Failed MiniLM/MPNet measurements remain evidence; neither is marked qualified.

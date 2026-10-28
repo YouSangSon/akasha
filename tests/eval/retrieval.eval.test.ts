@@ -6,6 +6,8 @@ import { buildContextPack } from "../../src/context-pack/build-context-pack.js";
 import { createPgPool, type PgPool } from "../../src/db/connection.js";
 import { runMigrations } from "../../src/db/migrate.js";
 import { createEmbeddingProvider } from "../../src/embedding/embedding-factory.js";
+import { embedQuery, embedSimilarityBatch, MULTILINGUAL_E5_MODEL } from "../../src/embedding/embedding-provider.js";
+import { cosineSimilarity } from "../../src/compact/semantic-duplicates.js";
 import { hardNegativeOrderingAtK, mrrAtK, recallAtK } from "../../src/eval/metrics.js";
 import { isAllowedEvalScope } from "../../src/eval/retrieval-corpus.js";
 import { buildContextPackResult } from "../../src/mcp/context-pack-result.js";
@@ -345,6 +347,26 @@ describe.skipIf(!RUN_EVAL)("default retrieval eval harness", () => {
     }
   }, 60_000);
 
+  it("checks E5 contrast scores before reusing automatic similarity thresholds", async () => {
+    if (!services || services.embeddingModel !== MULTILINGUAL_E5_MODEL) return;
+    const pairs = [...new Map(CORPUS!.multilingualQueries.map((query) => {
+      const positive = query.relevantRecordSeedKeys[0]!;
+      const negative = query.hardNegativeRecordSeedKeys![0]!;
+      return [`${positive}:${negative}`, [positive, negative] as const];
+    })).values()];
+    const keys = [...new Set(pairs.flat())];
+    const vectors = await embedSimilarityBatch(services.embeddings, keys.map((key) => EVAL_SEEDS.find((seed) => seed.seedKey === key)!.memory.content));
+    const byKey = new Map(keys.map((key, index) => [key, vectors[index]!]));
+    const contrasts = pairs.map(([positive, negative]) => ({ positive, negative,
+      score: cosineSimilarity(byKey.get(positive)!, byKey.get(negative)!) }));
+    const repeatFalsePositives = contrasts.filter((pair) => pair.score >= 0.85);
+    const compactionFalsePositives = contrasts.filter((pair) => pair.score >= 0.95);
+    process.stderr.write(`eval-similarity-thresholds ${JSON.stringify({ model: services.embeddingModel,
+      repeatThreshold: 0.85, compactionThreshold: 0.95, contrasts, repeatFalsePositives, compactionFalsePositives })}\n`);
+    expect(repeatFalsePositives).toEqual([]);
+    expect(compactionFalsePositives).toEqual([]);
+  }, 60_000);
+
   it("builds a context pack from org-scoped default-stack retrieval", async () => {
     if (!services) {
       throw new Error("retrieval eval services were not initialized");
@@ -386,7 +408,7 @@ async function measureQuery(
   }
 
   const started = performance.now();
-  const vector = await services.embeddings.embed(query.query);
+  const vector = await embedQuery(services.embeddings, query.query);
   const results = await retrieveMemory({
     vectorIndex: services.vectorIndex,
     repository: services.repository,

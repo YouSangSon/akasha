@@ -1,4 +1,5 @@
 import { assertNoSecrets } from "../store/secret-scrub.js";
+import { embedSimilarityBatch } from "../embedding/embedding-provider.js";
 import { assertNonBlankText } from "../store/memory-content.js";
 import type { ScopeType } from "../types.js";
 import type { CanonicalServices, ToolRegistry, WithCanonicalServices } from "../mcp/types.js";
@@ -250,7 +251,7 @@ export function createGoalRunToolHandlers(input: {
           return { ok: true, found: true, repeat: false, threshold, matches: [] };
         }
 
-        const vectors = await services.embeddings.embedBatch([
+        const vectors = await embedSimilarityBatch(services.embeddings, [
           attempt,
           ...failures.map((failure) => failure.attempt),
         ]);
