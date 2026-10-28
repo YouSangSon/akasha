@@ -11,8 +11,8 @@ Keep it short; detailed evidence belongs in `WORKLOG.md` and one-off rationale i
 
 - [x] 전체 구조화 컨텍스트 팩의 선택적 크기 예산: PR #40, main `2314ba3`, CI 5개 통과.
   정확한 경계와 측정 범위는 `GATES.md`가 소유한다.
-- [ ] MCP 응답 크기와 실제 전체 턴 입력 토큰을 구분하는 비용 계측 및 같은 입력 비교.
-- [ ] 기존 20개 질문을 보존한 50개 이상 검색 평가와 사용자/조직 격리·유사 오답 검증.
+- [x] MCP 비용 계측 및 같은 입력 비교: PR #41, main `74dc5b8`, 필수 CI 5개 통과.
+- [x] 기존 20개 질문을 보존한 52개 검색 평가와 사용자/조직/프로젝트 격리·유사 오답 검증: PR #42, 소스 `a6dc2e3` 독립 검토 및 필수 CI 5개 통과. 병합 여부는 PR 상태로 확인한다.
 
 로컬 전체 스택·유료 실행·VM 재시도는 하지 않는다. 기존 부정적 측정 결과를 새 성과로 바꾸지 않는다.
 
@@ -306,3 +306,8 @@ Before each resume:
   internal change, rerun checks, update durable docs, and create a local commit.
 - Do not push, merge, deploy, change credentials, run paid work, or make
   destructive migrations without explicit approval.
+
+
+2026-10-28 추가 세 단위의 구현·검증을 마쳤다. PR #42의 문서 head `9ce429e`도 필수 CI 5개를 통과했다.
+병합의 최종 상태는 PR #42, 별도 포트폴리오의 근거는 `/Users/yousang/Desktop/resume/자료수집/2026-10-23/akasha-portfolio`가 소유한다.
+목표 밖 신규 구현은 추가하지 않는다. 기존 RED·OPEN·DEFERRED 항목은 유지한다.

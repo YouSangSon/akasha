@@ -81,3 +81,21 @@ export function mrrAtK(
 
   return 0;
 }
+
+export function hardNegativeOrderingAtK(
+  retrieved: readonly number[],
+  relevant: readonly number[],
+  hardNegatives: readonly number[],
+  k: number,
+): number {
+  assertMetricInputs(retrieved, relevant, k);
+  assertPositiveIntegerArray(hardNegatives, "hardNegatives");
+  if (hardNegatives.length === 0) throw new Error("hardNegatives must not be empty");
+  const relevantSet = new Set(relevant);
+  if (hardNegatives.some((id) => relevantSet.has(id))) throw new Error("relevant and hard-negative labels must not overlap");
+  const window = retrieved.slice(0, k);
+  const firstRelevant = window.findIndex((id) => relevantSet.has(id));
+  if (firstRelevant < 0) return 0;
+  const negatives = new Set(hardNegatives);
+  return window.slice(0, firstRelevant).some((id) => negatives.has(id)) ? 0 : 1;
+}
