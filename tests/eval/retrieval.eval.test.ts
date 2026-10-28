@@ -254,8 +254,15 @@ describe.skipIf(!RUN_EVAL)("default retrieval eval harness", () => {
     const vector = await services.embeddings.embed(tail.content);
     const hits = await services.vectorIndex.query(vector, { organizationId: EVAL_ORGANIZATION_ID,
       scopes: [{ scopeType: "project", scopeId: "long-input-boundary" }] }, 1);
-    expect(tail.qdrantPointId).toBeTruthy();
-    expect(hits[0]?.id).toBe(tail.qdrantPointId);
+    const persisted = await services.pool.query<{ qdrant_point_id: string | null }>(
+      `SELECT mc.qdrant_point_id FROM memory_chunks mc
+       JOIN memory_records mr ON mr.id = mc.memory_record_id
+       WHERE mc.id = $1 AND mr.id = $2 AND mr.organization_id = $3`,
+      [tail.id, written.id, EVAL_ORGANIZATION_ID],
+    );
+    expect(persisted.rows).toHaveLength(1);
+    expect(persisted.rows[0]!.qdrant_point_id).toBeTruthy();
+    expect(hits[0]?.id).toBe(persisted.rows[0]!.qdrant_point_id);
     expect(hits[0]?.payload.memory_record_id).toBe(written.id);
     expect(hits[0]?.score).toBeGreaterThan(0.99);
   }, 60_000);
