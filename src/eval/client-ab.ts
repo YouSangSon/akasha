@@ -5,8 +5,10 @@ import { isDeepStrictEqual } from "node:util";
 import path from "node:path";
 import { createInterface } from "node:readline";
 import { performance } from "node:perf_hooks";
+import { createHash } from "node:crypto";
 import { chunkText } from "../chunk/chunk-text.js";
 import type { ToolRegistry } from "../mcp/types.js";
+import { scanForSecrets } from "../store/secret-scrub.js";
 import { assertObservedPackBudget, measureToolPayloadBytes, type ToolPayloadBytes } from "./payload-metrics.js";
 
 const FULL_SHA = /^[0-9a-f]{40}$/;
@@ -97,6 +99,9 @@ export type ClientConditionResult = {
   model: { requested: string; observed: string | null }; cliVersion: string;
   clientStdinUtf8Bytes?: number; clientDurationMs?: number;
   maxOutputBytes?: number;
+  effort?: string;
+  replay?: ClientAbReplayProvenance;
+  evidencePath?: string;
 };
 export type ClientAbRunSummary = {
   profile: ClientAbProfile;
@@ -104,15 +109,23 @@ export type ClientAbRunSummary = {
   model: { requested: string; observed: string | null }; pairs: ClientPair[];
   aggregate: ClientPairSummary;
   maxOutputBytes?: number;
+  effort?: string;
+  replay?: ClientAbReplayProvenance;
   totals: { offInputTokens: number; onInputTokens: number; offCachedInputTokens: number; onCachedInputTokens: number };
 };
 export type ClientExecutor = (command: ClientCommand) => Promise<{ stdout: string; stderr: string; finalOutput?: string }>;
+export type ClientAbReplayProvenance = {
+  mode: "captured-mcp";
+  snapshotSha256: string;
+  ci: { repository: string; runId: string; runAttempt: string; job: string; headSha: string };
+};
 export type ClientAbRunInput = {
   profile?: ClientAbProfile; prefetch?: (task: PreparedClientTask) => Promise<ClientPrefetchPack>;
   experiment: ClientAbExperiment; vendor: ClientVendor; model: string; resultDir: string;
   mcpServer: LiveMcpServer; executePaid: boolean; allowedMemoryIds: readonly string[]; env?: NodeJS.ProcessEnv;
   effort?: string; maxBudgetUsd?: number; executeSubscription?: boolean;
   maxOutputBytes?: number;
+  replay?: ClientAbReplayProvenance;
   readSubscriptionStatus?: () => Promise<CodexSubscriptionStatus>;
   execute?: ClientExecutor; getCliVersion?: (binary: string) => Promise<string>;
 };
@@ -235,6 +248,7 @@ function documentRecords(repoDir: string, sha: string, fixture: Fixture): Prepar
     const chunks = chunkText({ text: readTracked(repoDir, sha, sourcePath), ...fixture.chunking });
     if (chunks.length === 0) throw new Error(`client A/B tracked source ${sourcePath} produced no chunks`);
     for (const chunk of chunks) {
+      if (scanForSecrets(chunk.content).length > 0) continue;
       records.push(makeRecord({
         id: `doc:${sourcePath}:${chunk.chunkIndex}`, scope: "project", kind: "fact", content: chunk.content,
         sourceRef: `${sourcePath}#chunk-${chunk.chunkIndex}`, organizationId: fixture.organizationId,
@@ -611,7 +625,7 @@ export async function runClientCommand(command: ClientCommand, timeoutMs = 120_0
       // The parent may exit before detached descendants close their own streams.
       signalOwnedChild(child, "SIGKILL");
       cleanup();
-      if (stopped) { reject(stopped); return; }
+      if (stopped) { reject(new Error(stopped.message, { cause: { stdout, stderr } })); return; }
       if (code !== 0) { reject(new Error(`client A/B client command failed with exit code ${code ?? "signal"}`, { cause: { stdout, stderr } })); return; }
       resolve({ stdout, stderr });
     });
@@ -629,7 +643,7 @@ export function assertPaidClientExecutionAllowed(env: NodeJS.ProcessEnv, execute
 function wordEstimate(value: string): number {
   return value.match(/\S+/g)?.length ?? 0;
 }
-function preflightInput(experiment: ClientPromptScope, task: Pick<PreparedClientTask, "task">, maxOutputBytes?: number) {
+export function preflightInput(experiment: ClientPromptScope, task: Pick<PreparedClientTask, "task">, maxOutputBytes?: number) {
   if (maxOutputBytes !== undefined) positive(maxOutputBytes, "maxOutputBytes");
   return {
     organizationId: experiment.organizationId,
@@ -811,6 +825,9 @@ function assertClientAuthentication(input: ClientAbRunInput): void {
 }
 export async function runClientAb(input: ClientAbRunInput): Promise<ClientAbRunSummary> {
   const profile = input.profile ?? "mcp-roundtrip";
+  if (input.replay && (profile !== "mcp-roundtrip" || input.vendor !== "codex" || input.executePaid || !input.executeSubscription)) {
+    throw new Error("captured MCP replay requires the Codex subscription MCP roundtrip profile");
+  }
   if (input.maxOutputBytes !== undefined) {
     positive(input.maxOutputBytes, "maxOutputBytes");
     if (profile !== "mcp-roundtrip") throw new Error("maxOutputBytes is supported only by the MCP roundtrip profile");
@@ -851,6 +868,10 @@ export async function runClientAb(input: ClientAbRunInput): Promise<ClientAbRunS
       let outcomeWritten = false;
       let clientStdinUtf8Bytes: number | undefined;
       let clientDurationMs: number | undefined;
+      const evidencePath = `${resultPath}.private-evidence`;
+      let command: ClientCommand | undefined;
+      let executed: Awaited<ReturnType<ClientExecutor>> | undefined;
+      let rawOutput: string | undefined;
       try {
         const pairKey = `${entry.task.id}:${entry.repeat}`;
         if (profile === "cli-prefetch" && !prefetched.has(pairKey)) {
@@ -865,7 +886,7 @@ export async function runClientAb(input: ClientAbRunInput): Promise<ClientAbRunS
           packMarkdown: profile === "cli-prefetch" ? prefetched.get(pairKey)!.packMarkdown : undefined,
           maxOutputBytes: input.maxOutputBytes,
         });
-        const command = await buildClientCommand({
+        command = await buildClientCommand({
           vendor: input.vendor,
           condition: entry.condition,
           profile,
@@ -878,19 +899,33 @@ export async function runClientAb(input: ClientAbRunInput): Promise<ClientAbRunS
           mcpServer: profile === "mcp-roundtrip" && entry.condition === "on" ? input.mcpServer : undefined,
         });
         await checkSubscription();
-        executionStarted = true;
         clientStdinUtf8Bytes = Buffer.byteLength(command.stdin, "utf8");
+        await writeResultAtomically(evidencePath, {
+          manifest: {
+            binary: command.binary,
+            cwd: command.cwd,
+            // Live-stack MCP arguments may contain database credentials.
+            args: command.args.map((arg) => arg.replace(/^(mcp_servers\.akasha\.env\.[A-Z][A-Z0-9_]*=).*/, "$1<redacted>")),
+            stdinSha256: createHash("sha256").update(command.stdin).digest("hex"),
+            profile, model: input.model, effort: input.effort, cliVersion: version, replay: input.replay,
+          },
+        });
+        executionStarted = true;
         const started = performance.now();
-        let executed: Awaited<ReturnType<ClientExecutor>>;
         try { executed = await execute(command); }
         finally { clientDurationMs = performance.now() - started; }
+        // Persist the raw turn before parsing/grading or deleting its workspace.
+        await retainClientEvidence(evidencePath, executed);
+        if (input.vendor === "codex") {
+          rawOutput = executed.finalOutput ?? await readFile(command.finalOutputPath, "utf8");
+          await retainClientEvidence(evidencePath, { finalOutput: rawOutput });
+        }
         const parsed = input.vendor === "codex"
           ? parseCodexEvents(executed.stdout)
           : parseClaudeStream(executed.stdout, input.model);
         verifyToolTrace(profile === "cli-prefetch" ? "off" : entry.condition, parsed.toolCalls, preflightInput(input.experiment, entry.task, input.maxOutputBytes), input.allowedMemoryIds);
-        const rawOutput = input.vendor === "codex"
-          ? executed.finalOutput ?? await readFile(command.finalOutputPath, "utf8")
-          : JSON.stringify((parsed as ClaudeStreamResult).structuredOutput);
+        rawOutput ??= JSON.stringify((parsed as ClaudeStreamResult).structuredOutput);
+        if (input.vendor !== "codex") await retainClientEvidence(evidencePath, { finalOutput: rawOutput });
         if (input.vendor === "codex") parseCodexFinalOutput(rawOutput);
         const grade = gradeClientAnswer(entry.task, rawOutput);
         const observed = input.vendor === "codex" ? observedCodexModel(executed.stdout) : (parsed as ClaudeStreamResult).observedModel;
@@ -901,6 +936,7 @@ export async function runClientAb(input: ClientAbRunInput): Promise<ClientAbRunS
           runIndex, success: grade.success, inputTokens: parsed.inputTokens, cachedInputTokens: parsed.cachedInputTokens,
           toolCalls: parsed.toolCalls, grade, model: { requested: input.model, observed }, cliVersion: version,
           clientStdinUtf8Bytes, clientDurationMs,
+          evidencePath: path.basename(evidencePath), effort: input.effort, replay: input.replay,
           ...(input.maxOutputBytes === undefined ? {} : { maxOutputBytes: input.maxOutputBytes }),
         };
         await writeResultAtomically(resultPath, outcome);
@@ -910,11 +946,26 @@ export async function runClientAb(input: ClientAbRunInput): Promise<ClientAbRunS
       } catch (error: unknown) {
         // Keep raw diagnostics local for debugging; summaries never include client logs.
         if (error instanceof Error && error.cause !== undefined) await writeResultAtomically(`${resultPath}.private-diagnostics`, error.cause);
+        if (executionStarted) {
+          if (error instanceof Error && typeof error.cause === "object" && error.cause !== null) {
+            const partial = error.cause as Record<string, unknown>;
+            await retainClientEvidence(evidencePath, {
+              ...(typeof partial.stdout === "string" ? { stdout: partial.stdout } : {}),
+              ...(typeof partial.stderr === "string" ? { stderr: partial.stderr } : {}),
+            });
+          }
+          if (rawOutput === undefined && command) {
+            const final = await readFile(command.finalOutputPath, "utf8").catch(() => undefined);
+            if (final !== undefined) await retainClientEvidence(evidencePath, { finalOutput: final });
+          }
+        }
         if (!outcomeWritten) await writeResultAtomically(resultPath, {
           profile,
           vendor: input.vendor, taskId: entry.task.id, repeat: entry.repeat, condition: entry.condition, runIndex,
           success: false, cliVersion: version,
           clientStdinUtf8Bytes, clientDurationMs,
+          model: { requested: input.model, observed: null }, effort: input.effort, replay: input.replay,
+          ...(executionStarted ? { evidencePath: path.basename(evidencePath) } : {}),
           ...(input.maxOutputBytes === undefined ? {} : { maxOutputBytes: input.maxOutputBytes }),
           error: error instanceof Error ? error.message : "client A/B condition failed",
         });
@@ -938,6 +989,7 @@ export async function runClientAb(input: ClientAbRunInput): Promise<ClientAbRunS
       ...(input.maxOutputBytes === undefined ? {} : { maxOutputBytes: input.maxOutputBytes }),
       vendor: input.vendor, sourceSha: input.experiment.sourceSha, corpusVersion: input.experiment.corpusVersion,
       cliVersion: version, model, pairs, aggregate,
+      effort: input.effort, replay: input.replay,
       totals: {
         offInputTokens: all.filter((outcome) => outcome.condition === "off").reduce((sum, outcome) => sum + outcome.inputTokens, 0),
         onInputTokens: all.filter((outcome) => outcome.condition === "on").reduce((sum, outcome) => sum + outcome.inputTokens, 0),
@@ -952,8 +1004,14 @@ export async function runClientAb(input: ClientAbRunInput): Promise<ClientAbRunS
       profile,
       ...(input.maxOutputBytes === undefined ? {} : { maxOutputBytes: input.maxOutputBytes }),
       status: "failed", sourceSha: input.experiment.sourceSha, completedConditions: outcomes.size,
+      model: { requested: input.model, observed: null }, effort: input.effort, cliVersion: version, replay: input.replay,
       error: error instanceof Error ? error.message : "client A/B execution failed",
     });
     throw error;
   }
+}
+
+async function retainClientEvidence(destination: string, evidence: Record<string, unknown>): Promise<void> {
+  const previous = JSON.parse(await readFile(destination, "utf8")) as Record<string, unknown>;
+  await writeResultAtomically(destination, { ...previous, ...evidence });
 }

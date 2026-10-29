@@ -44,7 +44,7 @@ describe("CI workflow hygiene", () => {
 
   it("checks out the repository before setting up Node in every job", () => {
     const checkoutThenSetupNodeSteps = ciWorkflow.match(
-      /      - name: Checkout\n        uses: actions\/checkout@v4\n\n      - name: Setup Node\n/g,
+      /      - name: Checkout\n        uses: actions\/checkout@v4\n(?:        with:\n(?:          [^\n]+\n)+)?\n      - name: Setup Node\n/g,
     );
 
     expect(checkoutThenSetupNodeSteps).toHaveLength(4);
@@ -212,6 +212,20 @@ describe("CI workflow hygiene", () => {
     expect(retrievalJob).toContain(
       "        run: npx vitest run tests/eval/retrieval.eval.test.ts --reporter=verbose\n",
     );
+  });
+
+  it("captures only the default model's real context packs without running a paid client", () => {
+    const job = ciWorkflow.slice(ciWorkflow.indexOf("  default-retrieval-eval:\n"));
+    const capture = job.slice(job.indexOf("      - name: Capture client context packs"));
+    expect(job).toContain("ref: ${{ github.event.pull_request.head.sha || github.sha }}");
+    expect(capture.match(/if: matrix\.profile == 'default'/g)).toHaveLength(2);
+    expect(capture).toContain('eval_database="akasha_eval_${GITHUB_RUN_ID}"');
+    expect(capture).toContain('source_sha="$(git rev-parse HEAD)"');
+    expect(capture).toContain('tests/eval/client-ab-runner.ts --sha "$source_sha" --preflight');
+    expect(capture).toContain("--capture-snapshot artifacts/client-context-snapshot.json");
+    expect(capture).toContain("uses: actions/upload-artifact@v4");
+    expect(capture).toContain("if-no-files-found: error");
+    expect(capture).not.toMatch(/--execute-(?:paid|subscription)/);
   });
 
   it("waits for database service containers to pass health checks", () => {

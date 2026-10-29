@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
+import { scanForSecrets } from "../../src/store/secret-scrub.js";
 import {
   aggregateClientPairs,
   assertPaidClientExecutionAllowed,
@@ -38,7 +39,7 @@ afterEach(async () => {
   await Promise.all(tempRoots.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-async function makeTrackedFixtureRepo() {
+async function makeTrackedFixtureRepo(sourceOverrides: Record<string, string> = {}) {
   const repoDir = await mkdtemp(path.join(os.tmpdir(), "akasha-client-ab-test-"));
   tempRoots.push(repoDir);
   const fixture = await readFile(path.join(process.cwd(), fixtureRelativePath), "utf8");
@@ -50,7 +51,7 @@ async function makeTrackedFixtureRepo() {
   for (const sourcePath of [...parsed.sourcePaths, parsed.seedSourcePath]) {
     const targetPath = path.join(repoDir, sourcePath);
     await (await import("node:fs/promises")).mkdir(path.dirname(targetPath), { recursive: true });
-    await writeFile(targetPath, await readFile(path.join(process.cwd(), sourcePath), "utf8"));
+    await writeFile(targetPath, sourceOverrides[sourcePath] ?? await readFile(path.join(process.cwd(), sourcePath), "utf8"));
   }
   execFileSync("git", ["init", "--quiet"], { cwd: repoDir });
   execFileSync("git", ["config", "user.email", "eval@example.test"], { cwd: repoDir });
@@ -114,6 +115,31 @@ describe("client A/B evaluation harness", () => {
     expect(() =>
       prepareClientAbExperiment({ repoDir, sha, fixturePath: "fixture.json" }),
     ).toThrow("tracked staged or unstaged changes");
+  });
+
+  it("excludes secret-shaped document chunks from both conditions while retaining safe documents and all answer seeds", async () => {
+    const safeDocument = "Safe client A/B documentation remains available.";
+    const excludedMarker = "Exclude this entire document chunk.";
+    const excludedDocument = `${excludedMarker}\n${["postgresql", "://", "fixture-user", ":", "fixture-password", "@", "db.example.test/fixture"].join("")}`;
+    expect(scanForSecrets(excludedDocument)).toEqual([{ category: "db-connection-string" }]);
+    const { repoDir, sha } = await makeTrackedFixtureRepo({
+      "CONTEXT.md": excludedDocument,
+      "CONTRACTS.md": safeDocument,
+    });
+    const experiment = prepareClientAbExperiment({ repoDir, sha, fixturePath: "fixture.json" });
+
+    expect({
+      rawContainsExcluded: experiment.rawCanonicalContext.includes(excludedMarker),
+      targetContainsExcluded: experiment.targetRecords.some((record) => record.id === "doc:CONTEXT.md:0"),
+      seededContainsExcluded: experiment.seedRecords.some((record) => record.id === "doc:CONTEXT.md:0"),
+    }).toEqual({ rawContainsExcluded: false, targetContainsExcluded: false, seededContainsExcluded: false });
+    for (const records of [experiment.targetRecords, experiment.seedRecords]) {
+      expect(records.find((record) => record.id === "doc:CONTRACTS.md:0")).toMatchObject({ content: safeDocument });
+      expect(records.filter((record) => record.seedKey !== undefined)).toHaveLength(14);
+      expect(records.flatMap((record) => scanForSecrets(record.content))).toEqual([]);
+    }
+    expect(experiment.rawCanonicalContext).toContain(safeDocument);
+    expect(experiment.seedRecords.filter((record) => record.seedKey !== undefined)).toEqual(experiment.targetRecords.filter((record) => record.seedKey !== undefined));
   });
 
   it("creates only a strict task schema with the same requested fields for each client", async () => {
@@ -320,7 +346,7 @@ describe("client A/B evaluation harness", () => {
       expect(observed.toolCalls[0].arguments.maxOutputBytes).toBe(maxOutputBytes);
       expect(observed.toolCalls[0].payloadBytes.structuredContentJsonUtf8Bytes).toBeGreaterThan(0);
     } else expect(summary).not.toHaveProperty("maxOutputBytes");
-    expect(await (await import("node:fs/promises")).readdir(resultDir)).toHaveLength(profile === "cli-prefetch" ? 29 : 20);
+    expect(await (await import("node:fs/promises")).readdir(resultDir)).toHaveLength(profile === "cli-prefetch" ? 47 : 38);
   });
 
   it.each(["client", "prefetch"])("persists a failing %s and summary failure without retrying", async (failure) => {
