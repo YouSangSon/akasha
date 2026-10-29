@@ -315,6 +315,15 @@ source/corpus/model/scope metadata, required scoped IDs, and content digests.
 The v4 question explicitly asks about the seeded nominal `alpha.chunk-size`
 policy (800/120); it does not confuse that policy with actual tokenizer limits.
 
+The first capture at `6a1d30a` failed before any client call because public
+documentation includes credential-shaped connection examples. Preparation now
+excludes whole document chunks flagged by the existing production secret
+scanner before constructing either the raw baseline or the seeded retrieval
+corpus. It keeps all 14 answer seeds, questions, labels, source paths and grading
+thresholds. Both comparisons use that same retained corpus at the pinned source.
+This correction does not weaken storage validation or sanitize only one arm;
+historical corpus-v3 results remain separate.
+
 Before any model call, verify the artifact through GitHub's run, successful job,
 exact head and artifact receipt; preserve the archive digest and independently
 compute the snapshot SHA-256. Its own JSON provenance is not proof of origin.

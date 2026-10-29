@@ -8,6 +8,7 @@ import { performance } from "node:perf_hooks";
 import { createHash } from "node:crypto";
 import { chunkText } from "../chunk/chunk-text.js";
 import type { ToolRegistry } from "../mcp/types.js";
+import { scanForSecrets } from "../store/secret-scrub.js";
 import { assertObservedPackBudget, measureToolPayloadBytes, type ToolPayloadBytes } from "./payload-metrics.js";
 
 const FULL_SHA = /^[0-9a-f]{40}$/;
@@ -247,6 +248,7 @@ function documentRecords(repoDir: string, sha: string, fixture: Fixture): Prepar
     const chunks = chunkText({ text: readTracked(repoDir, sha, sourcePath), ...fixture.chunking });
     if (chunks.length === 0) throw new Error(`client A/B tracked source ${sourcePath} produced no chunks`);
     for (const chunk of chunks) {
+      if (scanForSecrets(chunk.content).length > 0) continue;
       records.push(makeRecord({
         id: `doc:${sourcePath}:${chunk.chunkIndex}`, scope: "project", kind: "fact", content: chunk.content,
         sourceRef: `${sourcePath}#chunk-${chunk.chunkIndex}`, organizationId: fixture.organizationId,

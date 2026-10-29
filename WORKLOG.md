@@ -14192,3 +14192,20 @@ Verification:
   and raw-trace validation now match, with full tool-list/response parity tests.
 - Local replay checks: 78 focused tests passed, followed by 40 schema-parity tests
   after the review fix; typecheck passed. Counts overlap. Actual runs pending CI.
+
+## 2026-10-29 — Resume budget replay and preserve the secret boundary (#43, part 4)
+
+- Revalidated main `e06cf22`, the existing replay worktree/PR #46 at `6a1d30a`,
+  and current included Codex usage. CLI 0.165.0 account RPC succeeds; weekly
+  remaining was 62% at 13:58 KST with no credit decline from this run's baseline.
+- CI `40672438992` passed retrieval but failed the subsequent snapshot capture.
+  The production write rejected a credential-shaped documentation example;
+  full job logs are retained privately. Keep that security check unchanged and
+  exclude flagged document chunks from both raw and seeded evaluation inputs.
+- Required answer seeds, questions and thresholds stay fixed. The corrected
+  capture and actual Codex comparisons are pending. No local DB stack or VM
+  was started; shared-host load rules out an additional local full-suite run.
+- The new regression failed before the fix (1 failed, 39 passed) and the same
+  focused file passed afterward (40 passed). The production change reuses the
+  existing scanner at shared document-corpus preparation; no security rule or
+  public API changed. Full required checks remain assigned to CI.
